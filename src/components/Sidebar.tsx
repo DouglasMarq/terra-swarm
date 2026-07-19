@@ -1,0 +1,337 @@
+import { useEffect, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
+import type { Workspace } from "../types";
+
+interface Props {
+  workspaces: Workspace[];
+  activeId: string | null;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+  onSelect: (id: string) => void;
+  onAdd: () => void;
+  onClose: (id: string) => void;
+  onRename: (id: string, name: string) => void;
+  onQuickNew: (id: string) => void;
+  onPickNew: (id: string) => void;
+  onOpenSettings: () => void;
+  renameTrigger: { id: string; n: number } | null;
+  notifications: Record<string, number>;
+}
+
+function BellIcon() {
+  return (
+    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  );
+}
+
+function TerminalPlusIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="4 15 9 9 4 3" />
+      <line x1="10" y1="17" x2="13" y2="17" />
+      <line x1="18" y1="14" x2="18" y2="20" />
+      <line x1="15" y1="17" x2="21" y2="17" />
+    </svg>
+  );
+}
+
+function TerminalMoreIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="4 15 9 9 4 3" />
+      <line x1="10" y1="17" x2="13" y2="17" />
+      <polyline points="16 15 18.5 17.5 21 15" />
+    </svg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="21" x2="4" y2="14" />
+      <line x1="4" y1="10" x2="4" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12" y2="3" />
+      <line x1="20" y1="21" x2="20" y2="16" />
+      <line x1="20" y1="12" x2="20" y2="3" />
+      <line x1="1" y1="14" x2="7" y2="14" />
+      <line x1="9" y1="8" x2="15" y2="8" />
+      <line x1="17" y1="16" x2="23" y2="16" />
+    </svg>
+  );
+}
+
+export function Sidebar({
+  workspaces,
+  activeId,
+  collapsed,
+  onToggleCollapse,
+  onSelect,
+  onAdd,
+  onClose,
+  onRename,
+  onQuickNew,
+  onPickNew,
+  onOpenSettings,
+  renameTrigger,
+  notifications,
+}: Props) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+
+  const openMenu = (e: ReactMouseEvent, ws: Workspace) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const menuWidth = 200;
+    const menuHeight = 150;
+    const x = Math.min(e.clientX, window.innerWidth - menuWidth - 8);
+    const y = Math.min(e.clientY, window.innerHeight - menuHeight - 8);
+    setMenu({ id: ws.id, x, y });
+    onSelect(ws.id);
+  };
+
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("mousedown", close);
+    window.addEventListener("blur", close);
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("blur", close);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+
+  const menuWorkspace = menu ? workspaces.find((w) => w.id === menu.id) : null;
+
+  const startEdit = (ws: Workspace) => {
+    setEditingId(ws.id);
+    setDraft(ws.name);
+  };
+
+  useEffect(() => {
+    if (!renameTrigger) return;
+    const ws = workspaces.find((w) => w.id === renameTrigger.id);
+    if (ws) startEdit(ws);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renameTrigger]);
+
+  const commit = () => {
+    if (editingId) {
+      const name = draft.trim();
+      if (name) onRename(editingId, name);
+    }
+    setEditingId(null);
+  };
+
+  if (collapsed) {
+    return (
+      <aside className="sidebar collapsed">
+        <button
+          className="sidebar-collapse-btn"
+          title="Expand sidebar"
+          onClick={onToggleCollapse}
+        >
+          »
+        </button>
+        <div className="sidebar-dots">
+          {workspaces.map((ws) => {
+            const notifTotal = ws.terminals.reduce(
+              (acc, t) => acc + (notifications[t.id] ?? 0),
+              0,
+            );
+            return (
+              <button
+                key={ws.id}
+                className={`sidebar-dot ${ws.id === activeId ? "active" : ""}`}
+                title={`${ws.name} (${ws.terminals.length})`}
+                onClick={() => {
+                  onSelect(ws.id);
+                  onToggleCollapse();
+                }}
+              >
+                {ws.name.charAt(0).toUpperCase()}
+                {notifTotal > 0 && <span className="sidebar-dot-notif" />}
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-title">
+        <span>Workspaces</span>
+        <button
+          className="sidebar-collapse-btn"
+          title="Collapse sidebar"
+          onClick={onToggleCollapse}
+        >
+          «
+        </button>
+      </div>
+      <div className="sidebar-list">
+        {workspaces.map((ws) => {
+          const notifTotal = ws.terminals.reduce(
+            (acc, t) => acc + (notifications[t.id] ?? 0),
+            0,
+          );
+          return (
+            <div
+              key={ws.id}
+              className={`sidebar-item ${ws.id === activeId ? "active" : ""}`}
+              onClick={() => onSelect(ws.id)}
+              onDoubleClick={() => startEdit(ws)}
+              onContextMenu={(e) => openMenu(e, ws)}
+            >
+              <div className="sidebar-item-main">
+                {editingId === ws.id ? (
+                  <input
+                    className="sidebar-rename-input"
+                    autoFocus
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={commit}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commit();
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                  />
+                ) : (
+                  <span className="sidebar-item-name">{ws.name}</span>
+                )}
+                <span className="sidebar-item-path" title={ws.cwd}>
+                  {ws.cwd}
+                </span>
+              </div>
+              {notifTotal > 0 && (
+                <span
+                  className="sidebar-item-bell"
+                  key={notifTotal}
+                  title={`${notifTotal} notification${notifTotal > 1 ? "s" : ""}`}
+                >
+                  <BellIcon />
+                  {notifTotal}
+                </span>
+              )}
+              <span className="sidebar-item-count">{ws.terminals.length}</span>
+              <button
+                className="sidebar-item-action"
+                title="New terminal (default agent)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuickNew(ws.id);
+                }}
+              >
+                <TerminalPlusIcon />
+              </button>
+              <button
+                className="sidebar-item-action"
+                title="Choose agent…"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPickNew(ws.id);
+                }}
+              >
+                <TerminalMoreIcon />
+              </button>
+              <button
+                className="sidebar-item-action"
+                title="Rename workspace"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startEdit(ws);
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                </svg>
+              </button>
+              <button
+                className="sidebar-item-action sidebar-item-close"
+                title="Close workspace"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose(ws.id);
+                }}
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="sidebar-footer">
+        <button className="sidebar-add" onClick={onAdd}>
+          + New workspace
+        </button>
+        <button
+          className="sidebar-gear"
+          title="Keyboard shortcuts"
+          onClick={onOpenSettings}
+        >
+          <SettingsIcon />
+        </button>
+      </div>
+      {menu && menuWorkspace && (
+        <div
+          className="context-menu"
+          style={{ left: menu.x, top: menu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <button
+            className="context-menu-item"
+            onClick={() => {
+              setMenu(null);
+              onQuickNew(menu.id);
+            }}
+          >
+            New terminal
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => {
+              setMenu(null);
+              onPickNew(menu.id);
+            }}
+          >
+            Choose agent…
+          </button>
+          <button
+            className="context-menu-item"
+            onClick={() => {
+              setMenu(null);
+              startEdit(menuWorkspace);
+            }}
+          >
+            Rename
+          </button>
+          <div className="context-menu-separator" />
+          <button
+            className="context-menu-item danger"
+            onClick={() => {
+              setMenu(null);
+              onClose(menu.id);
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
+    </aside>
+  );
+}

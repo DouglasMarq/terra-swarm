@@ -6,7 +6,7 @@ import {
   useVideoConfig,
 } from 'remotion';
 import {COLORS} from '../theme';
-import {SwarmMark} from '../components/SwarmMark';
+import {Logo} from '../components/Logo';
 import {FadeIn} from '../components/FadeIn';
 
 export const Title: React.FC = () => {
@@ -43,7 +43,7 @@ export const Title: React.FC = () => {
             gap: 36,
           }}
         >
-          <SwarmMark size={34} gap={12} />
+          <Logo size={150} />
           <div
             style={{
               color: COLORS.text,

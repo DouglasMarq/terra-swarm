@@ -46,6 +46,7 @@ impl Backlog {
     }
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 pub struct PtyEntry {
     pub input: std::sync::mpsc::SyncSender<Vec<u8>>,
     pub master: Arc<Mutex<Box<dyn MasterPty + Send>>>,
@@ -532,12 +533,90 @@ fn login_shell() -> Option<String> {
     }
 }
 
+#[cfg(unix)]
 fn valid_shell(shell: &str) -> bool {
     shell.starts_with('/') && std::path::Path::new(shell).exists()
 }
 
+#[cfg(windows)]
+fn valid_shell(shell: &str) -> bool {
+    let path = std::path::Path::new(shell);
+    path.is_absolute() && path.exists()
+}
+
+#[cfg(windows)]
+fn find_on_path(exe: &str) -> Option<String> {
+    let output = std::process::Command::new("where.exe")
+        .arg(exe)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8(output.stdout)
+        .ok()
+        .and_then(|s| s.lines().next().map(|l| l.trim().to_string()))
+        .filter(|p| !p.is_empty() && std::path::Path::new(p).exists())
+}
+
+#[cfg(windows)]
+fn find_git_bash() -> Option<String> {
+    if let Some(git) = find_on_path("git.exe") {
+        let path = std::path::Path::new(&git);
+        if let Some(root) = path.parent().and_then(|p| p.parent()) {
+            let bash = root.join("bin").join("bash.exe");
+            if bash.exists() {
+                return Some(bash.to_string_lossy().into_owned());
+            }
+        }
+    }
+    let mut candidates: Vec<std::path::PathBuf> = vec![
+        std::path::PathBuf::from(r"C:\Program Files\Git\bin\bash.exe"),
+        std::path::PathBuf::from(r"C:\Program Files (x86)\Git\bin\bash.exe"),
+    ];
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        candidates.push(
+            std::path::Path::new(&local)
+                .join("Programs")
+                .join("Git")
+                .join("bin")
+                .join("bash.exe"),
+        );
+    }
+    candidates
+        .into_iter()
+        .find(|p| p.exists())
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+#[cfg(windows)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ShellFlavor {
+    PowerShell,
+    Cmd,
+    Posix,
+}
+
+#[cfg(windows)]
+fn shell_flavor(shell: &str) -> ShellFlavor {
+    let name = std::path::Path::new(shell)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(shell)
+        .to_lowercase();
+    if name.starts_with("pwsh") || name.starts_with("powershell") {
+        ShellFlavor::PowerShell
+    } else if name.starts_with("cmd") {
+        ShellFlavor::Cmd
+    } else {
+        ShellFlavor::Posix
+    }
+}
+
+#[cfg(unix)]
 fn user_shell() -> String {
-    #[cfg(unix)]
     if let Some(shell) = login_shell() {
         return shell;
     }
@@ -547,6 +626,22 @@ fn user_shell() -> String {
         }
     }
     "/bin/zsh".to_string()
+}
+
+#[cfg(windows)]
+fn user_shell() -> String {
+    if let Some(pwsh) = find_on_path("pwsh.exe") {
+        return pwsh;
+    }
+    if let Some(ps) = find_on_path("powershell.exe") {
+        return ps;
+    }
+    if let Ok(comspec) = std::env::var("COMSPEC") {
+        if valid_shell(&comspec) {
+            return comspec;
+        }
+    }
+    r"C:\Windows\System32\cmd.exe".to_string()
 }
 
 fn resolve_shell(preferred: Option<&str>) -> String {
@@ -565,20 +660,38 @@ pub fn list_available_shells() -> Vec<String> {
         }
     };
     #[cfg(unix)]
-    if let Some(shell) = login_shell() {
-        add(shell);
-    }
-    if let Ok(contents) = std::fs::read_to_string("/etc/shells") {
-        for line in contents.lines() {
-            let line = line.trim();
-            if line.starts_with('#') {
-                continue;
+    {
+        if let Some(shell) = login_shell() {
+            add(shell);
+        }
+        if let Ok(contents) = std::fs::read_to_string("/etc/shells") {
+            for line in contents.lines() {
+                let line = line.trim();
+                if line.starts_with('#') {
+                    continue;
+                }
+                add(line.to_string());
             }
-            add(line.to_string());
+        }
+        if let Ok(shell) = std::env::var("SHELL") {
+            add(shell);
         }
     }
-    if let Ok(shell) = std::env::var("SHELL") {
-        add(shell);
+    #[cfg(windows)]
+    {
+        if let Some(pwsh) = find_on_path("pwsh.exe") {
+            add(pwsh);
+        }
+        if let Some(ps) = find_on_path("powershell.exe") {
+            add(ps);
+        }
+        if let Some(bash) = find_git_bash() {
+            add(bash);
+        }
+        if let Ok(comspec) = std::env::var("COMSPEC") {
+            add(comspec);
+        }
+        add(r"C:\Windows\System32\cmd.exe".to_string());
     }
     shells
 }
@@ -622,10 +735,36 @@ pub fn spawn_terminal_inner(
 
     let shell = resolve_shell(preferred_shell);
     let mut cmd = CommandBuilder::new(&shell);
-    if command.is_empty() || command == "shell" {
-        cmd.args(["-l", "-i"]);
-    } else {
-        cmd.args(["-l", "-c", &format!("exec {}", command)]);
+    let interactive = command.is_empty() || command == "shell";
+    #[cfg(unix)]
+    {
+        if interactive {
+            cmd.args(["-l", "-i"]);
+        } else {
+            cmd.args(["-l", "-c", &format!("exec {}", command)]);
+        }
+    }
+    #[cfg(windows)]
+    match shell_flavor(&shell) {
+        ShellFlavor::PowerShell => {
+            if interactive {
+                cmd.args(["-NoLogo"]);
+            } else {
+                cmd.args(["-NoLogo", "-Command", &command]);
+            }
+        }
+        ShellFlavor::Cmd => {
+            if !interactive {
+                cmd.args(["/C", &command]);
+            }
+        }
+        ShellFlavor::Posix => {
+            if interactive {
+                cmd.args(["-l", "-i"]);
+            } else {
+                cmd.args(["-l", "-c", &format!("exec {}", command)]);
+            }
+        }
     }
     cmd.cwd(&cwd);
     cmd.env("TERM", "xterm-256color");
@@ -938,17 +1077,9 @@ pub fn spawn_terminal(
 pub fn demo_seed(app: &AppHandle) {
     let store = app.state::<Mutex<WorkspaceStore>>();
     let manager = app.state::<Mutex<PtyManager>>();
-    let shell = user_shell();
     let mut picked: Vec<&str> = Vec::new();
     for c in ["claude", "codex", "opencode", "kimi"] {
-        let ok = std::process::Command::new(&shell)
-            .args(["-l", "-c", &format!("command -v {}", c)])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-        if ok {
+        if command_available(c) {
             picked.push(c);
         }
         if picked.len() == 2 {
@@ -967,6 +1098,7 @@ pub fn demo_seed(app: &AppHandle) {
         .lock()
         .map(|mut s| s.create("scratch".into(), String::new()));
     if let Ok(ws2) = ws2 {
+        #[cfg(unix)]
         let _ = spawn_terminal_inner(app, &manager, &store, &ws2.id, "top", 100, 30, None, None);
         let _ = spawn_terminal_inner(app, &manager, &store, &ws2.id, "shell", 100, 30, None, None);
     }
@@ -1115,6 +1247,22 @@ pub fn running_terminals(
         .collect())
 }
 
+#[cfg(unix)]
+fn command_available(id: &str) -> bool {
+    std::process::Command::new(user_shell())
+        .args(["-l", "-c", &format!("command -v {}", id)])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn command_available(id: &str) -> bool {
+    find_on_path(id).is_some()
+}
+
 #[tauri::command(async)]
 pub fn detect_agents() -> Vec<AgentInfo> {
     let candidates: [(&str, &str); 6] = [
@@ -1125,18 +1273,10 @@ pub fn detect_agents() -> Vec<AgentInfo> {
         ("gemini", "Gemini"),
         ("aider", "Aider"),
     ];
-    let shell = user_shell();
     let mut handles = Vec::new();
     for (id, label) in candidates {
-        let shell = shell.clone();
         handles.push(std::thread::spawn(move || {
-            let available = std::process::Command::new(&shell)
-                .args(["-l", "-c", &format!("command -v {}", id)])
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .map(|s| s.success())
-                .unwrap_or(false);
+            let available = command_available(id);
             AgentInfo {
                 id: id.to_string(),
                 label: label.to_string(),

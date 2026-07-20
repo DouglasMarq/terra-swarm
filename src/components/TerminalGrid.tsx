@@ -141,7 +141,13 @@ function dropTargetAt(
   };
 }
 
+const IS_WINDOWS = navigator.userAgent.includes("Windows");
+
 function shellQuote(p: string): string {
+  if (IS_WINDOWS) {
+    if (/^[A-Za-z0-9_\-./\\:@%+=,~]+$/.test(p)) return p;
+    return `"${p.replace(/"/g, '\\"')}"`;
+  }
   if (/^[A-Za-z0-9_\-./~:@%+=,]+$/.test(p)) return p;
   return `'${p.replace(/'/g, `'\\''`)}'`;
 }

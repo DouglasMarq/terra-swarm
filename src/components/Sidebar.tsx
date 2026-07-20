@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
+import { AnimatePresence, Reorder, motion, useDragControls } from "motion/react";
 import type { Workspace } from "../types";
+import { popAnim } from "../motion";
 
 interface Props {
   workspaces: Workspace[];
@@ -11,7 +13,8 @@ interface Props {
   onAdd: () => void;
   onClose: (id: string) => void;
   onRename: (id: string, name: string) => void;
-  onReorder: (dragId: string, targetId: string) => void;
+  onReorder: (ordered: Workspace[]) => void;
+  onPersistOrder: () => void;
   onQuickNew: (id: string) => void;
   onPickNew: (id: string) => void;
   onOpenSettings: () => void;
@@ -68,6 +71,164 @@ function SettingsIcon() {
   );
 }
 
+interface ItemProps {
+  ws: Workspace;
+  active: boolean;
+  editing: boolean;
+  draft: string;
+  notifTotal: number;
+  branch: string | undefined;
+  onSelect: () => void;
+  onStartEdit: () => void;
+  onQuickNew: () => void;
+  onPickNew: () => void;
+  onClose: () => void;
+  onOpenMenu: (e: ReactMouseEvent) => void;
+  onDraftChange: (v: string) => void;
+  onCommit: () => void;
+  onCancelEdit: () => void;
+  onPersistOrder: () => void;
+}
+
+function WorkspaceItem({
+  ws,
+  active,
+  editing,
+  draft,
+  notifTotal,
+  branch,
+  onSelect,
+  onStartEdit,
+  onQuickNew,
+  onPickNew,
+  onClose,
+  onOpenMenu,
+  onDraftChange,
+  onCommit,
+  onCancelEdit,
+  onPersistOrder,
+}: ItemProps) {
+  // Drag starts only from the name/branch area so the action buttons stay
+  // clickable; Reorder animates the siblings out of the way while dragging.
+  const controls = useDragControls();
+  const justDragged = useRef(false);
+
+  return (
+    <Reorder.Item
+      value={ws}
+      dragListener={false}
+      dragControls={controls}
+      whileDrag={{
+        scale: 1.03,
+        boxShadow: "0 14px 30px rgba(0, 0, 0, 0.5)",
+      }}
+      title={ws.cwd}
+      className={`sidebar-item ${active ? "active" : ""}`}
+      onDragStart={() => {
+        justDragged.current = true;
+        document.body.classList.add("ws-dragging");
+      }}
+      onDragEnd={() => {
+        document.body.classList.remove("ws-dragging");
+        onPersistOrder();
+        // The click that follows a drop would re-select the item; swallow it.
+        setTimeout(() => {
+          justDragged.current = false;
+        }, 0);
+      }}
+      onClick={() => {
+        if (justDragged.current) {
+          justDragged.current = false;
+          return;
+        }
+        onSelect();
+      }}
+      onDoubleClick={onStartEdit}
+      onContextMenu={onOpenMenu}
+    >
+      <div
+        className="sidebar-item-main"
+        onPointerDown={(e) => {
+          if (e.button !== 0 || editing) return;
+          controls.start(e);
+        }}
+      >
+        {editing ? (
+          <input
+            className="sidebar-rename-input"
+            autoFocus
+            value={draft}
+            onChange={(e) => onDraftChange(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={onCommit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onCommit();
+              if (e.key === "Escape") onCancelEdit();
+            }}
+          />
+        ) : (
+          <span className="sidebar-item-name">{ws.name}</span>
+        )}
+        {branch && (
+          <span className="sidebar-item-branch">
+            <BranchIcon />
+            {branch}
+          </span>
+        )}
+      </div>
+      {notifTotal > 0 && (
+        <span
+          className="sidebar-item-dot"
+          key={notifTotal}
+          title={`${notifTotal} notification${notifTotal > 1 ? "s" : ""}`}
+        />
+      )}
+      <button
+        className="sidebar-item-action"
+        title="New terminal (default agent)"
+        onClick={(e) => {
+          e.stopPropagation();
+          onQuickNew();
+        }}
+      >
+        <TerminalPlusIcon />
+      </button>
+      <button
+        className="sidebar-item-action"
+        title="Choose agent…"
+        onClick={(e) => {
+          e.stopPropagation();
+          onPickNew();
+        }}
+      >
+        <TerminalMoreIcon />
+      </button>
+      <button
+        className="sidebar-item-action"
+        title="Rename workspace"
+        onClick={(e) => {
+          e.stopPropagation();
+          onStartEdit();
+        }}
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+        </svg>
+      </button>
+      <button
+        className="sidebar-item-action sidebar-item-close"
+        title="Close workspace"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+      >
+        ×
+      </button>
+    </Reorder.Item>
+  );
+}
+
 export function Sidebar({
   workspaces,
   activeId,
@@ -78,6 +239,7 @@ export function Sidebar({
   onClose,
   onRename,
   onReorder,
+  onPersistOrder,
   onQuickNew,
   onPickNew,
   onOpenSettings,
@@ -88,9 +250,6 @@ export function Sidebar({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
-  const suppressClick = useRef(false);
 
   const openMenu = (e: ReactMouseEvent, ws: Workspace) => {
     e.preventDefault();
@@ -122,57 +281,6 @@ export function Sidebar({
   }, [menu]);
 
   const menuWorkspace = menu ? workspaces.find((w) => w.id === menu.id) : null;
-
-  // Mouse-based reordering: Tauri keeps `dragDropEnabled` on for file drops
-  // into terminals, which breaks HTML5 drag-and-drop inside the webview, so
-  // `draggable` never fires. Same pattern as TerminalGrid's pane reorder.
-  const startReorder = (e: ReactMouseEvent, ws: Workspace) => {
-    if (e.button !== 0 || editingId === ws.id) return;
-    const startX = e.clientX;
-    const startY = e.clientY;
-    let dragging = false;
-
-    const targetAt = (x: number, y: number): string | null => {
-      const el = document.elementFromPoint(x, y);
-      const item = el?.closest("[data-ws-id]");
-      return item?.getAttribute("data-ws-id") ?? null;
-    };
-
-    const onMove = (ev: MouseEvent) => {
-      if (
-        !dragging &&
-        Math.hypot(ev.clientX - startX, ev.clientY - startY) > 6
-      ) {
-        dragging = true;
-        setDragId(ws.id);
-        document.body.classList.add("reordering");
-      }
-      if (dragging) {
-        const t = targetAt(ev.clientX, ev.clientY);
-        setDropTargetId(t && t !== ws.id ? t : null);
-      }
-    };
-    const onUp = (ev: MouseEvent) => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      document.body.classList.remove("reordering");
-      if (dragging) {
-        suppressClick.current = true;
-        // The flag is cleared by the item onClick that follows a drop on an
-        // item; when the drag ends off-item no click fires, so clear it on
-        // the next tick instead of swallowing a later legitimate click.
-        setTimeout(() => {
-          suppressClick.current = false;
-        }, 0);
-        const t = targetAt(ev.clientX, ev.clientY);
-        if (t && t !== ws.id) onReorder(ws.id, t);
-      }
-      setDragId(null);
-      setDropTargetId(null);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  };
 
   const startEdit = (ws: Workspace) => {
     setEditingId(ws.id);
@@ -242,109 +350,40 @@ export function Sidebar({
           «
         </button>
       </div>
-      <div className="sidebar-list">
+      <Reorder.Group
+        axis="y"
+        values={workspaces}
+        onReorder={onReorder}
+        className="sidebar-list"
+      >
         {workspaces.map((ws) => {
           const notifTotal = ws.terminals.reduce(
-              (acc, t) => acc + (notifications[t.id] ?? 0),
-              0,
-            );
-          const branch = branches[ws.id];
+            (acc, t) => acc + (notifications[t.id] ?? 0),
+            0,
+          );
           return (
-            <div
+            <WorkspaceItem
               key={ws.id}
-              data-ws-id={ws.id}
-              title={ws.cwd}
-              className={`sidebar-item ${ws.id === activeId ? "active" : ""} ${dragId === ws.id ? "dragging" : ""} ${dropTargetId === ws.id && dragId !== ws.id ? "drop-target" : ""}`}
-              onClick={() => {
-                if (suppressClick.current) {
-                  suppressClick.current = false;
-                  return;
-                }
-                onSelect(ws.id);
-              }}
-              onDoubleClick={() => startEdit(ws)}
-              onContextMenu={(e) => openMenu(e, ws)}
-            >
-              <div
-                className="sidebar-item-main"
-                onMouseDown={(e) => startReorder(e, ws)}
-              >
-                {editingId === ws.id ? (
-                  <input
-                    className="sidebar-rename-input"
-                    autoFocus
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    onBlur={commit}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commit();
-                      if (e.key === "Escape") setEditingId(null);
-                    }}
-                  />
-                ) : (
-                  <span className="sidebar-item-name">{ws.name}</span>
-                )}
-                {branch && (
-                  <span className="sidebar-item-branch">
-                    <BranchIcon />
-                    {branch}
-                  </span>
-                )}
-              </div>
-              {notifTotal > 0 && (
-                <span
-                  className="sidebar-item-dot"
-                  key={notifTotal}
-                  title={`${notifTotal} notification${notifTotal > 1 ? "s" : ""}`}
-                />
-              )}
-              <button
-                className="sidebar-item-action"
-                title="New terminal (default agent)"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onQuickNew(ws.id);
-                }}
-              >
-                <TerminalPlusIcon />
-              </button>
-              <button
-                className="sidebar-item-action"
-                title="Choose agent…"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPickNew(ws.id);
-                }}
-              >
-                <TerminalMoreIcon />
-              </button>
-              <button
-                className="sidebar-item-action"
-                title="Rename workspace"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  startEdit(ws);
-                }}
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                </svg>
-              </button>
-              <button
-                className="sidebar-item-action sidebar-item-close"
-                title="Close workspace"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClose(ws.id);
-                }}
-              >
-                ×
-              </button>
-            </div>
+              ws={ws}
+              active={ws.id === activeId}
+              editing={editingId === ws.id}
+              draft={draft}
+              notifTotal={notifTotal}
+              branch={branches[ws.id]}
+              onSelect={() => onSelect(ws.id)}
+              onStartEdit={() => startEdit(ws)}
+              onQuickNew={() => onQuickNew(ws.id)}
+              onPickNew={() => onPickNew(ws.id)}
+              onClose={() => onClose(ws.id)}
+              onOpenMenu={(e) => openMenu(e, ws)}
+              onDraftChange={setDraft}
+              onCommit={commit}
+              onCancelEdit={() => setEditingId(null)}
+              onPersistOrder={onPersistOrder}
+            />
           );
         })}
-      </div>
+      </Reorder.Group>
       <div className="sidebar-footer">
         <button className="sidebar-add" onClick={onAdd}>
           + New workspace
@@ -357,9 +396,11 @@ export function Sidebar({
           <SettingsIcon />
         </button>
       </div>
+      <AnimatePresence>
       {menu && menuWorkspace && (
-        <div
+        <motion.div
           className="context-menu"
+          {...popAnim}
           style={{ left: menu.x, top: menu.y }}
           onMouseDown={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
@@ -401,8 +442,9 @@ export function Sidebar({
           >
             Delete
           </button>
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </aside>
   );
 }

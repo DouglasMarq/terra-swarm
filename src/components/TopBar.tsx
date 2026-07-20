@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { listen } from "@tauri-apps/api/event";
 import type { NotificationItem, VoiceStatus, Workspace } from "../types";
+import { popAnim } from "../motion";
 
 interface Props {
   workspaces: Workspace[];
@@ -286,8 +288,9 @@ export function TopBar({
           <GridIcon />
           <span className="topbar-grid-value">{gridCols}</span>
         </button>
+        <AnimatePresence>
         {gridOpen && (
-          <div className="grid-panel">
+          <motion.div className="grid-panel" {...popAnim}>
             <div className="notif-head">
               <span className="notif-title">Grid layout</span>
             </div>
@@ -308,8 +311,9 @@ export function TopBar({
                 </button>
               ))}
             </div>
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
       </div>
       <button
         className={`topbar-mic ${voiceStatus} ${voiceEnabled ? "" : "off"}`}
@@ -339,8 +343,9 @@ export function TopBar({
             </span>
           )}
         </button>
+        <AnimatePresence>
         {open && (
-          <div className="notif-panel">
+          <motion.div className="notif-panel" {...popAnim}>
             <div className="notif-head">
               <span className="notif-title">Notifications</span>
               {unread > 0 && (
@@ -377,14 +382,26 @@ export function TopBar({
               {items.length === 0 ? (
                 <div className="notif-empty">No notifications</div>
               ) : (
-                items.map((n) => {
+                <AnimatePresence initial={false}>
+                {items.map((n) => {
                   const ws = workspaces.find((w) => w.id === n.workspaceId);
                   const cmd = ws?.terminals.find(
                     (t) => t.id === n.terminalId,
                   )?.command;
                   return (
-                    <div
+                    <motion.div
                       key={n.key}
+                      layout
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{
+                        opacity: 0,
+                        height: 0,
+                        paddingTop: 0,
+                        paddingBottom: 0,
+                      }}
+                      transition={{ duration: 0.16 }}
+                      style={{ overflow: "hidden" }}
                       className={`notif-item ${n.read ? "" : "unread"}`}
                     >
                       <span className="notif-check">
@@ -425,13 +442,15 @@ export function TopBar({
                           )
                         )}
                       </div>
-                    </div>
+                    </motion.div>
                   );
-                })
+                })}
+                </AnimatePresence>
               )}
             </div>
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
       </div>
     </header>
   );

@@ -63,12 +63,21 @@ button {
   border-radius: 6px;
   padding: 6px 12px;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease,
+    opacity 0.14s ease,
+    transform 0.08s ease;
 }
 
 button:hover {
   background: var(--bg-hover);
   border-color: #40404a;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .app {
@@ -137,6 +146,9 @@ button:hover {
   background: transparent;
   color: var(--text-muted);
   border-radius: 6px;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease;
 }
 
 .topbar-bell:hover,
@@ -182,6 +194,7 @@ button:hover {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   z-index: 100;
+  transform-origin: top right;
 }
 
 .grid-panel-list {
@@ -234,6 +247,7 @@ button:hover {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   z-index: 100;
+  transform-origin: top right;
 }
 
 .notif-head {
@@ -301,6 +315,7 @@ button:hover {
   gap: 10px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
+  transition: background 0.25s ease;
 }
 
 .notif-item:last-child {
@@ -381,6 +396,20 @@ button:hover {
   user-select: none;
 }
 
+.statusbar-dot {
+  animation: dot-breathe 2.6s ease-in-out infinite;
+}
+
+@keyframes dot-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(74, 222, 128, 0);
+  }
+}
+
 .statusbar-item {
   white-space: nowrap;
 }
@@ -426,6 +455,18 @@ button:hover {
   flex-direction: column;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
+  animation: sidebar-in 0.2s ease-out;
+}
+
+@keyframes sidebar-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .sidebar.collapsed {
@@ -473,6 +514,10 @@ button:hover {
   font-size: 12px;
   font-weight: 600;
   padding: 0;
+  transition:
+    border-color 0.14s ease,
+    color 0.14s ease,
+    background 0.14s ease;
 }
 
 .sidebar-dot.active {
@@ -520,6 +565,12 @@ button:hover {
   cursor: pointer;
   border-radius: 6px;
   border: 1px solid transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    opacity 0.14s ease;
 }
 
 .sidebar-item:hover {
@@ -535,8 +586,12 @@ button:hover {
   opacity: 0.4;
 }
 
-.sidebar-item.drop-target {
-  border-color: var(--accent, #4f8cff);
+.sidebar-item-main {
+  cursor: grab;
+}
+
+.sidebar-item-main:active {
+  cursor: grabbing;
 }
 
 .sidebar-item-main {
@@ -620,6 +675,7 @@ button:hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   display: flex;
   flex-direction: column;
+  transform-origin: top left;
 }
 
 .context-menu-item {
@@ -659,6 +715,8 @@ button:hover {
   outline: none;
   width: 100%;
   min-width: 0;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .sidebar-rename-input:focus {
@@ -722,6 +780,16 @@ button:hover {
   justify-content: center;
   gap: 14px;
   color: var(--text-faint);
+  animation: fade-in 0.25s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* ---------- terminal grid ---------- */
@@ -734,6 +802,16 @@ button:hover {
   align-content: flex-start;
   gap: 12px;
   padding: 12px;
+  animation: grid-in 0.2s ease-out;
+}
+
+@keyframes grid-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .term-rows.has-expanded .pane:not(.expanded) {
@@ -778,8 +856,12 @@ button:hover {
   animation: pane-in 0.18s ease-out;
 }
 
-.pane.dragging {
-  display: none;
+.pane.floating {
+  border-color: #52525b;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+  cursor: grabbing;
+  opacity: 0.95;
+  will-change: transform;
 }
 
 .pane.drag-over {
@@ -806,29 +888,6 @@ button:hover {
   box-shadow:
     0 0 0 1px #52525b,
     0 1px 4px rgba(0, 0, 0, 0.35);
-}
-
-.drag-ghost {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 100;
-  pointer-events: none;
-  padding: 6px 12px;
-  border-radius: 8px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text);
-  opacity: 0.95;
-  will-change: transform;
-  transition: opacity 0.15s ease;
-}
-
-.drag-ghost.leaving {
-  opacity: 0;
 }
 
 .pane-resize {
@@ -863,6 +922,15 @@ body.reordering .pane-body {
 body.reordering {
   user-select: none;
   cursor: grabbing;
+}
+
+/* Kill text selection app-wide while a drag gesture is active */
+body.reordering *,
+body.reordering,
+body.ws-dragging *,
+body.ws-dragging {
+  -webkit-user-select: none !important;
+  user-select: none !important;
 }
 
 .pane-header {
@@ -1054,6 +1122,7 @@ body.reordering {
   color: var(--red);
   font-size: 13px;
   z-index: 10;
+  animation: fade-in 0.2s ease-out;
 }
 
 .pane-overlay-actions {
@@ -1112,10 +1181,12 @@ body.reordering {
   border-radius: 6px;
   padding: 8px 10px;
   outline: none;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
 }
 
 .modal input:focus {
   border-color: #71717a;
+  box-shadow: 0 0 0 3px rgba(113, 113, 122, 0.18);
 }
 
 .modal-folder {
@@ -1159,6 +1230,10 @@ body.reordering {
   padding: 10px 14px;
   border-radius: 10px;
   text-align: left;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    opacity 0.14s ease;
 }
 
 .agent-option:disabled {
@@ -1250,6 +1325,24 @@ body.reordering {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 14px;
+  animation: resume-item-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.resume-item:nth-child(1) { animation-delay: 0.03s; }
+.resume-item:nth-child(2) { animation-delay: 0.08s; }
+.resume-item:nth-child(3) { animation-delay: 0.13s; }
+.resume-item:nth-child(4) { animation-delay: 0.18s; }
+.resume-item:nth-child(n + 5) { animation-delay: 0.23s; }
+
+@keyframes resume-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .resume-item-top {
@@ -1347,10 +1440,12 @@ body.reordering {
 /* ---------- settings ---------- */
 .settings-modal {
   width: 640px;
+  height: 560px;
 }
 
 .settings-body {
   display: flex;
+  flex: 1;
   gap: 18px;
   min-height: 0;
 }
@@ -1359,7 +1454,7 @@ body.reordering {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: 160px;
+  width: 176px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   padding-right: 14px;
@@ -1373,6 +1468,10 @@ body.reordering {
   background: transparent;
   border-color: transparent;
   border-radius: 8px;
+  white-space: nowrap;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease;
 }
 
 .settings-nav-item:hover {
@@ -1394,7 +1493,6 @@ body.reordering {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-height: 60vh;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -1463,6 +1561,10 @@ body.reordering {
   font-family: "SF Mono", Menlo, monospace;
   font-size: 12px;
   text-align: center;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
 }
 
 .grid-cols-option.active {
@@ -1504,6 +1606,9 @@ body.reordering {
   color: var(--text);
   min-width: 72px;
   text-align: center;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease;
 }
 
 .hotkey-chip:hover {
@@ -1694,4 +1799,49 @@ body.reordering {
   font-size: 12px;
   color: var(--text-faint);
   padding: 6px 0;
+}
+
+/* ---------- misc transitions ---------- */
+.topbar-mic,
+.sidebar-collapse-btn,
+.sidebar-gear,
+.notif-icon-btn,
+.pane-btn,
+.resume-icon-btn,
+.voice-chip,
+.grid-panel-item,
+.context-menu-item,
+.voice-select,
+.sidebar-rename-input {
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease,
+    opacity 0.14s ease;
+}
+
+.sidebar-item-branch,
+.sidebar-item-name,
+.pane-title,
+.topbar-ws {
+  transition: color 0.14s ease;
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }

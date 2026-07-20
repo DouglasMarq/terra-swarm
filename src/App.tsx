@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
@@ -18,6 +19,7 @@ import type {
   Workspace,
 } from "./types";
 import { computeTerminalMove, type DropZone } from "./layout";
+import { backdropAnim, modalAnim } from "./motion";
 import { ResumeDialog } from "./components/ResumeDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
@@ -104,6 +106,7 @@ const SETTINGS_SECTIONS = [
   { id: "terminal", label: "Terminal" },
   { id: "voice", label: "Voice input" },
   { id: "shortcuts", label: "Keyboard shortcuts" },
+  { id: "accessibility", label: "Accessibility" },
   { id: "about", label: "About" },
 ] as const;
 
@@ -285,6 +288,18 @@ function App() {
   const [defaultShell, setDefaultShell] = useState(
     () => localStorage.getItem("defaultShell") ?? "",
   );
+  const [reduceMotion, setReduceMotion] = useState(
+    () => localStorage.getItem("reduceMotion") === "1",
+  );
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("reduce-motion", reduceMotion);
+  }, [reduceMotion]);
+
+  const updateReduceMotion = (on: boolean) => {
+    setReduceMotion(on);
+    localStorage.setItem("reduceMotion", on ? "1" : "0");
+  };
   const agentsRef = useRef<AgentInfo[]>([]);
   const agentsReadyRef = useRef<Promise<void>>(Promise.resolve());
   const [availableShells, setAvailableShells] = useState<string[]>([]);
@@ -835,25 +850,28 @@ function App() {
   };
 
   const persistWidth = (wsId: string, id: string, pct: number) => {
-    api.setTerminalWidth(wsId, id, pct).catch(() => {});
+    api
+      .setTerminalWidth(wsId, id, pct)
+      .catch((err) => console.warn("persist width failed:", err));
   };
 
   const persistOrder = (wsId: string, order: string[]) => {
-    api.reorderTerminals(wsId, order).catch(() => {});
+    api
+      .reorderTerminals(wsId, order)
+      .catch((err) => console.warn("persist order failed:", err));
   };
 
-  const reorderWorkspace = (dragId: string, targetId: string) => {
-    if (dragId === targetId) return;
-    const ids = workspaces.map((w) => w.id);
-    const from = ids.indexOf(dragId);
-    const to = ids.indexOf(targetId);
-    if (from < 0 || to < 0) return;
-    ids.splice(to, 0, ids.splice(from, 1)[0]);
-    setWorkspaces((prev) => {
-      const byId = new Map(prev.map((w) => [w.id, w]));
-      return ids.map((id) => byId.get(id)!);
-    });
-    api.reorderWorkspaces(ids).catch(() => {});
+  const wsOrderRef = useRef<Workspace[]>([]);
+  wsOrderRef.current = workspaces;
+
+  const reorderWorkspacesLocal = (ordered: Workspace[]) => {
+    setWorkspaces(ordered);
+  };
+
+  const persistWorkspaceOrder = () => {
+    api
+      .reorderWorkspaces(wsOrderRef.current.map((w) => w.id))
+      .catch(() => {});
   };
 
   const moveTerminalLocal = (
@@ -863,7 +881,10 @@ function App() {
     zone: DropZone,
     contentWidth: number,
   ) => {
-    const ws = workspaces.find((w) => w.id === wsId);
+    // Read through the ref, not the render closure: the drop gesture can
+    // outlive the render that started it (a terminal closed or a refresh
+    // landed mid-drag), and the stale list would resurrect the removed pane.
+    const ws = wsOrderRef.current.find((w) => w.id === wsId);
     if (!ws) return;
     const defaultBasis = gridCols > 0 ? Math.floor(100 / gridCols) : DEFAULT_BASIS;
     const move = computeTerminalMove(
@@ -880,7 +901,9 @@ function App() {
     );
     persistOrder(wsId, move.order);
     for (const { id, pct } of move.widths) {
-      api.setTerminalWidth(wsId, id, pct).catch(() => {});
+      api
+        .setTerminalWidth(wsId, id, pct)
+        .catch((err) => console.warn("persist width failed:", err));
     }
   };
 
@@ -1341,7 +1364,7 @@ function App() {
               const t = active?.terminals[Number(termMatch[1]) - 1];
               if (t) {
                 setFocusedId(t.id);
-                setExpandedId(null);
+                setExpandedId((cur) => (cur === t.id ? cur : null));
               }
             }
             break;
@@ -1409,6 +1432,7 @@ function App() {
   };
 
   return (
+    <MotionConfig reducedMotion={reduceMotion ? "always" : "user"}>
     <div className="app">
       <TopBar
         workspaces={workspaces}
@@ -1442,7 +1466,8 @@ function App() {
         onAdd={() => setShowNewWs(true)}
         onClose={closeWorkspace}
         onRename={renameWorkspace}
-        onReorder={reorderWorkspace}
+        onReorder={reorderWorkspacesLocal}
+        onPersistOrder={persistWorkspaceOrder}
         onQuickNew={quickNewTerminal}
         onPickNew={openPicker}
         onOpenSettings={() => setShowSettings(true)}
@@ -1515,6 +1540,7 @@ function App() {
         voiceStatus={voiceStatus}
       />
 
+      <AnimatePresence>
       {showResume && (
         <ResumeDialog
           items={resumeItems}
@@ -1525,10 +1551,20 @@ function App() {
           onDismissAll={dismissAll}
         />
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {showNewWs && (
-        <div className="modal-backdrop" onClick={() => setShowNewWs(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <motion.div
+          className="modal-backdrop"
+          {...backdropAnim}
+          onClick={() => setShowNewWs(false)}
+        >
+          <motion.div
+            className="modal"
+            {...modalAnim}
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2>New workspace</h2>
             <label>
               Name
@@ -1556,16 +1592,23 @@ function App() {
                 Create
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {showAgentPicker && (
-        <div
+        <motion.div
           className="modal-backdrop blur-strong"
+          {...backdropAnim}
           onClick={() => setShowAgentPicker(false)}
         >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <motion.div
+            className="modal"
+            {...modalAnim}
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2>New terminal</h2>
             <div className="agent-list">
               {agents.map((a) => (
@@ -1591,20 +1634,24 @@ function App() {
               />
               Save as default (quick-add skips this dialog)
             </label>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {showSettings && (
-        <div
+        <motion.div
           className="modal-backdrop"
+          {...backdropAnim}
           onClick={() => {
             setShowSettings(false);
             setCapturing(null);
           }}
         >
-          <div
+          <motion.div
             className="modal settings-modal"
+            {...modalAnim}
             onClick={(e) => e.stopPropagation()}
           >
             <h2>Settings</h2>
@@ -1820,6 +1867,29 @@ function App() {
                     </div>
                   </>
                 )}
+                {settingsSection === "accessibility" && (
+                  <>
+                    <div className="settings-title">Accessibility</div>
+                    <div className="toggle-row">
+                      <div className="toggle-row-text">
+                        <span className="toggle-row-label">Reduce motion</span>
+                        <span className="toggle-row-desc">
+                          Minimize animations and transitions across the app
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={reduceMotion}
+                        aria-label="Reduce motion"
+                        className={`toggle-switch ${reduceMotion ? "on" : ""}`}
+                        onClick={() => updateReduceMotion(!reduceMotion)}
+                      >
+                        <span className="toggle-knob" />
+                      </button>
+                    </div>
+                  </>
+                )}
                 {settingsSection === "about" && (
                   <>
                     <div className="settings-title">Terra Swarm</div>
@@ -1878,10 +1948,12 @@ function App() {
                 Done
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
+    </MotionConfig>
   );
 }
 

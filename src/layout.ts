@@ -14,35 +14,38 @@ export interface TerminalMove {
 export const MIN_PANE_WIDTH = 240;
 export const GRID_GAP = 12;
 
-// Split the flat terminal list into visual rows the same way flex-wrap does:
-// a new row starts whenever the accumulated flex basis would exceed 100%
-// (plus the small slack the per-pane `- 10px` affords) or when the panes'
-// minimum pixel widths no longer fit the container's content box.
+// Split the flat terminal list into visual rows the same way flex-wrap does.
+// Flex decides wrapping from each pane's hypothetical main size — flex-basis
+// resolved against the content box, clamped by min-width — so with a measured
+// container width we sum clamped pixel bases plus gaps; without one we fall
+// back to a pure percentage check.
 export function splitRows(
   terms: TerminalMeta[],
   defaultBasis: number,
   contentWidth = Infinity,
 ): TerminalMeta[][] {
-  const pctLimit =
-    contentWidth === Infinity
-      ? 100
-      : 100 + (GRID_GAP / Math.max(1, contentWidth)) * 100;
+  const pxBasis = (basis: number) =>
+    Math.max(MIN_PANE_WIDTH, (basis / 100) * contentWidth - GRID_GAP);
   const rows: TerminalMeta[][] = [[]];
-  let used = 0;
+  let usedPct = 0;
+  let usedPx = 0;
   for (const t of terms) {
     const basis = t.width ?? defaultBasis;
     const row = rows[rows.length - 1];
-    const overflowPct = used > 0 && used + basis > pctLimit;
-    const overflowPx =
+    const overflow =
       row.length > 0 &&
-      (row.length + 1) * MIN_PANE_WIDTH + row.length * GRID_GAP >
-        contentWidth;
-    if (overflowPct || overflowPx) {
+      (contentWidth === Infinity
+        ? usedPct + basis > 100
+        : usedPx + GRID_GAP + pxBasis(basis) > contentWidth + 0.01);
+    if (overflow) {
       rows.push([t]);
-      used = Math.min(100, basis);
+      usedPct = basis;
+      usedPx = contentWidth === Infinity ? 0 : pxBasis(basis);
     } else {
+      if (row.length > 0 && contentWidth !== Infinity) usedPx += GRID_GAP;
       row.push(t);
-      used = Math.min(100, used + basis);
+      usedPct += basis;
+      if (contentWidth !== Infinity) usedPx += pxBasis(basis);
     }
   }
   return rows;

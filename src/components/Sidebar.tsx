@@ -169,6 +169,7 @@ function WorkspaceItem({
         ) : (
           <span className="sidebar-item-name">{ws.name}</span>
         )}
+        <span className="sidebar-item-path">{ws.cwd}</span>
         {branch && (
           <span className="sidebar-item-branch">
             <BranchIcon />
@@ -259,7 +260,6 @@ export function Sidebar({
     const x = Math.min(e.clientX, window.innerWidth - menuWidth - 8);
     const y = Math.min(e.clientY, window.innerHeight - menuHeight - 8);
     setMenu({ id: ws.id, x, y });
-    onSelect(ws.id);
   };
 
   useEffect(() => {

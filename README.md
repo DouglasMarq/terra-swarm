@@ -4,26 +4,29 @@
 
 ![Terra Swarm demo](docs/media/terra-swarm-demo.gif)
 
-[Full-quality MP4](docs/media/terra-swarm-demo.mp4)
+## What is Terra Swarm?
+
+Terra Swarm is a desktop app for working with multiple AI coding agents at once. Instead of juggling terminal windows and tabs, you get a single window where each project is a **workspace**, and each workspace holds a grid of terminals — one per agent. Every pane is a real PTY, so agents behave exactly as they do in your normal terminal.
 
 ## Features
 
-- **Workspaces** — one workspace per project folder. Switch instantly with `⌘1…9` (macOS) / `Ctrl+1…9`, reorder via drag & drop, see the git branch of each workspace at a glance.
-- **Agent grid** — spawn terminals running `claude`, `codex`, `opencode`, `kimi` or any shell into a resizable, drag-to-reorder grid. Installed agents are auto-detected.
-- **Session resume** — on startup, Terra Swarm offers to bring back every terminal that was running when you quit, using agent-native continuation (`claude --continue`, `codex resume --last`, …) so agents pick up where they left off.
-- **Voice input** — dictate prompts into the focused terminal. Powered by local Whisper models (offline, GPU-accelerated on macOS), with per-model downloads and 16 languages.
-- **Notifications & context tracking** — get badged when an agent needs attention, jump straight to the terminal, and watch per-agent context-window usage.
-- **Keyboard-first** — every shortcut is remappable in Settings, with per-platform defaults.
-- **Auto-updates** — built-in updater keeps the app current.
+- **Workspaces** — one workspace per project folder. Switch instantly, reorder via drag & drop, and see the git branch of each workspace at a glance.
+- **Agent grid** — spawn `claude`, `codex`, `opencode`, `kimi` or any shell into a resizable, drag-to-reorder grid. Installed agents are auto-detected on your PATH.
+- **Session resume** — when you reopen the app, Terra Swarm offers to bring back every terminal that was running when you quit, using agent-native continuation (`claude --continue`, `codex resume --last`, …) so agents pick up exactly where they left off.
+- **Voice input** — dictate prompts straight into the focused terminal. Powered by local Whisper models: fully offline, GPU-accelerated on macOS, with per-model downloads and 16 languages.
+- **Notifications** — get badged when an agent finishes or needs input, and jump straight to the right terminal from the notification center.
+- **Context tracking** — watch each agent's context-window usage live, so you know before it runs out.
+- **Keyboard-first** — every action has a shortcut, and every shortcut is remappable.
+- **Auto-updates** — new versions install themselves in the background.
 
 ## Tech stack
 
-| Layer    | Tech                                                        |
-| -------- | ----------------------------------------------------------- |
-| Shell    | [Tauri 2](https://tauri.app) (Rust)                          |
-| Frontend | React 19 + TypeScript + Vite                                 |
-| Terminal | [xterm.js](https://xtermjs.org) + `portable-pty`             |
-| Voice    | [whisper-rs](https://github.com/tazz4843/whisper-rs) + cpal  |
+| Layer    | Tech                                                               |
+| -------- | ------------------------------------------------------------------ |
+| Shell    | [Tauri 2](https://tauri.app) (Rust)                                |
+| Frontend | React 19 + TypeScript + Vite                                       |
+| Terminal | [xterm.js](https://xtermjs.org) + `portable-pty`                   |
+| Voice    | [whisper-rs](https://github.com/tazz4843/whisper-rs) + cpal        |
 
 ## Getting started
 
@@ -53,15 +56,3 @@ npm run tauri build
 | Toggle voice input | `⇧⌘Space` |
 
 All shortcuts can be rebound in **Settings → Keyboard shortcuts**.
-
-## Demo video
-
-The demo above is generated with [Remotion](https://remotion.dev) from `video/`. To tweak and re-render it:
-
-```bash
-cd video
-npm install
-npm run studio   # live preview
-npm run render   # docs/media-ready MP4 (1920x1080 @ 30fps)
-npm run gif      # looping GIF (1280x720 @ 30fps)
-```

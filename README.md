@@ -21,16 +21,24 @@ Terra Swarm is a desktop app for working with multiple AI coding agents at once.
 
 ## Tech stack
 
-| Layer    | Tech                                                               |
-| -------- | ------------------------------------------------------------------ |
-| Shell    | [Tauri 2](https://tauri.app) (Rust)                                |
-| Frontend | React 19 + TypeScript + Vite                                       |
-| Terminal | [xterm.js](https://xtermjs.org) + `portable-pty`                   |
-| Voice    | [whisper-rs](https://github.com/tazz4843/whisper-rs) + cpal        |
+| Layer    | Tech                                                        |
+| -------- | ----------------------------------------------------------- |
+| Shell    | [Tauri 2](https://tauri.app) (Rust)                         |
+| Frontend | React 19 + TypeScript + Vite                                |
+| Terminal | [xterm.js](https://xtermjs.org) + `portable-pty`            |
+| Voice    | [whisper-rs](https://github.com/tazz4843/whisper-rs) + cpal |
 
 ## Getting started
 
 Prerequisites: [Node.js](https://nodejs.org), [Rust](https://rustup.rs), and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS.
+
+On Linux, also install:
+
+```bash
+sudo apt install -y build-essential cmake pkg-config clang libclang-dev \
+  libdbus-1-dev libasound2-dev \
+  libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+```
 
 ```bash
 npm install

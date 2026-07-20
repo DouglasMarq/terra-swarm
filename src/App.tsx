@@ -147,6 +147,29 @@ const VOICE_LANGUAGES = [
   { code: "ko", label: "Korean" },
 ];
 
+function MicLevelMeter({ active }: { active: boolean }) {
+  const fillRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!active) return;
+    const unlisten = listen<number>("voice-audio-level", (e) => {
+      const el = fillRef.current;
+      if (!el) return;
+      const level = Math.min(1, e.payload * 10);
+      el.style.transform = `scaleX(${level})`;
+    });
+    return () => {
+      unlisten.then((u) => u());
+    };
+  }, [active]);
+
+  return (
+    <div className="mic-test-meter">
+      <div className="mic-test-meter-fill" ref={fillRef} />
+    </div>
+  );
+}
+
 function loadFontSize(): number {
   const raw = Number(localStorage.getItem("termFontSize"));
   return Number.isFinite(raw) && raw >= MIN_FONT_SIZE && raw <= MAX_FONT_SIZE
@@ -315,6 +338,11 @@ function App() {
   const [voiceModel, setVoiceModel] = useState<string | null>(
     () => localStorage.getItem("voiceModel"),
   );
+  const [voiceInputDevice, setVoiceInputDevice] = useState<string | null>(
+    () => localStorage.getItem("voiceInputDevice"),
+  );
+  const [voiceInputDevices, setVoiceInputDevices] = useState<string[]>([]);
+  const [micTesting, setMicTesting] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
   const [voiceModels, setVoiceModels] = useState<VoiceModelInfo[]>([]);
   const [voiceDl, setVoiceDl] = useState<{
@@ -438,6 +466,9 @@ function App() {
         .catch(() => {});
       api
         .voiceSetLanguage(localStorage.getItem("voiceLanguage") ?? "auto")
+        .catch(() => {});
+      api
+        .voiceSetInputDevice(localStorage.getItem("voiceInputDevice"))
         .catch(() => {});
       const model = localStorage.getItem("voiceModel");
       if (model) {
@@ -1012,6 +1043,10 @@ function App() {
     api.voiceListModels().then(setVoiceModels).catch(() => {});
   }, []);
 
+  const refreshVoiceInputDevices = useCallback(() => {
+    api.voiceListInputDevices().then(setVoiceInputDevices).catch(() => {});
+  }, []);
+
   const toggleVoice = useCallback(() => {
     if (!voiceEnabled) {
       setSettingsSection("voice");
@@ -1120,10 +1155,12 @@ function App() {
         setVoiceEnabled(true);
         localStorage.setItem("voiceEnabled", "1");
         api.voiceSetLanguage(voiceLang).catch(() => {});
+        api.voiceSetInputDevice(voiceInputDevice).catch(() => {});
         if (voiceModel) {
           api.voiceSetModel(voiceModel).catch(handleVoiceModelLoadError);
         }
         refreshVoiceModels();
+        refreshVoiceInputDevices();
       })
       .catch(() => {});
   };
@@ -1132,6 +1169,42 @@ function App() {
     setVoiceLang(lang);
     localStorage.setItem("voiceLanguage", lang);
     api.voiceSetLanguage(lang).catch(() => {});
+  };
+
+  const updateVoiceInputDevice = (device: string) => {
+    const value = device === "" ? null : device;
+    setVoiceInputDevice(value);
+    if (value) {
+      localStorage.setItem("voiceInputDevice", value);
+    } else {
+      localStorage.removeItem("voiceInputDevice");
+    }
+    api.voiceSetInputDevice(value).catch(() => {});
+    // Switch the live test stream to the newly picked device so the meter
+    // reflects whatever is actually selected.
+    if (micTesting) {
+      api.voiceTestMicStart(value).catch(() => {});
+    }
+  };
+
+  const stopMicTest = useCallback(() => {
+    setMicTesting(false);
+    api.voiceTestMicStop().catch(() => {});
+  }, []);
+
+  const toggleMicTest = () => {
+    if (micTesting) {
+      stopMicTest();
+      return;
+    }
+    api
+      .voiceTestMicStart(voiceInputDevice)
+      .then(() => setMicTesting(true))
+      .catch((err) => {
+        console.error("mic test failed:", err);
+        const detail = typeof err === "string" ? err : "Could not start microphone test";
+        pushSystemNotification(detail);
+      });
   };
 
   const selectVoiceModel = (id: string) => {
@@ -1203,6 +1276,7 @@ function App() {
     });
     const unMicChanged = listen<boolean>("voice-mic-changed", (e) => {
       setMicAvailable(e.payload);
+      refreshVoiceInputDevices();
       if (!e.payload && voiceEnabledRef.current) disableVoiceInput(true);
     });
     return () => {
@@ -1216,7 +1290,7 @@ function App() {
       unModelChanged.then((u) => u());
       unMicChanged.then((u) => u());
     };
-  }, [refreshVoiceModels]);
+  }, [refreshVoiceModels, refreshVoiceInputDevices]);
 
   // Refresh mic presence and the model list whenever the settings page opens
   useEffect(() => {
@@ -1225,12 +1299,22 @@ function App() {
       .voiceMicAvailable()
       .then(setMicAvailable)
       .catch(() => {});
-    if (voiceEnabled) refreshVoiceModels();
+    if (voiceEnabled) {
+      refreshVoiceModels();
+      refreshVoiceInputDevices();
+    }
     api
       .listShells()
       .then(setAvailableShells)
       .catch(() => {});
-  }, [showSettings, voiceEnabled, refreshVoiceModels]);
+  }, [showSettings, voiceEnabled, refreshVoiceModels, refreshVoiceInputDevices]);
+
+  // A live test stream must not outlive the settings page or the voice tab —
+  // otherwise the mic stays open and blocks real recording from starting.
+  useEffect(() => {
+    if (showSettings && settingsSection === "voice") return;
+    if (micTesting) stopMicTest();
+  }, [showSettings, settingsSection, micTesting, stopMicTest]);
 
   const applyGridLayout = async (cols: number) => {
     if (!GRID_COL_OPTIONS.includes(cols)) return;
@@ -1787,6 +1871,52 @@ function App() {
                             ))}
                           </select>
                         </div>
+                        <div className="voice-row">
+                          <span className="hotkey-label">Input device</span>
+                          <select
+                            className="voice-select"
+                            title={voiceInputDevice ?? "System default"}
+                            value={voiceInputDevice ?? ""}
+                            onChange={(e) =>
+                              updateVoiceInputDevice(e.target.value)
+                            }
+                          >
+                            <option value="">System default</option>
+                            {voiceInputDevice &&
+                              !voiceInputDevices.includes(voiceInputDevice) && (
+                                <option value={voiceInputDevice}>
+                                  {voiceInputDevice} (disconnected)
+                                </option>
+                              )}
+                            {voiceInputDevices.map((d) => (
+                              <option key={d} value={d}>
+                                {d}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="voice-row">
+                          <span className="hotkey-label">
+                            Test microphone
+                          </span>
+                          <div className="mic-test-row">
+                            <MicLevelMeter active={micTesting} />
+                            <button
+                              type="button"
+                              className="hotkey-chip"
+                              onClick={toggleMicTest}
+                            >
+                              {micTesting ? "Stop" : "Test"}
+                            </button>
+                          </div>
+                        </div>
+                        {micTesting && (
+                          <div className="voice-hint">
+                            Speak into the mic — you should hear yourself
+                            (with a slight delay) and the bar should move. Use
+                            headphones to avoid feedback.
+                          </div>
+                        )}
                         <div className="voice-model-list">
                           {voiceModels.length === 0 && (
                             <div className="voice-hint">Loading models…</div>

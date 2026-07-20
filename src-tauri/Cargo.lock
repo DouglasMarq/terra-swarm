@@ -4215,7 +4215,7 @@ dependencies = [
 
 [[package]]
 name = "terra-swarm"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "cpal",
  "futures-util",

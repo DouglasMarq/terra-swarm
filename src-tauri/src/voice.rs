@@ -13,6 +13,7 @@ pub struct VoiceState {
     pub audio_buffer: Arc<Mutex<Vec<f32>>>,
     pub active_model_id: Mutex<Option<String>>,
     pub language: Mutex<String>,
+    pub input_device: Mutex<Option<String>>,
     pub transcriber: Mutex<Option<Arc<Transcriber>>>,
     pub downloading: Mutex<std::collections::HashSet<String>>,
 }
@@ -24,6 +25,7 @@ impl Default for VoiceState {
             audio_buffer: Arc::new(Mutex::new(Vec::new())),
             active_model_id: Mutex::new(None),
             language: Mutex::new("auto".into()),
+            input_device: Mutex::new(None),
             transcriber: Mutex::new(None),
             downloading: Mutex::new(std::collections::HashSet::new()),
         }
@@ -88,9 +90,10 @@ fn start_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
         return Err(msg.into());
     }
     let controller = app.state::<AudioController>();
+    let device = state.input_device.lock().unwrap().clone();
 
     state.audio_buffer.lock().unwrap().clear();
-    if let Err(e) = controller.start(state.audio_buffer.clone(), app.clone()) {
+    if let Err(e) = controller.start(state.audio_buffer.clone(), app.clone(), device) {
         let _ = app.emit("voice-recording-error", &e);
         return Err(e);
     }
@@ -168,6 +171,46 @@ pub async fn voice_mic_available() -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(audio::has_input_device)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn voice_list_input_devices() -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(audio::list_input_devices)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn voice_set_input_device(device: Option<String>, state: tauri::State<'_, VoiceState>) {
+    *state.input_device.lock().unwrap() = device;
+}
+
+/// Start capturing the given device and playing it back through the
+/// speakers (plus streaming `voice-audio-level` for the settings UI meter),
+/// so the user can hear and see whether a device — whose OS-reported name
+/// doesn't always match what's on the box — is actually picking up sound.
+/// Runs on its own stream pair, entirely separate from the real recording
+/// path, so it can never clobber or be clobbered by an active transcription.
+#[tauri::command]
+pub async fn voice_test_mic_start(
+    device: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<audio::MicTestController>()
+            .start(device, app.clone())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn voice_test_mic_stop(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<audio::MicTestController>().stop()
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Check the current mic state and, when it changed, emit `voice-mic-changed`.

@@ -54,6 +54,12 @@ export const api = {
   voiceSetLanguage: (language: string) =>
     invoke<void>("voice_set_language", { language }),
   voiceMicAvailable: () => invoke<boolean>("voice_mic_available"),
+  voiceListInputDevices: () => invoke<string[]>("voice_list_input_devices"),
+  voiceSetInputDevice: (device: string | null) =>
+    invoke<void>("voice_set_input_device", { device }),
+  voiceTestMicStart: (device: string | null) =>
+    invoke<void>("voice_test_mic_start", { device }),
+  voiceTestMicStop: () => invoke<void>("voice_test_mic_stop"),
   voiceListModels: () => invoke<VoiceModelInfo[]>("voice_list_models"),
   voiceSetModel: (modelId: string) =>
     invoke<void>("voice_set_model", { modelId }),

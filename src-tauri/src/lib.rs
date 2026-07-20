@@ -24,6 +24,7 @@ pub fn run() {
             app.manage(Mutex::new(pty::PtyManager::default()));
             app.manage(voice::VoiceState::default());
             app.manage(voice::audio::AudioController::new());
+            app.manage(voice::audio::MicTestController::new());
 
             // Auto-stop voice recording when the user finishes talking
             let handle = app.handle().clone();
@@ -65,6 +66,10 @@ pub fn run() {
             voice::voice_toggle_recording,
             voice::voice_set_language,
             voice::voice_mic_available,
+            voice::voice_list_input_devices,
+            voice::voice_set_input_device,
+            voice::voice_test_mic_start,
+            voice::voice_test_mic_stop,
             voice::voice_list_models,
             voice::voice_set_model,
             voice::voice_download_model,

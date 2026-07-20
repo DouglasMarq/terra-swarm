@@ -1,0 +1,22 @@
+{
+  "name": "terra-swarm-video",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render src/index.ts TerraSwarm ../docs/media/terra-swarm-demo.mp4",
+    "gif": "remotion render src/index.ts TerraSwarmGif ../docs/media/terra-swarm-demo.gif"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "@remotion/gif": "^4.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "remotion": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.8",
+    "typescript": "^5.8.0"
+  }
+}

@@ -1448,6 +1448,7 @@ function App() {
         onOpenSettings={() => setShowSettings(true)}
         renameTrigger={renameTrigger}
         notifications={notifications}
+        branches={branches}
       />
 
       <main className="main">
@@ -1507,9 +1508,11 @@ function App() {
 
       <StatusBar
         workspaces={workspaces}
-        active={active}
         agents={agents}
         exited={exited}
+        branch={active ? branches[active.id] : undefined}
+        voiceEnabled={voiceEnabled}
+        voiceStatus={voiceStatus}
       />
 
       {showResume && (

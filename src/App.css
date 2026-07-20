@@ -15,6 +15,7 @@
   --accent: #fafafa;
   --red: #e5636f;
   --green: #4ade80;
+  --green-dim: rgba(74, 222, 128, 0.1);
   --amber: #e0b45c;
 }
 
@@ -84,6 +85,7 @@ button:hover {
 
 /* ---------- top bar ---------- */
 .topbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -95,13 +97,23 @@ button:hover {
   flex-shrink: 0;
 }
 
+.topbar-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  pointer-events: none;
+}
+
 .topbar-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .topbar-ws {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -141,8 +153,8 @@ button:hover {
   height: 14px;
   padding: 0 3px;
   border-radius: 7px;
-  background: var(--red);
-  color: #fff;
+  background: var(--green);
+  color: #052e16;
   font-size: 9px;
   font-weight: 700;
   line-height: 14px;
@@ -388,6 +400,20 @@ button:hover {
   flex: 1;
 }
 
+.statusbar-agents {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+
+.statusbar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
 .statusbar-dim {
   color: var(--text-faint);
 }
@@ -537,27 +563,23 @@ button:hover {
   text-overflow: ellipsis;
 }
 
-.sidebar-item-count {
-  font-size: 10px;
-  font-weight: 600;
-  background: var(--bg-hover);
-  border: 1px solid var(--border-strong);
-  border-radius: 9px;
-  padding: 1px 6px;
-  color: var(--text-muted);
-}
-
-.sidebar-item-bell {
+.sidebar-item-branch {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  font-size: 10px;
-  font-weight: 600;
-  background: #36301c;
-  border: 1px solid #4a3f22;
-  border-radius: 9px;
-  padding: 1px 6px;
-  color: var(--amber);
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
   animation: bell-pop 0.25s ease-out;
 }
 
@@ -710,8 +732,8 @@ button:hover {
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
-  gap: 10px;
-  padding: 10px;
+  gap: 12px;
+  padding: 12px;
 }
 
 .term-rows.has-expanded .pane:not(.expanded) {
@@ -847,7 +869,7 @@ body.reordering {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 6px 5px 14px;
+  padding: 7px 8px 7px 16px;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
   cursor: grab;
@@ -868,6 +890,13 @@ body.reordering {
   display: flex;
   align-items: center;
   gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.pane:hover .pane-actions,
+.pane-actions:focus-within {
+  opacity: 1;
 }
 
 .pane-btn {
@@ -905,16 +934,7 @@ body.reordering {
   font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
-}
-
-.pane-title {
-  flex: 1;
-  min-width: 0;
-  font-size: 11px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
 }
 
 .pane-ctx-bar {
@@ -925,7 +945,7 @@ body.reordering {
   overflow: hidden;
 }
 
-.pane-ctx-fill {
+.pane-ctx-bar > span {
   display: block;
   height: 100%;
   background: var(--green);
@@ -936,7 +956,7 @@ body.reordering {
   color: var(--amber);
 }
 
-.pane-ctx.mid .pane-ctx-fill {
+.pane-ctx.mid .pane-ctx-bar > span {
   background: var(--amber);
 }
 
@@ -944,25 +964,18 @@ body.reordering {
   color: var(--red);
 }
 
-.pane-ctx.high .pane-ctx-fill {
+.pane-ctx.high .pane-ctx-bar > span {
   background: var(--red);
 }
 
-.pane-branch {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: var(--bg-hover);
+.pane-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
   color: var(--text-muted);
-  max-width: 160px;
-  overflow: hidden;
   white-space: nowrap;
+  overflow: hidden;
   text-overflow: ellipsis;
-  flex-shrink: 0;
 }
 
 .pane-bell {
@@ -1068,18 +1081,19 @@ body.reordering {
 .modal {
   width: 420px;
   background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
 }
 
 .modal h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .modal label {
@@ -1142,7 +1156,8 @@ body.reordering {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
   text-align: left;
 }
 
@@ -1152,7 +1167,8 @@ body.reordering {
 }
 
 .agent-option:not(:disabled):hover {
-  border-color: #71717a;
+  background: var(--green-dim);
+  border-color: var(--green);
 }
 
 .agent-option-label {
@@ -1176,7 +1192,7 @@ body.reordering {
 }
 
 .picker-default input {
-  accent-color: var(--amber);
+  accent-color: var(--green);
   margin: 0;
 }
 
@@ -1204,11 +1220,12 @@ body.reordering {
 
 .resume-count {
   font-size: 11px;
-  color: var(--text-muted);
-  background: var(--bg-hover);
-  border: 1px solid var(--border-strong);
+  font-weight: 700;
+  color: var(--green);
+  background: var(--green-dim);
+  border: 1px solid transparent;
   border-radius: 10px;
-  padding: 1px 7px;
+  padding: 1px 8px;
 }
 
 .resume-sub {
@@ -1229,10 +1246,10 @@ body.reordering {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: var(--bg-elevated);
+  background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px;
+  border-radius: 12px;
+  padding: 14px;
 }
 
 .resume-item-top {
@@ -1266,10 +1283,10 @@ body.reordering {
   font-family: "SF Mono", Menlo, Monaco, "Courier New", monospace;
   font-size: 12px;
   color: var(--text);
-  background: var(--bg);
+  background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 7px 10px;
+  border-radius: 8px;
+  padding: 8px 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1284,6 +1301,7 @@ body.reordering {
   color: var(--text-muted);
   background: transparent;
   border-color: transparent;
+  border-radius: 6px;
 }
 
 .resume-icon-btn:hover {
@@ -1349,11 +1367,12 @@ body.reordering {
 
 .settings-nav-item {
   text-align: left;
-  padding: 7px 10px;
+  padding: 8px 12px;
   font-size: 13px;
   color: var(--text-muted);
   background: transparent;
   border-color: transparent;
+  border-radius: 8px;
 }
 
 .settings-nav-item:hover {
@@ -1363,8 +1382,9 @@ body.reordering {
 }
 
 .settings-nav-item.active {
-  color: var(--amber);
-  background: #2a2519;
+  color: var(--green);
+  font-weight: 600;
+  background: var(--green-dim);
   border-color: transparent;
 }
 
@@ -1446,9 +1466,9 @@ body.reordering {
 }
 
 .grid-cols-option.active {
-  border-color: var(--amber);
-  color: var(--amber);
-  background: #2a2519;
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--green-dim);
 }
 
 .hotkey-list {
@@ -1492,7 +1512,7 @@ body.reordering {
 
 .hotkey-capturing {
   font-size: 12px;
-  color: var(--amber);
+  color: var(--green);
 }
 
 /* ---------- voice input ---------- */
@@ -1561,9 +1581,9 @@ body.reordering {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--bg);
 }
 
@@ -1602,8 +1622,8 @@ body.reordering {
 }
 
 .toggle-switch.on {
-  background: var(--amber);
-  border-color: var(--amber);
+  background: var(--green);
+  border-color: var(--green);
 }
 
 .toggle-switch:disabled {
@@ -1665,8 +1685,9 @@ body.reordering {
 }
 
 .voice-chip.active {
-  color: var(--amber);
-  border-color: var(--amber);
+  color: var(--green);
+  border-color: var(--green);
+  background: var(--green-dim);
 }
 
 .voice-hint {

@@ -17,13 +17,16 @@ interface Props {
   onOpenSettings: () => void;
   renameTrigger: { id: string; n: number } | null;
   notifications: Record<string, number>;
+  branches: Record<string, string>;
 }
 
-function BellIcon() {
+function BranchIcon() {
   return (
-    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="6" y1="3" x2="6" y2="15" />
+      <circle cx="18" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M18 9a9 9 0 0 1-9 9" />
     </svg>
   );
 }
@@ -80,6 +83,7 @@ export function Sidebar({
   onOpenSettings,
   renameTrigger,
   notifications,
+  branches,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -241,13 +245,15 @@ export function Sidebar({
       <div className="sidebar-list">
         {workspaces.map((ws) => {
           const notifTotal = ws.terminals.reduce(
-            (acc, t) => acc + (notifications[t.id] ?? 0),
-            0,
-          );
+              (acc, t) => acc + (notifications[t.id] ?? 0),
+              0,
+            );
+          const branch = branches[ws.id];
           return (
             <div
               key={ws.id}
               data-ws-id={ws.id}
+              title={ws.cwd}
               className={`sidebar-item ${ws.id === activeId ? "active" : ""} ${dragId === ws.id ? "dragging" : ""} ${dropTargetId === ws.id && dragId !== ws.id ? "drop-target" : ""}`}
               onClick={() => {
                 if (suppressClick.current) {
@@ -279,21 +285,20 @@ export function Sidebar({
                 ) : (
                   <span className="sidebar-item-name">{ws.name}</span>
                 )}
-                <span className="sidebar-item-path" title={ws.cwd}>
-                  {ws.cwd}
-                </span>
+                {branch && (
+                  <span className="sidebar-item-branch">
+                    <BranchIcon />
+                    {branch}
+                  </span>
+                )}
               </div>
               {notifTotal > 0 && (
                 <span
-                  className="sidebar-item-bell"
+                  className="sidebar-item-dot"
                   key={notifTotal}
                   title={`${notifTotal} notification${notifTotal > 1 ? "s" : ""}`}
-                >
-                  <BellIcon />
-                  {notifTotal}
-                </span>
+                />
               )}
-              <span className="sidebar-item-count">{ws.terminals.length}</span>
               <button
                 className="sidebar-item-action"
                 title="New terminal (default agent)"

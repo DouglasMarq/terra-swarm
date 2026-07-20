@@ -1,15 +1,24 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
-import type { AgentInfo, Workspace } from "../types";
+import type { AgentInfo, VoiceStatus, Workspace } from "../types";
 
 interface Props {
   workspaces: Workspace[];
-  active: Workspace | null;
   agents: AgentInfo[];
   exited: Record<string, number | null>;
+  branch?: string;
+  voiceEnabled: boolean;
+  voiceStatus: VoiceStatus;
 }
 
-export function StatusBar({ workspaces, active, agents, exited }: Props) {
+export function StatusBar({
+  workspaces,
+  agents,
+  exited,
+  branch,
+  voiceEnabled,
+  voiceStatus,
+}: Props) {
   const [version, setVersion] = useState<string>("");
 
   useEffect(() => {
@@ -33,28 +42,34 @@ export function StatusBar({ workspaces, active, agents, exited }: Props) {
     (t) => isRunning(t.id) && isAgent(t.command),
   ).length;
 
-  const wsTerminals = active?.terminals ?? [];
-  const runningWs = wsTerminals.filter((t) => isRunning(t.id)).length;
-  const agentsWs = wsTerminals.filter(
-    (t) => isRunning(t.id) && isAgent(t.command),
-  ).length;
-
   return (
     <footer className="statusbar">
       <span className="statusbar-item statusbar-version">
         v{version || "?"}
       </span>
       <span className="statusbar-sep" />
-      <span className="statusbar-item" title="Terminals / agents in this workspace">
-        {active ? active.name : "—"}: {runningWs} term · {agentsWs} agent
-        {agentsWs === 1 ? "" : "s"}
+      <span
+        className="statusbar-item statusbar-agents"
+        title="Agents running across all workspaces"
+      >
+        <span className="statusbar-dot" />
+        {agentsTotal} agent{agentsTotal === 1 ? "" : "s"} running
       </span>
-      <span className="statusbar-sep" />
-      <span className="statusbar-item" title="Terminals / agents across all workspaces">
-        Total: {runningTotal} term · {agentsTotal} agent
-        {agentsTotal === 1 ? "" : "s"}
+      <span className="statusbar-item statusbar-dim">
+        {runningTotal} terminal{runningTotal === 1 ? "" : "s"}
       </span>
+      {branch && (
+        <>
+          <span className="statusbar-sep" />
+          <span className="statusbar-item">{branch}</span>
+        </>
+      )}
       <span className="statusbar-spacer" />
+      {voiceEnabled && (
+        <span className="statusbar-item statusbar-dim">
+          voice: {voiceStatus === "idle" ? "ready" : `${voiceStatus}…`}
+        </span>
+      )}
       <span className="statusbar-item statusbar-dim">
         {workspaces.length} workspace{workspaces.length === 1 ? "" : "s"}
       </span>

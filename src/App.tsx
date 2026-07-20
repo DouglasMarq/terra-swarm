@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { getVersion } from "@tauri-apps/api/app";
 import { api } from "./api";
-import { checkForUpdates } from "./updater";
+import { checkForUpdate, installPendingUpdate } from "./updater";
 import type {
   AgentInfo,
   ContextPayload,
@@ -95,6 +96,7 @@ const MAX_FONT_SIZE = 32;
 const DEFAULT_FONT_SIZE = 13;
 const MAX_NOTIF_ITEMS = 50;
 const BRANCH_POLL_MS = 10000;
+const UPDATE_CHECK_MS = 60 * 60 * 1000;
 const GRID_COL_OPTIONS = [2, 3, 4, 5, 6];
 const DEFAULT_GRID_COLS = 2;
 
@@ -102,6 +104,7 @@ const SETTINGS_SECTIONS = [
   { id: "terminal", label: "Terminal" },
   { id: "voice", label: "Voice input" },
   { id: "shortcuts", label: "Keyboard shortcuts" },
+  { id: "about", label: "About" },
 ] as const;
 
 type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["id"];
@@ -304,6 +307,12 @@ function App() {
     percent: number;
   } | null>(null);
   const [micAvailable, setMicAvailable] = useState<boolean | null>(null);
+  const [appVersion, setAppVersion] = useState<string>("");
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+  const [updateInstalling, setUpdateInstalling] = useState(false);
+  const [updateCheckState, setUpdateCheckState] = useState<
+    "idle" | "checking" | "uptodate" | "error"
+  >("idle");
   const inited = useRef(false);
   // Authoritative set of terminal ids the UI tracks; mutated only by
   // spawn/close paths (never rebuilt from `workspaces`, which would race
@@ -396,7 +405,11 @@ function App() {
       })
       .catch(() => {});
 
-    checkForUpdates();
+    getVersion()
+      .then(setAppVersion)
+      .catch(() => {});
+    runUpdateCheck();
+    setInterval(runUpdateCheck, UPDATE_CHECK_MS);
 
     // Push persisted voice settings into the backend (model load is async).
     // If the mic is gone while the feature was left enabled, disable it.
@@ -1004,6 +1017,55 @@ function App() {
     );
   };
 
+  const notifyUpdateAvailable = (version: string, current: string) => {
+    setUpdateVersion(version);
+    setNotifItems((prev) =>
+      [
+        {
+          key: notifKeyRef.current++,
+          terminalId: "",
+          workspaceId: "",
+          message: `Version ${version} is available (installed: ${current}).`,
+          ts: Date.now(),
+          read: false,
+          system: true,
+          update: true,
+        },
+        ...prev.filter((n) => !n.update),
+      ].slice(0, MAX_NOTIF_ITEMS),
+    );
+  };
+
+  const runUpdateCheck = () => {
+    checkForUpdate().then((result) => {
+      if (result.kind === "update") {
+        notifyUpdateAvailable(result.version, result.current);
+      }
+    });
+  };
+
+  const manualUpdateCheck = () => {
+    setUpdateCheckState("checking");
+    checkForUpdate().then((result) => {
+      if (result.kind === "update") {
+        notifyUpdateAvailable(result.version, result.current);
+        setUpdateCheckState("idle");
+      } else {
+        setUpdateCheckState(result.kind === "none" ? "uptodate" : "error");
+      }
+    });
+  };
+
+  const installUpdate = () => {
+    if (updateInstalling) return;
+    setUpdateInstalling(true);
+    installPendingUpdate().catch((err) => {
+      console.error("update install failed:", err);
+      setUpdateInstalling(false);
+      pushSystemNotification("Update failed to install — try again later");
+    });
+  };
+
   const handleVoiceModelLoadError = (err: unknown) => {
     console.error("voice model load failed:", err);
     setVoiceModel(null);
@@ -1361,6 +1423,8 @@ function App() {
         onMarkAllRead={markAllRead}
         onClearAll={clearAllNotifications}
         onJump={jumpToNotification}
+        onUpdateClick={installUpdate}
+        updateInstalling={updateInstalling}
         voiceEnabled={voiceEnabled}
         voiceStatus={voiceStatus}
         onVoiceClick={toggleVoice}
@@ -1751,6 +1815,51 @@ function App() {
                     <div className="settings-section-actions">
                       <button onClick={resetHotkeys}>Reset defaults</button>
                     </div>
+                  </>
+                )}
+                {settingsSection === "about" && (
+                  <>
+                    <div className="settings-title">Terra Swarm</div>
+                    <div className="voice-row">
+                      <span className="hotkey-label">Version</span>
+                      <span className="voice-chip">
+                        {appVersion || "unknown"}
+                      </span>
+                    </div>
+                    <div className="settings-title">Updates</div>
+                    {updateVersion ? (
+                      <div className="voice-row">
+                        <span className="hotkey-label">
+                          Version {updateVersion} available
+                        </span>
+                        <button
+                          className="hotkey-chip"
+                          disabled={updateInstalling}
+                          onClick={installUpdate}
+                        >
+                          {updateInstalling ? "Installing…" : "Update now"}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="voice-row">
+                        <span className="hotkey-label">
+                          {updateCheckState === "checking"
+                            ? "Checking for updates…"
+                            : updateCheckState === "uptodate"
+                              ? "You're up to date"
+                              : updateCheckState === "error"
+                                ? "Update check failed"
+                                : "Checks automatically every hour"}
+                        </span>
+                        <button
+                          className="hotkey-chip"
+                          disabled={updateCheckState === "checking"}
+                          onClick={manualUpdateCheck}
+                        >
+                          Check for updates
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
               </div>

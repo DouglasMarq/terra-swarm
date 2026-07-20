@@ -69,6 +69,7 @@ export interface NotificationItem {
   ts: number;
   read: boolean;
   system?: boolean;
+  update?: boolean;
 }
 
 export interface ContextPayload {

@@ -12,6 +12,8 @@ interface Props {
   onMarkAllRead: () => void;
   onClearAll: () => void;
   onJump: (item: NotificationItem) => void;
+  onUpdateClick: () => void;
+  updateInstalling: boolean;
   voiceEnabled: boolean;
   voiceStatus: VoiceStatus;
   onVoiceClick: () => void;
@@ -215,6 +217,8 @@ export function TopBar({
   onMarkAllRead,
   onClearAll,
   onJump,
+  onUpdateClick,
+  updateInstalling,
   voiceEnabled,
   voiceStatus,
   onVoiceClick,
@@ -397,16 +401,26 @@ export function TopBar({
                         <div className="notif-msg" title={n.message}>
                           {n.message}
                         </div>
-                        {!n.system && (
+                        {n.update ? (
                           <button
                             className="notif-jump"
-                            onClick={() => {
-                              onJump(n);
-                              setOpen(false);
-                            }}
+                            disabled={updateInstalling}
+                            onClick={onUpdateClick}
                           >
-                            Jump to pane
+                            {updateInstalling ? "Installing…" : "Update now"}
                           </button>
+                        ) : (
+                          !n.system && (
+                            <button
+                              className="notif-jump"
+                              onClick={() => {
+                                onJump(n);
+                                setOpen(false);
+                              }}
+                            >
+                              Jump to pane
+                            </button>
+                          )
                         )}
                       </div>
                     </div>

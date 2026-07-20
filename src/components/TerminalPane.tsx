@@ -5,9 +5,17 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api } from "../api";
 import type { OutputChunk } from "../types";
 import { registerTerminal, unregisterTerminal, getTerminal } from "../terminalRegistry";
+import { GRID_GAP, MIN_PANE_WIDTH } from "../layout";
 import "@xterm/xterm/css/xterm.css";
 
 const MIN_PCT = 15;
+
+interface FloatRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
 
 interface Props {
   id: string;
@@ -19,7 +27,7 @@ interface Props {
   basis: number;
   height: string;
   entering: boolean;
-  dragging: boolean;
+  floating: FloatRect | null;
   dragOver: boolean;
   notifications: number;
   contextUsed?: number;
@@ -95,7 +103,7 @@ function MinimizeIcon() {
 }
 
 export function TerminalPane(props: Props) {
-  const { id, command, fontSize, exited, expanded, anyExpanded, basis, height, entering, dragging, dragOver, notifications, contextUsed, title, focused } =
+  const { id, command, fontSize, exited, expanded, anyExpanded, basis, height, entering, floating, dragOver, notifications, contextUsed, title, focused } =
     props;
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -385,12 +393,19 @@ export function TerminalPane(props: Props) {
     // includes flex-grow slack) is the true starting share.
     const total = rows.getBoundingClientRect().width - 24;
     const startPct = basis;
+    // The CSS min-width clamps narrow panes in pixels; keep the stored
+    // percentage from dipping below what min-width allows or the model and
+    // the rendered layout diverge.
+    const minPct = Math.max(
+      MIN_PCT,
+      ((MIN_PANE_WIDTH + GRID_GAP) / Math.max(1, total)) * 100,
+    );
     let last = startPct;
     document.body.classList.add("col-resizing");
     const onMove = (ev: MouseEvent) => {
       const raw = ((ev.clientX - startX) / total) * 100;
       const delta = edge === "right" ? raw : -raw;
-      last = Math.min(100, Math.max(MIN_PCT, startPct + delta));
+      last = Math.min(100, Math.max(minPct, startPct + delta));
       props.onResize(last);
     };
     const onUp = () => {
@@ -407,10 +422,23 @@ export function TerminalPane(props: Props) {
     <div
       ref={rootRef}
       data-term-id={id}
-      className={`pane ${expanded ? "expanded" : ""} ${entering ? "pane-enter" : ""} ${dragging ? "dragging" : ""} ${
+      className={`pane ${expanded ? "expanded" : ""} ${entering ? "pane-enter" : ""} ${floating ? "floating" : ""} ${
         dragOver ? "drag-over" : ""
       } ${focused ? "focused" : ""}`}
-      style={{ flex: `1 1 calc(${basis}% - 12px)`, height }}
+      style={
+        floating
+          ? {
+              position: "fixed",
+              left: floating.left,
+              top: floating.top,
+              width: floating.width,
+              height: floating.height,
+              margin: 0,
+              zIndex: 60,
+              pointerEvents: "none",
+            }
+          : { flex: `1 1 calc(${basis}% - 12px)`, height }
+      }
       onMouseDown={() => {
         props.onFocus();
         if (notifications > 0) props.onClearNotifications();

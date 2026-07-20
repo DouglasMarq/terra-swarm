@@ -3,13 +3,13 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { TerminalMeta } from "../types";
 import { api } from "../api";
 import { getTerminal } from "../terminalRegistry";
-import { computeTerminalMove, splitRows, type DropZone } from "../layout";
+import { computeTerminalMove, splitRows, GRID_GAP, type DropZone } from "../layout";
 import { TerminalPane } from "./TerminalPane";
 
 export const DEFAULT_BASIS = 50;
-const GAP = 10;
+const GAP = GRID_GAP;
 const MIN_ROW_HEIGHT = 200;
-const EDGE_ZONE = 0.25;
+const DRAG_SCALE = 0.6;
 const FLIP_EASING = "transform 0.24s cubic-bezier(0.22, 1, 0.36, 1)";
 
 interface Props {
@@ -40,12 +40,6 @@ interface Props {
   onClose: (id: string) => void;
 }
 
-interface GhostState {
-  label: string;
-  x: number;
-  y: number;
-}
-
 interface DropTarget {
   id: string;
   zone: DropZone;
@@ -57,41 +51,120 @@ function paneIdAt(x: number, y: number): string | null {
   return pane?.getAttribute("data-term-id") ?? null;
 }
 
-// Resolve a drop zone for a point: hovering a pane splits it into a top band
-// (new row above), a bottom band (new row below), and left/right halves
-// (insert into the same row). Points over empty grid space map to the
-// nearest row edge so a pane can be dropped past the end of a row or into a
-// new row at the top/bottom of the grid.
+// Layout rect with any in-flight FLIP animation offset removed.
+// getBoundingClientRect includes the animation transform, so hit-testing
+// against it chases its own tail: the preview changes the rect, the rect
+// flips the computed zone, the zone changes the preview — rapid flicker.
+function stableRect(el: HTMLElement): DOMRect {
+  const r = el.getBoundingClientRect();
+  const m =
+    /translate\(\s*(-?[\d.]+)px[\s,]+(-?[\d.]+)px\s*\)(?:\s*scale\(\s*(-?[\d.]+)(?:[\s,]+(-?[\d.]+))?\s*\))?/.exec(
+      el.style.transform,
+    );
+  if (m) {
+    const sx = m[3] ? parseFloat(m[3]) : 1;
+    const sy = m[4] ? parseFloat(m[4]) : sx;
+    return new DOMRect(
+      r.left - parseFloat(m[1]),
+      r.top - parseFloat(m[2]),
+      r.width / (sx || 1),
+      r.height / (sy || 1),
+    );
+  }
+  return r;
+}
+
+interface DragGeometry {
+  panes: Map<string, DOMRect>;
+  container: DOMRect;
+  scrollTop: number;
+}
+
+// Resolve a drop zone for a point against the FROZEN pre-drag geometry. The
+// live preview rearranges the grid, so targeting against current positions
+// feeds back into itself (preview moves rect → rect flips zone → zone
+// changes preview) and flickers. Hovering a pane splits it by nearest edge
+// (with a side-by-side bias); hovering the dragged pane's original slot
+// restores the layout; empty space maps to the nearest row edge.
 function dropTargetAt(
   x: number,
   y: number,
   excludeId: string,
-  container: HTMLElement | null,
+  geom: DragGeometry,
+  current: DropTarget | null = null,
 ): DropTarget | null {
-  const el = document.elementFromPoint(x, y);
-  const pane = el?.closest("[data-term-id]");
-  const id = pane?.getAttribute("data-term-id");
-  if (pane && id) {
-    if (id === excludeId) return null;
-    const rect = pane.getBoundingClientRect();
-    const fy = (y - rect.top) / rect.height;
-    if (fy < EDGE_ZONE) return { id, zone: "above" };
-    if (fy > 1 - EDGE_ZONE) return { id, zone: "below" };
-    return { id, zone: x < rect.left + rect.width / 2 ? "before" : "after" };
+  const panes = Array.from(geom.panes, ([id, rect]) => ({ id, rect })).filter(
+    (p) => p.id !== excludeId,
+  );
+
+  const origin = geom.panes.get(excludeId);
+  if (
+    origin &&
+    x >= origin.left &&
+    x <= origin.right &&
+    y >= origin.top &&
+    y <= origin.bottom
+  ) {
+    // Back over its own slot. Leaning toward the top/bottom edge stacks the
+    // pane into a new row above/below the neighboring pane (dragging "down
+    // to the bottom" should just work); the rest restores the layout.
+    const dL = x - origin.left;
+    const dR = origin.right - x;
+    const dT = y - origin.top;
+    const dB = origin.bottom - y;
+    if (Math.min(dT, dB) < Math.min(dL, dR) * 0.8) {
+      const sibling =
+        panes.find(
+          (p) =>
+            (Math.abs(p.rect.right - origin.left) < 24 ||
+              Math.abs(p.rect.left - origin.right) < 24) &&
+            Math.min(p.rect.bottom, origin.bottom) -
+              Math.max(p.rect.top, origin.top) >
+              0,
+        ) ?? panes[0];
+      if (sibling) {
+        return { id: sibling.id, zone: dT < dB ? "above" : "below" };
+      }
+    }
+    return null;
   }
-  if (!container) return null;
-  const crect = container.getBoundingClientRect();
+
+  const hit = panes.find(
+    (p) =>
+      x >= p.rect.left &&
+      x <= p.rect.right &&
+      y >= p.rect.top &&
+      y <= p.rect.bottom,
+  );
+  if (hit) {
+    const rect = hit.rect;
+    const dLeft = x - rect.left;
+    const dRight = rect.right - x;
+    const dTop = y - rect.top;
+    const dBottom = rect.bottom - y;
+    const minH = Math.min(dLeft, dRight);
+    const minV = Math.min(dTop, dBottom);
+    // Hysteresis: while hovering the same pane, stick to the current zone
+    // near the boundaries so the preview doesn't flap on tiny movements.
+    if (current && current.id === hit.id) {
+      const vertical = current.zone === "above" || current.zone === "below";
+      if (vertical && minV < minH * 1.1) {
+        return { id: hit.id, zone: current.zone };
+      }
+      if (!vertical && Math.abs(dLeft - dRight) < 16) {
+        return { id: hit.id, zone: current.zone };
+      }
+    }
+    if (minV < minH * 0.8) {
+      return { id: hit.id, zone: dTop < dBottom ? "above" : "below" };
+    }
+    return { id: hit.id, zone: dLeft < dRight ? "before" : "after" };
+  }
+
+  const crect = geom.container;
   if (x < crect.left || x > crect.right || y < crect.top || y > crect.bottom) {
     return null;
   }
-  const panes = Array.from(
-    container.querySelectorAll<HTMLElement>("[data-term-id]"),
-  )
-    .map((p) => ({
-      id: p.getAttribute("data-term-id") ?? "",
-      rect: p.getBoundingClientRect(),
-    }))
-    .filter((p) => p.id && p.id !== excludeId);
   if (panes.length === 0) return null;
 
   const bands: { top: number; bottom: number; items: typeof panes }[] = [];
@@ -176,12 +249,30 @@ export function TerminalGrid({
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [fileOverId, setFileOverId] = useState<string | null>(null);
-  const [ghost, setGhost] = useState<GhostState | null>(null);
+  const [dragFloat, setDragFloat] = useState<{
+    id: string;
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const ghostRef = useRef<HTMLDivElement>(null);
+  const floatElRef = useRef<HTMLElement | null>(null);
+  const glideElRef = useRef<HTMLElement | null>(null);
+  const dropTargetRef = useRef<DropTarget | null>(null);
+  const dragGeomRef = useRef<DragGeometry | null>(null);
   const pendingFlip = useRef<Map<string, DOMRect> | null>(null);
   const lastRects = useRef<Map<string, DOMRect> | null>(null);
   const lastIds = useRef<string[]>([]);
+  const lastPreviewSig = useRef("");
+  const lastDragId = useRef<string | null>(null);
+
+  // Never leave the global drag cursor/class behind if the grid unmounts
+  // mid-gesture (workspace switch, last terminal closed).
+  useEffect(
+    () => () => document.body.classList.remove("reordering"),
+    [],
+  );
 
   useEffect(() => {
     if (hidden) return;
@@ -240,8 +331,10 @@ export function TerminalGrid({
 
   // Live drop preview: run the same move the drop would perform so the grid
   // renders the exact post-drop layout (order, widths, row heights) with a
-  // placeholder box where the dragged pane will land.
-  const preview =
+  // placeholder box where the dragged pane will land. Without a target the
+  // placeholder holds the pane's original slot, so the grid always matches
+  // the frozen geometry the drop targeting is computed against.
+  const move =
     dragId && dropTarget
       ? computeTerminalMove(
           terminals,
@@ -252,12 +345,13 @@ export function TerminalGrid({
           contentWidth,
         )
       : null;
+  const previewNext = dragId ? (move?.next ?? terminals) : null;
 
   const previewWidth = new Map<string, number>();
   let previewIndex = -1;
   let previewBasis = 0;
-  if (preview) {
-    preview.next.forEach((t, i) => {
+  if (previewNext) {
+    previewNext.forEach((t, i) => {
       if (t.id === dragId) {
         previewIndex = i;
         previewBasis = t.width ?? defaultBasis;
@@ -267,13 +361,13 @@ export function TerminalGrid({
     });
   }
 
-  // While dragging without a drop target the dragged pane is display:none
-  // with no placeholder, so exclude it from the row model.
-  const rowSource = preview
-    ? preview.next
-    : dragId
-      ? terminals.filter((t) => t.id !== dragId)
-      : terminals;
+  // Signature of the live preview layout; the FLIP effect re-runs when it
+  // changes so siblings glide out of the way as the drop target moves.
+  const previewSig = previewNext
+    ? previewNext.map((t) => `${t.id}:${t.width ?? ""}`).join("|")
+    : "";
+
+  const rowSource = previewNext ?? terminals;
   const rowCount = Math.max(1, splitRows(rowSource, defaultBasis, contentWidth).length);
 
   const paneHeight = `max(${MIN_ROW_HEIGHT}px, calc((100% - ${
@@ -300,17 +394,24 @@ export function TerminalGrid({
     const structureChanged =
       prevIds.length !== currIds.length ||
       currIds.some((id, i) => prevIds[i] !== id);
+    const previewChanged = previewSig !== lastPreviewSig.current;
+    const dragChanged = dragId !== lastDragId.current;
 
     const prevRects = flipSource ?? lastRects.current;
     const curr = snapshotRects();
     const rafs: number[] = [];
     const touched: HTMLElement[] = [];
 
-    if (prevRects && (flipSource || structureChanged)) {
+    if (
+      prevRects &&
+      (flipSource || structureChanged || previewChanged || dragChanged)
+    ) {
       containerRef.current
         ?.querySelectorAll<HTMLElement>("[data-term-id]")
         .forEach((el) => {
           const id = el.getAttribute("data-term-id");
+          // The dragged pane follows the cursor; never FLIP it mid-drag.
+          if (id && id === dragId && !flipSource) return;
           const before = id ? prevRects.get(id) : undefined;
           const after = id ? curr.get(id) : undefined;
           if (!before || !after) return;
@@ -319,10 +420,20 @@ export function TerminalGrid({
           if (before.width === 0 && before.height === 0) return;
           const dx = before.left - after.left;
           const dy = before.top - after.top;
-          if (!dx && !dy) return;
+          if (!dx && !dy && el !== glideElRef.current) return;
           touched.push(el);
           el.style.transition = "none";
-          el.style.transform = `translate(${dx}px, ${dy}px)`;
+          if (el === glideElRef.current) {
+            // The dropped pane was scaled down: glide it home growing back to
+            // full size in the same motion (scale about the top-left keeps
+            // the translate math exact).
+            const sx = after.width > 0 ? before.width / after.width : 1;
+            const sy = after.height > 0 ? before.height / after.height : 1;
+            el.style.transformOrigin = "0 0";
+            el.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+          } else {
+            el.style.transform = `translate(${dx}px, ${dy}px)`;
+          }
           rafs.push(
             requestAnimationFrame(() => {
               if (!el.isConnected) return;
@@ -332,6 +443,7 @@ export function TerminalGrid({
                 "transitionend",
                 () => {
                   el.style.transition = "";
+                  el.style.transformOrigin = "";
                 },
                 { once: true },
               );
@@ -339,9 +451,12 @@ export function TerminalGrid({
           );
         });
     }
+    glideElRef.current = null;
 
     lastRects.current = curr;
     lastIds.current = currIds;
+    lastPreviewSig.current = previewSig;
+    lastDragId.current = dragId;
     return () => {
       rafs.forEach(cancelAnimationFrame);
       // If a rerender cancels the pending animation frame, don't leave the
@@ -350,24 +465,24 @@ export function TerminalGrid({
         if (!el.isConnected) continue;
         el.style.transition = "";
         el.style.transform = "";
+        el.style.transformOrigin = "";
       }
     };
-  }, [terminals]);
+  }, [terminals, previewSig, dragId]);
 
   const startReorder = (e: React.MouseEvent, id: string) => {
     if (e.button !== 0 || expandedId) return;
     if ((e.target as HTMLElement).closest("button")) return;
     const startX = e.clientX;
     const startY = e.clientY;
-    const label = terminals.find((t) => t.id === id)?.command ?? "terminal";
     let dragging = false;
+    let cancelled = false;
+    let grabDX = 0;
+    let grabDY = 0;
 
-    const moveGhost = (x: number, y: number) => {
-      if (ghostRef.current) {
-        ghostRef.current.style.transform = `translate(${x + 12}px, ${
-          y + 14
-        }px) rotate(1.5deg)`;
-      }
+    const updateDropTarget = (t: DropTarget | null) => {
+      dropTargetRef.current = t;
+      setDropTarget(t);
     };
 
     const onMove = (ev: MouseEvent) => {
@@ -375,46 +490,140 @@ export function TerminalGrid({
         !dragging &&
         Math.hypot(ev.clientX - startX, ev.clientY - startY) > 6
       ) {
+        const el = containerRef.current?.querySelector<HTMLElement>(
+          `[data-term-id="${id}"]`,
+        );
+        const rect = el?.getBoundingClientRect();
+        if (!el || !rect) return;
         dragging = true;
+        floatElRef.current = el;
+        // Freeze the pre-drag layout: all drop targeting for this gesture is
+        // computed against these rects, so the live preview can't feed back
+        // into the targeting and flicker.
+        const geom: DragGeometry = {
+          panes: new Map(),
+          container: containerRef.current!.getBoundingClientRect(),
+          scrollTop: containerRef.current!.scrollTop,
+        };
+        containerRef.current
+          ?.querySelectorAll<HTMLElement>("[data-term-id]")
+          .forEach((p) => {
+            const pid = p.getAttribute("data-term-id");
+            if (pid) geom.panes.set(pid, stableRect(p));
+          });
+        dragGeomRef.current = geom;
+        // Lift the pane out of the grid. Position it with left/top (scaled
+        // about the top-left corner) so the point under the cursor tracks
+        // exactly: visual grab = left + scale * grabOffset = cursor.
+        grabDX = (startX - rect.left) * DRAG_SCALE;
+        grabDY = (startY - rect.top) * DRAG_SCALE;
+        el.style.position = "fixed";
+        el.style.left = `${startX - grabDX}px`;
+        el.style.top = `${startY - grabDY}px`;
+        el.style.width = `${rect.width}px`;
+        el.style.height = `${rect.height}px`;
+        el.style.margin = "0";
+        el.style.zIndex = "60";
+        el.style.pointerEvents = "none";
+        el.style.transformOrigin = "0 0";
+        el.style.transform = `scale(${DRAG_SCALE})`;
+        setDragFloat({
+          id,
+          left: startX - grabDX,
+          top: startY - grabDY,
+          width: rect.width,
+          height: rect.height,
+        });
         setDragId(id);
-        setGhost({ label, x: ev.clientX, y: ev.clientY });
         document.body.classList.add("reordering");
       }
       if (dragging) {
-        moveGhost(ev.clientX, ev.clientY);
-        setDropTarget(
-          dropTargetAt(ev.clientX, ev.clientY, id, containerRef.current),
+        // A mouseup released outside the window is never delivered; treat the
+        // button state as the source of truth so the drag can't get stuck.
+        if ((ev.buttons & 1) === 0) {
+          onUp(ev);
+          return;
+        }
+        const el = floatElRef.current;
+        if (el) {
+          el.style.left = `${ev.clientX - grabDX}px`;
+          el.style.top = `${ev.clientY - grabDY}px`;
+        }
+        // Auto-scroll near the container edges, then shift the frozen
+        // geometry by the scroll delta so drop targeting stays correct
+        // (scrolling moves children's viewport rects, not the container's).
+        const container = containerRef.current;
+        const geom = dragGeomRef.current;
+        if (container && geom) {
+          const cr = geom.container;
+          const EDGE = 40;
+          if (ev.clientY < cr.top + EDGE) container.scrollTop -= 14;
+          else if (ev.clientY > cr.bottom - EDGE) container.scrollTop += 14;
+          const ds = container.scrollTop - geom.scrollTop;
+          if (ds !== 0) {
+            geom.scrollTop = container.scrollTop;
+            for (const [pid, r] of geom.panes) {
+              geom.panes.set(
+                pid,
+                new DOMRect(r.left, r.top - ds, r.width, r.height),
+              );
+            }
+          }
+        }
+        updateDropTarget(
+          geom
+            ? dropTargetAt(
+                ev.clientX,
+                ev.clientY,
+                id,
+                geom,
+                dropTargetRef.current,
+              )
+            : null,
         );
       }
+    };
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") cancelled = true;
     };
     const onUp = (ev: MouseEvent) => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("keydown", onKey);
       document.body.classList.remove("reordering");
-      if (dragging) {
-        const target = dropTargetAt(
-          ev.clientX,
-          ev.clientY,
-          id,
-          containerRef.current,
-        );
+      if (dragging && !cancelled) {
+        // Fresh rects let the FLIP effect glide the pane from the release
+        // point into its slot (or back home when dropped off-target).
+        pendingFlip.current = snapshotRects();
+        glideElRef.current = floatElRef.current;
+        const target = dragGeomRef.current
+          ? dropTargetAt(
+              ev.clientX,
+              ev.clientY,
+              id,
+              dragGeomRef.current,
+              dropTargetRef.current,
+            )
+          : null;
         if (target) {
-          pendingFlip.current = snapshotRects();
           onSwap(id, target.id, target.zone, contentWidth);
         }
-        ghostRef.current?.classList.add("leaving");
-        setTimeout(() => setGhost(null), 160);
       }
+      floatElRef.current = null;
+      dropTargetRef.current = null;
+      dragGeomRef.current = null;
+      setDragFloat(null);
       setDragId(null);
       setDropTarget(null);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
+    window.addEventListener("keydown", onKey);
   };
 
   const prevIds = lastIds.current;
 
-  const placeholder = preview && (
+  const placeholder = previewNext && (
     <div
       key="drop-preview"
       className="drop-preview"
@@ -425,6 +634,11 @@ export function TerminalGrid({
   let insertAt = previewIndex;
   if (previewIndex > dragOrigIndex && dragOrigIndex >= 0) {
     insertAt = previewIndex + 1;
+  }
+  // No computed move (no target, or the pane vanished mid-drag): hold the
+  // dragged pane's original slot so the grid matches the frozen geometry.
+  if (insertAt < 0) {
+    insertAt = dragOrigIndex >= 0 ? dragOrigIndex : terminals.length;
   }
 
   const nodes: React.ReactNode[] = [];
@@ -442,7 +656,7 @@ export function TerminalGrid({
         basis={previewWidth.get(t.id) ?? t.width ?? defaultBasis}
         height={paneHeight}
         entering={!prevIds.includes(t.id)}
-        dragging={dragId === t.id}
+        floating={dragFloat && dragFloat.id === t.id ? dragFloat : null}
         dragOver={dropTarget?.id === t.id || fileOverId === t.id}
         notifications={notifications[t.id] ?? 0}
         contextUsed={contextUsage[t.id]}
@@ -473,17 +687,6 @@ export function TerminalGrid({
       style={hidden ? { display: "none" } : undefined}
     >
       {nodes}
-      {ghost && (
-        <div
-          ref={ghostRef}
-          className="drag-ghost"
-          style={{
-            transform: `translate(${ghost.x + 12}px, ${ghost.y + 14}px) rotate(1.5deg)`,
-          }}
-        >
-          {ghost.label}
-        </div>
-      )}
     </div>
   );
 }

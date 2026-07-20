@@ -1,4 +1,6 @@
+import { motion } from "motion/react";
 import type { ResumeItem } from "../types";
+import { backdropAnim, modalAnim } from "../motion";
 
 interface Props {
   items: ResumeItem[];
@@ -92,9 +94,10 @@ function formatRelativeTime(ms: number): string {
 export function ResumeDialog(props: Props) {
   const { items, savedAt } = props;
   return (
-    <div className="modal-backdrop blur-strong">
-      <div
+    <motion.div className="modal-backdrop blur-strong" {...backdropAnim}>
+      <motion.div
         className="modal resume-modal"
+        {...modalAnim}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="resume-header">
@@ -168,7 +171,7 @@ export function ResumeDialog(props: Props) {
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

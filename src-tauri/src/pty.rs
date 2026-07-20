@@ -546,8 +546,11 @@ fn valid_shell(shell: &str) -> bool {
 
 #[cfg(windows)]
 fn find_on_path(exe: &str) -> Option<String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
     let output = std::process::Command::new("where.exe")
         .arg(exe)
+        .creation_flags(CREATE_NO_WINDOW)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .output()

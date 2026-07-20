@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "./api";
+import { checkForUpdates } from "./updater";
 import type {
   AgentInfo,
   ContextPayload,
@@ -379,6 +380,8 @@ function App() {
     })();
 
     api.detectAgents().then(setAgents).catch(() => {});
+
+    checkForUpdates();
 
     // Push persisted voice settings into the backend (model load is async).
     // If the mic is gone while the feature was left enabled, disable it.

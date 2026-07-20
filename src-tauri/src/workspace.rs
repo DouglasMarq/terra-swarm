@@ -348,15 +348,20 @@ pub fn close_workspace(app: AppHandle, id: String) -> Result<(), String> {
 #[tauri::command(async)]
 pub fn git_branch(cwd: String) -> Option<String> {
     fn git(cwd: &str, args: &[&str]) -> Option<String> {
-        let out = std::process::Command::new("git")
-            .arg("-C")
+        let mut cmd = std::process::Command::new("git");
+        cmd.arg("-C")
             .arg(cwd)
             .args(args)
             .env("GIT_OPTIONAL_LOCKS", "0")
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .output()
-            .ok()?;
+            .stderr(std::process::Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        let out = cmd.output().ok()?;
         if !out.status.success() {
             return None;
         }

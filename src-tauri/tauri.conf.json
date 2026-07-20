@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Terra Swarm",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "identifier": "com.terra-swarm.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -26,6 +26,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "macOS": {
       "minimumSystemVersion": "11.0"
     },
@@ -36,5 +37,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNBMkNCNEFGMTNGQTIyQgpSV1Fyb2oveFNzdWlBeUlvSHc5OHRZeStETnRBazEyTk9UWTY5T1VQS2JPV1l6bVRVUEFGb2p5Tgo=",
+      "endpoints": [
+        "https://github.com/DouglasMarq/terra-swarm/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

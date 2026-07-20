@@ -11,9 +11,28 @@ static NEXT_WS_ID: AtomicU64 = AtomicU64::new(1);
 struct SaveRequest {
     path: PathBuf,
     json: String,
+    seq: u64,
 }
 
 static SAVE_TX: OnceLock<Sender<SaveRequest>> = OnceLock::new();
+static SAVE_SEQ: AtomicU64 = AtomicU64::new(0);
+static LAST_WRITTEN: AtomicU64 = AtomicU64::new(0);
+static WRITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+/// Serialized write that never lets an older snapshot overwrite a newer one:
+/// every save gets a monotonic seq, and a request is skipped when a newer
+/// save has already landed (e.g. save_now at exit vs a stale debounced write).
+fn write_guarded(path: &std::path::Path, json: &str, seq: u64) {
+    let lock = WRITE_LOCK.get_or_init(|| Mutex::new(()));
+    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    if seq < LAST_WRITTEN.load(Ordering::SeqCst) {
+        return;
+    }
+    match write_atomic(path, json) {
+        Ok(()) => LAST_WRITTEN.store(seq, Ordering::SeqCst),
+        Err(e) => eprintln!("failed to save workspaces: {}", e),
+    }
+}
 
 /// Writes `json` to `path` atomically (temp file + rename) so a crash
 /// mid-write can never leave a truncated/corrupt store behind.
@@ -40,9 +59,7 @@ fn save_channel() -> &'static Sender<SaveRequest> {
                         Err(_) => break,
                     }
                 }
-                if let Err(e) = write_atomic(&req.path, &req.json) {
-                    eprintln!("failed to save workspaces: {}", e);
-                }
+                write_guarded(&req.path, &req.json, req.seq);
             }
         });
         tx
@@ -76,6 +93,25 @@ pub struct Workspace {
 pub struct WorkspaceStore {
     pub workspaces: Vec<Workspace>,
     pub save_path: Option<PathBuf>,
+}
+
+fn home_dir() -> String {
+    #[cfg(windows)]
+    {
+        if let Ok(p) = std::env::var("USERPROFILE") {
+            if !p.trim().is_empty() {
+                return p;
+            }
+        }
+        if let (Ok(drive), Ok(path)) = (std::env::var("HOMEDRIVE"), std::env::var("HOMEPATH")) {
+            return format!("{}{}", drive, path);
+        }
+        "C:\\".to_string()
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
+    }
 }
 
 impl WorkspaceStore {
@@ -129,6 +165,7 @@ impl WorkspaceStore {
             let _ = save_channel().send(SaveRequest {
                 path: path.clone(),
                 json,
+                seq: SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1,
             });
         }
     }
@@ -139,9 +176,8 @@ impl WorkspaceStore {
         let Some(path) = &self.save_path else { return };
         match serde_json::to_string_pretty(&self.workspaces) {
             Ok(json) => {
-                if let Err(e) = write_atomic(path, &json) {
-                    eprintln!("failed to save workspaces on exit: {}", e);
-                }
+                let seq = SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
+                write_guarded(path, &json, seq);
             }
             Err(e) => eprintln!("failed to serialize workspaces on exit: {}", e),
         }
@@ -149,7 +185,7 @@ impl WorkspaceStore {
 
     pub fn create(&mut self, name: String, cwd: String) -> Workspace {
         let cwd = if cwd.trim().is_empty() {
-            std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
+            home_dir()
         } else {
             cwd
         };

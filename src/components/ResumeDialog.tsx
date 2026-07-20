@@ -92,7 +92,7 @@ function formatRelativeTime(ms: number): string {
 export function ResumeDialog(props: Props) {
   const { items, savedAt } = props;
   return (
-    <div className="modal-backdrop blur-strong" onClick={props.onDismissAll}>
+    <div className="modal-backdrop blur-strong">
       <div
         className="modal resume-modal"
         onClick={(e) => e.stopPropagation()}

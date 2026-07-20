@@ -51,17 +51,24 @@ const wsSelect = (n: number): Hotkey =>
 const termSelect = (n: number): Hotkey =>
   IS_MAC ? mk(String(n), true, true) : mk(String(n), false, true, true);
 
+// On Windows the meta key is the Win key: Win+W opens Widgets, Win+Enter
+// launches Narrator, Win+= drives the Magnifier, etc. Use Ctrl+Shift / Alt
+// combos there; keep Cmd combos on macOS.
 const DEFAULT_HOTKEYS: Record<string, Hotkey> = {
-  newWorkspace: mk("n", true, true),
-  renameWorkspace: mk("r", true, true),
-  deleteWorkspace: mk("Backspace", true, true),
-  newTerminal: mk("t", true),
-  closeTerminal: mk("w", true),
-  maximizeTerminal: mk("Enter", true),
-  minimizeTerminal: mk("Enter", true, true),
-  increaseFontSize: mk("=", true),
-  decreaseFontSize: mk("-", true),
-  resetFontSize: mk("0", true),
+  newWorkspace: IS_MAC ? mk("n", true, true) : mk("n", false, true, true),
+  renameWorkspace: IS_MAC ? mk("r", true, true) : mk("r", false, true, true),
+  deleteWorkspace: IS_MAC
+    ? mk("Backspace", true, true)
+    : mk("Backspace", false, true, true),
+  newTerminal: IS_MAC ? mk("t", true) : mk("t", false, true, true),
+  closeTerminal: IS_MAC ? mk("w", true) : mk("w", false, true, true),
+  maximizeTerminal: IS_MAC ? mk("Enter", true) : mk("Enter", false, false, false, true),
+  minimizeTerminal: IS_MAC
+    ? mk("Enter", true, true)
+    : mk("Enter", false, true, false, true),
+  increaseFontSize: IS_MAC ? mk("=", true) : mk("=", false, false, true),
+  decreaseFontSize: IS_MAC ? mk("-", true) : mk("-", false, false, true),
+  resetFontSize: IS_MAC ? mk("0", true) : mk("0", false, false, true),
   toggleVoice: IS_MAC ? mk(" ", true, true) : mk(" ", false, true, true),
   selectWorkspace1: wsSelect(1),
   selectWorkspace2: wsSelect(2),
@@ -275,6 +282,8 @@ function App() {
   const [defaultShell, setDefaultShell] = useState(
     () => localStorage.getItem("defaultShell") ?? "",
   );
+  const agentsRef = useRef<AgentInfo[]>([]);
+  const agentsReadyRef = useRef<Promise<void>>(Promise.resolve());
   const [availableShells, setAvailableShells] = useState<string[]>([]);
   const [gridCols, setGridCols] = useState<number>(loadGridCols);
   const [resumeItems, setResumeItems] = useState<ResumeItem[] | null>(null);
@@ -379,7 +388,13 @@ function App() {
       }
     })();
 
-    api.detectAgents().then(setAgents).catch(() => {});
+    agentsReadyRef.current = api
+      .detectAgents()
+      .then((a) => {
+        agentsRef.current = a;
+        setAgents(a);
+      })
+      .catch(() => {});
 
     checkForUpdates();
 
@@ -533,18 +548,30 @@ function App() {
   }, [activeId, focusedId, modalOpen]);
 
   const spawnTerminalInto = async (wsId: string, command: string) => {
+    // Spawn at an existing pane's size when possible: the PTY otherwise
+    // starts at 80x24 and the child draws its first frame at the wrong size
+    // before the pane's fit can correct it (worst on Windows/ConPTY).
+    const sibling = workspaces
+      .find((w) => w.id === wsId)
+      ?.terminals.map((t) => getTerminal(t.id))
+      .find((t) => t && t.cols > 0 && t.rows > 0);
     const res = await api.spawnTerminal(
       wsId,
       command,
       undefined,
-      undefined,
-      undefined,
+      sibling?.cols,
+      sibling?.rows,
       defaultShell || undefined,
     );
     liveIdsRef.current.add(res.meta.id);
     spawnSeqRef.current[res.meta.id] = res.seq;
     setFocusedId(res.meta.id);
     await refresh();
+  };
+
+  const reportSpawnError = (err: unknown) => {
+    console.error("failed to spawn terminal:", err);
+    pushSystemNotification(`Failed to start terminal: ${String(err)}`);
   };
 
   const openPicker = (wsId: string) => {
@@ -555,14 +582,17 @@ function App() {
     setShowAgentPicker(true);
   };
 
-  const quickNewTerminal = (wsId: string) => {
+  const quickNewTerminal = async (wsId: string) => {
     setActiveId(wsId);
     setExpandedId(null);
+    // Wait for agent detection: at startup `agents` is still empty, and
+    // deciding on a stale list would open the picker despite a saved default.
+    await agentsReadyRef.current;
     const defAvailable =
       defaultAgent &&
-      agents.some((a) => a.id === defaultAgent && a.available);
+      agentsRef.current.some((a) => a.id === defaultAgent && a.available);
     if (defAvailable) {
-      spawnTerminalInto(wsId, defaultAgent).catch(() => {});
+      spawnTerminalInto(wsId, defaultAgent).catch(reportSpawnError);
     } else {
       setPickerTarget(wsId);
       setPickerSaveDefault(false);
@@ -577,7 +607,7 @@ function App() {
     }
     setShowAgentPicker(false);
     if (pickerTarget) {
-      await spawnTerminalInto(pickerTarget, agentId).catch(() => {});
+      await spawnTerminalInto(pickerTarget, agentId).catch(reportSpawnError);
     }
   };
 
@@ -854,7 +884,7 @@ function App() {
       if (typeof dir === "string") {
         setNewWsCwd(dir);
         if (!newWsName) {
-          const base = dir.split("/").filter(Boolean).pop();
+          const base = dir.split(/[\\/]/).filter(Boolean).pop();
           if (base) setNewWsName(base);
         }
       }
@@ -1277,6 +1307,25 @@ function App() {
         alt: e.altKey,
       };
       if (!hk.meta && !hk.ctrl && !hk.alt) return;
+      // Reject duplicates: dispatch stops at the first match, so a combo
+      // already bound to another action would silently never fire.
+      const conflict = HOTKEY_ACTIONS.find(
+        (a) =>
+          a.id !== capturing &&
+          hotkeys[a.id] &&
+          hotkeys[a.id].key === hk.key &&
+          hotkeys[a.id].meta === hk.meta &&
+          hotkeys[a.id].shift === hk.shift &&
+          hotkeys[a.id].ctrl === hk.ctrl &&
+          hotkeys[a.id].alt === hk.alt,
+      );
+      if (conflict) {
+        pushSystemNotification(
+          `Shortcut already assigned to "${conflict.label}"`,
+        );
+        setCapturing(null);
+        return;
+      }
       const next = { ...hotkeys, [capturing]: hk };
       setHotkeys(next);
       localStorage.setItem("hotkeys", JSON.stringify(next));

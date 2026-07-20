@@ -154,6 +154,12 @@ export function Sidebar({
       document.body.classList.remove("reordering");
       if (dragging) {
         suppressClick.current = true;
+        // The flag is cleared by the item onClick that follows a drop on an
+        // item; when the drag ends off-item no click fires, so clear it on
+        // the next tick instead of swallowing a later legitimate click.
+        setTimeout(() => {
+          suppressClick.current = false;
+        }, 0);
         const t = targetAt(ev.clientX, ev.clientY);
         if (t && t !== ws.id) onReorder(ws.id, t);
       }

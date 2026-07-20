@@ -546,22 +546,33 @@ fn valid_shell(shell: &str) -> bool {
 
 #[cfg(windows)]
 fn find_on_path(exe: &str) -> Option<String> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-    let output = std::process::Command::new("where.exe")
-        .arg(exe)
-        .creation_flags(CREATE_NO_WINDOW)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
+    // Search PATH directly instead of shelling out to where.exe: its output is
+    // encoded in the console OEM codepage, so any non-ASCII install path
+    // (accented usernames, localized "Program Files") breaks UTF-8 decoding
+    // and the tool is reported missing.
+    let paths = std::env::var_os("PATH")?;
+    let pathext: Vec<String> = std::env::var("PATHEXT")
+        .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string())
+        .split(';')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    for dir in std::env::split_paths(&paths) {
+        if dir.as_os_str().is_empty() {
+            continue;
+        }
+        let exact = dir.join(exe);
+        if exact.is_file() {
+            return Some(exact.to_string_lossy().into_owned());
+        }
+        for ext in &pathext {
+            let candidate = dir.join(format!("{}{}", exe, ext));
+            if candidate.is_file() {
+                return Some(candidate.to_string_lossy().into_owned());
+            }
+        }
     }
-    String::from_utf8(output.stdout)
-        .ok()
-        .and_then(|s| s.lines().next().map(|l| l.trim().to_string()))
-        .filter(|p| !p.is_empty() && std::path::Path::new(p).exists())
+    None
 }
 
 #[cfg(windows)]
@@ -1151,11 +1162,10 @@ pub fn resize_terminal(
     let cols = cols.max(2);
     let rows = rows.max(2);
     {
-        let mut last = last_size.lock().map_err(|e| e.to_string())?;
+        let last = last_size.lock().map_err(|e| e.to_string())?;
         if *last == (cols, rows) {
             return Ok(());
         }
-        *last = (cols, rows);
     }
     let guard = master.lock().map_err(|e| e.to_string())?;
     guard
@@ -1165,7 +1175,11 @@ pub fn resize_terminal(
             pixel_width: 0,
             pixel_height: 0,
         })
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    // Only record the new size after the resize actually succeeded, otherwise
+    // a failed resize can never be retried (dedup would treat it as a no-op).
+    *last_size.lock().map_err(|e| e.to_string())? = (cols, rows);
+    Ok(())
 }
 
 pub fn kill_terminal_inner(manager: &Mutex<PtyManager>, id: &str) {

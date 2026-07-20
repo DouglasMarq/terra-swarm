@@ -14,6 +14,7 @@ pub struct VoiceState {
     pub active_model_id: Mutex<Option<String>>,
     pub language: Mutex<String>,
     pub transcriber: Mutex<Option<Arc<Transcriber>>>,
+    pub downloading: Mutex<std::collections::HashSet<String>>,
 }
 
 impl Default for VoiceState {
@@ -24,6 +25,7 @@ impl Default for VoiceState {
             active_model_id: Mutex::new(None),
             language: Mutex::new("auto".into()),
             transcriber: Mutex::new(None),
+            downloading: Mutex::new(std::collections::HashSet::new()),
         }
     }
 }
@@ -69,7 +71,9 @@ fn activate_model(app: &tauri::AppHandle, model_id: &str, path: PathBuf) -> Resu
 
 fn start_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<VoiceState>();
-    if *state.recording.lock().unwrap() {
+    // Held across check-and-start so two rapid toggles can't both start.
+    let mut recording = state.recording.lock().unwrap();
+    if *recording {
         return Err("Already recording".into());
     }
     if state.transcriber.lock().unwrap().is_none() {
@@ -84,20 +88,28 @@ fn start_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
         let _ = app.emit("voice-recording-error", &e);
         return Err(e);
     }
-    *state.recording.lock().unwrap() = true;
+    *recording = true;
     let _ = app.emit("voice-recording-started", ());
     Ok(())
 }
 
 pub fn stop_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<VoiceState>();
-    if !*state.recording.lock().unwrap() {
-        return Err("Not recording".into());
+    {
+        let mut recording = state.recording.lock().unwrap();
+        if !*recording {
+            return Err("Not recording".into());
+        }
+        // Clear unconditionally: if the audio thread died, stop() will fail
+        // forever and the flag must not leave the app stuck in "recording".
+        *recording = false;
     }
     let controller = app.state::<AudioController>();
 
-    controller.stop()?;
-    *state.recording.lock().unwrap() = false;
+    if let Err(e) = controller.stop() {
+        eprintln!("audio stop failed: {}", e);
+        let _ = app.emit("voice-recording-error", &e);
+    }
     let _ = app.emit("voice-recording-stopped", ());
 
     let audio_data = std::mem::take(&mut *state.audio_buffer.lock().unwrap());
@@ -131,7 +143,7 @@ pub fn stop_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn voice_toggle_recording(app: tauri::AppHandle) -> Result<(), String> {
     let recording = *app.state::<VoiceState>().recording.lock().unwrap();
     match recording {
@@ -264,6 +276,25 @@ pub async fn voice_set_model(model_id: String, app: tauri::AppHandle) -> Result<
 
 #[tauri::command]
 pub async fn voice_download_model(model_id: String, app: tauri::AppHandle) -> Result<(), String> {
+    // Per-model in-progress guard: two concurrent downloads of the same model
+    // would interleave writes into the shared .tmp file and corrupt it.
+    {
+        let state = app.state::<VoiceState>();
+        let mut dl = state.downloading.lock().unwrap();
+        if !dl.insert(model_id.clone()) {
+            return Err(format!("Download of {} is already in progress", model_id));
+        }
+    }
+    let result = download_model_impl(model_id.clone(), app.clone()).await;
+    app.state::<VoiceState>()
+        .downloading
+        .lock()
+        .unwrap()
+        .remove(&model_id);
+    result
+}
+
+async fn download_model_impl(model_id: String, app: tauri::AppHandle) -> Result<(), String> {
     use futures_util::StreamExt;
 
     let model = models::find_model(&model_id).ok_or("Unknown model ID")?;

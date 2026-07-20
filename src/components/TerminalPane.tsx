@@ -181,9 +181,22 @@ export function TerminalPane(props: Props) {
     // and a single full-width pane never changes size afterwards, so a failed
     // initial fit would stick the terminal at 80x24 until a window resize.
     // Report failure and retry with backoff until the fit actually takes.
+    // proposeDimensions() can also return degenerate-but-truthy results
+    // ({cols:2,rows:1} for a 0-height container, {NaN,NaN} inside a
+    // display:none subtree) — treat those as failures so the retry loop
+    // survives instead of poisoning lastCols/lastRows.
     const fitAndSend = (): boolean => {
       try {
-        if (!fit.proposeDimensions()) return false;
+        const d = fit.proposeDimensions();
+        if (
+          !d ||
+          !Number.isFinite(d.cols) ||
+          !Number.isFinite(d.rows) ||
+          d.cols < 10 ||
+          d.rows < 3
+        ) {
+          return false;
+        }
         fit.fit();
         if (term.cols !== lastCols || term.rows !== lastRows) {
           lastCols = term.cols;
@@ -199,13 +212,43 @@ export function TerminalPane(props: Props) {
     };
     fitRef.current = fitAndSend;
 
+    // ConPTY (and some TUIs) can miss the very first resize because it lands
+    // before the child has attached its console handler, and same-size
+    // resizes are deduped afterwards — so after the first valid fit, nudge
+    // the PTY with a rows-1/rows pair to force fresh resize events the
+    // child cannot miss.
+    const confirmTimers: number[] = [];
+    let confirmed = false;
+    const confirmResize = () => {
+      if (disposed || confirmed) return;
+      confirmed = true;
+      for (const delay of [400, 1500]) {
+        confirmTimers.push(
+          window.setTimeout(() => {
+            if (disposed || term.cols < 10 || term.rows < 4) return;
+            if (term.cols !== lastCols || term.rows !== lastRows) return;
+            const { cols, rows } = term;
+            api
+              .resizeTerminal(id, cols, rows - 1)
+              .then(() => api.resizeTerminal(id, cols, rows))
+              .catch(() => {});
+          }, delay),
+        );
+      }
+    };
+
     let fitTimer = 0;
     const scheduleFit = (attempt = 0) => {
       if (disposed || fitTimer) return;
       fitTimer = window.setTimeout(
         () => {
           fitTimer = 0;
-          if (disposed || fitAndSend() || attempt >= 50) return;
+          if (disposed) return;
+          if (fitAndSend()) {
+            confirmResize();
+            return;
+          }
+          if (attempt >= 50) return;
           scheduleFit(attempt + 1);
         },
         attempt === 0 ? 0 : Math.min(1000, 100 * 2 ** Math.min(attempt, 3)),
@@ -288,8 +331,28 @@ export function TerminalPane(props: Props) {
       preLive.length = 0;
     })();
 
+    // Serialize writes and retry while the backend input channel is full
+    // (child not reading stdin): without this, keystrokes and pastes are
+    // silently dropped under backpressure.
+    let writeChain: Promise<void> = Promise.resolve();
     const dataSub = term.onData((data) => {
-      api.writeTerminal(id, data).catch((err) => warnThrottled("write", err));
+      writeChain = writeChain.then(async () => {
+        for (let attempt = 0; ; attempt++) {
+          if (disposed) return;
+          try {
+            await api.writeTerminal(id, data);
+            return;
+          } catch (err) {
+            if (!String(err).includes("busy") || attempt >= 30) {
+              warnThrottled("write", err);
+              return;
+            }
+            await new Promise((r) =>
+              setTimeout(r, 25 * Math.min(attempt + 1, 10)),
+            );
+          }
+        }
+      });
     });
 
     let resizeRaf = 0;
@@ -297,7 +360,8 @@ export function TerminalPane(props: Props) {
       if (resizeRaf) return;
       resizeRaf = requestAnimationFrame(() => {
         resizeRaf = 0;
-        if (!fitAndSend()) scheduleFit();
+        if (fitAndSend()) confirmResize();
+        else scheduleFit();
       });
     });
     observer.observe(container);
@@ -309,6 +373,7 @@ export function TerminalPane(props: Props) {
       cancelAnimationFrame(resizeRaf);
       clearTimeout(retry);
       clearTimeout(fitTimer);
+      for (const t of confirmTimers) clearTimeout(t);
       observer.disconnect();
       dataSub.dispose();
       unlisten?.();

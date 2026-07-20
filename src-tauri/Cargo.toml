@@ -1,6 +1,6 @@
 [package]
 name = "terra-swarm"
-version = "1.0.0"
+version = "1.0.1"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -33,10 +33,6 @@ futures-util = "0.3.33"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
-[target.'cfg(target_os = "linux")'.dependencies]
-whisper-rs = { version = "0.16.0", features = ["vulkan"] }
-
-[target.'cfg(target_os = "windows")'.dependencies]
 whisper-rs = "0.16.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]

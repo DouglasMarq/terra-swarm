@@ -74,26 +74,6 @@ function BellIcon() {
   );
 }
 
-function BranchIcon() {
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="6" y1="3" x2="6" y2="15" />
-      <circle cx="18" cy="6" r="3" />
-      <circle cx="6" cy="18" r="3" />
-      <path d="M18 9a9 9 0 0 1-9 9" />
-    </svg>
-  );
-}
-
 function MinimizeIcon() {
   return (
     <svg
@@ -115,7 +95,7 @@ function MinimizeIcon() {
 }
 
 export function TerminalPane(props: Props) {
-  const { id, command, fontSize, exited, expanded, anyExpanded, basis, height, entering, dragging, dragOver, notifications, contextUsed, title, branch, focused } =
+  const { id, command, fontSize, exited, expanded, anyExpanded, basis, height, entering, dragging, dragOver, notifications, contextUsed, title, focused } =
     props;
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -401,9 +381,9 @@ export function TerminalPane(props: Props) {
     if (!pane || !rows) return;
     const startX = e.clientX;
     // Percentages resolve against the container's content box, which excludes
-    // its 10px side padding; the basis prop (not the rendered width, which
+    // its 12px side padding; the basis prop (not the rendered width, which
     // includes flex-grow slack) is the true starting share.
-    const total = rows.getBoundingClientRect().width - 20;
+    const total = rows.getBoundingClientRect().width - 24;
     const startPct = basis;
     let last = startPct;
     document.body.classList.add("col-resizing");
@@ -430,7 +410,7 @@ export function TerminalPane(props: Props) {
       className={`pane ${expanded ? "expanded" : ""} ${entering ? "pane-enter" : ""} ${dragging ? "dragging" : ""} ${
         dragOver ? "drag-over" : ""
       } ${focused ? "focused" : ""}`}
-      style={{ flex: `1 1 calc(${basis}% - 10px)`, height }}
+      style={{ flex: `1 1 calc(${basis}% - 12px)`, height }}
       onMouseDown={() => {
         props.onFocus();
         if (notifications > 0) props.onClearNotifications();
@@ -446,12 +426,6 @@ export function TerminalPane(props: Props) {
               {title}
             </span>
           )}
-          {branch && (
-            <span className="pane-branch" title={`Git branch: ${branch}`}>
-              <BranchIcon />
-              {branch}
-            </span>
-          )}
           {contextUsed != null && !exited && (
             <span
               className={`pane-ctx ${
@@ -460,10 +434,7 @@ export function TerminalPane(props: Props) {
               title={`Context used: ${contextUsed}%`}
             >
               <span className="pane-ctx-bar">
-                <span
-                  className="pane-ctx-fill"
-                  style={{ width: `${contextUsed}%` }}
-                />
+                <span style={{ width: `${contextUsed}%` }} />
               </span>
               {contextUsed}%
             </span>

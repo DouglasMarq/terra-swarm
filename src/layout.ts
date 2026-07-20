@@ -8,11 +8,11 @@ export interface TerminalMove {
   widths: { id: string; pct: number }[];
 }
 
-// Panes have `min-width: 240px` and `flex-basis: calc(basis% - 10px)` in a
-// container with 10px gaps, so wrapping depends on both the percentage sum
+// Panes have `min-width: 240px` and `flex-basis: calc(basis% - 12px)` in a
+// container with 12px gaps, so wrapping depends on both the percentage sum
 // and the available pixel width.
 export const MIN_PANE_WIDTH = 240;
-export const GRID_GAP = 10;
+export const GRID_GAP = 12;
 
 // Split the flat terminal list into visual rows the same way flex-wrap does:
 // a new row starts whenever the accumulated flex basis would exceed 100%

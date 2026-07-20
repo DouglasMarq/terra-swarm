@@ -266,14 +266,16 @@ export function TopBar({
 
   return (
     <header className="topbar" data-tauri-drag-region>
-      <span className="topbar-title" data-tauri-drag-region>
-        Terra Swarm
-      </span>
-      {activeName && (
-        <span className="topbar-ws" data-tauri-drag-region>
-          {activeName}
+      <div className="topbar-center" data-tauri-drag-region>
+        <span className="topbar-title" data-tauri-drag-region>
+          Terra Swarm
         </span>
-      )}
+        {activeName && (
+          <span className="topbar-ws" data-tauri-drag-region>
+            — {activeName}
+          </span>
+        )}
+      </div>
       <span className="topbar-spacer" data-tauri-drag-region />
       <div className="topbar-bell-wrap" ref={gridWrapRef}>
         <button

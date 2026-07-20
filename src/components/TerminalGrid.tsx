@@ -231,7 +231,7 @@ export function TerminalGrid({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const measure = () => setContentWidth(Math.max(1, el.clientWidth - 20));
+    const measure = () => setContentWidth(Math.max(1, el.clientWidth - 24));
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -418,7 +418,7 @@ export function TerminalGrid({
     <div
       key="drop-preview"
       className="drop-preview"
-      style={{ flex: `1 1 calc(${previewBasis}% - 10px)`, height: paneHeight }}
+      style={{ flex: `1 1 calc(${previewBasis}% - 12px)`, height: paneHeight }}
     />
   );
   const dragOrigIndex = terminals.findIndex((t) => t.id === dragId);

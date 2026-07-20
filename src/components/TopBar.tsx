@@ -1,14 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import type { NotificationItem, Workspace } from "../types";
+import { listen } from "@tauri-apps/api/event";
+import type { NotificationItem, VoiceStatus, Workspace } from "../types";
 
 interface Props {
   workspaces: Workspace[];
   activeName: string | null;
   items: NotificationItem[];
+  notificationCount: number;
+  gridCols: number;
+  onGridLayoutChange: (cols: number) => void;
   onMarkAllRead: () => void;
   onClearAll: () => void;
   onJump: (item: NotificationItem) => void;
+  voiceEnabled: boolean;
+  voiceStatus: VoiceStatus;
+  onVoiceClick: () => void;
 }
+
+const GRID_COL_OPTIONS = [2, 3, 4, 5, 6];
 
 const AGENT_NAMES: Record<string, string> = {
   claude: "Claude Code",
@@ -36,6 +45,26 @@ function relTime(ts: number, now: number): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function GridIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="3" width="7" height="7" />
+      <rect x="14" y="3" width="7" height="7" />
+      <rect x="14" y="14" width="7" height="7" />
+      <rect x="3" y="14" width="7" height="7" />
+    </svg>
+  );
+}
+
 function BellIcon() {
   return (
     <svg
@@ -51,6 +80,57 @@ function BellIcon() {
       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" x2="12" y1="19" y2="22" />
+    </svg>
+  );
+}
+
+function VoiceWave() {
+  const waveRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const unlisten = listen<number>("voice-audio-level", (e) => {
+      const el = waveRef.current;
+      if (!el) return;
+      const level = Math.min(1, e.payload * 10);
+      const now = Date.now() / 110;
+      const bars = el.children;
+      for (let i = 0; i < bars.length; i++) {
+        const wobble = 0.5 + 0.5 * Math.abs(Math.sin(now + i * 1.7));
+        const scale = 0.2 + level * 0.8 * wobble;
+        (bars[i] as HTMLElement).style.transform = `scaleY(${scale})`;
+      }
+    });
+    return () => {
+      unlisten.then((u) => u());
+    };
+  }, []);
+
+  return (
+    <span className="voice-wave" ref={waveRef}>
+      <i />
+      <i />
+      <i />
+      <i />
+      <i />
+    </span>
   );
 }
 
@@ -129,14 +209,38 @@ export function TopBar({
   workspaces,
   activeName,
   items,
+  notificationCount,
+  gridCols,
+  onGridLayoutChange,
   onMarkAllRead,
   onClearAll,
   onJump,
+  voiceEnabled,
+  voiceStatus,
+  onVoiceClick,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [gridOpen, setGridOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const wrapRef = useRef<HTMLDivElement>(null);
+  const gridWrapRef = useRef<HTMLDivElement>(null);
   const unread = items.reduce((n, it) => n + (it.read ? 0 : 1), 0);
+
+  useEffect(() => {
+    if (!gridOpen) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (!gridWrapRef.current?.contains(e.target as Node)) setGridOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setGridOpen(false);
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [gridOpen]);
 
   useEffect(() => {
     if (!open) return;
@@ -167,6 +271,55 @@ export function TopBar({
         </span>
       )}
       <span className="topbar-spacer" data-tauri-drag-region />
+      <div className="topbar-bell-wrap" ref={gridWrapRef}>
+        <button
+          className={`topbar-bell ${gridOpen ? "open" : ""}`}
+          title="Grid layout"
+          onClick={() => setGridOpen((o) => !o)}
+        >
+          <GridIcon />
+          <span className="topbar-grid-value">{gridCols}</span>
+        </button>
+        {gridOpen && (
+          <div className="grid-panel">
+            <div className="notif-head">
+              <span className="notif-title">Grid layout</span>
+            </div>
+            <div className="grid-panel-list">
+              {GRID_COL_OPTIONS.map((n) => (
+                <button
+                  key={n}
+                  className={`grid-panel-item ${gridCols === n ? "active" : ""}`}
+                  onClick={() => {
+                    onGridLayoutChange(n);
+                    setGridOpen(false);
+                  }}
+                >
+                  <span className="grid-panel-check">
+                    {gridCols === n && <CheckIcon />}
+                  </span>
+                  {n} side-by-side
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <button
+        className={`topbar-mic ${voiceStatus} ${voiceEnabled ? "" : "off"}`}
+        title={
+          !voiceEnabled
+            ? "Voice input is disabled — click to configure"
+            : voiceStatus === "recording"
+              ? "Listening… click to stop"
+              : voiceStatus === "transcribing"
+                ? "Transcribing…"
+                : "Voice input"
+        }
+        onClick={onVoiceClick}
+      >
+        {voiceStatus === "recording" ? <VoiceWave /> : <MicIcon />}
+      </button>
       <div className="topbar-bell-wrap" ref={wrapRef}>
         <button
           className={`topbar-bell ${open ? "open" : ""}`}
@@ -174,9 +327,9 @@ export function TopBar({
           onClick={() => setOpen((o) => !o)}
         >
           <BellIcon />
-          {unread > 0 && (
-            <span className="topbar-bell-badge" key={unread}>
-              {unread}
+          {notificationCount > 0 && (
+            <span className="topbar-bell-badge" key={notificationCount}>
+              {notificationCount}
             </span>
           )}
         </button>
@@ -229,11 +382,13 @@ export function TopBar({
                       className={`notif-item ${n.read ? "" : "unread"}`}
                     >
                       <span className="notif-check">
-                        <CheckCircleIcon />
+                        {n.system ? <MicIcon /> : <CheckCircleIcon />}
                       </span>
                       <div className="notif-body">
                         <div className="notif-item-top">
-                          <span className="notif-agent">{agentName(cmd)}</span>
+                          <span className="notif-agent">
+                            {n.system ? "System" : agentName(cmd)}
+                          </span>
                           {ws && <span className="notif-ws">{ws.name}</span>}
                           <span className="notif-time">
                             {relTime(n.ts, now)}
@@ -242,15 +397,17 @@ export function TopBar({
                         <div className="notif-msg" title={n.message}>
                           {n.message}
                         </div>
-                        <button
-                          className="notif-jump"
-                          onClick={() => {
-                            onJump(n);
-                            setOpen(false);
-                          }}
-                        >
-                          Jump to pane
-                        </button>
+                        {!n.system && (
+                          <button
+                            className="notif-jump"
+                            onClick={() => {
+                              onJump(n);
+                              setOpen(false);
+                            }}
+                          >
+                            Jump to pane
+                          </button>
+                        )}
                       </div>
                     </div>
                   );

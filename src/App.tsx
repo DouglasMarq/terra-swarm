@@ -8,12 +8,18 @@ import type {
   ExitPayload,
   NotificationItem,
   NotificationPayload,
+  ResumeItem,
   TitlePayload,
+  VoiceDownloadProgress,
+  VoiceModelInfo,
+  VoiceStatus,
   Workspace,
 } from "./types";
+import { computeTerminalMove, type DropZone } from "./layout";
+import { ResumeDialog } from "./components/ResumeDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
-import { TerminalGrid } from "./components/TerminalGrid";
+import { DEFAULT_BASIS, TerminalGrid } from "./components/TerminalGrid";
 import { TopBar } from "./components/TopBar";
 import { getTerminal } from "./terminalRegistry";
 import "./App.css";
@@ -34,6 +40,16 @@ const mk = (
   alt = false,
 ): Hotkey => ({ key, meta, shift, ctrl, alt });
 
+const IS_MAC =
+  typeof navigator !== "undefined" &&
+  /mac/i.test(navigator.platform || navigator.userAgent);
+
+const wsSelect = (n: number): Hotkey =>
+  IS_MAC ? mk(String(n), true) : mk(String(n), false, false, true);
+
+const termSelect = (n: number): Hotkey =>
+  IS_MAC ? mk(String(n), true, true) : mk(String(n), false, true, true);
+
 const DEFAULT_HOTKEYS: Record<string, Hotkey> = {
   newWorkspace: mk("n", true, true),
   renameWorkspace: mk("r", true, true),
@@ -45,6 +61,25 @@ const DEFAULT_HOTKEYS: Record<string, Hotkey> = {
   increaseFontSize: mk("=", true),
   decreaseFontSize: mk("-", true),
   resetFontSize: mk("0", true),
+  toggleVoice: IS_MAC ? mk(" ", true, true) : mk(" ", false, true, true),
+  selectWorkspace1: wsSelect(1),
+  selectWorkspace2: wsSelect(2),
+  selectWorkspace3: wsSelect(3),
+  selectWorkspace4: wsSelect(4),
+  selectWorkspace5: wsSelect(5),
+  selectWorkspace6: wsSelect(6),
+  selectWorkspace7: wsSelect(7),
+  selectWorkspace8: wsSelect(8),
+  selectWorkspace9: wsSelect(9),
+  selectTerminal1: termSelect(1),
+  selectTerminal2: termSelect(2),
+  selectTerminal3: termSelect(3),
+  selectTerminal4: termSelect(4),
+  selectTerminal5: termSelect(5),
+  selectTerminal6: termSelect(6),
+  selectTerminal7: termSelect(7),
+  selectTerminal8: termSelect(8),
+  selectTerminal9: termSelect(9),
 };
 
 const MIN_FONT_SIZE = 8;
@@ -52,12 +87,62 @@ const MAX_FONT_SIZE = 32;
 const DEFAULT_FONT_SIZE = 13;
 const MAX_NOTIF_ITEMS = 50;
 const BRANCH_POLL_MS = 10000;
+const GRID_COL_OPTIONS = [2, 3, 4, 5, 6];
+const DEFAULT_GRID_COLS = 2;
+
+const SETTINGS_SECTIONS = [
+  { id: "terminal", label: "Terminal" },
+  { id: "voice", label: "Voice input" },
+  { id: "shortcuts", label: "Keyboard shortcuts" },
+] as const;
+
+type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["id"];
+
+// Agent-native session continuation for the startup resume dialog. Only the
+// base binary is mapped; anything else (shell, custom commands) respawns
+// with its original command, which is a fresh start for that program.
+const RESUME_COMMANDS: Record<string, string> = {
+  claude: "claude --continue",
+  codex: "codex resume --last",
+  opencode: "opencode --continue",
+  kimi: "kimi --continue",
+};
+
+function resumeCommandFor(command: string): string {
+  const base = command.trim().split(/\s+/)[0];
+  return RESUME_COMMANDS[base] ?? command;
+}
+
+const VOICE_LANGUAGES = [
+  { code: "auto", label: "Auto-detect" },
+  { code: "en", label: "English" },
+  { code: "es", label: "Spanish" },
+  { code: "fr", label: "French" },
+  { code: "de", label: "German" },
+  { code: "it", label: "Italian" },
+  { code: "pt", label: "Portuguese" },
+  { code: "nl", label: "Dutch" },
+  { code: "pl", label: "Polish" },
+  { code: "ru", label: "Russian" },
+  { code: "uk", label: "Ukrainian" },
+  { code: "tr", label: "Turkish" },
+  { code: "ar", label: "Arabic" },
+  { code: "hi", label: "Hindi" },
+  { code: "zh", label: "Chinese" },
+  { code: "ja", label: "Japanese" },
+  { code: "ko", label: "Korean" },
+];
 
 function loadFontSize(): number {
   const raw = Number(localStorage.getItem("termFontSize"));
   return Number.isFinite(raw) && raw >= MIN_FONT_SIZE && raw <= MAX_FONT_SIZE
     ? Math.round(raw)
     : DEFAULT_FONT_SIZE;
+}
+
+function loadGridCols(): number {
+  const raw = Number(localStorage.getItem("gridCols"));
+  return GRID_COL_OPTIONS.includes(raw) ? raw : DEFAULT_GRID_COLS;
 }
 
 const HOTKEY_ACTIONS = [
@@ -71,6 +156,25 @@ const HOTKEY_ACTIONS = [
   { id: "increaseFontSize", label: "Increase terminal font size" },
   { id: "decreaseFontSize", label: "Decrease terminal font size" },
   { id: "resetFontSize", label: "Reset terminal font size" },
+  { id: "toggleVoice", label: "Toggle voice input" },
+  { id: "selectWorkspace1", label: "Select workspace 1" },
+  { id: "selectWorkspace2", label: "Select workspace 2" },
+  { id: "selectWorkspace3", label: "Select workspace 3" },
+  { id: "selectWorkspace4", label: "Select workspace 4" },
+  { id: "selectWorkspace5", label: "Select workspace 5" },
+  { id: "selectWorkspace6", label: "Select workspace 6" },
+  { id: "selectWorkspace7", label: "Select workspace 7" },
+  { id: "selectWorkspace8", label: "Select workspace 8" },
+  { id: "selectWorkspace9", label: "Select workspace 9" },
+  { id: "selectTerminal1", label: "Focus terminal 1" },
+  { id: "selectTerminal2", label: "Focus terminal 2" },
+  { id: "selectTerminal3", label: "Focus terminal 3" },
+  { id: "selectTerminal4", label: "Focus terminal 4" },
+  { id: "selectTerminal5", label: "Focus terminal 5" },
+  { id: "selectTerminal6", label: "Focus terminal 6" },
+  { id: "selectTerminal7", label: "Focus terminal 7" },
+  { id: "selectTerminal8", label: "Focus terminal 8" },
+  { id: "selectTerminal9", label: "Focus terminal 9" },
 ];
 
 function loadHotkeys(): Record<string, Hotkey> {
@@ -116,7 +220,8 @@ function formatHotkey(h: Hotkey): string {
   if (h.alt) s += "⌥";
   if (h.shift) s += "⇧";
   if (h.meta) s += "⌘";
-  s += h.key.length === 1 ? h.key.toUpperCase() : h.key;
+  s +=
+    h.key === " " ? "Space" : h.key.length === 1 ? h.key.toUpperCase() : h.key;
   return s;
 }
 
@@ -155,6 +260,8 @@ function App() {
   const [pickerSaveDefault, setPickerSaveDefault] = useState(false);
   const [hotkeys, setHotkeys] = useState<Record<string, Hotkey>>(loadHotkeys);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsSection, setSettingsSection] =
+    useState<SettingsSection>("terminal");
   const [capturing, setCapturing] = useState<string | null>(null);
   const [renameTrigger, setRenameTrigger] = useState<{
     id: string;
@@ -164,18 +271,38 @@ function App() {
     () => localStorage.getItem("sidebarCollapsed") === "1",
   );
   const [fontSize, setFontSize] = useState<number>(loadFontSize);
+  const [defaultShell, setDefaultShell] = useState(
+    () => localStorage.getItem("defaultShell") ?? "",
+  );
+  const [availableShells, setAvailableShells] = useState<string[]>([]);
+  const [gridCols, setGridCols] = useState<number>(loadGridCols);
+  const [resumeItems, setResumeItems] = useState<ResumeItem[] | null>(null);
+  const [resumeSavedAt, setResumeSavedAt] = useState<number | null>(null);
+  const [voiceEnabled, setVoiceEnabled] = useState(
+    () => localStorage.getItem("voiceEnabled") === "1",
+  );
+  const [voiceLang, setVoiceLang] = useState(
+    () => localStorage.getItem("voiceLanguage") ?? "auto",
+  );
+  const [voiceModel, setVoiceModel] = useState<string | null>(
+    () => localStorage.getItem("voiceModel"),
+  );
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
+  const [voiceModels, setVoiceModels] = useState<VoiceModelInfo[]>([]);
+  const [voiceDl, setVoiceDl] = useState<{
+    id: string;
+    percent: number;
+  } | null>(null);
+  const [micAvailable, setMicAvailable] = useState<boolean | null>(null);
   const inited = useRef(false);
+  // Authoritative set of terminal ids the UI tracks; mutated only by
+  // spawn/close paths (never rebuilt from `workspaces`, which would race
+  // with pending refreshes and silently drop live ids).
   const liveIdsRef = useRef<Set<string>>(new Set());
   const notifKeyRef = useRef(1);
   const spawnSeqRef = useRef<Record<string, number>>({});
   const lastFocusByWs = useRef<Record<string, string>>({});
   const prevActiveId = useRef<string | null>(null);
-
-  useEffect(() => {
-    liveIdsRef.current = new Set(
-      workspaces.flatMap((w) => w.terminals.map((t) => t.id)),
-    );
-  }, [workspaces]);
 
   const refresh = useCallback(async () => {
     try {
@@ -189,8 +316,9 @@ function App() {
     }
   }, []);
 
-  // One-time init: load workspaces and respawn persisted terminals. Guarded
-  // so React StrictMode's double-invoke doesn't spawn everything twice.
+  // One-time init: load workspaces and offer to resume the terminals that
+  // were running at last close. Guarded so React StrictMode's double-invoke
+  // doesn't spawn everything twice.
   useEffect(() => {
     if (inited.current) return;
     inited.current = true;
@@ -207,26 +335,43 @@ function App() {
 
         const running = await api.runningTerminals();
         const runningIds = new Set(running.map((r) => r.id));
+        for (const ws of list) {
+          for (const t of ws.terminals) liveIdsRef.current.add(t.id);
+        }
         for (const r of running) {
-          liveIdsRef.current.add(r.id);
           spawnSeqRef.current[r.id] = r.seq;
         }
+        // Persisted terminals that are no longer alive were running when the
+        // app last closed; offer to resume them instead of silently
+        // respawning, so agent-native session continuation can be used.
+        const items: ResumeItem[] = [];
+        const deadIds: string[] = [];
         for (const ws of list) {
           for (const t of ws.terminals) {
             if (runningIds.has(t.id)) continue;
-            // Register intent synchronously so an exit event for a
-            // fast-crashing process is never dropped by the render-delay gap.
-            liveIdsRef.current.add(t.id);
-            api
-              .spawnTerminal(ws.id, t.command, t.id)
-              .then((res) => {
-                spawnSeqRef.current[t.id] = res.seq;
-              })
-              .catch((err) => {
-                console.error(`failed to spawn terminal ${t.id}:`, err);
-                setExited((prev) => ({ ...prev, [t.id]: null }));
-              });
+            deadIds.push(t.id);
+            items.push({
+              terminalId: t.id,
+              wsId: ws.id,
+              wsName: ws.name,
+              cwd: ws.cwd,
+              command: t.command,
+              agentId: t.command.trim().split(/\s+/)[0] || "shell",
+              resumeCommand: resumeCommandFor(t.command),
+            });
           }
+        }
+        if (items.length > 0) {
+          // Mark persisted-dead terminals as exited up front so the status
+          // bar doesn't count them as running and panes show the exited
+          // overlay instead of a blank live-looking terminal.
+          setExited((prev) => {
+            const next = { ...prev };
+            for (const id of deadIds) next[id] = null;
+            return next;
+          });
+          setResumeItems(items);
+          api.storeSavedAt().then(setResumeSavedAt).catch(() => {});
         }
       } catch (err) {
         console.error("initialization failed:", err);
@@ -234,6 +379,27 @@ function App() {
     })();
 
     api.detectAgents().then(setAgents).catch(() => {});
+
+    // Push persisted voice settings into the backend (model load is async).
+    // If the mic is gone while the feature was left enabled, disable it.
+    if (localStorage.getItem("voiceEnabled") === "1") {
+      api
+        .voiceMicAvailable()
+        .then((avail) => {
+          setMicAvailable(avail);
+          if (!avail) disableVoiceInput(false);
+        })
+        .catch(() => {});
+      api
+        .voiceSetLanguage(localStorage.getItem("voiceLanguage") ?? "auto")
+        .catch(() => {});
+      const model = localStorage.getItem("voiceModel");
+      if (model) {
+        api
+          .voiceSetModel(model)
+          .catch((err) => console.error("voice model load failed:", err));
+      }
+    }
   }, []);
 
   // Global backend event listeners. Registered in a dedicated effect (no
@@ -299,7 +465,8 @@ function App() {
   }, [refresh]);
 
   const active = workspaces.find((w) => w.id === activeId) ?? null;
-  const modalOpen = showNewWs || showAgentPicker || showSettings;
+  const showResume = resumeItems !== null && resumeItems.length > 0;
+  const modalOpen = showNewWs || showAgentPicker || showSettings || showResume;
 
   // Poll git branches for all workspace directories. Keyed off the id:cwd
   // signature so terminal spawns/resizes don't restart the interval.
@@ -363,7 +530,14 @@ function App() {
   }, [activeId, focusedId, modalOpen]);
 
   const spawnTerminalInto = async (wsId: string, command: string) => {
-    const res = await api.spawnTerminal(wsId, command);
+    const res = await api.spawnTerminal(
+      wsId,
+      command,
+      undefined,
+      undefined,
+      undefined,
+      defaultShell || undefined,
+    );
     liveIdsRef.current.add(res.meta.id);
     spawnSeqRef.current[res.meta.id] = res.seq;
     setFocusedId(res.meta.id);
@@ -445,9 +619,19 @@ function App() {
     try {
       // Kill the old PTY first (store entry is kept so position/width are
       // preserved), then respawn. Spawning onto a live id would leak the old
-      // process and double-emit output.
+      // process and double-emit output. Spawn at the xterm's current size:
+      // it fitted to the pane long ago, so nothing would re-send the real
+      // dimensions and the new PTY would stay stuck at the 80x24 default.
+      const term = getTerminal(id);
       await api.stopTerminal(id);
-      const res = await api.spawnTerminal(active.id, command, id);
+      const res = await api.spawnTerminal(
+        active.id,
+        command,
+        id,
+        term?.cols,
+        term?.rows,
+        defaultShell || undefined,
+      );
       spawnSeqRef.current[id] = res.seq;
     } catch (err) {
       console.error(`failed to restart terminal ${id}:`, err);
@@ -479,6 +663,77 @@ function App() {
     await refresh();
   };
 
+  const spawnResumed = async (item: ResumeItem) => {
+    try {
+      // Respawn onto the persisted id so position/width are kept; the store
+      // entry's command is updated to the resume variant backend-side. Spawn
+      // at the xterm's current size: the pane mounted (and fitted) while the
+      // old process was dead, so no resize would be sent after the respawn
+      // and the PTY would stay at the 80x24 default under a full-width pane.
+      const term = getTerminal(item.terminalId);
+      const res = await api.spawnTerminal(
+        item.wsId,
+        item.resumeCommand,
+        item.terminalId,
+        term?.cols,
+        term?.rows,
+        defaultShell || undefined,
+      );
+      liveIdsRef.current.add(item.terminalId);
+      spawnSeqRef.current[item.terminalId] = res.seq;
+      setExited((prev) => {
+        const next = { ...prev };
+        delete next[item.terminalId];
+        return next;
+      });
+    } catch (err) {
+      console.error(`failed to resume terminal ${item.terminalId}:`, err);
+      setExited((prev) => ({ ...prev, [item.terminalId]: null }));
+    }
+  };
+
+  const dropResumeItem = (terminalId: string) =>
+    setResumeItems((prev) => {
+      if (!prev) return prev;
+      const next = prev.filter((i) => i.terminalId !== terminalId);
+      return next.length > 0 ? next : null;
+    });
+
+  const resumeOne = async (item: ResumeItem) => {
+    await spawnResumed(item);
+    dropResumeItem(item.terminalId);
+    await refresh();
+  };
+
+  const dismissOne = async (item: ResumeItem) => {
+    // killTerminal removes the store entry even when no PTY is alive.
+    liveIdsRef.current.delete(item.terminalId);
+    delete spawnSeqRef.current[item.terminalId];
+    await api.killTerminal(item.terminalId).catch(() => {});
+    dropResumeItem(item.terminalId);
+    await refresh();
+  };
+
+  const resumeAll = async () => {
+    const items = resumeItems ?? [];
+    setResumeItems(null);
+    await Promise.all(items.map(spawnResumed));
+    await refresh();
+  };
+
+  const dismissAll = async () => {
+    const items = resumeItems ?? [];
+    setResumeItems(null);
+    for (const i of items) {
+      liveIdsRef.current.delete(i.terminalId);
+      delete spawnSeqRef.current[i.terminalId];
+    }
+    await Promise.all(
+      items.map((i) => api.killTerminal(i.terminalId).catch(() => {})),
+    );
+    await refresh();
+  };
+
   const markTerminalRead = (id: string) => {
     setNotifItems((prev) =>
       prev.some((n) => n.terminalId === id && !n.read)
@@ -503,6 +758,7 @@ function App() {
         ? prev.map((n) => ({ ...n, read: true }))
         : prev,
     );
+    setNotifications({});
   };
 
   const clearAllNotifications = () => {
@@ -538,22 +794,50 @@ function App() {
     api.setTerminalWidth(wsId, id, pct).catch(() => {});
   };
 
-  const swapTerminalsLocal = (wsId: string, a: string, b: string) => {
-    setWorkspaces((prev) =>
-      prev.map((w) => {
-        if (w.id !== wsId) return w;
-        const ia = w.terminals.findIndex((t) => t.id === a);
-        const ib = w.terminals.findIndex((t) => t.id === b);
-        if (ia < 0 || ib < 0) return w;
-        const next = [...w.terminals];
-        [next[ia], next[ib]] = [next[ib], next[ia]];
-        return { ...w, terminals: next };
-      }),
-    );
-  };
-
   const persistOrder = (wsId: string, order: string[]) => {
     api.reorderTerminals(wsId, order).catch(() => {});
+  };
+
+  const reorderWorkspace = (dragId: string, targetId: string) => {
+    if (dragId === targetId) return;
+    const ids = workspaces.map((w) => w.id);
+    const from = ids.indexOf(dragId);
+    const to = ids.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    setWorkspaces((prev) => {
+      const byId = new Map(prev.map((w) => [w.id, w]));
+      return ids.map((id) => byId.get(id)!);
+    });
+    api.reorderWorkspaces(ids).catch(() => {});
+  };
+
+  const moveTerminalLocal = (
+    wsId: string,
+    dragId: string,
+    targetId: string,
+    zone: DropZone,
+    contentWidth: number,
+  ) => {
+    const ws = workspaces.find((w) => w.id === wsId);
+    if (!ws) return;
+    const defaultBasis = gridCols > 0 ? Math.floor(100 / gridCols) : DEFAULT_BASIS;
+    const move = computeTerminalMove(
+      ws.terminals,
+      dragId,
+      targetId,
+      zone,
+      defaultBasis,
+      contentWidth,
+    );
+    if (!move) return;
+    setWorkspaces((prev) =>
+      prev.map((w) => (w.id !== wsId ? w : { ...w, terminals: move.next })),
+    );
+    persistOrder(wsId, move.order);
+    for (const { id, pct } of move.widths) {
+      api.setTerminalWidth(wsId, id, pct).catch(() => {});
+    }
   };
 
   const renameWorkspace = async (id: string, name: string) => {
@@ -657,16 +941,224 @@ function App() {
     localStorage.removeItem("termFontSize");
   };
 
+  const refreshVoiceModels = useCallback(() => {
+    api.voiceListModels().then(setVoiceModels).catch(() => {});
+  }, []);
+
+  const toggleVoice = useCallback(() => {
+    if (!voiceEnabled) {
+      setSettingsSection("voice");
+      setShowSettings(true);
+      return;
+    }
+    api
+      .voiceToggleRecording()
+      .catch((err) => console.error("voice toggle failed:", err));
+  }, [voiceEnabled]);
+
+  const pushSystemNotification = (message: string) => {
+    setNotifItems((prev) =>
+      [
+        {
+          key: notifKeyRef.current++,
+          terminalId: "",
+          workspaceId: "",
+          message,
+          ts: Date.now(),
+          read: false,
+          system: true,
+        },
+        ...prev,
+      ].slice(0, MAX_NOTIF_ITEMS),
+    );
+  };
+
+  const disableVoiceInput = (notify: boolean) => {
+    setVoiceEnabled(false);
+    localStorage.setItem("voiceEnabled", "0");
+    if (notify) {
+      pushSystemNotification("Microphone disconnected — voice input disabled");
+    }
+  };
+
+  const updateVoiceEnabled = (on: boolean) => {
+    if (!on) {
+      setVoiceEnabled(false);
+      localStorage.setItem("voiceEnabled", "0");
+      return;
+    }
+    // Never enable without a microphone connected
+    api
+      .voiceMicAvailable()
+      .then((avail) => {
+        setMicAvailable(avail);
+        if (!avail) return;
+        setVoiceEnabled(true);
+        localStorage.setItem("voiceEnabled", "1");
+        api.voiceSetLanguage(voiceLang).catch(() => {});
+        if (voiceModel) api.voiceSetModel(voiceModel).catch(() => {});
+        refreshVoiceModels();
+      })
+      .catch(() => {});
+  };
+
+  const updateVoiceLang = (lang: string) => {
+    setVoiceLang(lang);
+    localStorage.setItem("voiceLanguage", lang);
+    api.voiceSetLanguage(lang).catch(() => {});
+  };
+
+  const selectVoiceModel = (id: string) => {
+    setVoiceModel(id);
+    localStorage.setItem("voiceModel", id);
+    api
+      .voiceSetModel(id)
+      .catch((err) => console.error("voice model load failed:", err));
+  };
+
+  const downloadVoiceModel = (id: string) => {
+    setVoiceDl({ id, percent: 0 });
+    api.voiceDownloadModel(id).catch((err) => {
+      setVoiceDl(null);
+      console.error("voice model download failed:", err);
+    });
+  };
+
+  // Latest focused terminal for the voice paste target, readable from
+  // listeners that are registered once.
+  const voiceFocusRef = useRef<string | null>(null);
+  voiceFocusRef.current = focusedId;
+  const voiceEnabledRef = useRef(voiceEnabled);
+  voiceEnabledRef.current = voiceEnabled;
+
+  // Voice backend events. On completion the transcript is written into the
+  // focused terminal (bracketed-paste aware) and focus is returned to it.
+  useEffect(() => {
+    const unRecStart = listen("voice-recording-started", () =>
+      setVoiceStatus("recording"),
+    );
+    const unTrStart = listen("voice-transcription-started", () =>
+      setVoiceStatus("transcribing"),
+    );
+    const unTrDone = listen<string>("voice-transcription-complete", (e) => {
+      setVoiceStatus("idle");
+      const text = e.payload;
+      if (!text.trim()) return;
+      const id = voiceFocusRef.current;
+      if (!id) return;
+      const term = getTerminal(id);
+      if (!term) return;
+      const data = term.modes.bracketedPasteMode
+        ? `\u001b[200~${text}\u001b[201~`
+        : text;
+      api.writeTerminal(id, data).catch(() => {});
+      term.focus();
+    });
+    const unTrErr = listen<string>("voice-transcription-error", (e) => {
+      setVoiceStatus("idle");
+      console.error("voice transcription error:", e.payload);
+    });
+    const unRecErr = listen<string>("voice-recording-error", (e) => {
+      setVoiceStatus("idle");
+      console.error("voice recording error:", e.payload);
+      if (e.payload.includes("model")) {
+        setSettingsSection("voice");
+        setShowSettings(true);
+      }
+    });
+    const unDlProg = listen<VoiceDownloadProgress>(
+      "voice-model-download-progress",
+      (e) => setVoiceDl({ id: e.payload.model_id, percent: e.payload.percent }),
+    );
+    const unDlDone = listen("voice-model-download-complete", () => {
+      setVoiceDl(null);
+      refreshVoiceModels();
+    });
+    const unModelChanged = listen<string>("voice-model-changed", (e) => {
+      setVoiceModel(e.payload);
+      localStorage.setItem("voiceModel", e.payload);
+      refreshVoiceModels();
+    });
+    const unMicChanged = listen<boolean>("voice-mic-changed", (e) => {
+      setMicAvailable(e.payload);
+      if (!e.payload && voiceEnabledRef.current) disableVoiceInput(true);
+    });
+    return () => {
+      unRecStart.then((u) => u());
+      unTrStart.then((u) => u());
+      unTrDone.then((u) => u());
+      unTrErr.then((u) => u());
+      unRecErr.then((u) => u());
+      unDlProg.then((u) => u());
+      unDlDone.then((u) => u());
+      unModelChanged.then((u) => u());
+      unMicChanged.then((u) => u());
+    };
+  }, [refreshVoiceModels]);
+
+  // Refresh mic presence and the model list whenever the settings page opens
+  useEffect(() => {
+    if (!showSettings) return;
+    api
+      .voiceMicAvailable()
+      .then(setMicAvailable)
+      .catch(() => {});
+    if (voiceEnabled) refreshVoiceModels();
+    api
+      .listShells()
+      .then(setAvailableShells)
+      .catch(() => {});
+  }, [showSettings, voiceEnabled, refreshVoiceModels]);
+
+  const applyGridLayout = async (cols: number) => {
+    if (!GRID_COL_OPTIONS.includes(cols)) return;
+    setGridCols(cols);
+    localStorage.setItem("gridCols", String(cols));
+    // Even out every pane to an equal share of the row, then reload the
+    // workspaces so all grids re-layout on the new column count.
+    const basis = Math.floor(100 / cols);
+    const targets = workspaces.flatMap((w) =>
+      w.terminals.map((t) => ({ wsId: w.id, id: t.id })),
+    );
+    setWorkspaces((prev) =>
+      prev.map((w) => ({
+        ...w,
+        terminals: w.terminals.map((t) => ({ ...t, width: basis })),
+      })),
+    );
+    await Promise.all(
+      targets.map(({ wsId, id }) =>
+        api.setTerminalWidth(wsId, id, basis).catch(() => {}),
+      ),
+    );
+    await refresh();
+  };
+
   // Latest-values ref so the global hotkey listener can be registered once
   // instead of being torn down and re-added on every render.
-  const hotkeyCtx = useRef({ modalOpen, capturing, hotkeys, active, focusedId });
-  hotkeyCtx.current = { modalOpen, capturing, hotkeys, active, focusedId };
+  const hotkeyCtx = useRef({
+    modalOpen,
+    capturing,
+    hotkeys,
+    active,
+    focusedId,
+    workspaces,
+  });
+  hotkeyCtx.current = {
+    modalOpen,
+    capturing,
+    hotkeys,
+    active,
+    focusedId,
+    workspaces,
+  };
   const hotkeyActions = useRef({
     closeWorkspace,
     quickNewTerminal,
     closeTerminal,
     changeFontSize,
     resetFontSize,
+    toggleVoice,
   });
   hotkeyActions.current = {
     closeWorkspace,
@@ -674,11 +1166,12 @@ function App() {
     closeTerminal,
     changeFontSize,
     resetFontSize,
+    toggleVoice,
   };
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const { modalOpen, capturing, hotkeys, active, focusedId } =
+      const { modalOpen, capturing, hotkeys, active, focusedId, workspaces } =
         hotkeyCtx.current;
       const actions = hotkeyActions.current;
       if (modalOpen || capturing) return;
@@ -731,6 +1224,29 @@ function App() {
           case "resetFontSize":
             actions.resetFontSize();
             break;
+          case "toggleVoice":
+            actions.toggleVoice();
+            break;
+          default: {
+            const wsMatch = /^selectWorkspace([1-9])$/.exec(action);
+            if (wsMatch) {
+              const ws = workspaces[Number(wsMatch[1]) - 1];
+              if (ws) {
+                setActiveId(ws.id);
+                setExpandedId(null);
+              }
+              break;
+            }
+            const termMatch = /^selectTerminal([1-9])$/.exec(action);
+            if (termMatch) {
+              const t = active?.terminals[Number(termMatch[1]) - 1];
+              if (t) {
+                setFocusedId(t.id);
+                setExpandedId(null);
+              }
+            }
+            break;
+          }
         }
         return;
       }
@@ -780,9 +1296,18 @@ function App() {
         workspaces={workspaces}
         activeName={active?.name ?? null}
         items={notifItems}
+        notificationCount={Object.values(notifications).reduce(
+          (a, b) => a + b,
+          0,
+        )}
+        gridCols={gridCols}
+        onGridLayoutChange={applyGridLayout}
         onMarkAllRead={markAllRead}
         onClearAll={clearAllNotifications}
         onJump={jumpToNotification}
+        voiceEnabled={voiceEnabled}
+        voiceStatus={voiceStatus}
+        onVoiceClick={toggleVoice}
       />
       <div className="app-row">
         <Sidebar
@@ -797,6 +1322,7 @@ function App() {
         onAdd={() => setShowNewWs(true)}
         onClose={closeWorkspace}
         onRename={renameWorkspace}
+        onReorder={reorderWorkspace}
         onQuickNew={quickNewTerminal}
         onPickNew={openPicker}
         onOpenSettings={() => setShowSettings(true)}
@@ -815,6 +1341,7 @@ function App() {
                   workspaceId={w.id}
                   terminals={w.terminals}
                   fontSize={fontSize}
+                  gridCols={gridCols}
                   hidden={w.id !== active.id}
                   expandedId={w.id === active.id ? expandedId : null}
                   focusedId={focusedId}
@@ -827,8 +1354,9 @@ function App() {
                   onFocus={setFocusedId}
                   onResize={(id, pct) => resizeTerminalLocal(w.id, id, pct)}
                   onResizeEnd={(id, pct) => persistWidth(w.id, id, pct)}
-                  onSwap={(a, b) => swapTerminalsLocal(w.id, a, b)}
-                  onDropOrder={(order) => persistOrder(w.id, order)}
+                  onSwap={(a, b, before, width) =>
+                    moveTerminalLocal(w.id, a, b, before, width)
+                  }
                   onToggleExpand={setExpandedId}
                   onRestart={restartTerminal}
                   onClose={closeTerminal}
@@ -863,6 +1391,17 @@ function App() {
         agents={agents}
         exited={exited}
       />
+
+      {showResume && (
+        <ResumeDialog
+          items={resumeItems}
+          savedAt={resumeSavedAt}
+          onResume={resumeOne}
+          onDismiss={dismissOne}
+          onResumeAll={resumeAll}
+          onDismissAll={dismissAll}
+        />
+      )}
 
       {showNewWs && (
         <div className="modal-backdrop" onClick={() => setShowNewWs(false)}>
@@ -941,49 +1480,226 @@ function App() {
             setCapturing(null);
           }}
         >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal settings-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2>Settings</h2>
-            <div className="settings-title">Terminal font size</div>
-            <div className="font-stepper">
-              <button
-                className="font-stepper-btn"
-                onClick={() => changeFontSize(-1)}
-                disabled={fontSize <= MIN_FONT_SIZE}
-              >
-                −
-              </button>
-              <span className="font-stepper-value">{fontSize}px</span>
-              <button
-                className="font-stepper-btn"
-                onClick={() => changeFontSize(1)}
-                disabled={fontSize >= MAX_FONT_SIZE}
-              >
-                +
-              </button>
-            </div>
-            <div className="settings-title">Keyboard shortcuts</div>
-            <div className="hotkey-list">
-              {HOTKEY_ACTIONS.map((a) => (
-                <div className="hotkey-row" key={a.id}>
-                  <span className="hotkey-label">{a.label}</span>
-                  {capturing === a.id ? (
-                    <span className="hotkey-capturing">
-                      Press shortcut… (Esc cancels)
-                    </span>
-                  ) : (
-                    <button
-                      className="hotkey-chip"
-                      onClick={() => setCapturing(a.id)}
-                      title="Click to rebind"
-                    >
-                      {formatHotkey(hotkeys[a.id])}
-                    </button>
-                  )}
-                </div>
-              ))}
+            <div className="settings-body">
+              <nav className="settings-nav">
+                {SETTINGS_SECTIONS.map((s) => (
+                  <button
+                    key={s.id}
+                    className={`settings-nav-item ${
+                      settingsSection === s.id ? "active" : ""
+                    }`}
+                    onClick={() => {
+                      setSettingsSection(s.id);
+                      setCapturing(null);
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </nav>
+              <div className="settings-content">
+                {settingsSection === "terminal" && (
+                  <>
+                    <div className="settings-title">Terminal font size</div>
+                    <div className="font-stepper">
+                      <button
+                        className="font-stepper-btn"
+                        onClick={() => changeFontSize(-1)}
+                        disabled={fontSize <= MIN_FONT_SIZE}
+                      >
+                        −
+                      </button>
+                      <span className="font-stepper-value">{fontSize}px</span>
+                      <button
+                        className="font-stepper-btn"
+                        onClick={() => changeFontSize(1)}
+                        disabled={fontSize >= MAX_FONT_SIZE}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className="settings-title">Grid layout</div>
+                    <div className="grid-cols-row">
+                      <span className="grid-cols-label">
+                        Terminals side-by-side
+                      </span>
+                      <div className="grid-cols-picker">
+                        {GRID_COL_OPTIONS.map((n) => (
+                          <button
+                            key={n}
+                            className={`grid-cols-option ${
+                              gridCols === n ? "active" : ""
+                            }`}
+                            onClick={() => applyGridLayout(n)}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="settings-title">Default shell</div>
+                    <div className="voice-row">
+                      <select
+                        className="voice-select"
+                        value={defaultShell}
+                        onChange={(e) => {
+                          const shell = e.target.value;
+                          setDefaultShell(shell);
+                          if (shell) {
+                            localStorage.setItem("defaultShell", shell);
+                          } else {
+                            localStorage.removeItem("defaultShell");
+                          }
+                        }}
+                      >
+                        <option value="">System default</option>
+                        {(defaultShell &&
+                        !availableShells.includes(defaultShell)
+                          ? [defaultShell, ...availableShells]
+                          : availableShells
+                        ).map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
+                {settingsSection === "voice" && (
+                  <>
+                    <div className="settings-title">Voice input</div>
+                    <div className="toggle-row">
+                      <div className="toggle-row-text">
+                        <span className="toggle-row-label">
+                          Enable voice input
+                        </span>
+                        <span className="toggle-row-desc">
+                          Speech-to-text into the focused terminal
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={voiceEnabled}
+                        aria-label="Enable voice input"
+                        className={`toggle-switch ${voiceEnabled ? "on" : ""}`}
+                        disabled={micAvailable === false && !voiceEnabled}
+                        onClick={() => updateVoiceEnabled(!voiceEnabled)}
+                      >
+                        <span className="toggle-knob" />
+                      </button>
+                    </div>
+                    {micAvailable === false && !voiceEnabled && (
+                      <div className="voice-hint">
+                        No microphone detected — connect one to enable voice
+                        input.
+                      </div>
+                    )}
+                    {voiceEnabled && (
+                      <>
+                        <div className="voice-row">
+                          <span className="hotkey-label">Language</span>
+                          <select
+                            className="voice-select"
+                            value={voiceLang}
+                            onChange={(e) => updateVoiceLang(e.target.value)}
+                          >
+                            {VOICE_LANGUAGES.map((l) => (
+                              <option key={l.code} value={l.code}>
+                                {l.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="voice-model-list">
+                          {voiceModels.length === 0 && (
+                            <div className="voice-hint">Loading models…</div>
+                          )}
+                          {voiceModels.length > 0 &&
+                            !voiceModels.some((m) => m.downloaded) && (
+                              <div className="voice-hint">
+                                Download a model to start using voice input.
+                              </div>
+                            )}
+                          {voiceModels.map((m) => (
+                            <div className="hotkey-row" key={m.id}>
+                              <span
+                                className="hotkey-label"
+                                title={m.description}
+                              >
+                                {m.display_name}
+                                <span className="voice-model-size">
+                                  {m.size_label}
+                                </span>
+                              </span>
+                              {voiceDl?.id === m.id ? (
+                                <span className="hotkey-capturing">
+                                  {Math.floor(voiceDl.percent)}%
+                                </span>
+                              ) : m.active ? (
+                                <span className="voice-chip active">
+                                  Active
+                                </span>
+                              ) : m.downloaded ? (
+                                <button
+                                  className="hotkey-chip"
+                                  onClick={() => selectVoiceModel(m.id)}
+                                >
+                                  Use
+                                </button>
+                              ) : (
+                                <button
+                                  className="hotkey-chip"
+                                  onClick={() => downloadVoiceModel(m.id)}
+                                  disabled={voiceDl !== null}
+                                >
+                                  Download
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+                {settingsSection === "shortcuts" && (
+                  <>
+                    <div className="settings-title">Keyboard shortcuts</div>
+                    <div className="hotkey-list">
+                      {HOTKEY_ACTIONS.map((a) => (
+                        <div className="hotkey-row" key={a.id}>
+                          <span className="hotkey-label">{a.label}</span>
+                          {capturing === a.id ? (
+                            <span className="hotkey-capturing">
+                              Press shortcut… (Esc cancels)
+                            </span>
+                          ) : (
+                            <button
+                              className="hotkey-chip"
+                              onClick={() => setCapturing(a.id)}
+                              title="Click to rebind"
+                            >
+                              {formatHotkey(hotkeys[a.id])}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="settings-section-actions">
+                      <button onClick={resetHotkeys}>Reset defaults</button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
             <div className="modal-actions">
-              <button onClick={resetHotkeys}>Reset defaults</button>
               <button
                 className="primary"
                 onClick={() => {

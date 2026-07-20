@@ -514,8 +514,73 @@ fn take_decodable(pending: &mut Vec<u8>) -> Option<String> {
     }
 }
 
+#[cfg(unix)]
+fn login_shell() -> Option<String> {
+    unsafe {
+        let pw = libc::getpwuid(libc::getuid());
+        if pw.is_null() || (*pw).pw_shell.is_null() {
+            return None;
+        }
+        let shell = std::ffi::CStr::from_ptr((*pw).pw_shell)
+            .to_string_lossy()
+            .into_owned();
+        if shell.is_empty() || !std::path::Path::new(&shell).exists() {
+            None
+        } else {
+            Some(shell)
+        }
+    }
+}
+
+fn valid_shell(shell: &str) -> bool {
+    shell.starts_with('/') && std::path::Path::new(shell).exists()
+}
+
 fn user_shell() -> String {
-    std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())
+    #[cfg(unix)]
+    if let Some(shell) = login_shell() {
+        return shell;
+    }
+    if let Ok(shell) = std::env::var("SHELL") {
+        if valid_shell(&shell) {
+            return shell;
+        }
+    }
+    "/bin/zsh".to_string()
+}
+
+fn resolve_shell(preferred: Option<&str>) -> String {
+    match preferred.map(str::trim) {
+        Some(shell) if valid_shell(shell) => shell.to_string(),
+        _ => user_shell(),
+    }
+}
+
+#[tauri::command(async)]
+pub fn list_available_shells() -> Vec<String> {
+    let mut shells: Vec<String> = Vec::new();
+    let mut add = |shell: String| {
+        if valid_shell(&shell) && !shells.contains(&shell) {
+            shells.push(shell);
+        }
+    };
+    #[cfg(unix)]
+    if let Some(shell) = login_shell() {
+        add(shell);
+    }
+    if let Ok(contents) = std::fs::read_to_string("/etc/shells") {
+        for line in contents.lines() {
+            let line = line.trim();
+            if line.starts_with('#') {
+                continue;
+            }
+            add(line.to_string());
+        }
+    }
+    if let Ok(shell) = std::env::var("SHELL") {
+        add(shell);
+    }
+    shells
 }
 
 pub fn spawn_terminal_inner(
@@ -527,6 +592,7 @@ pub fn spawn_terminal_inner(
     cols: u16,
     rows: u16,
     force_id: Option<&str>,
+    preferred_shell: Option<&str>,
 ) -> Result<SpawnedTerminal, String> {
     let workspace_id = workspace_id.to_string();
     let cwd = {
@@ -554,7 +620,7 @@ pub fn spawn_terminal_inner(
         }
     }
 
-    let shell = user_shell();
+    let shell = resolve_shell(preferred_shell);
     let mut cmd = CommandBuilder::new(&shell);
     if command.is_empty() || command == "shell" {
         cmd.args(["-l", "-i"]);
@@ -854,6 +920,7 @@ pub fn spawn_terminal(
     cols: u16,
     rows: u16,
     terminal_id: Option<String>,
+    shell: Option<String>,
 ) -> Result<SpawnedTerminal, String> {
     spawn_terminal_inner(
         &app,
@@ -864,6 +931,7 @@ pub fn spawn_terminal(
         cols,
         rows,
         terminal_id.as_deref(),
+        shell.as_deref(),
     )
 }
 
@@ -892,15 +960,15 @@ pub fn demo_seed(app: &AppHandle) {
         .map(|mut s| s.create("agents".into(), String::new()));
     if let Ok(ws1) = ws1 {
         for c in picked {
-            let _ = spawn_terminal_inner(app, &manager, &store, &ws1.id, c, 100, 30, None);
+            let _ = spawn_terminal_inner(app, &manager, &store, &ws1.id, c, 100, 30, None, None);
         }
     }
     let ws2 = store
         .lock()
         .map(|mut s| s.create("scratch".into(), String::new()));
     if let Ok(ws2) = ws2 {
-        let _ = spawn_terminal_inner(app, &manager, &store, &ws2.id, "top", 100, 30, None);
-        let _ = spawn_terminal_inner(app, &manager, &store, &ws2.id, "shell", 100, 30, None);
+        let _ = spawn_terminal_inner(app, &manager, &store, &ws2.id, "top", 100, 30, None, None);
+        let _ = spawn_terminal_inner(app, &manager, &store, &ws2.id, "shell", 100, 30, None, None);
     }
     let _ = app.emit("workspaces-changed", ());
 }

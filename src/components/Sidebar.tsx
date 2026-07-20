@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { Workspace } from "../types";
 
@@ -11,6 +11,7 @@ interface Props {
   onAdd: () => void;
   onClose: (id: string) => void;
   onRename: (id: string, name: string) => void;
+  onReorder: (dragId: string, targetId: string) => void;
   onQuickNew: (id: string) => void;
   onPickNew: (id: string) => void;
   onOpenSettings: () => void;
@@ -73,6 +74,7 @@ export function Sidebar({
   onAdd,
   onClose,
   onRename,
+  onReorder,
   onQuickNew,
   onPickNew,
   onOpenSettings,
@@ -82,6 +84,9 @@ export function Sidebar({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const suppressClick = useRef(false);
 
   const openMenu = (e: ReactMouseEvent, ws: Workspace) => {
     e.preventDefault();
@@ -113,6 +118,51 @@ export function Sidebar({
   }, [menu]);
 
   const menuWorkspace = menu ? workspaces.find((w) => w.id === menu.id) : null;
+
+  // Mouse-based reordering: Tauri keeps `dragDropEnabled` on for file drops
+  // into terminals, which breaks HTML5 drag-and-drop inside the webview, so
+  // `draggable` never fires. Same pattern as TerminalGrid's pane reorder.
+  const startReorder = (e: ReactMouseEvent, ws: Workspace) => {
+    if (e.button !== 0 || editingId === ws.id) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let dragging = false;
+
+    const targetAt = (x: number, y: number): string | null => {
+      const el = document.elementFromPoint(x, y);
+      const item = el?.closest("[data-ws-id]");
+      return item?.getAttribute("data-ws-id") ?? null;
+    };
+
+    const onMove = (ev: MouseEvent) => {
+      if (
+        !dragging &&
+        Math.hypot(ev.clientX - startX, ev.clientY - startY) > 6
+      ) {
+        dragging = true;
+        setDragId(ws.id);
+        document.body.classList.add("reordering");
+      }
+      if (dragging) {
+        const t = targetAt(ev.clientX, ev.clientY);
+        setDropTargetId(t && t !== ws.id ? t : null);
+      }
+    };
+    const onUp = (ev: MouseEvent) => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.classList.remove("reordering");
+      if (dragging) {
+        suppressClick.current = true;
+        const t = targetAt(ev.clientX, ev.clientY);
+        if (t && t !== ws.id) onReorder(ws.id, t);
+      }
+      setDragId(null);
+      setDropTargetId(null);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
 
   const startEdit = (ws: Workspace) => {
     setEditingId(ws.id);
@@ -191,12 +241,22 @@ export function Sidebar({
           return (
             <div
               key={ws.id}
-              className={`sidebar-item ${ws.id === activeId ? "active" : ""}`}
-              onClick={() => onSelect(ws.id)}
+              data-ws-id={ws.id}
+              className={`sidebar-item ${ws.id === activeId ? "active" : ""} ${dragId === ws.id ? "dragging" : ""} ${dropTargetId === ws.id && dragId !== ws.id ? "drop-target" : ""}`}
+              onClick={() => {
+                if (suppressClick.current) {
+                  suppressClick.current = false;
+                  return;
+                }
+                onSelect(ws.id);
+              }}
               onDoubleClick={() => startEdit(ws)}
               onContextMenu={(e) => openMenu(e, ws)}
             >
-              <div className="sidebar-item-main">
+              <div
+                className="sidebar-item-main"
+                onMouseDown={(e) => startReorder(e, ws)}
+              >
                 {editingId === ws.id ? (
                   <input
                     className="sidebar-rename-input"
@@ -280,7 +340,7 @@ export function Sidebar({
         </button>
         <button
           className="sidebar-gear"
-          title="Keyboard shortcuts"
+          title="Settings"
           onClick={onOpenSettings}
         >
           <SettingsIcon />

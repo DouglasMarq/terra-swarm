@@ -227,6 +227,19 @@ impl WorkspaceStore {
         self.save();
     }
 
+    pub fn reorder_workspaces(&mut self, order: &[String]) {
+        let mut remaining = std::mem::take(&mut self.workspaces);
+        let mut sorted = Vec::with_capacity(remaining.len());
+        for id in order {
+            if let Some(pos) = remaining.iter().position(|w| &w.id == id) {
+                sorted.push(remaining.remove(pos));
+            }
+        }
+        sorted.extend(remaining);
+        self.workspaces = sorted;
+        self.save();
+    }
+
     pub fn set_width(&mut self, ws_id: &str, terminal_id: &str, width: f64) {
         if let Some(ws) = self.workspaces.iter_mut().find(|w| w.id == ws_id) {
             if let Some(t) = ws.terminals.iter_mut().find(|t| t.id == terminal_id) {
@@ -235,6 +248,23 @@ impl WorkspaceStore {
         }
         self.save();
     }
+}
+
+/// Last time the store file was written, in milliseconds since the Unix
+/// epoch. The store is flushed synchronously on exit, so this is when the
+/// previous session ended; the startup resume dialog shows it as "X ago".
+#[tauri::command(async)]
+pub fn store_saved_at(store: State<'_, Mutex<WorkspaceStore>>) -> Result<Option<u64>, String> {
+    let store = store.lock().map_err(|e| e.to_string())?;
+    let Some(path) = &store.save_path else {
+        return Ok(None);
+    };
+    let millis = std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64);
+    Ok(millis)
 }
 
 #[tauri::command(async)]
@@ -272,6 +302,16 @@ pub fn reorder_terminals(
 ) -> Result<(), String> {
     let mut store = store.lock().map_err(|e| e.to_string())?;
     store.reorder(&ws_id, &order);
+    Ok(())
+}
+
+#[tauri::command(async)]
+pub fn reorder_workspaces(
+    store: State<'_, Mutex<WorkspaceStore>>,
+    order: Vec<String>,
+) -> Result<(), String> {
+    let mut store = store.lock().map_err(|e| e.to_string())?;
+    store.reorder_workspaces(&order);
     Ok(())
 }
 

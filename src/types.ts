@@ -44,6 +44,16 @@ export interface BacklogSnapshot {
   total: number;
 }
 
+export interface ResumeItem {
+  terminalId: string;
+  wsId: string;
+  wsName: string;
+  cwd: string;
+  command: string;
+  agentId: string;
+  resumeCommand: string;
+}
+
 export interface NotificationPayload {
   id: string;
   workspace_id: string;
@@ -58,6 +68,7 @@ export interface NotificationItem {
   message: string;
   ts: number;
   read: boolean;
+  system?: boolean;
 }
 
 export interface ContextPayload {
@@ -70,4 +81,22 @@ export interface TitlePayload {
   id: string;
   workspace_id: string;
   title: string;
+}
+
+export type VoiceStatus = "idle" | "recording" | "transcribing";
+
+export interface VoiceModelInfo {
+  id: string;
+  display_name: string;
+  size_label: string;
+  description: string;
+  downloaded: boolean;
+  active: boolean;
+}
+
+export interface VoiceDownloadProgress {
+  model_id: string;
+  downloaded: number;
+  total: number;
+  percent: number;
 }

@@ -1,6 +1,6 @@
 [package]
 name = "terra-swarm"
-version = "0.4.2"
+version = "0.5.4"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -23,7 +23,20 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 portable-pty = "0.9.0"
 tauri-plugin-dialog = "2.7.2"
+cpal = "0.18.1"
+rubato = "4.0.0"
+reqwest = { version = "0.13.4", features = ["rustls", "stream"], default-features = false }
+futures-util = "0.3.33"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+whisper-rs = { version = "0.16.0", features = ["vulkan"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+whisper-rs = { version = "0.16.0", features = ["vulkan"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+whisper-rs = { version = "0.16.0", features = ["metal"] }
 

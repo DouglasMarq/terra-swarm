@@ -1,8 +1,9 @@
 mod pty;
+mod voice;
 mod workspace;
 
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Listener, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -19,6 +20,18 @@ pub fn run() {
             }
             app.manage(Mutex::new(store));
             app.manage(Mutex::new(pty::PtyManager::default()));
+            app.manage(voice::VoiceState::default());
+            app.manage(voice::audio::AudioController::new());
+
+            // Auto-stop voice recording when the user finishes talking
+            let handle = app.handle().clone();
+            app.listen("voice-silence-detected", move |_| {
+                let _ = voice::stop_recording_impl(&handle);
+            });
+
+            // Watch for microphone plug/unplug so the UI can react
+            voice::watch_input_devices(app.handle().clone());
+
             if std::env::var("SWARM_DEMO").is_ok() {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || {
@@ -31,9 +44,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             workspace::create_workspace,
             workspace::list_workspaces,
+            workspace::store_saved_at,
             workspace::close_workspace,
             workspace::rename_workspace,
             workspace::reorder_terminals,
+            workspace::reorder_workspaces,
             workspace::set_terminal_width,
             workspace::git_branch,
             pty::spawn_terminal,
@@ -44,6 +59,13 @@ pub fn run() {
             pty::terminal_backlog,
             pty::running_terminals,
             pty::detect_agents,
+            pty::list_available_shells,
+            voice::voice_toggle_recording,
+            voice::voice_set_language,
+            voice::voice_mic_available,
+            voice::voice_list_models,
+            voice::voice_set_model,
+            voice::voice_download_model,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

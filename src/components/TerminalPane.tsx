@@ -176,8 +176,14 @@ export function TerminalPane(props: Props) {
 
     let lastCols = 0;
     let lastRows = 0;
-    const fitAndSend = () => {
+    // fit() silently no-ops while the renderer has no cell metrics yet
+    // (fresh webview at startup, or open() ran inside a display:none grid),
+    // and a single full-width pane never changes size afterwards, so a failed
+    // initial fit would stick the terminal at 80x24 until a window resize.
+    // Report failure and retry with backoff until the fit actually takes.
+    const fitAndSend = (): boolean => {
       try {
+        if (!fit.proposeDimensions()) return false;
         fit.fit();
         if (term.cols !== lastCols || term.rows !== lastRows) {
           lastCols = term.cols;
@@ -186,14 +192,28 @@ export function TerminalPane(props: Props) {
             .resizeTerminal(id, term.cols, term.rows)
             .catch((err) => warnThrottled("resize", err));
         }
+        return true;
       } catch {
-        // hidden or zero-sized; will refit on next resize
+        return false;
       }
     };
     fitRef.current = fitAndSend;
 
-    const raf = requestAnimationFrame(fitAndSend);
-    const retry = setTimeout(fitAndSend, 800);
+    let fitTimer = 0;
+    const scheduleFit = (attempt = 0) => {
+      if (disposed || fitTimer) return;
+      fitTimer = window.setTimeout(
+        () => {
+          fitTimer = 0;
+          if (disposed || fitAndSend() || attempt >= 50) return;
+          scheduleFit(attempt + 1);
+        },
+        attempt === 0 ? 0 : Math.min(1000, 100 * 2 ** Math.min(attempt, 3)),
+      );
+    };
+
+    const raf = requestAnimationFrame(() => scheduleFit());
+    const retry = setTimeout(() => scheduleFit(), 800);
 
     // Output pipeline with real backpressure: each chunk is handed to xterm
     // with a completion callback, and the next chunk is only drained once
@@ -277,7 +297,7 @@ export function TerminalPane(props: Props) {
       if (resizeRaf) return;
       resizeRaf = requestAnimationFrame(() => {
         resizeRaf = 0;
-        fitAndSend();
+        if (!fitAndSend()) scheduleFit();
       });
     });
     observer.observe(container);
@@ -288,6 +308,7 @@ export function TerminalPane(props: Props) {
       cancelAnimationFrame(raf);
       cancelAnimationFrame(resizeRaf);
       clearTimeout(retry);
+      clearTimeout(fitTimer);
       observer.disconnect();
       dataSub.dispose();
       unlisten?.();
@@ -307,14 +328,18 @@ export function TerminalPane(props: Props) {
   }, [fontSize, id]);
 
   const startResize = (e: React.MouseEvent, edge: "left" | "right") => {
+    if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     const pane = rootRef.current;
     const rows = pane?.closest(".term-rows") as HTMLElement | null;
     if (!pane || !rows) return;
     const startX = e.clientX;
-    const total = rows.getBoundingClientRect().width;
-    const startPct = (pane.getBoundingClientRect().width / total) * 100;
+    // Percentages resolve against the container's content box, which excludes
+    // its 10px side padding; the basis prop (not the rendered width, which
+    // includes flex-grow slack) is the true starting share.
+    const total = rows.getBoundingClientRect().width - 20;
+    const startPct = basis;
     let last = startPct;
     document.body.classList.add("col-resizing");
     const onMove = (ev: MouseEvent) => {
@@ -348,8 +373,8 @@ export function TerminalPane(props: Props) {
     >
       <div className="pane-header" onMouseDown={props.onHeaderMouseDown}>
         <div className="pane-header-left">
-          <span className={`pane-badge agent-${command.split(" ")[0]}`}>
-            {command}
+          <span className={`pane-badge agent-${command.split(" ")[0]}`} title={command}>
+            {command.split(" ")[0]}
           </span>
           {title && (
             <span className="pane-title" title={title}>

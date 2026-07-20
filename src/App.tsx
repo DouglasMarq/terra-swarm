@@ -1438,8 +1438,8 @@ function App() {
         workspaces={workspaces}
         activeName={active?.name ?? null}
         items={notifItems}
-        notificationCount={Object.values(notifications).reduce(
-          (a, b) => a + b,
+        notificationCount={notifItems.reduce(
+          (n, it) => n + (it.read ? 0 : 1),
           0,
         )}
         gridCols={gridCols}

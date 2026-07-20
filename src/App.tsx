@@ -413,9 +413,7 @@ function App() {
         .catch(() => {});
       const model = localStorage.getItem("voiceModel");
       if (model) {
-        api
-          .voiceSetModel(model)
-          .catch((err) => console.error("voice model load failed:", err));
+        api.voiceSetModel(model).catch(handleVoiceModelLoadError);
       }
     }
   }, []);
@@ -1006,6 +1004,14 @@ function App() {
     );
   };
 
+  const handleVoiceModelLoadError = (err: unknown) => {
+    console.error("voice model load failed:", err);
+    setVoiceModel(null);
+    localStorage.removeItem("voiceModel");
+    refreshVoiceModels();
+    pushSystemNotification("Voice model failed to load — select it again");
+  };
+
   const disableVoiceInput = (notify: boolean) => {
     setVoiceEnabled(false);
     localStorage.setItem("voiceEnabled", "0");
@@ -1029,7 +1035,9 @@ function App() {
         setVoiceEnabled(true);
         localStorage.setItem("voiceEnabled", "1");
         api.voiceSetLanguage(voiceLang).catch(() => {});
-        if (voiceModel) api.voiceSetModel(voiceModel).catch(() => {});
+        if (voiceModel) {
+          api.voiceSetModel(voiceModel).catch(handleVoiceModelLoadError);
+        }
         refreshVoiceModels();
       })
       .catch(() => {});
@@ -1042,11 +1050,7 @@ function App() {
   };
 
   const selectVoiceModel = (id: string) => {
-    setVoiceModel(id);
-    localStorage.setItem("voiceModel", id);
-    api
-      .voiceSetModel(id)
-      .catch((err) => console.error("voice model load failed:", err));
+    api.voiceSetModel(id).catch(handleVoiceModelLoadError);
   };
 
   const downloadVoiceModel = (id: string) => {

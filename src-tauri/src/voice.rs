@@ -50,6 +50,7 @@ struct DownloadProgress {
 
 /// Load a Whisper context, preferring GPU and falling back to CPU when the
 /// GPU context fails to initialize.
+#[cfg(not(target_os = "windows"))]
 fn load_transcriber(path: &Path) -> Result<Transcriber, String> {
     match Transcriber::new(path, true) {
         Ok(t) => Ok(t),
@@ -58,6 +59,11 @@ fn load_transcriber(path: &Path) -> Result<Transcriber, String> {
             Transcriber::new(path, false)
         }
     }
+}
+
+#[cfg(target_os = "windows")]
+fn load_transcriber(path: &Path) -> Result<Transcriber, String> {
+    Transcriber::new(path, false)
 }
 
 fn activate_model(app: &tauri::AppHandle, model_id: &str, path: PathBuf) -> Result<(), String> {

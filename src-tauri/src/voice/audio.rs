@@ -315,12 +315,69 @@ fn build_stream(
                 )
                 .map_err(|e| format!("Failed to build input stream: {e}"))?
         }
+        cpal::SampleFormat::I8 => device
+            .build_input_stream(
+                config.into(),
+                move |data: &[i8], _: &cpal::InputCallbackInfo| {
+                    let float_data: Vec<f32> = data.iter().map(i8_to_f32).collect();
+                    process_audio(&float_data, &ctx);
+                },
+                err_fn,
+                None,
+            )
+            .map_err(|e| format!("Failed to build input stream: {e}"))?,
+        cpal::SampleFormat::U8 => device
+            .build_input_stream(
+                config.into(),
+                move |data: &[u8], _: &cpal::InputCallbackInfo| {
+                    let float_data: Vec<f32> = data.iter().map(u8_to_f32).collect();
+                    process_audio(&float_data, &ctx);
+                },
+                err_fn,
+                None,
+            )
+            .map_err(|e| format!("Failed to build input stream: {e}"))?,
         cpal::SampleFormat::I16 => device
             .build_input_stream(
                 config.into(),
                 move |data: &[i16], _: &cpal::InputCallbackInfo| {
-                    let float_data: Vec<f32> =
-                        data.iter().map(|&s| s as f32 / i16::MAX as f32).collect();
+                    let float_data: Vec<f32> = data.iter().map(i16_to_f32).collect();
+                    process_audio(&float_data, &ctx);
+                },
+                err_fn,
+                None,
+            )
+            .map_err(|e| format!("Failed to build input stream: {e}"))?,
+        cpal::SampleFormat::U16 => device
+            .build_input_stream(
+                config.into(),
+                move |data: &[u16], _: &cpal::InputCallbackInfo| {
+                    let float_data: Vec<f32> = data.iter().map(u16_to_f32).collect();
+                    process_audio(&float_data, &ctx);
+                },
+                err_fn,
+                None,
+            )
+            .map_err(|e| format!("Failed to build input stream: {e}"))?,
+        // 24-bit USB interfaces (Focusrite & co.) natively report I24/U24.
+        // cpal hands these over as dasp I24/U24 (right-justified in a 32-bit
+        // container), so the 24-bit full-scale helpers apply — not the I32 one.
+        cpal::SampleFormat::I24 => device
+            .build_input_stream(
+                config.into(),
+                move |data: &[cpal::I24], _: &cpal::InputCallbackInfo| {
+                    let float_data: Vec<f32> = data.iter().map(i24_to_f32).collect();
+                    process_audio(&float_data, &ctx);
+                },
+                err_fn,
+                None,
+            )
+            .map_err(|e| format!("Failed to build input stream: {e}"))?,
+        cpal::SampleFormat::U24 => device
+            .build_input_stream(
+                config.into(),
+                move |data: &[cpal::U24], _: &cpal::InputCallbackInfo| {
+                    let float_data: Vec<f32> = data.iter().map(u24_to_f32).collect();
                     process_audio(&float_data, &ctx);
                 },
                 err_fn,
@@ -335,8 +392,7 @@ fn build_stream(
             .build_input_stream(
                 config.into(),
                 move |data: &[i32], _: &cpal::InputCallbackInfo| {
-                    let float_data: Vec<f32> =
-                        data.iter().map(|&s| s as f32 / i32::MAX as f32).collect();
+                    let float_data: Vec<f32> = data.iter().map(i32_to_f32).collect();
                     process_audio(&float_data, &ctx);
                 },
                 err_fn,
@@ -365,6 +421,137 @@ fn compute_rms(samples: &[f32]) -> f32 {
         return 0.0;
     }
     (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt()
+}
+
+/// 24-bit full scale (2^23 - 1). cpal delivers I24 samples as dasp `I24`:
+/// the value right-justified in an i32 container, range -(2^23)..=(2^23-1)
+/// — NOT shifted into the high bits. Using the i32::MAX scaling here would
+/// attenuate the signal by 256x.
+const I24_FULL_SCALE: f32 = 8_388_607.0;
+/// 24-bit unsigned midpoint ((2^24 - 1) / 2). dasp `U24` is also an i32
+/// container, range 0..=(2^24-1) with equilibrium at 2^23.
+const U24_MIDPOINT: f32 = 8_388_607.5;
+
+fn i8_to_f32(s: &i8) -> f32 {
+    *s as f32 / i8::MAX as f32
+}
+
+fn u8_to_f32(s: &u8) -> f32 {
+    (*s as f32 - u8::MAX as f32 / 2.0) / (u8::MAX as f32 / 2.0)
+}
+
+fn i16_to_f32(s: &i16) -> f32 {
+    *s as f32 / i16::MAX as f32
+}
+
+fn u16_to_f32(s: &u16) -> f32 {
+    (*s as f32 - u16::MAX as f32 / 2.0) / (u16::MAX as f32 / 2.0)
+}
+
+fn i24_to_f32(s: &cpal::I24) -> f32 {
+    s.inner() as f32 / I24_FULL_SCALE
+}
+
+fn u24_to_f32(s: &cpal::U24) -> f32 {
+    (s.inner() as f32 - U24_MIDPOINT) / U24_MIDPOINT
+}
+
+fn i32_to_f32(s: &i32) -> f32 {
+    *s as f32 / i32::MAX as f32
+}
+
+fn f32_to_i8(s: f32) -> i8 {
+    (s * i8::MAX as f32) as i8
+}
+
+fn f32_to_u8(s: f32) -> u8 {
+    // .round() so digital silence lands exactly on the format's equilibrium
+    // instead of 1 LSB below it (a tiny DC offset).
+    (s * (u8::MAX as f32 / 2.0) + u8::MAX as f32 / 2.0).round() as u8
+}
+
+fn f32_to_i16(s: f32) -> i16 {
+    (s * i16::MAX as f32) as i16
+}
+
+fn f32_to_u16(s: f32) -> u16 {
+    (s * (u16::MAX as f32 / 2.0) + u16::MAX as f32 / 2.0).round() as u16
+}
+
+fn f32_to_i24(s: f32) -> cpal::I24 {
+    cpal::I24::new_unchecked((s * I24_FULL_SCALE) as i32)
+}
+
+fn f32_to_u24(s: f32) -> cpal::U24 {
+    cpal::U24::new_unchecked((s * U24_MIDPOINT + U24_MIDPOINT).round() as i32)
+}
+
+fn f32_to_i32(s: f32) -> i32 {
+    (s * i32::MAX as f32) as i32
+}
+
+#[cfg(test)]
+mod conversion_tests {
+    use super::*;
+
+    const EPS: f32 = 1e-6;
+
+    #[test]
+    fn signed_ints_scale_to_full_range() {
+        assert_eq!(i8_to_f32(&0), 0.0);
+        assert_eq!(i8_to_f32(&i8::MAX), 1.0);
+        assert!((i8_to_f32(&i8::MIN) - -1.0).abs() < 0.01);
+        assert_eq!(i16_to_f32(&i16::MAX), 1.0);
+        assert_eq!(i32_to_f32(&i32::MAX), 1.0);
+    }
+
+    #[test]
+    fn unsigned_ints_are_centered_on_zero() {
+        assert_eq!(u8_to_f32(&0), -1.0);
+        assert_eq!(u8_to_f32(&u8::MAX), 1.0);
+        assert!((u8_to_f32(&128)).abs() < 0.01); // midpoint ≈ silence
+        assert_eq!(u16_to_f32(&0), -1.0);
+        assert_eq!(u16_to_f32(&u16::MAX), 1.0);
+        assert!((u16_to_f32(&32768)).abs() < 1e-4);
+    }
+
+    #[test]
+    fn i24_uses_24bit_full_scale_not_i32() {
+        assert_eq!(i24_to_f32(&cpal::I24::new(0).unwrap()), 0.0);
+        assert_eq!(i24_to_f32(&cpal::I24::new(8_388_607).unwrap()), 1.0);
+        assert!((i24_to_f32(&cpal::I24::new(-8_388_608).unwrap()) - -1.0).abs() < EPS);
+        // A value at half of 24-bit range must read as ~0.5; i32::MAX scaling
+        // would wrongly read it as ~0.002.
+        assert!((i24_to_f32(&cpal::I24::new(4_194_304).unwrap()) - 0.5).abs() < EPS);
+    }
+
+    #[test]
+    fn u24_is_centered_on_equilibrium() {
+        assert_eq!(u24_to_f32(&cpal::U24::new(0).unwrap()), -1.0);
+        assert_eq!(u24_to_f32(&cpal::U24::new(16_777_215).unwrap()), 1.0);
+        assert!((u24_to_f32(&cpal::U24::new(8_388_608).unwrap())).abs() < EPS);
+    }
+
+    #[test]
+    fn f32_roundtrips_signed_formats() {
+        assert_eq!(f32_to_i8(1.0), i8::MAX);
+        assert_eq!(f32_to_i16(1.0), i16::MAX);
+        assert_eq!(f32_to_i32(1.0), i32::MAX);
+        assert_eq!(f32_to_i24(1.0).inner(), 8_388_607);
+        assert_eq!(f32_to_i24(-1.0).inner(), -8_388_607);
+        assert!((i24_to_f32(&f32_to_i24(0.5)) - 0.5).abs() < EPS);
+    }
+
+    #[test]
+    fn f32_roundtrips_unsigned_formats_on_equilibrium() {
+        assert_eq!(f32_to_u8(1.0), u8::MAX);
+        assert_eq!(f32_to_u8(-1.0), 0);
+        assert_eq!(f32_to_u8(0.0), 128); // equilibrium, not 127
+        assert_eq!(f32_to_u16(0.0), 32768);
+        assert_eq!(f32_to_u24(1.0).inner(), 16_777_215);
+        assert_eq!(f32_to_u24(-1.0).inner(), 0);
+        assert_eq!(f32_to_u24(0.0).inner(), 8_388_608);
+    }
 }
 
 fn process_audio(data: &[f32], ctx: &StreamContext) {
@@ -666,8 +853,13 @@ fn build_test_streams(
 
     let input_stream = match in_config.sample_format() {
         cpal::SampleFormat::F32 => input_arm!([f32], |s: &f32| *s),
-        cpal::SampleFormat::I16 => input_arm!([i16], |s: &i16| *s as f32 / i16::MAX as f32),
-        cpal::SampleFormat::I32 => input_arm!([i32], |s: &i32| *s as f32 / i32::MAX as f32),
+        cpal::SampleFormat::I8 => input_arm!([i8], i8_to_f32),
+        cpal::SampleFormat::U8 => input_arm!([u8], u8_to_f32),
+        cpal::SampleFormat::I16 => input_arm!([i16], i16_to_f32),
+        cpal::SampleFormat::U16 => input_arm!([u16], u16_to_f32),
+        cpal::SampleFormat::I24 => input_arm!([cpal::I24], i24_to_f32),
+        cpal::SampleFormat::U24 => input_arm!([cpal::U24], u24_to_f32),
+        cpal::SampleFormat::I32 => input_arm!([i32], i32_to_f32),
         format => return Err(format!("Unsupported microphone sample format: {format:?}")),
     };
 
@@ -698,8 +890,13 @@ fn build_test_streams(
 
     let output_stream = match out_config.sample_format() {
         cpal::SampleFormat::F32 => output_arm!([f32], |s: f32| s),
-        cpal::SampleFormat::I16 => output_arm!([i16], |s: f32| (s * i16::MAX as f32) as i16),
-        cpal::SampleFormat::I32 => output_arm!([i32], |s: f32| (s * i32::MAX as f32) as i32),
+        cpal::SampleFormat::I8 => output_arm!([i8], f32_to_i8),
+        cpal::SampleFormat::U8 => output_arm!([u8], f32_to_u8),
+        cpal::SampleFormat::I16 => output_arm!([i16], f32_to_i16),
+        cpal::SampleFormat::U16 => output_arm!([u16], f32_to_u16),
+        cpal::SampleFormat::I24 => output_arm!([cpal::I24], f32_to_i24),
+        cpal::SampleFormat::U24 => output_arm!([cpal::U24], f32_to_u24),
+        cpal::SampleFormat::I32 => output_arm!([i32], f32_to_i32),
         format => return Err(format!("Unsupported speaker sample format: {format:?}")),
     };
 

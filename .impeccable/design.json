@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-21T20:52:05Z",
+  "title": "Design System: Terra Swarm",
+  "extensions": {
+    "colorMeta": {
+      "bg":            { "role": "neutral", "displayName": "App Black",      "tonalRamp": ["#101013", "#131316", "#17171b", "#1d1d22", "#232329", "#26262c", "#34343c", "#8e8e96"] },
+      "bg-sidebar":    { "role": "neutral", "displayName": "Chrome Slate",   "tonalRamp": ["#101013", "#131316", "#17171b", "#1d1d22", "#232329", "#26262c", "#34343c", "#8e8e96"] },
+      "bg-panel":      { "role": "neutral", "displayName": "Panel Slate",    "tonalRamp": ["#101013", "#131316", "#17171b", "#1d1d22", "#232329", "#26262c", "#34343c", "#8e8e96"] },
+      "bg-elevated":   { "role": "neutral", "displayName": "Elevated Slate", "tonalRamp": ["#101013", "#131316", "#17171b", "#1d1d22", "#232329", "#26262c", "#34343c", "#8e8e96"] },
+      "bg-hover":      { "role": "neutral", "displayName": "Hover Slate",    "tonalRamp": ["#101013", "#131316", "#17171b", "#1d1d22", "#232329", "#26262c", "#34343c", "#8e8e96"] },
+      "terminal-bg":   { "role": "neutral", "displayName": "Terminal Black", "tonalRamp": ["#0c0c0e", "#101013", "#131316", "#17171b", "#1d1d22", "#232329", "#26262c", "#34343c"] },
+      "border":        { "role": "neutral", "displayName": "Hairline",       "tonalRamp": ["#101013", "#17171b", "#1d1d22", "#232329", "#26262c", "#34343c", "#40404a", "#5b5b64"] },
+      "border-strong": { "role": "neutral", "displayName": "Strong Hairline","tonalRamp": ["#101013", "#1d1d22", "#26262c", "#34343c", "#40404a", "#52525b", "#71717a", "#8e8e96"] },
+      "text":          { "role": "neutral", "displayName": "Ink",            "tonalRamp": ["#34343c", "#5b5b64", "#71717a", "#8e8e96", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#fafafa"] },
+      "text-muted":    { "role": "neutral", "displayName": "Murmur",         "tonalRamp": ["#34343c", "#5b5b64", "#71717a", "#8e8e96", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#fafafa"] },
+      "text-faint":    { "role": "neutral", "displayName": "Whisper",        "tonalRamp": ["#34343c", "#5b5b64", "#71717a", "#8e8e96", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#fafafa"] },
+      "accent":        { "role": "primary", "displayName": "Signal White",   "tonalRamp": ["#34343c", "#5b5b64", "#71717a", "#8e8e96", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#fafafa"] },
+      "green":         { "role": "primary", "displayName": "Running Green",  "tonalRamp": ["#052e16", "#14532d", "#166534", "#15803d", "#22c55e", "#4ade80", "#86efac", "#bbf7d0"] },
+      "green-dim":     { "role": "primary", "displayName": "Running Green Tint", "tonalRamp": ["#0d1f14", "#12291b", "#163423", "#1c3d2b", "#234633", "#2c503c", "#355a45", "#3f644e"] },
+      "amber":         { "role": "tertiary", "displayName": "Attention Amber", "tonalRamp": ["#29220f", "#4a3a17", "#6b531f", "#8c6d2a", "#b08c3c", "#e0b45c", "#eccf8e", "#f6e5c0"] },
+      "red":           { "role": "tertiary", "displayName": "Exit Red",      "tonalRamp": ["#2a0e11", "#4c151a", "#6e1d24", "#93252e", "#b93a45", "#e5636f", "#ef8f98", "#f7bcc2"] }
+    },
+    "typographyMeta": {
+      "display":  { "displayName": "Display",  "purpose": "Modal headings only — the largest text in the app." },
+      "title":    { "displayName": "Title",    "purpose": "Topbar title, workspace names, pane titles." },
+      "body":     { "displayName": "Body",     "purpose": "Settings text, menu items, dialog copy." },
+      "label":    { "displayName": "Label",    "purpose": "Metadata — paths, branches, timestamps, statusbar." },
+      "micro":    { "displayName": "Micro",    "purpose": "Uppercase section headers and badges, one per panel." },
+      "terminal": { "displayName": "Terminal", "purpose": "All PTY output and anything copy-pasted as a command. The voice of the machine." }
+    },
+    "shadows": [
+      { "name": "pane-rest",     "value": "0 1px 4px rgba(0,0,0,0.35)",  "purpose": "The only resting shadow — separation between panes and the app background." },
+      { "name": "floating-menu", "value": "0 8px 24px rgba(0,0,0,0.45)", "purpose": "Context menus." },
+      { "name": "popover",       "value": "0 12px 32px rgba(0,0,0,0.5)", "purpose": "Topbar panels (notifications, grid layout)." },
+      { "name": "modal",         "value": "0 24px 64px rgba(0,0,0,0.55)","purpose": "Dialogs over the dimmed, blurred backdrop." },
+      { "name": "focus-ring",    "value": "0 0 0 3px rgba(113,113,122,0.18)", "purpose": "Token --focus-ring. Keyboard :focus-visible halo on every interactive element, plus :focus on text inputs — zinc, never a colored glow; pointer focus never shows it." }
+    ],
+    "zIndex": [
+      { "name": "pane-overlay",     "value": 10,  "purpose": "Pane-local: exit overlay, topmost inside a pane." },
+      { "name": "dropdown",         "value": 100, "purpose": "Token --z-dropdown. Context menus." },
+      { "name": "popover",          "value": 200, "purpose": "Token --z-popover. Topbar panels (notifications, grid layout)." },
+      { "name": "sticky",           "value": 300, "purpose": "Token --z-sticky. Reserved." },
+      { "name": "modal-backdrop",   "value": 400, "purpose": "Token --z-modal-backdrop. Dimmed blur layer; the modal itself stacks inside it." },
+      { "name": "modal",            "value": 500, "purpose": "Token --z-modal. Reserved." },
+      { "name": "toast",            "value": 600, "purpose": "Token --z-toast. Reserved — toasts outrank modals." },
+      { "name": "tooltip",          "value": 700, "purpose": "Token --z-tooltip. Reserved — topmost layer." }
+    ],
+    "accessibility": {
+      "focusVisible": "Every interactive element (buttons, icon buttons, inputs, sidebar rows, context-menu items, toggles, agent-picker options, settings nav) shows box-shadow: var(--focus-ring) on :focus-visible only — mouse clicks never flash the ring. Text inputs keep a :focus treatment (border #71717a + halo).",
+      "contrast": "Audited 2026-07: --text-faint #5b5b64 measures 2.83/2.76/2.66:1 against bg/bg-sidebar/bg-panel (fails 4.5:1); candidate #6e6e78 still failed (3.77/3.68/3.54:1). Essential text (paths, branches, timestamps, placeholders, counters, section titles, hints) moved to --text-muted #8e8e96 (5.84/5.70/5.50:1 — passes AA). --text-faint survives only on icon glyphs at rest.",
+      "reducedMotion": "@media (prefers-reduced-motion: reduce) and the .reduce-motion class collapse all animation/transition durations to 0.01ms, covering every animation including the ctx-meter transform transition."
+    },
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Token --ease-out. Entrances, FLIP grid moves, modals, popovers, ctx meter." },
+      { "name": "hover",         "value": "0.14s ease",  "purpose": "Token --dur-hover. Background/border/color transitions on controls." },
+      { "name": "press",         "value": "0.08s ease",  "purpose": "Token --dur-press. Button compress to scale(0.97) on :active." },
+      { "name": "med",           "value": "0.2s",        "purpose": "Token --dur-med. Sidebar/grid entrance animations." },
+      { "name": "ctx-meter",     "value": "0.3s var(--ease-out)", "purpose": "Context-usage fill: transform scaleX transition — compositor-only, no layout thrash." },
+      { "name": "flip-grid",     "value": "0.24s cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Grid reflow on spawn/close via FLIP transform animation (structure changes only — the grid is static otherwise: no resize, no reorder)." },
+      { "name": "modal-in",      "value": "0.18s cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Modal scale 0.96→1, y 8→0." },
+      { "name": "popover-in",    "value": "0.15s cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Popover scale 0.96→1, y -4→0." },
+      { "name": "toggle",        "value": "120ms ease",  "purpose": "Toggle knob travel." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Default Button",
+      "kind": "button",
+      "refersTo": "button-default",
+      "description": "The workhorse control — elevated slate, hairline border, compresses on press.",
+      "html": "<button class=\"ds-btn\">New terminal</button>",
+      "css": ".ds-btn { font: inherit; font-size: 13px; line-height: 14px; color: var(--text, #e4e4e7); background: var(--bg-elevated, #1d1d22); border: 1px solid var(--border-strong, #34343c); border-radius: 6px; padding: 6px 12px; cursor: pointer; transition: background 0.14s ease, border-color 0.14s ease, transform 0.08s ease; } .ds-btn:hover { background: var(--bg-hover, #232329); border-color: #40404a; } .ds-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(113, 113, 122, 0.18); } .ds-btn:active { transform: scale(0.97); } .ds-btn:disabled { opacity: 0.4; cursor: default; }"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Signal White inverted primary — one per screen, never a hue.",
+      "html": "<button class=\"ds-btn-primary\">Spawn agent</button>",
+      "css": ".ds-btn-primary { font: inherit; font-size: 13px; font-weight: 600; color: #111113; background: var(--accent, #fafafa); border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; transition: background 0.14s ease, transform 0.08s ease; } .ds-btn-primary:hover { background: #d4d4d8; } .ds-btn-primary:active { transform: scale(0.97); } .ds-btn-primary:disabled { opacity: 0.4; cursor: default; }"
+    },
+    {
+      "name": "Icon Button",
+      "kind": "button",
+      "description": "Transparent at rest, murmur icon, hover wash — topbar and pane-header actions.",
+      "html": "<button class=\"ds-icon-btn\" title=\"Notifications\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9\"/><path d=\"M10.3 21a1.94 1.94 0 0 0 3.4 0\"/></svg></button>",
+      "css": ".ds-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px; color: var(--text-muted, #8e8e96); background: transparent; border: none; border-radius: 5px; cursor: pointer; transition: background 0.14s ease, color 0.14s ease; } .ds-icon-btn:hover { background: var(--bg-hover, #232329); color: var(--text, #e4e4e7); } .ds-icon-btn:disabled { opacity: 0.4; cursor: default; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "App-black field with zinc halo focus — modals and inline rename.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Workspace name\" />",
+      "css": ".ds-input { font: inherit; font-size: 13px; color: var(--text, #e4e4e7); background: var(--bg, #101013); border: 1px solid var(--border-strong, #34343c); border-radius: 6px; padding: 8px 10px; outline: none; transition: border-color 0.14s ease, box-shadow 0.14s ease; } .ds-input::placeholder { color: var(--text-muted, #8e8e96); } .ds-input:focus { border-color: #71717a; box-shadow: 0 0 0 3px rgba(113, 113, 122, 0.18); }"
+    },
+    {
+      "name": "Workspace Sidebar Item",
+      "kind": "nav",
+      "description": "One workspace row — name, branch, running dot; active gets elevated fill and strong border.",
+      "html": "<div class=\"ds-ws-item active\"><span class=\"ds-ws-dot\"></span><div class=\"ds-ws-text\"><div class=\"ds-ws-name\">terra-swarm</div><div class=\"ds-ws-meta\">main · 3 agents</div></div></div>",
+      "css": ".ds-ws-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 6px; border: 1px solid transparent; cursor: pointer; transition: background 0.14s ease, border-color 0.14s ease; } .ds-ws-item:hover { background: var(--bg-elevated, #1d1d22); } .ds-ws-item:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(113, 113, 122, 0.18); } .ds-ws-item.active { background: var(--bg-elevated, #1d1d22); border-color: var(--border-strong, #34343c); } .ds-ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green, #4ade80); flex-shrink: 0; } .ds-ws-name { font-size: 13px; font-weight: 500; color: var(--text, #e4e4e7); } .ds-ws-meta { font-size: 11px; color: var(--text-muted, #8e8e96); }"
+    },
+    {
+      "name": "Terminal Pane",
+      "kind": "card",
+      "refersTo": "terminal-pane",
+      "description": "The product — terminal-black body, panel-slate header, focused ring, agent badge, context meter.",
+      "html": "<div class=\"ds-pane focused\"><div class=\"ds-pane-header\"><span class=\"ds-pane-badge\">claude</span><span class=\"ds-pane-title\">refactor auth module</span><span class=\"ds-pane-ctx\"><span class=\"ds-pane-ctx-bar\"><span class=\"ds-pane-ctx-fill\" style=\"transform: scaleX(0.42)\"></span></span>42%</span></div><div class=\"ds-pane-body\">$ claude --resume<br/>● running</div></div>",
+      "css": ".ds-pane { background: var(--terminal-bg, #0c0c0e); border: 1px solid var(--border, #26262c); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.35); min-width: 240px; transition: border-color 0.14s ease, box-shadow 0.14s ease; } .ds-pane.focused { box-shadow: 0 1px 4px rgba(0,0,0,0.35), 0 0 0 1px #52525b; } .ds-pane-header { display: flex; align-items: center; gap: 8px; background: var(--bg-panel, #17171b); border-bottom: 1px solid var(--border, #26262c); padding: 6px 8px 6px 14px; } .ds-pane-badge { font-size: 11px; font-weight: 600; color: #e0a35c; background: #38291f; border-radius: 6px; padding: 2px 8px; } .ds-pane-title { font-size: 11px; color: var(--text-muted, #8e8e96); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-pane-ctx { display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-muted, #8e8e96); } .ds-pane-ctx-bar { width: 34px; height: 4px; border-radius: 2px; background: var(--bg-hover, #232329); overflow: hidden; } .ds-pane-ctx-fill { display: block; width: 100%; height: 100%; border-radius: 2px; background: var(--green, #4ade80); transform-origin: left; transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); } .ds-pane-body { font-family: 'SF Mono', Menlo, Monaco, 'Courier New', monospace; font-size: 13px; line-height: 1.35; color: #d4d4d8; padding: 8px 10px; }"
+    },
+    {
+      "name": "Agent Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Per-agent identity tint — the only place brand hues are allowed.",
+      "html": "<span class=\"ds-agent-badge\">claude</span> <span class=\"ds-agent-badge codex\">codex</span> <span class=\"ds-agent-badge opencode\">opencode</span> <span class=\"ds-agent-badge kimi\">kimi</span>",
+      "css": ".ds-agent-badge { font-size: 11px; font-weight: 600; border-radius: 6px; padding: 2px 8px; color: #e0a35c; background: #38291f; } .ds-agent-badge.codex { color: #5bc0b8; background: #1e3336; } .ds-agent-badge.opencode { color: #8fbf6f; background: #22331f; } .ds-agent-badge.kimi { color: #b39ddb; background: #2e2542; }"
+    },
+    {
+      "name": "Toggle Switch",
+      "kind": "input",
+      "description": "38×22 pill — hover slate off, running green on, 120ms knob travel.",
+      "html": "<button class=\"ds-toggle on\" role=\"switch\" aria-checked=\"true\"><span class=\"ds-toggle-knob\"></span></button>",
+      "css": ".ds-toggle { position: relative; width: 38px; height: 22px; border-radius: 999px; background: var(--bg-hover, #232329); border: 1px solid var(--border-strong, #34343c); cursor: pointer; padding: 0; transition: background 120ms ease, border-color 120ms ease; } .ds-toggle.on { background: var(--green, #4ade80); border-color: var(--green, #4ade80); } .ds-toggle-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--text, #e4e4e7); transition: transform 120ms ease, background 120ms ease; } .ds-toggle.on .ds-toggle-knob { transform: translateX(16px); background: #18181b; }"
+    },
+    {
+      "name": "Modal",
+      "kind": "custom",
+      "description": "Panel-slate card over dimmed, blurred backdrop — spawn and settings flows only.",
+      "html": "<div class=\"ds-modal\"><h2 class=\"ds-modal-title\">New agent</h2><p class=\"ds-modal-copy\">Pick an agent to spawn in this workspace.</p><div class=\"ds-modal-actions\"><button class=\"ds-modal-btn\">Cancel</button><button class=\"ds-modal-btn primary\">Spawn</button></div></div>",
+      "css": ".ds-modal { background: var(--bg-panel, #17171b); border: 1px solid var(--border, #26262c); border-radius: 14px; padding: 24px; width: 420px; max-width: 100%; box-shadow: 0 24px 64px rgba(0,0,0,0.55); display: flex; flex-direction: column; gap: 14px; } .ds-modal-title { margin: 0; font-size: 16px; font-weight: 700; color: var(--text, #e4e4e7); } .ds-modal-copy { margin: 0; font-size: 13px; color: var(--text-muted, #8e8e96); } .ds-modal-actions { display: flex; justify-content: flex-end; gap: 8px; } .ds-modal-btn { font: inherit; font-size: 13px; color: var(--text, #e4e4e7); background: var(--bg-elevated, #1d1d22); border: 1px solid var(--border-strong, #34343c); border-radius: 6px; padding: 6px 12px; cursor: pointer; transition: background 0.14s ease; } .ds-modal-btn:hover { background: var(--bg-hover, #232329); } .ds-modal-btn.primary { background: var(--accent, #fafafa); color: #111113; font-weight: 600; border: none; } .ds-modal-btn.primary:hover { background: #d4d4d8; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Console",
+    "overview": "Terra Swarm is a dark, dense control room that has learned to keep its mouth shut. The aesthetic is Warp's seriousness applied to a fleet of agents: a near-black zinc palette, terminal-grade typography, and chrome so restrained it registers only when it carries state. Nothing on screen is decorative; every pixel either is agent output or says something true about an agent right now.\n\nThe system explicitly rejects IDE chrome overload — toolbars, panels, and ornamentation competing with the terminals for attention. Depth is tonal, not shadowed. Color is a status vocabulary, not a brand wash: green means running, amber means attention, red means failure, and the only \"accent\" is a white button. Motion is fast (140–250ms) and exists solely to convey state change.\n\nDensity is a feature. This is a tool its user opens at the start of a session and leaves open all day; it should feel like a well-made instrument, not a presentation.",
+    "keyCharacteristics": [
+      "Terminal grid is the product; chrome recedes to 38px topbar, 24px statusbar, one sidebar.",
+      "Near-black zinc surfaces, layered tonally — no hue in the neutrals.",
+      "White-on-dark inverted primary button; the interface has no brand color.",
+      "Green / amber / red used exclusively as live agent state.",
+      "Two type voices: system sans for chrome, SF Mono for anything the machine said.",
+      "Flat at rest; shadows exist only on layers floating above the grid."
+    ],
+    "rules": [
+      { "name": "The Inverted Primary Rule", "body": "The loudest action on any screen is a white button, never a hue. Terra Swarm has no brand color in the UI; identity comes from restraint, not pigment.", "section": "colors" },
+      { "name": "The Three-Word Rule", "body": "Saturated color says exactly one of three things — green: running, amber: attention, red: failed. Using green, amber, or red for anything else (branding, decoration, categorization) is forbidden. Agent identity colors are the only exception, and they appear only on agent badges.", "section": "colors" },
+      { "name": "The Two Voices Rule", "body": "Chrome speaks the system sans; the machine speaks SF Mono. If text is a command, path the user runs, or agent output, it is mono. Nothing else is.", "section": "typography" },
+      { "name": "The Fixed Scale Rule", "body": "No fluid type, no clamp(), no responsive font sizes. The scale is fixed at 10 / 11 / 12 / 13 / 16px and nothing in between — the former 12.5px (context-menu items) and 9px (bell badge) offenders are converged to 12px and 10px. Chrome renders with -webkit-font-smoothing: antialiased; numeric meters and counters always use tabular-nums.", "section": "typography" },
+      { "name": "The Floating-Only Rule", "body": "If a surface doesn't float, it gets no shadow. Resting cards, sidebar items, and list rows are tonal, not shadowed.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do let the terminal grid own the window — chrome earns pixels only by carrying state (notification, context usage, git branch), per PRODUCT.md.",
+      "Do keep transitions on the motion tokens — --dur-hover (140ms) for control state, --dur-press (80ms) for the button handshake, --dur-med (200ms) with --ease-out (cubic-bezier(0.22, 1, 0.36, 1)) for entrances; motion conveys state, nothing else.",
+      "Do use the fixed type scale (10 / 11 / 12 / 13 / 16px) and the two voices exactly as defined.",
+      "Do express every interactive component in all its states: default, hover, focus-visible, active, disabled. Keyboard focus always has the zinc halo; pointer focus never does.",
+      "Do honor prefers-reduced-motion — the app ships a global reduce path; every new animation joins it.",
+      "Do keep contrast at WCAG AA minimum against the dark surfaces — check, don't assume. Essential text never dips below Murmur (5.2:1 worst case); Whisper is for decorative rests only."
+    ],
+    "donts": [
+      "Don't ship IDE chrome overload — PRODUCT.md's named anti-reference: toolbars, panels, or ornamentation that compete with agent output instead of serving it.",
+      "Don't introduce a brand hue into the UI. No colored primary buttons, no gradient anything, no tinted neutrals outside the zinc scale.",
+      "Don't use green, amber, or red decoratively — the Three-Word Rule is absolute.",
+      "Don't add resting shadows to non-floating surfaces, or glow/ring effects beyond the single #52525b focused-pane ring and the zinc --focus-ring halo.",
+      "Don't use a display font, a second sans, or fluid typography anywhere in chrome.",
+      "Don't gate content on entrance animations; panes and lists are visible by default, motion only enhances.",
+      "Don't reach for a modal as a first thought — inline and progressive disclosure first; modals are for spawning and settings, not workflow."
+    ]
+  }
+}

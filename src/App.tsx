@@ -18,12 +18,11 @@ import type {
   VoiceStatus,
   Workspace,
 } from "./types";
-import { computeTerminalMove, type DropZone } from "./layout";
 import { backdropAnim, modalAnim } from "./motion";
 import { ResumeDialog } from "./components/ResumeDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
-import { DEFAULT_BASIS, TerminalGrid } from "./components/TerminalGrid";
+import { TerminalGrid } from "./components/TerminalGrid";
 import { TopBar } from "./components/TopBar";
 import { getTerminal } from "./terminalRegistry";
 import "./App.css";
@@ -834,33 +833,6 @@ function App() {
     clearNotifications(item.terminalId);
   };
 
-  const resizeTerminalLocal = (wsId: string, id: string, pct: number) => {
-    setWorkspaces((prev) =>
-      prev.map((w) =>
-        w.id !== wsId
-          ? w
-          : {
-              ...w,
-              terminals: w.terminals.map((t) =>
-                t.id !== id ? t : { ...t, width: pct },
-              ),
-            },
-      ),
-    );
-  };
-
-  const persistWidth = (wsId: string, id: string, pct: number) => {
-    api
-      .setTerminalWidth(wsId, id, pct)
-      .catch((err) => console.warn("persist width failed:", err));
-  };
-
-  const persistOrder = (wsId: string, order: string[]) => {
-    api
-      .reorderTerminals(wsId, order)
-      .catch((err) => console.warn("persist order failed:", err));
-  };
-
   const wsOrderRef = useRef<Workspace[]>([]);
   wsOrderRef.current = workspaces;
 
@@ -872,39 +844,6 @@ function App() {
     api
       .reorderWorkspaces(wsOrderRef.current.map((w) => w.id))
       .catch(() => {});
-  };
-
-  const moveTerminalLocal = (
-    wsId: string,
-    dragId: string,
-    targetId: string,
-    zone: DropZone,
-    contentWidth: number,
-  ) => {
-    // Read through the ref, not the render closure: the drop gesture can
-    // outlive the render that started it (a terminal closed or a refresh
-    // landed mid-drag), and the stale list would resurrect the removed pane.
-    const ws = wsOrderRef.current.find((w) => w.id === wsId);
-    if (!ws) return;
-    const defaultBasis = gridCols > 0 ? Math.floor(100 / gridCols) : DEFAULT_BASIS;
-    const move = computeTerminalMove(
-      ws.terminals,
-      dragId,
-      targetId,
-      zone,
-      defaultBasis,
-      contentWidth,
-    );
-    if (!move) return;
-    setWorkspaces((prev) =>
-      prev.map((w) => (w.id !== wsId ? w : { ...w, terminals: move.next })),
-    );
-    persistOrder(wsId, move.order);
-    for (const { id, pct } of move.widths) {
-      api
-        .setTerminalWidth(wsId, id, pct)
-        .catch((err) => console.warn("persist width failed:", err));
-    }
   };
 
   const renameWorkspace = async (id: string, name: string) => {
@@ -1498,11 +1437,6 @@ function App() {
                   branch={branches[w.id]}
                   onClearNotifications={clearNotifications}
                   onFocus={setFocusedId}
-                  onResize={(id, pct) => resizeTerminalLocal(w.id, id, pct)}
-                  onResizeEnd={(id, pct) => persistWidth(w.id, id, pct)}
-                  onSwap={(a, b, before, width) =>
-                    moveTerminalLocal(w.id, a, b, before, width)
-                  }
                   onToggleExpand={setExpandedId}
                   onRestart={restartTerminal}
                   onClose={closeTerminal}

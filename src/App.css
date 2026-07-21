@@ -1772,9 +1772,11 @@ body.ws-dragging {
   outline: none;
 }
 
+/* Selects behave like text inputs: focus (mouse or keyboard) gets the zinc
+   halo, matching `.modal input:focus`. */
 .voice-select:focus {
   border-color: #71717a;
-  box-shadow: 0 0 0 3px rgba(113, 113, 122, 0.18);
+  box-shadow: var(--focus-ring);
 }
 
 .mic-test-row {
@@ -1839,8 +1841,7 @@ body.ws-dragging {
    clicks never flash a ring. Text inputs keep their :focus treatment
    (border + halo) since typing is always a keyboard context. */
 button:focus-visible,
-.sidebar-item:focus-visible,
-.voice-select:focus-visible {
+.sidebar-item:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
 }

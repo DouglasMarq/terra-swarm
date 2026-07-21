@@ -42,8 +42,6 @@ export const api = {
   terminalBacklog: (id: string) =>
     invoke<BacklogSnapshot>("terminal_backlog", { id }),
   runningTerminals: () => invoke<RunningTerminal[]>("running_terminals"),
-  reorderTerminals: (wsId: string, order: string[]) =>
-    invoke<void>("reorder_terminals", { wsId, order }),
   reorderWorkspaces: (order: string[]) =>
     invoke<void>("reorder_workspaces", { order }),
   setTerminalWidth: (wsId: string, terminalId: string, width: number) =>

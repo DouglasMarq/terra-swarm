@@ -5,17 +5,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api } from "../api";
 import type { OutputChunk } from "../types";
 import { registerTerminal, unregisterTerminal, getTerminal } from "../terminalRegistry";
-import { GRID_GAP, MIN_PANE_WIDTH } from "../layout";
 import "@xterm/xterm/css/xterm.css";
-
-const MIN_PCT = 15;
-
-interface FloatRect {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
 
 interface Props {
   id: string;
@@ -23,11 +13,9 @@ interface Props {
   fontSize: number;
   exited: boolean;
   expanded: boolean;
-  anyExpanded: boolean;
   basis: number;
   height: string;
   entering: boolean;
-  floating: FloatRect | null;
   dragOver: boolean;
   notifications: number;
   contextUsed?: number;
@@ -36,9 +24,6 @@ interface Props {
   onClearNotifications: () => void;
   focused: boolean;
   onFocus: () => void;
-  onHeaderMouseDown: (e: React.MouseEvent) => void;
-  onResize: (pct: number) => void;
-  onResizeEnd: (pct: number) => void;
   onToggleExpand: () => void;
   onRestart: () => void;
   onClose: () => void;
@@ -103,7 +88,7 @@ function MinimizeIcon() {
 }
 
 export function TerminalPane(props: Props) {
-  const { id, command, fontSize, exited, expanded, anyExpanded, basis, height, entering, floating, dragOver, notifications, contextUsed, title, focused } =
+  const { id, command, fontSize, exited, expanded, basis, height, entering, dragOver, notifications, contextUsed, title, focused } =
     props;
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -380,71 +365,20 @@ export function TerminalPane(props: Props) {
     fitRef.current?.();
   }, [fontSize, id]);
 
-  const startResize = (e: React.MouseEvent, edge: "left" | "right") => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const pane = rootRef.current;
-    const rows = pane?.closest(".term-rows") as HTMLElement | null;
-    if (!pane || !rows) return;
-    const startX = e.clientX;
-    // Percentages resolve against the container's content box, which excludes
-    // its 12px side padding; the basis prop (not the rendered width, which
-    // includes flex-grow slack) is the true starting share.
-    const total = rows.getBoundingClientRect().width - 24;
-    const startPct = basis;
-    // The CSS min-width clamps narrow panes in pixels; keep the stored
-    // percentage from dipping below what min-width allows or the model and
-    // the rendered layout diverge.
-    const minPct = Math.max(
-      MIN_PCT,
-      ((MIN_PANE_WIDTH + GRID_GAP) / Math.max(1, total)) * 100,
-    );
-    let last = startPct;
-    document.body.classList.add("col-resizing");
-    const onMove = (ev: MouseEvent) => {
-      const raw = ((ev.clientX - startX) / total) * 100;
-      const delta = edge === "right" ? raw : -raw;
-      last = Math.min(100, Math.max(minPct, startPct + delta));
-      props.onResize(last);
-    };
-    const onUp = () => {
-      document.body.classList.remove("col-resizing");
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      props.onResizeEnd(last);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  };
-
   return (
     <div
       ref={rootRef}
       data-term-id={id}
-      className={`pane ${expanded ? "expanded" : ""} ${entering ? "pane-enter" : ""} ${floating ? "floating" : ""} ${
+      className={`pane ${expanded ? "expanded" : ""} ${entering ? "pane-enter" : ""} ${
         dragOver ? "drag-over" : ""
       } ${focused ? "focused" : ""}`}
-      style={
-        floating
-          ? {
-              position: "fixed",
-              left: floating.left,
-              top: floating.top,
-              width: floating.width,
-              height: floating.height,
-              margin: 0,
-              zIndex: 60,
-              pointerEvents: "none",
-            }
-          : { flex: `1 1 calc(${basis}% - 12px)`, height }
-      }
+      style={{ flex: `1 1 calc(${basis}% - 12px)`, height }}
       onMouseDown={() => {
         props.onFocus();
         if (notifications > 0) props.onClearNotifications();
       }}
     >
-      <div className="pane-header" onMouseDown={props.onHeaderMouseDown}>
+      <div className="pane-header">
         <div className="pane-header-left">
           <span className={`pane-badge agent-${command.split(" ")[0]}`} title={command}>
             {command.split(" ")[0]}
@@ -462,7 +396,7 @@ export function TerminalPane(props: Props) {
               title={`Context used: ${contextUsed}%`}
             >
               <span className="pane-ctx-bar">
-                <span style={{ width: `${contextUsed}%` }} />
+                <span style={{ transform: `scaleX(${contextUsed / 100})` }} />
               </span>
               {contextUsed}%
             </span>
@@ -502,18 +436,6 @@ export function TerminalPane(props: Props) {
             <button onClick={props.onClose}>Close</button>
           </div>
         </div>
-      )}
-      {!expanded && !anyExpanded && (
-        <>
-          <div
-            className="pane-resize left"
-            onMouseDown={(e) => startResize(e, "left")}
-          />
-          <div
-            className="pane-resize"
-            onMouseDown={(e) => startResize(e, "right")}
-          />
-        </>
       )}
     </div>
   );

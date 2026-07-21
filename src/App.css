@@ -17,6 +17,36 @@
   --green: #4ade80;
   --green-dim: rgba(74, 222, 128, 0.1);
   --amber: #e0b45c;
+
+  /* radius scale */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 10px;
+  --r-modal: 14px;
+  --r-pill: 999px;
+
+  /* motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-press: 0.08s;
+  --dur-hover: 0.14s;
+  --dur-med: 0.2s;
+
+  /* keyboard-only focus halo — zinc, never a colored glow */
+  --focus-ring: 0 0 0 3px rgba(113, 113, 122, 0.18);
+
+  /* semantic stacking layers */
+  --z-dropdown: 100;
+  --z-popover: 200;
+  --z-sticky: 300;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-toast: 600;
+  --z-tooltip: 700;
+
+  /* scrollbars */
+  --scrollbar-thumb: #2c2c33;
+  --scrollbar-thumb-hover: #3a3a42;
 }
 
 * {
@@ -31,6 +61,7 @@ body,
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
 }
 
 ::-webkit-scrollbar {
@@ -39,14 +70,14 @@ body,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2c2c33;
-  border-radius: 5px;
+  background: var(--scrollbar-thumb);
+  border-radius: var(--r-md);
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a42;
+  background: var(--scrollbar-thumb-hover);
   background-clip: content-box;
   border: 2px solid transparent;
 }
@@ -57,18 +88,19 @@ body,
 
 button {
   font: inherit;
+  line-height: 14px; /* 6px padding + 1px border each side → 26px effective height */
   color: var(--text);
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--r-md);
   padding: 6px 12px;
   cursor: pointer;
   transition:
-    background 0.14s ease,
-    border-color 0.14s ease,
-    color 0.14s ease,
-    opacity 0.14s ease,
-    transform 0.08s ease;
+    background var(--dur-hover) ease,
+    border-color var(--dur-hover) ease,
+    color var(--dur-hover) ease,
+    opacity var(--dur-hover) ease,
+    transform var(--dur-press) ease;
 }
 
 button:hover {
@@ -123,7 +155,7 @@ button:active:not(:disabled) {
 
 .topbar-ws {
   font-size: 12px;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .topbar-spacer {
@@ -145,10 +177,10 @@ button:active:not(:disabled) {
   border: none;
   background: transparent;
   color: var(--text-muted);
-  border-radius: 6px;
+  border-radius: var(--r-md);
   transition:
-    background 0.14s ease,
-    color 0.14s ease;
+    background var(--dur-hover) ease,
+    color var(--dur-hover) ease;
 }
 
 .topbar-bell:hover,
@@ -161,15 +193,16 @@ button:active:not(:disabled) {
   position: absolute;
   top: -3px;
   right: -4px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  border-radius: 7px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
   background: var(--green);
   color: #052e16;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
-  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  line-height: 15px;
   text-align: center;
   animation: bell-pop 0.25s ease-out;
   pointer-events: none;
@@ -178,6 +211,7 @@ button:active:not(:disabled) {
 .topbar-grid-value {
   font-size: 10px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   margin-left: 3px;
 }
 
@@ -190,10 +224,10 @@ button:active:not(:disabled) {
   flex-direction: column;
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: var(--r-xl);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   overflow: hidden;
-  z-index: 100;
+  z-index: var(--z-popover);
   transform-origin: top right;
 }
 
@@ -207,9 +241,9 @@ button:active:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 4px 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-md);
   background: transparent;
   font-size: 12px;
   color: var(--text-muted);
@@ -243,10 +277,10 @@ button:active:not(:disabled) {
   flex-direction: column;
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: var(--r-xl);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   overflow: hidden;
-  z-index: 100;
+  z-index: var(--z-popover);
   transform-origin: top right;
 }
 
@@ -254,7 +288,7 @@ button:active:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -266,10 +300,11 @@ button:active:not(:disabled) {
 .notif-unread {
   font-size: 10px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: var(--amber);
   background: #36301c;
   padding: 1px 7px;
-  border-radius: 8px;
+  border-radius: var(--r-lg);
 }
 
 .notif-head-spacer {
@@ -286,7 +321,7 @@ button:active:not(:disabled) {
   border: none;
   background: transparent;
   color: var(--text-faint);
-  border-radius: 5px;
+  border-radius: var(--r-sm);
 }
 
 .notif-icon-btn:hover:not(:disabled) {
@@ -307,7 +342,7 @@ button:active:not(:disabled) {
   padding: 24px 12px;
   text-align: center;
   font-size: 11px;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .notif-item {
@@ -353,7 +388,7 @@ button:active:not(:disabled) {
 
 .notif-ws {
   font-size: 10px;
-  color: var(--text-faint);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -361,7 +396,7 @@ button:active:not(:disabled) {
 .notif-time {
   margin-left: auto;
   font-size: 10px;
-  color: var(--text-faint);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -379,7 +414,7 @@ button:active:not(:disabled) {
   align-self: flex-start;
   font-size: 10px;
   padding: 3px 10px;
-  border-radius: 10px;
+  border-radius: var(--r-pill);
 }
 
 /* ---------- status bar ---------- */
@@ -444,7 +479,7 @@ button:active:not(:disabled) {
 }
 
 .statusbar-dim {
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 /* ---------- sidebar ---------- */
@@ -455,7 +490,7 @@ button:active:not(:disabled) {
   flex-direction: column;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
-  animation: sidebar-in 0.2s ease-out;
+  animation: sidebar-in var(--dur-med) var(--ease-out);
 }
 
 @keyframes sidebar-in {
@@ -480,7 +515,7 @@ button:active:not(:disabled) {
 .sidebar-collapse-btn {
   border: none;
   background: transparent;
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-size: 13px;
   padding: 2px 6px;
   line-height: 1;
@@ -507,7 +542,7 @@ button:active:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 7px;
+  border-radius: var(--r-lg);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   color: var(--text-muted);
@@ -515,9 +550,9 @@ button:active:not(:disabled) {
   font-weight: 600;
   padding: 0;
   transition:
-    border-color 0.14s ease,
-    color 0.14s ease,
-    background 0.14s ease;
+    border-color var(--dur-hover) ease,
+    color var(--dur-hover) ease,
+    background var(--dur-hover) ease;
 }
 
 .sidebar-dot.active {
@@ -545,7 +580,7 @@ button:active:not(:disabled) {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.09em;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .sidebar-list {
@@ -561,16 +596,16 @@ button:active:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--r-md);
   border: 1px solid transparent;
   -webkit-user-select: none;
   user-select: none;
   transition:
-    background 0.14s ease,
-    border-color 0.14s ease,
-    opacity 0.14s ease;
+    background var(--dur-hover) ease,
+    border-color var(--dur-hover) ease,
+    opacity var(--dur-hover) ease;
 }
 
 .sidebar-item:hover {
@@ -612,7 +647,7 @@ button:active:not(:disabled) {
 
 .sidebar-item-path {
   font-size: 11px;
-  color: var(--text-faint);
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -623,7 +658,7 @@ button:active:not(:disabled) {
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: var(--text-faint);
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -666,11 +701,11 @@ button:active:not(:disabled) {
 
 .context-menu {
   position: fixed;
-  z-index: 1000;
+  z-index: var(--z-dropdown);
   min-width: 180px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--r-lg);
   padding: 4px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   display: flex;
@@ -681,10 +716,10 @@ button:active:not(:disabled) {
 .context-menu-item {
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   text-align: left;
-  padding: 6px 10px;
-  font-size: 12.5px;
+  padding: 4px 8px;
+  font-size: 12px;
   color: var(--text);
   cursor: pointer;
 }
@@ -700,7 +735,7 @@ button:active:not(:disabled) {
 .context-menu-separator {
   height: 1px;
   background: var(--border);
-  margin: 4px 6px;
+  margin: 4px 8px;
 }
 
 .sidebar-rename-input {
@@ -710,7 +745,7 @@ button:active:not(:disabled) {
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--border-strong);
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   padding: 1px 5px;
   outline: none;
   width: 100%;
@@ -721,6 +756,7 @@ button:active:not(:disabled) {
 
 .sidebar-rename-input:focus {
   border-color: #71717a;
+  box-shadow: var(--focus-ring);
 }
 
 .sidebar-footer {
@@ -779,7 +815,7 @@ button:active:not(:disabled) {
   align-items: center;
   justify-content: center;
   gap: 14px;
-  color: var(--text-faint);
+  color: var(--text-muted);
   animation: fade-in 0.25s ease-out;
 }
 
@@ -802,7 +838,7 @@ button:active:not(:disabled) {
   align-content: flex-start;
   gap: 12px;
   padding: 12px;
-  animation: grid-in 0.2s ease-out;
+  animation: grid-in var(--dur-med) var(--ease-out);
 }
 
 @keyframes grid-in {
@@ -825,14 +861,14 @@ button:active:not(:disabled) {
   min-width: 240px;
   min-height: 200px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-xl);
   overflow: hidden;
   background: #0c0c0e;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
   transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    opacity 0.15s ease;
+    border-color var(--dur-hover) ease,
+    box-shadow var(--dur-hover) ease,
+    opacity var(--dur-hover) ease;
 }
 
 .pane.expanded {
@@ -856,14 +892,6 @@ button:active:not(:disabled) {
   animation: pane-in 0.18s ease-out;
 }
 
-.pane.floating {
-  border-color: #52525b;
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
-  cursor: grabbing;
-  opacity: 0.95;
-  will-change: transform;
-}
-
 .pane.drag-over {
   border-color: #a1a1aa;
   box-shadow:
@@ -871,62 +899,15 @@ button:active:not(:disabled) {
     0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
-.drop-preview {
-  border: 1px dashed var(--border-strong);
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.55);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-    inset 0 0 28px rgba(0, 0, 0, 0.65);
-  pointer-events: none;
-  min-width: 240px;
-  min-height: 200px;
-}
-
+/* Exactly one 1px ring: the border stays --border so the box-shadow ring
+   alone carries the focused state (border + ring would read as 2px). */
 .pane.focused {
-  border-color: #52525b;
   box-shadow:
     0 0 0 1px #52525b,
     0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
-.pane-resize {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 6px;
-  height: 100%;
-  cursor: col-resize;
-  z-index: 5;
-}
-
-.pane-resize.left {
-  left: 0;
-  right: auto;
-}
-
-.pane-resize:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-body.col-resizing {
-  cursor: col-resize;
-  user-select: none;
-}
-
-body.col-resizing .pane-body,
-body.reordering .pane-body {
-  pointer-events: none;
-}
-
-body.reordering {
-  user-select: none;
-  cursor: grabbing;
-}
-
-/* Kill text selection app-wide while a drag gesture is active */
-body.reordering *,
-body.reordering,
+/* Kill text selection app-wide while a workspace drag gesture is active */
 body.ws-dragging *,
 body.ws-dragging {
   -webkit-user-select: none !important;
@@ -937,10 +918,9 @@ body.ws-dragging {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 8px 7px 16px;
+  padding: 6px 8px 6px 14px;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
-  cursor: grab;
 }
 
 .pane-header-left {
@@ -950,16 +930,12 @@ body.ws-dragging {
   min-width: 0;
 }
 
-.pane-header:active {
-  cursor: grabbing;
-}
-
 .pane-actions {
   display: flex;
   align-items: center;
   gap: 2px;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--dur-hover) ease;
 }
 
 .pane:hover .pane-actions,
@@ -977,7 +953,7 @@ body.ws-dragging {
   width: 24px;
   height: 22px;
   padding: 0;
-  border-radius: 5px;
+  border-radius: var(--r-sm);
 }
 
 .pane-btn:hover {
@@ -990,7 +966,7 @@ body.ws-dragging {
   font-weight: 600;
   letter-spacing: 0.01em;
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-md);
   background: var(--bg-hover);
   color: var(--text-muted);
 }
@@ -1013,11 +989,16 @@ body.ws-dragging {
   overflow: hidden;
 }
 
+/* The fill is always full-width; the component scales it with
+   transform: scaleX(<fraction>) so updates composite instead of
+   re-laying-out on every context tick. */
 .pane-ctx-bar > span {
   display: block;
+  width: 100%;
   height: 100%;
   background: var(--green);
-  transition: width 0.3s ease;
+  transform-origin: left;
+  transition: transform 0.3s var(--ease-out);
 }
 
 .pane-ctx.mid {
@@ -1052,8 +1033,9 @@ body.ws-dragging {
   gap: 4px;
   font-size: 11px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-md);
   background: #36301c;
   color: var(--amber);
   animation: bell-pop 0.25s ease-out;
@@ -1121,7 +1103,7 @@ body.ws-dragging {
   background: rgba(12, 12, 14, 0.88);
   color: var(--red);
   font-size: 13px;
-  z-index: 10;
+  z-index: 10; /* pane-local: topmost layer inside a pane */
   animation: fade-in 0.2s ease-out;
 }
 
@@ -1139,7 +1121,7 @@ body.ws-dragging {
   justify-content: center;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(2px);
-  z-index: 50;
+  z-index: var(--z-modal-backdrop);
 }
 
 .modal-backdrop.blur-strong {
@@ -1151,7 +1133,7 @@ body.ws-dragging {
   width: 420px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--r-modal);
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -1178,15 +1160,21 @@ body.ws-dragging {
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--r-md);
   padding: 8px 10px;
   outline: none;
-  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+  transition:
+    border-color var(--dur-hover) ease,
+    box-shadow var(--dur-hover) ease;
+}
+
+.modal input::placeholder {
+  color: var(--text-muted);
 }
 
 .modal input:focus {
   border-color: #71717a;
-  box-shadow: 0 0 0 3px rgba(113, 113, 122, 0.18);
+  box-shadow: var(--focus-ring);
 }
 
 .modal-folder {
@@ -1228,12 +1216,12 @@ body.ws-dragging {
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: var(--r-xl);
   text-align: left;
   transition:
-    background 0.14s ease,
-    border-color 0.14s ease,
-    opacity 0.14s ease;
+    background var(--dur-hover) ease,
+    border-color var(--dur-hover) ease,
+    opacity var(--dur-hover) ease;
 }
 
 .agent-option:disabled {
@@ -1253,7 +1241,7 @@ body.ws-dragging {
 
 .agent-option-missing {
   font-size: 11px;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .picker-default {
@@ -1296,10 +1284,11 @@ body.ws-dragging {
 .resume-count {
   font-size: 11px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--green);
   background: var(--green-dim);
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--r-pill);
   padding: 1px 8px;
 }
 
@@ -1323,9 +1312,9 @@ body.ws-dragging {
   gap: 8px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-xl);
   padding: 14px;
-  animation: resume-item-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: resume-item-in 0.25s var(--ease-out) backwards;
 }
 
 .resume-item:nth-child(1) { animation-delay: 0.03s; }
@@ -1354,7 +1343,7 @@ body.ws-dragging {
 .resume-time {
   margin-left: auto;
   font-size: 11px;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .resume-ws {
@@ -1378,7 +1367,7 @@ body.ws-dragging {
   color: var(--text);
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-lg);
   padding: 8px 10px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1394,7 +1383,7 @@ body.ws-dragging {
   color: var(--text-muted);
   background: transparent;
   border-color: transparent;
-  border-radius: 6px;
+  border-radius: var(--r-md);
 }
 
 .resume-icon-btn:hover {
@@ -1434,7 +1423,7 @@ body.ws-dragging {
 
 .resume-sessions {
   font-size: 12px;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 /* ---------- settings ---------- */
@@ -1467,11 +1456,11 @@ body.ws-dragging {
   color: var(--text-muted);
   background: transparent;
   border-color: transparent;
-  border-radius: 8px;
+  border-radius: var(--r-lg);
   white-space: nowrap;
   transition:
-    background 0.14s ease,
-    color 0.14s ease;
+    background var(--dur-hover) ease,
+    color var(--dur-hover) ease;
 }
 
 .settings-nav-item:hover {
@@ -1507,7 +1496,7 @@ body.ws-dragging {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .font-stepper {
@@ -1536,6 +1525,7 @@ body.ws-dragging {
   text-align: center;
   font-family: "SF Mono", Menlo, monospace;
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .grid-cols-row {
@@ -1562,9 +1552,9 @@ body.ws-dragging {
   font-size: 12px;
   text-align: center;
   transition:
-    background 0.14s ease,
-    border-color 0.14s ease,
-    color 0.14s ease;
+    background var(--dur-hover) ease,
+    border-color var(--dur-hover) ease,
+    color var(--dur-hover) ease;
 }
 
 .grid-cols-option.active {
@@ -1600,15 +1590,15 @@ body.ws-dragging {
   font-family: "SF Mono", Menlo, monospace;
   font-size: 12px;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--r-md);
   background: var(--bg);
   border: 1px solid var(--border-strong);
   color: var(--text);
   min-width: 72px;
   text-align: center;
   transition:
-    border-color 0.14s ease,
-    background 0.14s ease;
+    border-color var(--dur-hover) ease,
+    background var(--dur-hover) ease;
 }
 
 .hotkey-chip:hover {
@@ -1618,6 +1608,7 @@ body.ws-dragging {
 .hotkey-capturing {
   font-size: 12px;
   color: var(--green);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- voice input ---------- */
@@ -1632,7 +1623,7 @@ body.ws-dragging {
   border: none;
   background: transparent;
   color: var(--text-muted);
-  border-radius: 6px;
+  border-radius: var(--r-md);
 }
 
 .topbar-mic:hover {
@@ -1688,7 +1679,7 @@ body.ws-dragging {
   gap: 16px;
   padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-xl);
   background: var(--bg);
 }
 
@@ -1706,7 +1697,7 @@ body.ws-dragging {
 
 .toggle-row-desc {
   font-size: 12px;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .toggle-switch {
@@ -1716,7 +1707,7 @@ body.ws-dragging {
   height: 22px;
   padding: 0;
   border: 1px solid var(--border-strong);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--bg-hover);
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease;
@@ -1764,7 +1755,7 @@ body.ws-dragging {
   background: var(--bg);
   border: 1px solid var(--border-strong);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: var(--r-md);
   font-size: 12px;
   padding: 4px 8px;
 }
@@ -1775,7 +1766,7 @@ body.ws-dragging {
 }
 
 .voice-model-size {
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-size: 11px;
   margin-left: 6px;
 }
@@ -1783,9 +1774,9 @@ body.ws-dragging {
 .voice-chip {
   font-size: 11px;
   padding: 3px 10px;
-  border-radius: 6px;
+  border-radius: var(--r-md);
   border: 1px solid var(--border-strong);
-  color: var(--text-faint);
+  color: var(--text-muted);
   background: transparent;
 }
 
@@ -1797,8 +1788,19 @@ body.ws-dragging {
 
 .voice-hint {
   font-size: 12px;
-  color: var(--text-faint);
+  color: var(--text-muted);
   padding: 6px 0;
+}
+
+/* ---------- focus visibility ---------- */
+/* Keyboard-first: the zinc halo appears on :focus-visible only, so mouse
+   clicks never flash a ring. Text inputs keep their :focus treatment
+   (border + halo) since typing is always a keyboard context. */
+button:focus-visible,
+.sidebar-item:focus-visible,
+.voice-select:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* ---------- misc transitions ---------- */
@@ -1814,17 +1816,17 @@ body.ws-dragging {
 .voice-select,
 .sidebar-rename-input {
   transition:
-    background 0.14s ease,
-    border-color 0.14s ease,
-    color 0.14s ease,
-    opacity 0.14s ease;
+    background var(--dur-hover) ease,
+    border-color var(--dur-hover) ease,
+    color var(--dur-hover) ease,
+    opacity var(--dur-hover) ease;
 }
 
 .sidebar-item-branch,
 .sidebar-item-name,
 .pane-title,
 .topbar-ws {
-  transition: color 0.14s ease;
+  transition: color var(--dur-hover) ease;
 }
 
 /* ---------- reduced motion ---------- */

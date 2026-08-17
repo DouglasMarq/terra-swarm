@@ -1,0 +1,372 @@
+import type { TerminalMeta, Workspace, WorkspaceGroup } from "../../types";
+
+/** The four states exposed by the fleet command center. */
+export type FleetStatus = "working" | "attention" | "suspended" | "exited";
+
+export type FleetStatusFilter = FleetStatus | "all";
+
+export type FleetViewMode = "cards" | "list";
+
+export type FleetValue = number | string | Date;
+
+export interface FleetFilters {
+  groupId: string;
+  status: FleetStatusFilter;
+  agent: string;
+  query: string;
+}
+
+export interface FleetDerivationInput {
+  workspaces: readonly Workspace[];
+  groups?: readonly WorkspaceGroup[];
+  exited?: Readonly<Record<string, number | null>>;
+  notifications?: Readonly<Record<string, number>>;
+  contextUsage?: Readonly<Record<string, number>>;
+  titles?: Readonly<Record<string, string>>;
+  branches?: Readonly<Record<string, string>>;
+  /** Optional telemetry keyed by terminal id. A value can be a timestamp or display text. */
+  lastActivity?: Readonly<Record<string, FleetValue>>;
+  /** Optional duration keyed by terminal id. Milliseconds are formatted for the card. */
+  durations?: Readonly<Record<string, FleetValue>>;
+  /** Allows a host to supply a stable display label for a terminal. */
+  agentLabels?: Readonly<Record<string, string>>;
+}
+
+export interface FleetAgentModel {
+  id: string;
+  terminalId: string;
+  workspaceId: string;
+  workspaceName: string;
+  projectId: string;
+  projectName: string;
+  groupId: string;
+  groupName: string;
+  label: string;
+  title: string;
+  command: string;
+  cwd: string;
+  branch: string;
+  status: FleetStatus;
+  contextUsage: number | null;
+  notificationCount: number;
+  exitCode: number | null | undefined;
+  lastActivity?: FleetValue;
+  duration?: FleetValue;
+}
+
+export interface FleetProjectModel {
+  id: string;
+  name: string;
+  cwd: string;
+  branch: string;
+  groupId: string;
+  groupName: string;
+  status: FleetStatus;
+  agents: FleetAgentModel[];
+}
+
+export interface FleetGroupModel {
+  id: string;
+  name: string;
+  suspended: boolean;
+  status: FleetStatus;
+  projects: FleetProjectModel[];
+}
+
+export interface FleetSummary {
+  total: number;
+  working: number;
+  attention: number;
+  suspended: number;
+  exited: number;
+}
+
+export interface FleetModel {
+  agents: FleetAgentModel[];
+  groups: FleetGroupModel[];
+  summary: FleetSummary;
+}
+
+export const DEFAULT_FLEET_FILTERS: FleetFilters = {
+  groupId: "all",
+  status: "all",
+  agent: "all",
+  query: "",
+};
+
+const EMPTY_RECORD: Readonly<Record<string, never>> = {};
+const UNGROUPED_ID = "ungrouped";
+const UNGROUPED_NAME = "Ungrouped";
+
+function clean(value: string | undefined | null, fallback = ""): string {
+  const result = value?.trim();
+  return result || fallback;
+}
+
+function mapValue<T>(record: Readonly<Record<string, T>> | undefined, id: string): T | undefined {
+  return record?.[id];
+}
+
+function agentLabelFromCommand(command: string): string {
+  const token = command.trim().split(/\s+/)[0] ?? "";
+  const executable = token.split(/[\\/]/).pop()?.replace(/\.(?:exe|cmd|sh)$/i, "") ?? "";
+  if (!executable) return "Terminal";
+  const known: Record<string, string> = {
+    aider: "Aider",
+    claude: "Claude Code",
+    codex: "Codex",
+    gemini: "Gemini",
+    kimi: "Kimi",
+    opencode: "OpenCode",
+    shell: "Shell",
+    zsh: "Shell",
+    bash: "Shell",
+    fish: "Shell",
+  };
+  return known[executable.toLowerCase()] ?? executable.charAt(0).toUpperCase() + executable.slice(1);
+}
+
+function clampContext(value: number | undefined): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(100, value));
+}
+
+function membershipByWorkspace(
+  workspaces: readonly Workspace[],
+  groups: readonly WorkspaceGroup[],
+): Map<string, WorkspaceGroup> {
+  const result = new Map<string, WorkspaceGroup>();
+  const byId = new Map(groups.map((group) => [group.id, group]));
+  for (const workspace of workspaces) {
+    const direct = workspace.groupId ? byId.get(workspace.groupId) : undefined;
+    if (direct) {
+      result.set(workspace.id, direct);
+      continue;
+    }
+    const listed = groups.find((group) => group.projectIds.includes(workspace.id));
+    if (listed) result.set(workspace.id, listed);
+  }
+  return result;
+}
+
+function statusFor(
+  terminal: TerminalMeta,
+  groupSuspended: boolean,
+  exited: Readonly<Record<string, number | null>>,
+  notifications: Readonly<Record<string, number>>,
+  contextUsage: Readonly<Record<string, number>>,
+): FleetStatus {
+  if (groupSuspended || terminal.suspended) return "suspended";
+  if (terminal.id in exited) return "exited";
+  if ((notifications[terminal.id] ?? 0) > 0 || (contextUsage[terminal.id] ?? 0) >= 85) {
+    return "attention";
+  }
+  return "working";
+}
+
+const STATUS_PRIORITY: readonly FleetStatus[] = ["attention", "working", "suspended", "exited"];
+
+export function fleetAggregateStatus(statuses: readonly FleetStatus[]): FleetStatus {
+  if (statuses.length === 0) return "working";
+  return STATUS_PRIORITY.find((status) => statuses.includes(status)) ?? "working";
+}
+
+function groupForId(groups: readonly WorkspaceGroup[], id: string): WorkspaceGroup {
+  return (
+    groups.find((group) => group.id === id) ?? {
+      id: UNGROUPED_ID,
+      name: UNGROUPED_NAME,
+      collapsed: false,
+      projectIds: [],
+      parentGroupId: null,
+      suspended: false,
+    }
+  );
+}
+
+function makeAgent(
+  workspace: Workspace,
+  terminal: TerminalMeta,
+  group: WorkspaceGroup,
+  input: FleetDerivationInput,
+): FleetAgentModel {
+  const exited = input.exited ?? EMPTY_RECORD as Readonly<Record<string, number | null>>;
+  const notifications = input.notifications ?? EMPTY_RECORD as Readonly<Record<string, number>>;
+  const contextUsage = input.contextUsage ?? EMPTY_RECORD as Readonly<Record<string, number>>;
+  const groupSuspended = Boolean(group.suspended || workspace.terminals.length > 0 && workspace.terminals.every((item) => item.suspended));
+  const command = clean(terminal.command, "shell");
+  const label = clean(mapValue(input.agentLabels, terminal.id), agentLabelFromCommand(command));
+  const title = clean(mapValue(input.titles, terminal.id));
+  return {
+    id: terminal.id,
+    terminalId: terminal.id,
+    workspaceId: workspace.id,
+    workspaceName: clean(workspace.name, workspace.id),
+    projectId: workspace.id,
+    projectName: clean(workspace.name, workspace.id),
+    groupId: group.id,
+    groupName: clean(group.name, group.id),
+    label,
+    title,
+    command,
+    cwd: workspace.cwd,
+    branch: clean(mapValue(input.branches, workspace.id)),
+    status: statusFor(terminal, groupSuspended, exited, notifications, contextUsage),
+    contextUsage: clampContext(mapValue(contextUsage, terminal.id)),
+    notificationCount: Math.max(0, mapValue(notifications, terminal.id) ?? 0),
+    exitCode: mapValue(exited, terminal.id),
+    lastActivity: mapValue(input.lastActivity, terminal.id),
+    duration: mapValue(input.durations, terminal.id),
+  };
+}
+
+function projectStatus(agents: readonly FleetAgentModel[]): FleetStatus {
+  return fleetAggregateStatus(agents.map((agent) => agent.status));
+}
+
+function summaryFor(agents: readonly FleetAgentModel[]): FleetSummary {
+  return {
+    total: agents.length,
+    working: agents.filter((agent) => agent.status === "working").length,
+    attention: agents.filter((agent) => agent.status === "attention").length,
+    suspended: agents.filter((agent) => agent.status === "suspended").length,
+    exited: agents.filter((agent) => agent.status === "exited").length,
+  };
+}
+
+function groupModelFromAgents(
+  group: WorkspaceGroup,
+  workspaces: readonly Workspace[],
+  agents: readonly FleetAgentModel[],
+): FleetGroupModel {
+  const projects = workspaces
+    .map((workspace): FleetProjectModel | null => {
+      const projectAgents = agents.filter((agent) => agent.workspaceId === workspace.id);
+      if (projectAgents.length === 0) return null;
+      return {
+        id: workspace.id,
+        name: clean(workspace.name, workspace.id),
+        cwd: workspace.cwd,
+        branch: projectAgents[0]?.branch ?? "",
+        groupId: group.id,
+        groupName: clean(group.name, group.id),
+        status: projectStatus(projectAgents),
+        agents: [...projectAgents],
+      };
+    })
+    .filter((project): project is FleetProjectModel => project !== null);
+  return {
+    id: group.id,
+    name: clean(group.name, group.id),
+    suspended: Boolean(group.suspended),
+    status: projectStatus(projects.flatMap((project) => project.agents)),
+    projects,
+  };
+}
+
+/**
+ * Normalizes the legacy workspace response into a board-friendly fleet model.
+ * This function is deliberately pure so filters and rendering can be tested
+ * without a Tauri runtime or a mounted React tree.
+ */
+export function deriveFleetModel(input: FleetDerivationInput): FleetModel {
+  const workspaces = input.workspaces ?? [];
+  const groups = input.groups ?? [];
+  const membership = membershipByWorkspace(workspaces, groups);
+  const ungrouped = groupForId(groups, UNGROUPED_ID);
+  const agents = workspaces.flatMap((workspace) => {
+    const group = membership.get(workspace.id) ?? ungrouped;
+    return workspace.terminals.map((terminal) => makeAgent(workspace, terminal, group, input));
+  });
+
+  const groupModels = [
+    ...groups.map((group) => groupModelFromAgents(
+      group,
+      workspaces.filter((workspace) => membership.get(workspace.id)?.id === group.id),
+      agents.filter((agent) => agent.groupId === group.id),
+    )),
+    groupModelFromAgents(
+      ungrouped,
+      workspaces.filter((workspace) => !membership.has(workspace.id)),
+      agents.filter((agent) => agent.groupId === UNGROUPED_ID),
+    ),
+  ].filter((group) => group.projects.length > 0);
+
+  return { agents, groups: groupModels, summary: summaryFor(agents) };
+}
+
+function searchText(agent: FleetAgentModel): string {
+  return [
+    agent.label,
+    agent.title,
+    agent.command,
+    agent.cwd,
+    agent.branch,
+    agent.workspaceName,
+    agent.groupName,
+  ].join(" ").toLocaleLowerCase();
+}
+
+/** Applies a filter without mutating the normalized source model. */
+export function filterFleetModel(model: FleetModel, filters: Partial<FleetFilters> = {}): FleetModel {
+  const groupId = filters.groupId ?? "all";
+  const status = filters.status ?? "all";
+  const agent = filters.agent ?? "all";
+  const query = (filters.query ?? "").trim().toLocaleLowerCase();
+  const filteredAgents = model.agents.filter((candidate) => {
+    if (groupId !== "all" && candidate.groupId !== groupId) return false;
+    if (status !== "all" && candidate.status !== status) return false;
+    if (agent !== "all" && candidate.label !== agent) return false;
+    return !query || searchText(candidate).includes(query);
+  });
+
+  const groups = model.groups
+    .map((group): FleetGroupModel => {
+      const groupAgents = filteredAgents.filter((candidate) => candidate.groupId === group.id);
+      const projects = group.projects
+        .map((project): FleetProjectModel | null => {
+          const projectAgents = groupAgents.filter((candidate) => candidate.workspaceId === project.id);
+          return projectAgents.length === 0 ? null : {
+            ...project,
+            status: projectStatus(projectAgents),
+            agents: projectAgents,
+          };
+        })
+        .filter((project): project is FleetProjectModel => project !== null);
+      return { ...group, status: projectStatus(projects.flatMap((project) => project.agents)), projects };
+    })
+    .filter((group) => group.projects.length > 0);
+
+  return { agents: filteredAgents, groups, summary: summaryFor(filteredAgents) };
+}
+
+export function formatFleetDuration(value: FleetValue | undefined): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "string") return value;
+  if (value instanceof Date) return formatFleetRelativeTime(value.getTime());
+  if (!Number.isFinite(value)) return null;
+  const milliseconds = value < 1000 ? value * 1000 : value;
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  if (minutes > 0) return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+  return `${seconds}s`;
+}
+
+export function formatFleetRelativeTime(value: FleetValue | undefined, now = Date.now()): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "string") return value;
+  const timestamp = value instanceof Date ? value.getTime() : value;
+  if (!Number.isFinite(timestamp)) return null;
+  const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
+  if (seconds < 45) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+export const FLEET_UNGROUPED_ID = UNGROUPED_ID;

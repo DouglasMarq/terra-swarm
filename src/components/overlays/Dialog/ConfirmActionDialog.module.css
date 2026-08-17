@@ -1,0 +1,12 @@
+.descriptionWithIcon {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.warningIcon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--terra-amber, #e0b45c);
+}
+

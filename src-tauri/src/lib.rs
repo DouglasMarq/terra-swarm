@@ -1,4 +1,5 @@
 mod pty;
+mod scrollback;
 mod voice;
 mod workspace;
 
@@ -20,8 +21,25 @@ pub fn run() {
                     pty::bump_next_terminal_id(&t.id);
                 }
             }
+            let known_terminals = store
+                .workspaces
+                .iter()
+                .flat_map(|workspace| {
+                    workspace
+                        .terminals
+                        .iter()
+                        .map(|terminal| terminal.id.clone())
+                })
+                .collect::<std::collections::HashSet<_>>();
+            let scrollback_dir = dir.join("scrollback");
+            let scrollback_store = scrollback::ScrollbackStore::from_root(scrollback_dir.clone());
+            if let Err(error) = scrollback_store.cleanup_orphans(&known_terminals) {
+                eprintln!("failed to clean orphaned scrollback: {}", error);
+            }
             app.manage(Mutex::new(store));
-            app.manage(Mutex::new(pty::PtyManager::default()));
+            app.manage(Mutex::new(pty::PtyManager::with_scrollback_dir(
+                scrollback_dir,
+            )));
             app.manage(voice::VoiceState::default());
             app.manage(voice::audio::AudioController::new());
             app.manage(voice::audio::MicTestController::new());
@@ -47,12 +65,30 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             workspace::create_workspace,
             workspace::list_workspaces,
+            workspace::list_groups,
+            workspace::set_workspace_group,
+            workspace::set_terminal_placement,
+            workspace::set_active_pane,
+            workspace::reorder_workspace_containers,
+            workspace::reorder_workspace_panes,
+            workspace::move_workspace_pane,
+            workspace::set_workspace_container_state,
+            workspace::set_workspace_layout,
+            workspace::set_workspace_collapsed,
+            workspace::create_group,
+            workspace::rename_group,
+            workspace::remove_group,
+            workspace::suspend_group,
+            workspace::resume_group,
             workspace::store_saved_at,
+            workspace::export_workspace_snapshot,
+            workspace::import_workspace_snapshot,
             workspace::close_workspace,
             workspace::rename_workspace,
-            workspace::reorder_terminals,
             workspace::reorder_workspaces,
             workspace::set_terminal_width,
+            workspace::list_workspace_files,
+            workspace::git_status,
             workspace::git_branch,
             pty::spawn_terminal,
             pty::write_terminal,
@@ -60,7 +96,9 @@ pub fn run() {
             pty::kill_terminal,
             pty::stop_terminal,
             pty::terminal_backlog,
+            pty::set_durable_scrollback_enabled,
             pty::running_terminals,
+            pty::terminal_runtime_info,
             pty::detect_agents,
             pty::list_available_shells,
             voice::voice_toggle_recording,

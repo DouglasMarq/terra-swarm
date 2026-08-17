@@ -4,8 +4,9 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
+use crate::scrollback::ScrollbackStore;
 use crate::workspace::{TerminalMeta, WorkspaceStore};
 
 static NEXT_TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
@@ -29,11 +30,14 @@ pub struct Backlog {
 }
 
 impl Backlog {
-    fn new() -> Self {
-        Self {
-            buf: Vec::new(),
-            total: 0,
-        }
+    fn from_bytes(data: Vec<u8>) -> Self {
+        let total = data.len() as u64;
+        let buf = if data.len() > BACKLOG_CAP {
+            data[data.len() - BACKLOG_CAP..].to_vec()
+        } else {
+            data
+        };
+        Self { buf, total }
     }
 
     fn push(&mut self, s: &str) {
@@ -56,9 +60,15 @@ pub struct PtyEntry {
     pub seq: u64,
     pub reaped: Arc<AtomicBool>,
     pub backlog: Arc<Mutex<Backlog>>,
+    /// Cleared before an explicit kill so a late reader flush cannot recreate
+    /// a scrollback file that the user intentionally deleted.
+    pub scrollback_enabled: Arc<AtomicBool>,
 }
 
-fn kill_entry(entry: PtyEntry) {
+fn kill_entry(entry: PtyEntry, disable_scrollback: bool) {
+    if disable_scrollback {
+        entry.scrollback_enabled.store(false, Ordering::SeqCst);
+    }
     #[cfg(unix)]
     if let Some(pid) = entry.pid {
         // Only signal the process group if the child has not been reaped yet.
@@ -75,9 +85,57 @@ fn kill_entry(entry: PtyEntry) {
     }
 }
 
-#[derive(Default)]
 pub struct PtyManager {
     terminals: HashMap<String, PtyEntry>,
+    scrollback: Arc<ScrollbackStore>,
+    /// Runtime gate for durable scrollback. It starts disabled (fail-closed)
+    /// and is shared with every PTY flusher so toggling the feature does not
+    /// require respawning sessions or racing a manager map mutation.
+    durable_scrollback_enabled: Arc<AtomicBool>,
+}
+
+impl Default for PtyManager {
+    fn default() -> Self {
+        Self {
+            terminals: HashMap::new(),
+            scrollback: Arc::new(ScrollbackStore::default()),
+            durable_scrollback_enabled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
+impl PtyManager {
+    pub fn with_scrollback_dir(path: std::path::PathBuf) -> Self {
+        Self {
+            terminals: HashMap::new(),
+            scrollback: Arc::new(ScrollbackStore::from_root(path)),
+            durable_scrollback_enabled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn scrollback(&self) -> Arc<ScrollbackStore> {
+        Arc::clone(&self.scrollback)
+    }
+
+    pub fn durable_scrollback_enabled(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.durable_scrollback_enabled)
+    }
+
+    pub fn set_durable_scrollback_enabled(&self, enabled: bool) {
+        self.durable_scrollback_enabled
+            .store(enabled, Ordering::SeqCst);
+    }
+
+    fn running_terminals(&self) -> Vec<RunningTerminal> {
+        self.terminals
+            .iter()
+            .filter(|(_, entry)| !entry.reaped.load(Ordering::SeqCst))
+            .map(|(id, entry)| RunningTerminal {
+                id: id.clone(),
+                seq: entry.seq,
+            })
+            .collect()
+    }
 }
 
 #[derive(Serialize, Clone)]
@@ -104,6 +162,56 @@ pub struct SpawnedTerminal {
 pub struct RunningTerminal {
     pub id: String,
     pub seq: u64,
+}
+
+/// Point-in-time runtime facts for one PTY. This intentionally contains no
+/// CPU or memory estimates: those metrics are not part of Terra's runtime
+/// contract.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalRuntimeInfo {
+    pub id: String,
+    pub pid: Option<u32>,
+    pub cols: u16,
+    pub rows: u16,
+    pub running: bool,
+    pub reaped: bool,
+    pub generation: u64,
+}
+
+fn runtime_info_from_values(
+    id: &str,
+    pid: Option<u32>,
+    cols: u16,
+    rows: u16,
+    generation: u64,
+    reaped: bool,
+) -> TerminalRuntimeInfo {
+    TerminalRuntimeInfo {
+        id: id.to_string(),
+        // Once the child is reaped, the operating-system pid may already be
+        // recycled. Never expose that stale identifier as live runtime data.
+        pid: if reaped { None } else { pid },
+        cols,
+        rows,
+        running: !reaped,
+        reaped,
+        generation,
+    }
+}
+
+fn runtime_info_from_manager(
+    manager: &PtyManager,
+    id: &str,
+) -> Result<Option<TerminalRuntimeInfo>, String> {
+    let Some(entry) = manager.terminals.get(id) else {
+        return Ok(None);
+    };
+    let (cols, rows) = *entry.last_size.lock().map_err(|e| e.to_string())?;
+    let reaped = entry.reaped.load(Ordering::SeqCst);
+    Ok(Some(runtime_info_from_values(
+        id, entry.pid, cols, rows, entry.seq, reaped,
+    )))
 }
 
 #[derive(Serialize, Clone)]
@@ -137,7 +245,9 @@ fn extract_notifications(data: &[u8], tail: &[u8]) -> (usize, Vec<String>) {
             let mut num: u32 = 0;
             let mut digits = 0;
             while j < data.len() && data[j].is_ascii_digit() {
-                num = num.saturating_mul(10).saturating_add((data[j] - b'0') as u32);
+                num = num
+                    .saturating_mul(10)
+                    .saturating_add((data[j] - b'0') as u32);
                 digits += 1;
                 j += 1;
             }
@@ -344,7 +454,9 @@ fn parse_trailing_number(s: &str) -> Option<f64> {
     }
     let mut start = end;
     while start > 0
-        && (bytes[start - 1].is_ascii_digit() || bytes[start - 1] == b'.' || bytes[start - 1] == b',')
+        && (bytes[start - 1].is_ascii_digit()
+            || bytes[start - 1] == b'.'
+            || bytes[start - 1] == b',')
     {
         start -= 1;
     }
@@ -710,8 +822,8 @@ pub fn list_available_shells() -> Vec<String> {
     shells
 }
 
-pub fn spawn_terminal_inner(
-    app: &AppHandle,
+pub fn spawn_terminal_inner<R: Runtime>(
+    app: &AppHandle<R>,
     manager: &Mutex<PtyManager>,
     store: &Mutex<WorkspaceStore>,
     workspace_id: &str,
@@ -739,6 +851,18 @@ pub fn spawn_terminal_inner(
     };
     let command = command.trim().to_string();
     let seq = SPAWN_SEQ.fetch_add(1, Ordering::SeqCst);
+
+    {
+        let store = store.lock().map_err(|e| e.to_string())?;
+        if let Some(owner) = store.terminal_owner(&id) {
+            if owner != workspace_id {
+                return Err(format!(
+                    "terminal {} already belongs to workspace {}",
+                    id, owner
+                ));
+            }
+        }
+    }
 
     {
         let manager = manager.lock().map_err(|e| e.to_string())?;
@@ -803,14 +927,31 @@ pub fn spawn_terminal_inner(
     let pid = child.process_id();
     let killer = Arc::new(Mutex::new(child.clone_killer()));
     let reaped = Arc::new(AtomicBool::new(false));
-    let backlog = Arc::new(Mutex::new(Backlog::new()));
+    let scrollback_enabled = Arc::new(AtomicBool::new(true));
+    let (scrollback, durable_scrollback_enabled) = {
+        let manager = manager.lock().map_err(|e| e.to_string())?;
+        (manager.scrollback(), manager.durable_scrollback_enabled())
+    };
+    let durable_backlog = if durable_scrollback_enabled.load(Ordering::SeqCst) {
+        scrollback.read(&id).unwrap_or_else(|error| {
+            eprintln!("failed to read durable scrollback for {}: {}", id, error);
+            Vec::new()
+        })
+    } else {
+        Vec::new()
+    };
+    let backlog = Arc::new(Mutex::new(Backlog::from_bytes(durable_backlog)));
     let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
     let mut writer = pair.master.take_writer().map_err(|e| e.to_string())?;
 
     let (input_tx, input_rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(256);
     std::thread::spawn(move || {
         while let Ok(data) = input_rx.recv() {
-            if writer.write_all(&data).and_then(|_| writer.flush()).is_err() {
+            if writer
+                .write_all(&data)
+                .and_then(|_| writer.flush())
+                .is_err()
+            {
                 break;
             }
         }
@@ -847,6 +988,9 @@ pub fn spawn_terminal_inner(
         let notif_ws = workspace_id.clone();
         let app = app.clone();
         let backlog = Arc::clone(&backlog);
+        let scrollback = Arc::clone(&scrollback);
+        let scrollback_enabled = Arc::clone(&scrollback_enabled);
+        let durable_scrollback_enabled = Arc::clone(&durable_scrollback_enabled);
         std::thread::spawn(move || {
             let mut pending: Vec<u8> = Vec::new();
             let mut raw_tail: Vec<u8> = Vec::new();
@@ -919,6 +1063,13 @@ pub fn spawn_terminal_inner(
                     b.push(&s);
                     b.total
                 };
+                if scrollback_enabled.load(Ordering::SeqCst)
+                    && durable_scrollback_enabled.load(Ordering::SeqCst)
+                {
+                    if let Err(error) = scrollback.append(&notif_id, s.as_bytes()) {
+                        eprintln!("failed to persist scrollback for {}: {}", notif_id, error);
+                    }
+                }
                 let _ = app.emit(&output_event, OutputChunk { data: s, total });
             };
 
@@ -952,9 +1103,7 @@ pub fn spawn_terminal_inner(
                 match input {
                     In::Chunk(c) => {
                         pending.extend_from_slice(&c);
-                        if pending.len() < FORCE_FLUSH
-                            && last_flush.elapsed() < flush_interval
-                        {
+                        if pending.len() < FORCE_FLUSH && last_flush.elapsed() < flush_interval {
                             continue;
                         }
                     }
@@ -982,12 +1131,35 @@ pub fn spawn_terminal_inner(
         });
     }
 
+    let entry_killer = Arc::clone(&killer);
+    let monitor_reaped = Arc::clone(&reaped);
+    let entry = PtyEntry {
+        input: input_tx,
+        master: Arc::new(Mutex::new(pair.master)),
+        killer,
+        pid,
+        last_size: Arc::new(Mutex::new((cols.max(2), rows.max(2)))),
+        seq,
+        reaped,
+        backlog,
+        scrollback_enabled,
+    };
+    manager
+        .lock()
+        .map_err(|e| e.to_string())?
+        .terminals
+        .insert(id.clone(), entry);
+
+    // Register the entry before waiting on the child. A command can exit
+    // between spawn and this point; starting the monitor earlier used to let
+    // it observe an absent map entry, emit an exit, and then leave a reaped
+    // session behind as a phantom running terminal.
     {
         let app = app.clone();
         let exit_id = id.clone();
         let exit_ws = workspace_id.clone();
-        let entry_killer = Arc::clone(&killer);
-        let reaped = Arc::clone(&reaped);
+        let entry_killer = entry_killer;
+        let reaped = monitor_reaped;
         std::thread::spawn(move || {
             let code = child.wait().ok().map(|s| s.exit_code());
             // Mark reaped immediately so kill_entry never signals a pid that
@@ -1028,26 +1200,18 @@ pub fn spawn_terminal_inner(
         });
     }
 
-    let entry = PtyEntry {
-        input: input_tx,
-        master: Arc::new(Mutex::new(pair.master)),
-        killer,
-        pid,
-        last_size: Arc::new(Mutex::new((cols.max(2), rows.max(2)))),
-        seq,
-        reaped,
-        backlog,
-    };
-    manager
-        .lock()
-        .map_err(|e| e.to_string())?
-        .terminals
-        .insert(id.clone(), entry);
-
     let meta = TerminalMeta {
         id: id.clone(),
-        command: if command.is_empty() { "shell".into() } else { command },
+        command: if command.is_empty() {
+            "shell".into()
+        } else {
+            command
+        },
         width: None,
+        pane_id: None,
+        tab_id: None,
+        group_id: None,
+        suspended: false,
     };
     let added = store
         .lock()
@@ -1057,7 +1221,10 @@ pub fn spawn_terminal_inner(
         // The workspace was closed while we were spawning; don't leak the
         // process or leave it running untracked.
         kill_terminal_inner(manager, &id);
-        return Err(format!("workspace {} not found", workspace_id));
+        return Err(format!(
+            "workspace {} unavailable or terminal {} belongs to another workspace",
+            workspace_id, id
+        ));
     }
 
     Ok(SpawnedTerminal { meta, seq })
@@ -1135,9 +1302,7 @@ pub fn write_terminal(
     };
     match input.try_send(data.into_bytes()) {
         Ok(()) => Ok(()),
-        Err(std::sync::mpsc::TrySendError::Full(_)) => {
-            Err(format!("terminal {} input busy", id))
-        }
+        Err(std::sync::mpsc::TrySendError::Full(_)) => Err(format!("terminal {} input busy", id)),
         Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
             Err(format!("terminal {} input closed", id))
         }
@@ -1191,7 +1356,20 @@ pub fn kill_terminal_inner(manager: &Mutex<PtyManager>, id: &str) {
         manager.terminals.remove(id)
     };
     if let Some(entry) = entry {
-        kill_entry(entry);
+        kill_entry(entry, false);
+    }
+}
+
+fn kill_terminal_inner_destructive(manager: &Mutex<PtyManager>, id: &str) {
+    let entry = {
+        let mut manager = match manager.lock() {
+            Ok(m) => m,
+            Err(_) => return,
+        };
+        manager.terminals.remove(id)
+    };
+    if let Some(entry) = entry {
+        kill_entry(entry, true);
     }
 }
 
@@ -1201,17 +1379,18 @@ pub fn kill_all(manager: &Mutex<PtyManager>) {
         Err(_) => return,
     };
     for entry in entries {
-        kill_entry(entry);
+        kill_entry(entry, false);
     }
 }
 
 #[tauri::command(async)]
-pub fn kill_terminal(
-    app: AppHandle,
-    id: String,
-) -> Result<(), String> {
+pub fn kill_terminal(app: AppHandle, id: String) -> Result<(), String> {
     let manager = app.state::<Mutex<PtyManager>>();
-    kill_terminal_inner(&manager, &id);
+    kill_terminal_inner_destructive(&manager, &id);
+    let scrollback = manager.lock().map_err(|e| e.to_string())?.scrollback();
+    if let Err(error) = scrollback.remove(&id) {
+        eprintln!("failed to remove durable scrollback for {}: {}", id, error);
+    }
     let store = app.state::<Mutex<WorkspaceStore>>();
     store
         .lock()
@@ -1234,19 +1413,52 @@ pub fn terminal_backlog(
     manager: State<'_, Mutex<PtyManager>>,
     id: String,
 ) -> Result<BacklogSnapshot, String> {
-    let backlog = {
+    let (backlog, scrollback, durable_scrollback_enabled) = {
         let manager = manager.lock().map_err(|e| e.to_string())?;
-        manager
-            .terminals
-            .get(&id)
-            .map(|e| Arc::clone(&e.backlog))
-            .ok_or_else(|| format!("terminal {} not found", id))?
+        (
+            manager.terminals.get(&id).map(|e| Arc::clone(&e.backlog)),
+            manager.scrollback(),
+            manager.durable_scrollback_enabled(),
+        )
     };
-    let b = backlog.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(backlog) = backlog {
+        let b = backlog.lock().unwrap_or_else(|e| e.into_inner());
+        return Ok(BacklogSnapshot {
+            data: String::from_utf8_lossy(&b.buf).into_owned(),
+            total: b.total,
+        });
+    }
+
+    // A stopped/exited terminal is intentionally absent from the live map;
+    // the durable tail remains the source of truth only while the feature is
+    // enabled. Disabling the flag never deletes existing files, but it must
+    // not expose them as a hidden fallback.
+    if !durable_scrollback_enabled.load(Ordering::SeqCst) {
+        return Ok(BacklogSnapshot {
+            data: String::new(),
+            total: 0,
+        });
+    }
+    let data = scrollback
+        .read(&id)
+        .map_err(|error| format!("failed to read terminal {} scrollback: {}", id, error))?;
     Ok(BacklogSnapshot {
-        data: String::from_utf8_lossy(&b.buf).into_owned(),
-        total: b.total,
+        total: data.len() as u64,
+        data: String::from_utf8_lossy(&data).into_owned(),
     })
+}
+
+/// Enable or disable durable scrollback for all current and future PTYs.
+/// The state is intentionally runtime-only and fail-closed on startup; turning
+/// it off stops new disk writes and fallback reads without deleting old data.
+#[tauri::command(async)]
+pub fn set_durable_scrollback_enabled(
+    manager: State<'_, Mutex<PtyManager>>,
+    enabled: bool,
+) -> Result<(), String> {
+    let manager = manager.lock().map_err(|e| e.to_string())?;
+    manager.set_durable_scrollback_enabled(enabled);
+    Ok(())
 }
 
 #[tauri::command(async)]
@@ -1254,14 +1466,19 @@ pub fn running_terminals(
     manager: State<'_, Mutex<PtyManager>>,
 ) -> Result<Vec<RunningTerminal>, String> {
     let manager = manager.lock().map_err(|e| e.to_string())?;
-    Ok(manager
-        .terminals
-        .iter()
-        .map(|(id, e)| RunningTerminal {
-            id: id.clone(),
-            seq: e.seq,
-        })
-        .collect())
+    Ok(manager.running_terminals())
+}
+
+/// Return only the runtime facts for the requested PTY. Unknown ids resolve
+/// to `null` so an exited/removed session is not confused with a command
+/// failure and the Inspector can render an unavailable state safely.
+#[tauri::command(async)]
+pub fn terminal_runtime_info(
+    manager: State<'_, Mutex<PtyManager>>,
+    id: String,
+) -> Result<Option<TerminalRuntimeInfo>, String> {
+    let manager = manager.lock().map_err(|e| e.to_string())?;
+    runtime_info_from_manager(&manager, &id)
 }
 
 #[cfg(unix)]
@@ -1371,7 +1588,10 @@ mod ctx_tests {
 
     #[test]
     fn opencode_footer() {
-        assert_eq!(detect_context_used("some output 12.3K (42%) $0.05"), Some(42));
+        assert_eq!(
+            detect_context_used("some output 12.3K (42%) $0.05"),
+            Some(42)
+        );
         assert_eq!(detect_context_used("999 (100%)"), Some(100));
         assert_eq!(detect_context_used("0 (0%)"), Some(0));
         assert_eq!(detect_context_used("hello (95%) no number"), None);
@@ -1379,18 +1599,188 @@ mod ctx_tests {
         assert_eq!(detect_context_used("12.0k / 200k tokens"), Some(6));
         assert_eq!(detect_context_used("random 50% nothing"), None);
         // most recent indicator wins
-        assert_eq!(detect_context_used("10% context left then 5K (33%)"), Some(33));
-        assert_eq!(detect_context_used("5K (33%) then 10% context left"), Some(90));
+        assert_eq!(
+            detect_context_used("10% context left then 5K (33%)"),
+            Some(33)
+        );
+        assert_eq!(
+            detect_context_used("5K (33%) then 10% context left"),
+            Some(90)
+        );
     }
 
     #[test]
     fn unicode_near_keywords_does_not_panic() {
         // Box-drawing / emoji / CJK around the keyword must not panic on
         // char-boundary slicing.
-        assert_eq!(detect_context_used("╭─░▒▓ 42% context left ▓▒░─╮"), Some(58));
+        assert_eq!(
+            detect_context_used("╭─░▒▓ 42% context left ▓▒░─╮"),
+            Some(58)
+        );
         assert_eq!(detect_context_used("🚀🚀 12.0k / 200k tokens 🚀"), Some(6));
-        assert_eq!(detect_context_used("コンテキスト 30% context used"), Some(30));
+        assert_eq!(
+            detect_context_used("コンテキスト 30% context used"),
+            Some(30)
+        );
         assert_eq!(detect_context_used("│ 88% context left │"), Some(12));
         assert_eq!(detect_context_used("no indicators ░░░"), None);
+    }
+}
+
+#[cfg(test)]
+mod scrollback_flag_tests {
+    use super::PtyManager;
+    use crate::scrollback::ScrollbackStore;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+    fn root() -> PathBuf {
+        let id = TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "terra-swarm-pty-scrollback-{}-{id}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("scrollback root");
+        root
+    }
+
+    #[test]
+    fn durable_scrollback_gate_is_fail_closed_and_non_destructive() {
+        let root = root();
+        let store = ScrollbackStore::from_root(root.clone());
+        store
+            .append("t-flag", b"existing")
+            .expect("seed scrollback");
+        let manager = PtyManager::with_scrollback_dir(root.clone());
+        let enabled = manager.durable_scrollback_enabled();
+
+        assert!(!enabled.load(Ordering::SeqCst));
+        let hidden = if enabled.load(Ordering::SeqCst) {
+            store.read("t-flag").expect("read")
+        } else {
+            Vec::new()
+        };
+        assert!(hidden.is_empty());
+
+        manager.set_durable_scrollback_enabled(true);
+        assert!(enabled.load(Ordering::SeqCst));
+        assert_eq!(store.read("t-flag").expect("enabled read"), b"existing");
+
+        manager.set_durable_scrollback_enabled(false);
+        assert!(!enabled.load(Ordering::SeqCst));
+        let hidden_again = if enabled.load(Ordering::SeqCst) {
+            store.read("t-flag").expect("read")
+        } else {
+            Vec::new()
+        };
+        assert!(hidden_again.is_empty());
+        assert_eq!(
+            fs::read(root.join("t-flag.scrollback")).expect("file is not deleted"),
+            b"existing"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+}
+
+#[cfg(test)]
+mod runtime_info_tests {
+    use super::{runtime_info_from_manager, runtime_info_from_values, PtyManager};
+
+    #[test]
+    fn live_runtime_info_exposes_only_real_process_facts() {
+        let info = runtime_info_from_values("term-live", Some(42), 120, 40, 7, false);
+        assert_eq!(info.id, "term-live");
+        assert_eq!(info.pid, Some(42));
+        assert_eq!((info.cols, info.rows), (120, 40));
+        assert!(info.running);
+        assert!(!info.reaped);
+        assert_eq!(info.generation, 7);
+    }
+
+    #[test]
+    fn reaped_runtime_info_is_not_reported_as_running() {
+        let info = runtime_info_from_values("term-ended", Some(42), 80, 24, 8, true);
+        assert_eq!(info.pid, None);
+        assert!(!info.running);
+        assert!(info.reaped);
+    }
+
+    #[test]
+    fn an_empty_manager_has_no_runtime_info_for_unknown_ids() {
+        let manager = PtyManager::default();
+        assert_eq!(
+            runtime_info_from_manager(&manager, "term-missing").expect("runtime query"),
+            None
+        );
+    }
+}
+
+#[cfg(test)]
+mod spawn_lifecycle_tests {
+    use super::{spawn_terminal_inner, PtyManager};
+    use crate::workspace::WorkspaceStore;
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+    use tauri::Manager;
+
+    #[test]
+    fn immediate_exit_is_registered_then_removed_without_a_phantom_runtime() {
+        let app = tauri::test::mock_app();
+        assert!(app.manage(Mutex::new(PtyManager::default())));
+        assert!(app.manage(Mutex::new(WorkspaceStore::default())));
+        let store = app.state::<Mutex<WorkspaceStore>>();
+        let workspace = store.lock().expect("workspace store").create(
+            "immediate-exit".into(),
+            std::env::temp_dir().to_string_lossy().into_owned(),
+        );
+        let manager = app.state::<Mutex<PtyManager>>();
+
+        let spawned = spawn_terminal_inner(
+            app.handle(),
+            manager.inner(),
+            store.inner(),
+            &workspace.id,
+            "exit 0",
+            80,
+            24,
+            None,
+            None,
+        )
+        .expect("spawn immediate command");
+
+        // The child exits before the caller can observe a second command
+        // round-trip. The monitor must still see the entry that was inserted
+        // before it started waiting and remove exactly that generation.
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let manager = manager.lock().expect("pty manager");
+            let is_running = manager
+                .running_terminals()
+                .iter()
+                .any(|terminal| terminal.id == spawned.meta.id);
+            let is_registered = manager.terminals.contains_key(&spawned.meta.id);
+            drop(manager);
+            if !is_running && !is_registered {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "immediate child remained in running_terminals"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        assert!(
+            manager
+                .lock()
+                .expect("pty manager")
+                .terminals
+                .get(&spawned.meta.id)
+                .is_none(),
+            "reaped child left a phantom manager entry"
+        );
     }
 }

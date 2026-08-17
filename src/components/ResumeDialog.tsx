@@ -1,177 +1,171 @@
-import { motion } from "motion/react";
+import { Clock3, Copy, History, Play, Trash2 } from "lucide-react";
+import { useState } from "react";
+
 import type { ResumeItem } from "../types";
-import { backdropAnim, modalAnim } from "../motion";
+import { ConfirmActionDialog, TerraDialog } from "./overlays/Dialog";
+import { Badge } from "./ui/Badge";
+import { Button } from "./ui/Button";
+import styles from "./integration/dialogs/ModalForms.module.css";
 
 interface Props {
   items: ResumeItem[];
   savedAt: number | null;
-  onResume: (item: ResumeItem) => void;
-  onDismiss: (item: ResumeItem) => void;
-  onResumeAll: () => void;
-  onDismissAll: () => void;
-}
-
-function HistoryIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-      <path d="M3 3v5h5" />
-      <polyline points="12 7 12 12 15 15" />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-    </svg>
-  );
-}
-
-function CopyIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-
-function PlayIcon() {
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      stroke="none"
-    >
-      <polygon points="6 3 20 12 6 21 6 3" />
-    </svg>
-  );
+  onResume: (item: ResumeItem) => void | Promise<void>;
+  onDismiss: (item: ResumeItem) => void | Promise<void>;
+  onResumeAll: () => void | Promise<void>;
+  onDismissAll: () => void | Promise<void>;
+  /** Hides this queue without mutating it. It can be reopened from Home. */
+  onDefer: () => void;
 }
 
 function formatRelativeTime(ms: number): string {
-  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
-  if (s < 60) return "just now";
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m} minute${m === 1 ? "" : "s"} ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} hour${h === 1 ? "" : "s"} ago`;
-  const d = Math.floor(h / 24);
-  return `${d} day${d === 1 ? "" : "s"} ago`;
+  const seconds = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (seconds < 60) return "agora";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `há ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `há ${hours} h`;
+  return `há ${Math.floor(hours / 24)} d`;
 }
 
-export function ResumeDialog(props: Props) {
-  const { items, savedAt } = props;
+async function copyText(value: string) {
+  try {
+    await navigator.clipboard?.writeText(value);
+  } catch {
+    // Clipboard permissions are optional; the resume action remains usable.
+  }
+}
+
+/**
+ * Startup queue for persisted sessions. Closing, Escape and “Agora não” only
+ * hide the dialog: destructive queue mutations always pass through an
+ * explicit confirmation dialog.
+ */
+export function ResumeDialog({
+  items,
+  onDefer,
+  onDismiss,
+  onDismissAll,
+  onResume,
+  onResumeAll,
+  savedAt,
+}: Props) {
+  const [pendingDismiss, setPendingDismiss] = useState<ResumeItem | null>(null);
+  const [confirmDismissAll, setConfirmDismissAll] = useState(false);
+
   return (
-    <motion.div className="modal-backdrop blur-strong" {...backdropAnim}>
-      <motion.div
-        className="modal resume-modal"
-        {...modalAnim}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="resume-header">
-          <div className="resume-title-row">
-            <HistoryIcon />
-            <h2>Resume your agents</h2>
-            <span className="resume-count">{items.length}</span>
-          </div>
-          <button
-            className="resume-icon-btn"
-            title="Dismiss all"
-            onClick={props.onDismissAll}
-          >
-            ×
-          </button>
-        </div>
-        <p className="resume-sub">
-          Running when Terra Swarm last closed. Pick up where you left off.
-        </p>
-        <div className="resume-list">
-          {items.map((item) => (
-            <div className="resume-item" key={item.terminalId}>
-              <div className="resume-item-top">
-                <span className={`pane-badge agent-${item.agentId}`}>
-                  {item.agentId}
-                </span>
-                <span className="resume-time">
-                  {savedAt != null ? formatRelativeTime(savedAt) : ""}
-                </span>
-                <button
-                  className="resume-icon-btn"
-                  title="Dismiss"
-                  onClick={() => props.onDismiss(item)}
-                >
-                  <TrashIcon />
-                </button>
-              </div>
-              <div className="resume-ws" title={item.cwd}>
-                {item.wsName}
-              </div>
-              <div className="resume-cmd-row">
-                <code className="resume-cmd">{item.resumeCommand}</code>
-                <button
-                  className="resume-icon-btn"
-                  title="Copy command"
-                  onClick={() =>
-                    navigator.clipboard
-                      .writeText(item.resumeCommand)
-                      .catch(() => {})
-                  }
-                >
-                  <CopyIcon />
-                </button>
-              </div>
-              <div className="resume-item-actions">
-                <button className="primary" onClick={() => props.onResume(item)}>
-                  <PlayIcon /> Resume
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="resume-footer">
-          <span className="resume-sessions">
-            {items.length} session{items.length === 1 ? "" : "s"}
+    <>
+      <TerraDialog
+        className={styles.resumeDialog}
+        description="Estas sessões estavam ativas quando o Terra foi fechado. Retome-as agora ou deixe a fila para depois."
+        onOpenChange={(open) => {
+          if (!open) onDefer();
+        }}
+        open={items.length > 0}
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <History aria-hidden="true" size={17} strokeWidth={1.8} />
+            Retomar seus agentes
+            <Badge size="sm" shape="pill">{items.length}</Badge>
           </span>
-          <div className="modal-actions">
-            <button onClick={props.onDismissAll}>Dismiss all</button>
-            <button className="primary" onClick={props.onResumeAll}>
-              <PlayIcon /> Resume all ({items.length})
-            </button>
+        }
+      >
+        <div className={styles.resumeBody}>
+          <div aria-live="polite" className={styles.resumeList}>
+            {items.map((item) => (
+              <article className={styles.resumeItem} key={item.terminalId}>
+                <div className={styles.resumeItemTop}>
+                  <Badge size="sm" tone="agent">{item.agentId}</Badge>
+                  <span className={styles.resumeTime}>
+                    <Clock3 aria-hidden="true" size={12} /> {savedAt != null ? formatRelativeTime(savedAt) : "salva anteriormente"}
+                  </span>
+                  <button
+                    aria-label={`Descartar sessão de ${item.wsName}`}
+                    className={styles.iconButton}
+                    data-danger="true"
+                    onClick={() => setPendingDismiss(item)}
+                    title="Descartar sessão salva"
+                    type="button"
+                  >
+                    <Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />
+                  </button>
+                </div>
+                <strong>{item.wsName}</strong>
+                <span className={styles.resumeCwd} title={item.cwd}>{item.cwd || "Diretório atual"}</span>
+                <div className={styles.resumeCommandRow}>
+                  <code className={styles.resumeCommand}>{item.resumeCommand}</code>
+                  <button
+                    aria-label={`Copiar comando de ${item.wsName}`}
+                    className={styles.iconButton}
+                    onClick={() => void copyText(item.resumeCommand)}
+                    title="Copiar comando"
+                    type="button"
+                  >
+                    <Copy aria-hidden="true" size={13} strokeWidth={1.8} />
+                  </button>
+                </div>
+                <div className={styles.resumeActions}>
+                  <Button
+                    leadingIcon={<Play aria-hidden="true" size={12} fill="currentColor" />}
+                    onClick={() => void onResume(item)}
+                    size="sm"
+                    type="button"
+                    variant="primary"
+                  >
+                    Retomar
+                  </Button>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className={styles.resumeFooter}>
+            <span className={styles.resumeSessions}>
+              {items.length} {items.length === 1 ? "sessão" : "sessões"}
+            </span>
+            <div className={styles.resumeActions}>
+              <Button onClick={onDefer} type="button" variant="ghost">
+                Agora não
+              </Button>
+              <Button onClick={() => setConfirmDismissAll(true)} type="button" variant="danger">
+                Descartar todas
+              </Button>
+              <Button
+                leadingIcon={<Play aria-hidden="true" size={12} fill="currentColor" />}
+                onClick={() => void onResumeAll()}
+                type="button"
+                variant="primary"
+              >
+                Retomar todas ({items.length})
+              </Button>
+            </div>
           </div>
         </div>
-      </motion.div>
-    </motion.div>
+      </TerraDialog>
+
+      <ConfirmActionDialog
+        description={
+          pendingDismiss
+            ? `A sessão de “${pendingDismiss.wsName}” será removida da fila e não poderá ser retomada por este fluxo.`
+            : "Todas as sessões salvas serão removidas da fila e não poderão ser retomadas por este fluxo."
+        }
+        onConfirm={async () => {
+          if (pendingDismiss) {
+            await onDismiss(pendingDismiss);
+            setPendingDismiss(null);
+          } else {
+            await onDismissAll();
+            setConfirmDismissAll(false);
+          }
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDismiss(null);
+            setConfirmDismissAll(false);
+          }
+        }}
+        open={pendingDismiss !== null || confirmDismissAll}
+        title={pendingDismiss ? "Descartar esta sessão?" : "Descartar todas as sessões?"}
+      />
+    </>
   );
 }

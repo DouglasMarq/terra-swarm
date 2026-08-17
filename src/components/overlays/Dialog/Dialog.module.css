@@ -1,0 +1,125 @@
+.overlay {
+  position: fixed;
+  z-index: var(--terra-z-modal-backdrop, 400);
+  inset: 0;
+  background: rgb(0 0 0 / 66%);
+  backdrop-filter: blur(5px);
+}
+
+.content {
+  position: fixed;
+  z-index: var(--terra-z-modal, 500);
+  top: 50%;
+  left: 50%;
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  overflow: auto;
+  border: 1px solid var(--terra-border-strong, #34343c);
+  border-radius: var(--terra-radius-modal, 14px);
+  color: var(--terra-text, #e4e4e7);
+  background: var(--terra-bg-panel, #17171b);
+  box-shadow: var(--terra-shadow-modal, 0 24px 64px rgb(0 0 0 / 55%));
+  transform: translate(-50%, -50%);
+  outline: 0;
+}
+
+.content[data-state="open"] {
+  animation: terra-dialog-in var(--terra-duration-med, 200ms) var(--terra-ease-out, ease-out);
+}
+
+.content[data-state="closed"] {
+  animation: terra-dialog-out var(--terra-duration-med, 200ms) ease-in;
+}
+
+.header {
+  display: grid;
+  gap: 5px;
+  padding: 22px 24px 16px;
+}
+
+.title {
+  margin: 0;
+  color: var(--terra-text, #e4e4e7);
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.description {
+  margin: 0;
+  color: var(--terra-text-muted, #8e8e96);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.closeButton {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--terra-radius-md, 6px);
+  color: var(--terra-text-muted, #8e8e96);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    border-color var(--terra-duration-hover, 140ms) ease,
+    color var(--terra-duration-hover, 140ms) ease,
+    background var(--terra-duration-hover, 140ms) ease;
+}
+
+.closeButton:hover {
+  border-color: var(--terra-border-strong, #34343c);
+  color: var(--terra-text, #e4e4e7);
+  background: var(--terra-bg-hover, #232329);
+}
+
+.closeButton:focus-visible {
+  outline: 0;
+  box-shadow: var(--terra-focus-ring, 0 0 0 3px rgb(113 113 122 / 18%));
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px 22px;
+}
+
+@keyframes terra-dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes terra-dialog-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content,
+  .closeButton {
+    animation-duration: 0.01ms;
+    transition-duration: 0.01ms;
+  }
+}
+

@@ -1,0 +1,87 @@
+/*
+ * Terra Swarm visual foundation
+ *
+ * Quiet Console: zinc neutrals carry the interface; signal colours only
+ * communicate running, attention, or failure. The --terra-* namespace keeps
+ * these tokens composable while the existing shell is migrated incrementally.
+ */
+:root {
+  color-scheme: dark;
+
+  /* surfaces */
+  --terra-bg: #101013;
+  --terra-bg-sidebar: #131316;
+  --terra-bg-panel: #17171b;
+  --terra-bg-elevated: #1d1d22;
+  --terra-bg-hover: #232329;
+  --terra-terminal-bg: #0c0c0e;
+
+  /* borders and ink */
+  --terra-border: #26262c;
+  --terra-border-strong: #34343c;
+  --terra-border-focus: #71717a;
+  --terra-text: #e4e4e7;
+  --terra-text-muted: #8e8e96;
+  --terra-text-faint: #5b5b64;
+  --terra-accent: #fafafa;
+  --terra-accent-contrast: #111113;
+
+  /* status vocabulary: green = running, amber = attention, red = failure */
+  --terra-green: #4ade80;
+  --terra-green-dim: rgb(74 222 128 / 10%);
+  --terra-amber: #e0b45c;
+  --terra-amber-dim: rgb(224 180 92 / 14%);
+  --terra-red: #e5636f;
+  --terra-red-dim: rgb(229 99 111 / 14%);
+
+  /* typography */
+  --terra-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --terra-font-mono: "SF Mono", Menlo, Monaco, "Courier New", monospace;
+  --terra-font-size-micro: 10px;
+  --terra-font-size-label: 11px;
+  --terra-font-size-body: 13px;
+  --terra-font-size-title: 13px;
+  --terra-font-size-display: 16px;
+
+  /* spacing */
+  --terra-space-1: 4px;
+  --terra-space-2: 8px;
+  --terra-space-3: 12px;
+  --terra-space-4: 16px;
+  --terra-space-5: 24px;
+  --terra-space-6: 32px;
+
+  /* radii */
+  --terra-radius-sm: 4px;
+  --terra-radius-md: 6px;
+  --terra-radius-lg: 8px;
+  --terra-radius-xl: 10px;
+  --terra-radius-modal: 14px;
+  --terra-radius-pill: 999px;
+
+  /* motion */
+  --terra-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --terra-duration-press: 80ms;
+  --terra-duration-hover: 140ms;
+  --terra-duration-med: 200ms;
+  --terra-focus-ring: 0 0 0 3px rgb(113 113 122 / 18%);
+
+  /* elevation */
+  --terra-shadow-pane: 0 1px 4px rgb(0 0 0 / 35%);
+  --terra-shadow-dropdown: 0 8px 24px rgb(0 0 0 / 45%);
+  --terra-shadow-popover: 0 12px 32px rgb(0 0 0 / 50%);
+  --terra-shadow-modal: 0 24px 64px rgb(0 0 0 / 55%);
+
+  /* layers */
+  --terra-z-dropdown: 100;
+  --terra-z-popover: 200;
+  --terra-z-sticky: 300;
+  --terra-z-modal-backdrop: 400;
+  --terra-z-modal: 500;
+  --terra-z-toast: 600;
+  --terra-z-tooltip: 700;
+
+  /* scrollbar */
+  --terra-scrollbar-thumb: #2c2c33;
+  --terra-scrollbar-thumb-hover: #3a3a42;
+}

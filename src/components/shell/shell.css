@@ -1,0 +1,792 @@
+.terra-shell {
+  --terra-shell-bg: #0f1012;
+  --terra-shell-panel: #15171a;
+  --terra-shell-raised: #1b1e22;
+  --terra-shell-border: #292d33;
+  --terra-shell-border-strong: #3a4048;
+  --terra-shell-text: #f4f4f5;
+  --terra-shell-muted: #a1a1aa;
+  --terra-shell-faint: #71717a;
+  --terra-shell-green: #8bd49b;
+  --terra-shell-amber: #e8bd73;
+  --terra-shell-red: #f18b8b;
+  --terra-shell-sky: #83c8ed;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--terra-shell-bg);
+  color: var(--terra-shell-text);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.005em;
+}
+
+.terra-shell button {
+  font: inherit;
+}
+
+.terra-shell button:focus-visible,
+.terra-shell [role="button"]:focus-visible,
+.terra-shell [role="tab"]:focus-visible,
+.terra-shell [role="link"]:focus-visible {
+  outline: 2px solid var(--terra-shell-muted);
+  outline-offset: 2px;
+}
+
+.terra-window-chrome {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  min-height: 40px;
+  min-width: 0;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--terra-shell-border);
+  background: #121417;
+  overflow: hidden;
+  user-select: none;
+}
+
+.terra-window-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  min-width: 86px;
+  color: var(--terra-shell-text);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.terra-window-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid #575c64;
+  border-radius: 5px;
+  color: var(--terra-shell-text);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.terra-window-history {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.terra-window-icon-button,
+.terra-window-voice,
+.terra-window-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--terra-shell-muted);
+  cursor: pointer;
+}
+
+.terra-window-icon-button:hover:not(:disabled),
+.terra-window-action:hover:not(:disabled) {
+  border-color: var(--terra-shell-border);
+  background: var(--terra-shell-raised);
+  color: var(--terra-shell-text);
+}
+
+.terra-window-icon-button:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.terra-window-tab-strip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.terra-window-tab-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.terra-window-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 100px;
+  max-width: 180px;
+  height: 27px;
+  padding: 0 6px 0 10px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--terra-shell-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.terra-window-tab:hover {
+  background: #1a1d21;
+  color: var(--terra-shell-text);
+}
+
+.terra-window-tab[data-active="true"] {
+  border-color: var(--terra-shell-border);
+  background: #1c2024;
+  color: var(--terra-shell-text);
+}
+
+.terra-window-tab[data-dragging="true"] {
+  z-index: 1;
+  opacity: 0.68;
+  box-shadow: 0 8px 18px rgb(0 0 0 / 28%);
+}
+
+.terra-window-tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.terra-window-tab-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.terra-window-tab-empty {
+  display: inline-flex;
+  align-items: center;
+  height: 27px;
+  padding: 0 10px;
+  color: var(--terra-shell-muted);
+  font-size: 11px;
+}
+
+.terra-window-tab-state {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--terra-shell-faint);
+}
+
+.terra-window-tab-state[data-state="ready"] {
+  background: var(--terra-shell-green);
+}
+
+.terra-window-tab-state[data-state="busy"] {
+  background: var(--terra-shell-amber);
+}
+
+.terra-window-tab-state[data-state="attention"] {
+  background: var(--terra-shell-red);
+}
+
+.terra-window-tab-state[data-state="paused"] {
+  background: var(--terra-shell-faint);
+}
+
+.terra-window-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--terra-shell-faint);
+  opacity: 0;
+}
+
+.terra-window-tab:hover .terra-window-tab-close,
+.terra-window-tab[data-active="true"] .terra-window-tab-close,
+.terra-window-tab-close:focus-visible {
+  opacity: 1;
+}
+
+.terra-window-tab-close:hover {
+  background: #2b3036;
+  color: var(--terra-shell-text);
+}
+
+.terra-window-tab-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--terra-shell-muted);
+  cursor: pointer;
+}
+
+.terra-window-tab-add:hover {
+  border-color: var(--terra-shell-border);
+  background: var(--terra-shell-raised);
+  color: var(--terra-shell-text);
+}
+
+.terra-window-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  color: var(--terra-shell-faint);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.terra-window-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.terra-window-voice {
+  width: auto;
+  gap: 5px;
+  padding: 0 8px;
+  color: var(--terra-shell-sky);
+}
+
+.terra-window-voice[data-recording="true"] {
+  border-color: rgba(131, 200, 237, 0.36);
+  background: rgba(131, 200, 237, 0.12);
+}
+
+.terra-shell-body {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.terra-activity-rail {
+  display: flex;
+  flex: 0 0 44px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 6px;
+  border-right: 1px solid var(--terra-shell-border);
+  background: #111316;
+}
+
+.terra-activity-nav {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.terra-activity-spacer {
+  flex: 1;
+}
+
+.terra-activity-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 31px;
+  height: 31px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--terra-shell-faint);
+  cursor: pointer;
+}
+
+.terra-activity-item:hover {
+  background: var(--terra-shell-raised);
+  color: var(--terra-shell-muted);
+}
+
+.terra-activity-item[data-active="true"] {
+  border-color: var(--terra-shell-border);
+  background: #20242a;
+  color: var(--terra-shell-text);
+}
+
+.terra-activity-item[data-active="true"]::before {
+  position: absolute;
+  left: -7px;
+  width: 2px;
+  height: 16px;
+  border-radius: 0 2px 2px 0;
+  background: var(--terra-shell-text);
+  content: "";
+}
+
+.terra-activity-item[data-tone="status"] {
+  color: var(--terra-shell-green);
+}
+
+.terra-shell-panel-group {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.terra-shell-compact-layout {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.terra-shell-compact-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  min-width: 0;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--terra-shell-border);
+  background: #131518;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.terra-shell-compact-actions::-webkit-scrollbar {
+  display: none;
+}
+
+.terra-shell-compact-actions button {
+  min-height: 25px;
+  padding: 0 9px;
+  border: 1px solid var(--terra-shell-border);
+  border-radius: 5px;
+  color: var(--terra-shell-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.terra-shell-compact-actions button:hover,
+.terra-shell-compact-actions button[aria-expanded="true"] {
+  color: var(--terra-shell-text);
+  background: var(--terra-shell-raised);
+}
+
+.terra-shell-compact-content {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.terra-shell-compact-main {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.terra-shell-compact-drawer {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  width: min(86vw, 330px);
+  min-width: 0;
+  flex-direction: column;
+  border: 1px solid var(--terra-shell-border);
+  background: var(--terra-shell-panel);
+  box-shadow: 0 18px 46px rgb(0 0 0 / 38%);
+}
+
+.terra-shell-compact-navigator {
+  left: 0;
+}
+
+.terra-shell-compact-dock {
+  right: 0;
+  width: min(88vw, 360px);
+}
+
+.terra-shell-compact-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  padding: 0 9px 0 12px;
+  border-bottom: 1px solid var(--terra-shell-border);
+  color: var(--terra-shell-text);
+  font-size: 11px;
+}
+
+.terra-shell-compact-drawer-header button {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--terra-shell-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.terra-shell-compact-drawer-header button:hover {
+  color: var(--terra-shell-text);
+  background: var(--terra-shell-raised);
+}
+
+.terra-shell-compact-drawer-content {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.terra-shell-compact-drawer-content > * {
+  height: 100%;
+}
+
+.terra-shell-compact-backdrop {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  border: 0;
+  background: rgb(0 0 0 / 32%);
+  cursor: pointer;
+}
+
+.terra-shell-panel {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--terra-shell-panel);
+}
+
+.terra-shell-panel-slot[data-slot="navigator"] {
+  background: #131518;
+}
+
+.terra-shell-panel-slot[data-slot="content"] {
+  background: var(--terra-shell-bg);
+}
+
+.terra-shell-panel-slot[data-slot="dock"] {
+  background: #131518;
+}
+
+.terra-shell-panel > * {
+  min-height: 0;
+  height: 100%;
+}
+
+.terra-shell-panel-slot {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.terra-shell-separator {
+  position: relative;
+  flex: 0 0 1px;
+  background: var(--terra-shell-border);
+  transition: background 120ms ease;
+}
+
+.terra-shell-separator:hover,
+.terra-shell-separator:focus-visible,
+.terra-shell-separator[data-active="true"] {
+  background: var(--terra-shell-border-strong);
+}
+
+.terra-shell-dock-reopen {
+  position: relative;
+  flex: 0 0 34px;
+  align-self: stretch;
+  width: 34px;
+  min-width: 34px;
+  min-height: 0;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--terra-shell-border);
+  border-radius: 0;
+  color: var(--terra-shell-muted);
+  background: #131518;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.terra-shell-dock-reopen:hover,
+.terra-shell-dock-reopen:focus-visible {
+  color: var(--terra-shell-text);
+  background: var(--terra-shell-raised);
+}
+
+/* Keep the reopen affordance in the shell's flex track, never over content. */
+.terra-shell-dock-reopen > svg {
+  flex: 0 0 auto;
+}
+
+.terra-shell-separator::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 7px;
+  content: "";
+}
+
+.terra-shell-telemetry {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 24px;
+  min-width: 0;
+  padding: 0 12px 0 58px;
+  border-top: 1px solid var(--terra-shell-border);
+  background: #111316;
+  color: var(--terra-shell-faint);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.terra-shell-telemetry::-webkit-scrollbar {
+  display: none;
+}
+
+.terra-shell-telemetry:empty {
+  display: none;
+}
+
+.terra-shell-telemetry-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.terra-shell-telemetry-item[data-tone="good"] {
+  color: var(--terra-shell-green);
+}
+
+.terra-shell-telemetry-item[data-tone="warn"] {
+  color: var(--terra-shell-amber);
+}
+
+.terra-right-dock {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+}
+
+.terra-right-dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 32px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--terra-shell-border);
+}
+
+.terra-right-dock-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--terra-shell-faint);
+  cursor: pointer;
+}
+
+.terra-right-dock-close:hover {
+  background: var(--terra-shell-raised);
+  color: var(--terra-shell-text);
+}
+
+.terra-right-dock-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--terra-shell-border);
+}
+
+.terra-right-dock-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 27px;
+  padding: 0 4px;
+  gap: 3px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--terra-shell-faint);
+  cursor: pointer;
+  font-size: 10px;
+  overflow: hidden;
+}
+
+.terra-right-dock-tab:hover {
+  background: var(--terra-shell-raised);
+  color: var(--terra-shell-muted);
+}
+
+.terra-right-dock-tab[data-active="true"] {
+  border-color: var(--terra-shell-border);
+  background: #20242a;
+  color: var(--terra-shell-text);
+}
+
+.terra-right-dock-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terra-right-dock-content {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 12px;
+}
+
+.terra-right-dock-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  height: 100%;
+  flex-direction: column;
+  gap: 9px;
+  padding: 24px;
+  color: var(--terra-shell-faint);
+  text-align: center;
+}
+
+.terra-right-dock-empty strong {
+  color: var(--terra-shell-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.terra-right-dock-empty span {
+  max-width: 220px;
+  color: var(--terra-shell-faint);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.terra-shell-slot-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 30px;
+  color: var(--terra-shell-faint);
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .terra-window-brand {
+    min-width: auto;
+  }
+
+  .terra-window-brand-word,
+  .terra-window-meta-chip-label {
+    display: none;
+  }
+
+  .terra-window-meta {
+    display: none;
+  }
+
+  .terra-shell-telemetry {
+    padding-left: 12px;
+  }
+}
+
+@media (max-width: 720px) {
+  .terra-activity-rail {
+    flex-basis: 40px;
+    padding-inline: 4px;
+  }
+
+  .terra-activity-item[data-active="true"]::before {
+    left: -5px;
+  }
+
+  .terra-window-history {
+    display: none;
+  }
+
+  .terra-window-tab {
+    min-width: 76px;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terra-shell *,
+  .terra-shell *::before,
+  .terra-shell *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

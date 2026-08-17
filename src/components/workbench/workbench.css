@@ -1,0 +1,737 @@
+.terra-workbench {
+  --workbench-bg: var(--terra-bg, #101013);
+  --workbench-panel: var(--terra-bg-panel, #17171b);
+  --workbench-elevated: var(--terra-bg-elevated, #1d1d22);
+  --workbench-hover: var(--terra-bg-hover, #232329);
+  --workbench-border: var(--terra-border, #26262c);
+  --workbench-border-strong: var(--terra-border-strong, #34343c);
+  --workbench-ink: var(--terra-text, #e4e4e7);
+  --workbench-muted: var(--terra-text-muted, #8e8e96);
+  --workbench-faint: var(--terra-text-faint, #5b5b64);
+  --workbench-accent: var(--terra-accent, #fafafa);
+  --workbench-danger: var(--terra-red, #e5636f);
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+  background: var(--workbench-bg);
+  color: var(--workbench-ink);
+  font-family: var(--terra-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+}
+
+.terra-workbench__list {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow: auto;
+}
+
+.terra-workbench__empty {
+  display: grid;
+  min-height: 220px;
+  flex: 1 1 auto;
+  place-items: center;
+  border: 1px dashed var(--workbench-border-strong);
+  border-radius: 8px;
+  color: var(--workbench-muted);
+  background: rgb(255 255 255 / 1%);
+}
+
+.terra-workbench__sortable {
+  display: flex;
+  min-width: 0;
+  min-height: 160px;
+  flex: 1 1 0;
+  flex-direction: column;
+  transition: transform 140ms var(--terra-ease-out, cubic-bezier(.22, 1, .36, 1));
+}
+
+/* A pane may be dragged across the global DndContext, but it cannot be moved
+ * into another project. Show the destination as rejected before drop so the
+ * gesture never looks like an accepted cross-project mutation. */
+.terra-workbench__sortable[data-drop-invalid="true"] {
+  outline: 1px solid var(--workbench-danger);
+  outline-offset: -1px;
+  box-shadow: inset 0 0 0 1px rgb(229 99 111 / 22%);
+}
+
+/* Keep the sortable host and its project card as the height-bearing flex
+ * boundaries. This selector also covers the dnd wrapper created by the
+ * workbench projection, so the terminal receives the available viewport. */
+.terra-workbench .terra-workbench__list > .terra-workbench__sortable {
+  min-height: 0;
+  flex: 1 1 0;
+}
+
+.terra-workbench .terra-workbench__sortable > .terra-project-container {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+/*
+ * The dnd wrapper is a real flex item.  Without this boundary the card's own
+ * `flex: 1` has no effect (the wrapper is a block), which leaves the terminal
+ * at its intrinsic height while the workbench's remaining viewport is empty.
+ * Collapsed and fullscreen cards intentionally leave the normal flow so an
+ * expanded sibling can still own all available space.
+ */
+.terra-workbench__sortable[data-collapsed="true"] {
+  min-height: 0;
+  flex: 0 0 auto;
+}
+
+.terra-workbench__sortable[data-fullscreen="true"] {
+  min-height: 0;
+  flex: 0 0 0;
+}
+
+.terra-workbench__sortable[data-visible="false"] {
+  display: none;
+}
+
+.terra-workbench__sortable > .terra-project-container {
+  width: 100%;
+  height: 100%;
+}
+
+.terra-workbench__sortable[data-dragging="true"] {
+  z-index: 2;
+  opacity: .72;
+}
+
+.terra-project-container {
+  display: flex;
+  min-width: min(260px, 100%);
+  min-height: 160px;
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--workbench-border);
+  border-radius: 8px;
+  background: var(--workbench-panel);
+  box-shadow: var(--terra-shadow-pane, 0 1px 4px rgb(0 0 0 / 35%));
+  transition: border-color 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
+}
+
+.terra-project-container[data-fullscreen="true"] {
+  position: fixed;
+  z-index: var(--terra-z-modal, 500);
+  inset: 12px;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  border-color: var(--workbench-border-strong);
+  box-shadow: var(--terra-shadow-modal, 0 24px 64px rgb(0 0 0 / 55%));
+}
+
+.terra-project-container[data-collapsed="true"] {
+  min-height: 0;
+}
+
+.terra-project-container[data-visible="false"] {
+  display: none;
+}
+
+.terra-project-container__header {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  row-gap: 4px;
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid var(--workbench-border);
+  background: linear-gradient(180deg, rgb(255 255 255 / 3%), transparent);
+}
+
+.terra-project-container__drag,
+.terra-project-container__action,
+.terra-pane-frame__action {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  color: var(--workbench-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.terra-project-container__drag {
+  cursor: grab;
+  letter-spacing: -2px;
+}
+
+.terra-project-container__drag:active {
+  cursor: grabbing;
+}
+
+.terra-project-container__drag:hover,
+.terra-project-container__action:hover,
+.terra-pane-frame__action:hover {
+  color: var(--workbench-ink);
+  background: var(--workbench-hover);
+}
+
+.terra-project-container__action[data-danger="true"]:hover,
+.terra-pane-frame__action[data-danger="true"]:hover {
+  color: var(--workbench-danger);
+}
+
+.terra-project-container__title {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+
+.terra-project-container__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.terra-project-container__layout-select {
+  display: inline-flex;
+  min-width: min(86px, 100%);
+  flex: 0 1 86px;
+  align-items: center;
+}
+
+.terra-project-container__layout-select select {
+  width: 100%;
+  padding: 3px 18px 3px 6px;
+  border: 1px solid var(--workbench-border);
+  border-radius: 4px;
+  color: var(--workbench-muted);
+  background: var(--workbench-elevated);
+  font: inherit;
+  font-size: 10px;
+}
+
+.terra-project-container__layout-select select:focus-visible {
+  outline: 2px solid var(--terra-accent, #fafafa);
+  outline-offset: 1px;
+}
+
+.terra-project-container__grid-controls {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  color: var(--workbench-faint);
+  font-size: 10px;
+}
+
+.terra-project-container__grid-control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px;
+}
+
+.terra-project-container__grid-label {
+  margin-right: 2px;
+  color: var(--workbench-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.terra-project-container__grid-button,
+.terra-project-container__grid-auto {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0 4px;
+  border: 1px solid var(--workbench-border);
+  border-radius: 3px;
+  color: var(--workbench-muted);
+  background: var(--workbench-elevated);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.terra-project-container__grid-button:hover,
+.terra-project-container__grid-auto:hover {
+  color: var(--workbench-ink);
+  border-color: var(--workbench-border-strong);
+  background: var(--workbench-hover);
+}
+
+.terra-project-container__grid-button[aria-pressed="true"] {
+  color: var(--workbench-ink);
+  border-color: var(--workbench-accent);
+  background: var(--workbench-hover);
+}
+
+.terra-project-container__grid-button:disabled,
+.terra-project-container__grid-auto:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.terra-project-container__grid-button:focus-visible,
+.terra-project-container__grid-auto:focus-visible {
+  outline: 2px solid var(--terra-accent, #fafafa);
+  outline-offset: 1px;
+}
+
+.terra-project-container__surface {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 0;
+  flex: 1 1 0;
+  overflow: hidden;
+}
+
+.terra-project-container[data-collapsed="true"] .terra-project-container__surface {
+  display: none;
+}
+
+.terra-pane-grid {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.terra-pane-grid--grid {
+  display: grid;
+  gap: 1px;
+  background: var(--workbench-border);
+}
+
+.terra-pane-grid__cell {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--terra-terminal-bg, #0c0c0e);
+}
+
+.terra-pane-grid__cell > * {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+}
+
+.terra-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.terra-pane-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.terra-pane-sortable {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.terra-pane-panel > [data-panel] {
+  min-width: 0;
+  min-height: 0;
+}
+
+.terra-pane-frame {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  overflow: hidden;
+  border-right: 1px solid var(--workbench-border);
+  background: var(--terra-terminal-bg, #0c0c0e);
+}
+
+.terra-pane-frame:last-child {
+  border-right: 0;
+}
+
+.terra-pane-frame__drag {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  color: var(--workbench-faint);
+  background: transparent;
+  cursor: grab;
+}
+
+.terra-pane-frame__drag:active {
+  cursor: grabbing;
+}
+
+.terra-pane-frame__drag:hover {
+  color: var(--workbench-ink);
+  background: var(--workbench-hover);
+}
+
+.terra-pane-frame__body {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.terra-pane-frame__toolbar {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--workbench-border);
+  color: var(--workbench-muted);
+  background: rgb(255 255 255 / 2%);
+  font-size: 10px;
+}
+
+.terra-pane-frame__surface {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 0;
+  flex: 1 1 0;
+  overflow: hidden;
+}
+
+.terra-pane-tab-surfaces {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.terra-pane-tab-surface {
+  position: absolute;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  inset: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.terra-pane-tab-surface[aria-hidden="true"] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.terra-pane-tab-surface[aria-hidden="false"] {
+  visibility: visible;
+}
+
+/* TerminalPane predates the workbench and carries a 200px standalone-grid
+ * minimum.  In a mounted pane that minimum clips the host instead of letting
+ * xterm consume the panel's actual height, so reset it at this boundary. */
+.terra-pane-tab-surface > .pane {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.terra-subtab-lane {
+  display: flex;
+  width: 36px;
+  min-width: 36px;
+  min-height: 0;
+  flex: 0 0 36px;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 3px;
+  border-right: 1px solid var(--workbench-border);
+  background: rgb(255 255 255 / 2%);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.terra-subtab-lane::-webkit-scrollbar {
+  display: none;
+}
+
+.terra-subtab-lane__tab,
+.terra-subtab-lane__new {
+  position: relative;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--workbench-faint);
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--terra-font-mono, ui-monospace, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  writing-mode: vertical-rl;
+}
+
+.terra-subtab-lane__tab-button {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border: 0;
+  border-radius: inherit;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  writing-mode: vertical-rl;
+}
+
+.terra-subtab-lane__tab:hover,
+.terra-subtab-lane__tab:focus-visible,
+.terra-subtab-lane__new:hover,
+.terra-subtab-lane__new:focus-visible {
+  border-color: var(--workbench-border-strong);
+  color: var(--workbench-ink);
+  background: var(--workbench-hover);
+}
+
+.terra-subtab-lane__tab[data-active="true"] {
+  border-color: rgb(250 250 250 / 32%);
+  color: var(--workbench-accent);
+  background: rgb(250 250 250 / 8%);
+}
+
+.terra-subtab-lane__tab[data-dragging="true"] {
+  z-index: 1;
+  opacity: .68;
+  box-shadow: 0 6px 14px rgb(0 0 0 / 28%);
+}
+
+.terra-subtab-lane__tab[data-status="running"]::before,
+.terra-subtab-lane__tab[data-status="attention"]::before,
+.terra-subtab-lane__tab[data-status="error"]::before,
+.terra-subtab-lane__tab[data-status="suspended"]::before {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--terra-green, #4ade80);
+  content: "";
+}
+
+.terra-subtab-lane__tab[data-status="attention"]::before {
+  background: var(--terra-amber, #e0b45c);
+}
+
+.terra-subtab-lane__tab[data-status="error"]::before {
+  background: var(--workbench-danger);
+}
+
+.terra-subtab-lane__tab[data-status="suspended"]::before {
+  background: var(--workbench-faint);
+}
+
+.terra-subtab-lane__tab[data-unread="true"]::after {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--workbench-accent);
+  content: "";
+}
+
+.terra-subtab-lane__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.terra-subtab-lane__close,
+.terra-subtab-lane__kill {
+  position: absolute;
+  z-index: 1;
+  display: none;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 0;
+  border-radius: 3px;
+  color: var(--workbench-ink);
+  background: rgb(16 16 19 / 92%);
+  cursor: pointer;
+  font-family: var(--terra-font-sans, sans-serif);
+  font-size: 11px;
+  line-height: 1;
+  writing-mode: horizontal-tb;
+}
+
+.terra-subtab-lane__close {
+  top: 1px;
+  right: 1px;
+}
+
+.terra-subtab-lane__kill {
+  right: 1px;
+  bottom: 1px;
+  color: var(--workbench-danger);
+  font-size: 8px;
+}
+
+.terra-subtab-lane__tab:hover .terra-subtab-lane__close,
+.terra-subtab-lane__tab:hover .terra-subtab-lane__kill,
+.terra-subtab-lane__tab:focus-within .terra-subtab-lane__close,
+.terra-subtab-lane__tab:focus-within .terra-subtab-lane__kill {
+  display: grid;
+}
+
+.terra-empty-pane {
+  display: grid;
+  min-width: 0;
+  min-height: 120px;
+  width: 100%;
+  flex: 1 1 auto;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--workbench-muted);
+  background: var(--terra-terminal-bg, #0c0c0e);
+  font-size: 11px;
+  text-align: center;
+}
+
+.terra-empty-pane__content {
+  display: grid;
+  max-width: 360px;
+  gap: 6px;
+}
+
+.terra-empty-pane__title {
+  margin: 0;
+  color: var(--workbench-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.terra-empty-pane__description,
+.terra-empty-pane__context {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.terra-empty-pane__context {
+  color: var(--workbench-faint);
+  font-size: 10px;
+}
+
+.terra-empty-pane__button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--workbench-border-strong);
+  border-radius: 5px;
+  color: var(--workbench-ink);
+  background: var(--workbench-elevated);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.terra-empty-pane__button:hover {
+  border-color: var(--workbench-accent);
+  background: var(--workbench-hover);
+}
+
+.terra-workbench :where(button, [tabindex]):focus-visible {
+  outline: 2px solid var(--terra-border-focus, #71717a);
+  outline-offset: 2px;
+  box-shadow: var(--terra-focus-ring, 0 0 0 3px rgb(113 113 122 / 18%));
+}
+
+@media (max-width: 720px) {
+  .terra-workbench__list {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .terra-project-container[data-fullscreen="true"] {
+    inset: 0;
+    border-radius: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terra-workbench *,
+  .terra-workbench *::before,
+  .terra-workbench *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

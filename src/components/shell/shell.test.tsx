@@ -4,12 +4,29 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { TerminalTab } from "../../types";
+import { detectShortcutPlatform } from "../../lib/platform/shortcuts";
 import { ApplicationShell } from "./ApplicationShell";
 import { WindowChrome } from "./WindowChrome";
 import shellStyles from "./shell.css?raw";
 import { SubTabLane } from "../workbench/SubTabLane";
 
 describe("ApplicationShell", () => {
+  it("reserves the native traffic-light area on macOS", () => {
+    render(
+      <ApplicationShell navigator={<div>Navigator</div>}>
+        <div>Content</div>
+      </ApplicationShell>,
+    );
+
+    expect(document.querySelector(".terra-shell")).toHaveAttribute(
+      "data-platform",
+      detectShortcutPlatform(),
+    );
+    expect(shellStyles).toMatch(
+      /\.terra-shell\[data-platform="mac"\]\s+\.terra-window-chrome\s*\{[^}]*padding-left:\s*78px/,
+    );
+  });
+
   it("keeps the dock header minimal and uses tabs as the only panel labels", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();

@@ -168,6 +168,26 @@ describe("VisualShellSurface smoke flow", () => {
     expect(screen.getByRole("heading", { name: "Bom dia" })).toBeInTheDocument();
   });
 
+  it("keeps a workspace closed after the topbar close action", async () => {
+    const user = userEvent.setup();
+    const onHideWorkspace = vi.fn();
+    render(<VisualShellSurface {...shellProps({ onHideWorkspace })} />);
+
+    const closeButton = await screen.findByRole("button", {
+      name: "Fechar workspace Terra API",
+    });
+    await user.click(closeButton);
+
+    expect(onHideWorkspace).toHaveBeenCalledWith(workspace.id);
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Fechar workspace Terra API" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(useShellStore.getState().workspaceTabs).toEqual([]);
+    expect(useShellStore.getState().recentlyClosedTabs[0]?.workspaceId).toBe(workspace.id);
+  });
+
   it("stops compact Inspector runtime polling when its drawer closes", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({

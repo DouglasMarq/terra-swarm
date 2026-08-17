@@ -65,6 +65,22 @@
   text-transform: uppercase;
 }
 
+/* Tauri starts a drag only when the element receiving the pointer event has
+ * data-tauri-drag-region. Keep decorative children transparent to hit testing
+ * so the branded part of the custom title bar remains draggable. Interactive
+ * controls (buttons and tabs) keep their normal pointer behavior. */
+.terra-window-brand > *,
+.terra-window-tab-empty {
+  pointer-events: none;
+}
+
+/* Keep the chip's native tooltip while making icon clicks land on the
+ * draggable chip rather than on an SVG path without the Tauri attribute. */
+.terra-window-meta-chip svg,
+.terra-window-meta-chip svg * {
+  pointer-events: none;
+}
+
 .terra-window-brand-mark {
   display: inline-flex;
   align-items: center;

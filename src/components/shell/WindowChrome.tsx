@@ -97,6 +97,7 @@ function SortableWorkspaceTab({
     <div
       ref={sortable.setNodeRef}
       className="terra-window-tab"
+      data-tauri-drag-region="true"
       style={style}
       data-active={active}
       data-dragging={sortable.isDragging}
@@ -182,14 +183,22 @@ export function WindowChrome({
 
   return (
     <header className="terra-window-chrome" data-tauri-drag-region="true">
-      <div className="terra-window-brand" aria-label={`${title} ${surfaceLabels[activeSurface]}`}>
+      <div
+        className="terra-window-brand"
+        data-tauri-drag-region="true"
+        aria-label={`${title} ${surfaceLabels[activeSurface]}`}
+      >
         <span className="terra-window-brand-mark" aria-hidden="true">
           T
         </span>
         <span className="terra-window-brand-word">{title}</span>
       </div>
 
-      <nav className="terra-window-history" aria-label="Histórico de navegação">
+      <nav
+        className="terra-window-history"
+        data-tauri-drag-region="true"
+        aria-label="Histórico de navegação"
+      >
         <button
           className="terra-window-icon-button"
           type="button"
@@ -217,7 +226,12 @@ export function WindowChrome({
         collisionDetection={closestCenter}
         onDragEnd={onWorkspaceTabDragEnd}
       >
-        <div className="terra-window-tab-strip" role="tablist" aria-label="Workspaces abertos">
+        <div
+          className="terra-window-tab-strip"
+          data-tauri-drag-region="true"
+          role="tablist"
+          aria-label="Workspaces abertos"
+        >
           {workspaceTabs.length === 0 ? (
             <span className="terra-window-tab-empty" aria-live="polite">
               {surfaceLabels[activeSurface]}
@@ -250,28 +264,28 @@ export function WindowChrome({
         </div>
       </DndContext>
 
-      {hasResourceSignal ? <div className="terra-window-meta" aria-label="Recursos de execução">
+      {hasResourceSignal ? <div className="terra-window-meta" data-tauri-drag-region="true" aria-label="Recursos de execução">
         {resources?.active !== undefined && resources.active > 0 && (
-          <span className="terra-window-meta-chip" title="Sessões ativas">
+          <span className="terra-window-meta-chip" data-tauri-drag-region="true" title="Sessões ativas">
             <Activity size={12} aria-hidden="true" />
-            <span className="terra-window-meta-chip-label">{resources.active} ativas</span>
+            <span className="terra-window-meta-chip-label" data-tauri-drag-region="true">{resources.active} ativas</span>
           </span>
         )}
         {resources?.queued !== undefined && resources.queued > 0 && (
-          <span className="terra-window-meta-chip" title="Sessões na fila">
+          <span className="terra-window-meta-chip" data-tauri-drag-region="true" title="Sessões na fila">
             <ChevronDown size={12} aria-hidden="true" />
-            <span className="terra-window-meta-chip-label">{resources.queued} na fila</span>
+            <span className="terra-window-meta-chip-label" data-tauri-drag-region="true">{resources.queued} na fila</span>
           </span>
         )}
         {resources?.cpu?.trim() && (
-          <span className="terra-window-meta-chip" title="Uso de CPU">
+          <span className="terra-window-meta-chip" data-tauri-drag-region="true" title="Uso de CPU">
             <Cpu size={12} aria-hidden="true" />
-            <span className="terra-window-meta-chip-label">{resources.cpu}</span>
+            <span className="terra-window-meta-chip-label" data-tauri-drag-region="true">{resources.cpu}</span>
           </span>
         )}
         {resources?.memory?.trim() && (
-          <span className="terra-window-meta-chip" title="Uso de memória">
-            <span className="terra-window-meta-chip-label">{resources.memory}</span>
+          <span className="terra-window-meta-chip" data-tauri-drag-region="true" title="Uso de memória">
+            <span className="terra-window-meta-chip-label" data-tauri-drag-region="true">{resources.memory}</span>
           </span>
         )}
       </div> : null}

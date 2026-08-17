@@ -75,6 +75,48 @@ describe("ApplicationShell", () => {
     expect(screen.queryByTitle("Atalho de teclado")).not.toBeInTheDocument();
   });
 
+  it("keeps every non-interactive chrome segment draggable on Tauri", () => {
+    render(
+      <WindowChrome
+        workspaceTabs={[{ id: "workspace-a", label: "Alpha" }]}
+        activeWorkspaceId="workspace-a"
+        resources={{ active: 1 }}
+      />,
+    );
+
+    const chrome = screen.getByRole("banner");
+    expect(chrome.querySelector(".terra-window-brand")).toHaveAttribute(
+      "data-tauri-drag-region",
+      "true",
+    );
+    expect(chrome.querySelector(".terra-window-history")).toHaveAttribute(
+      "data-tauri-drag-region",
+      "true",
+    );
+    expect(chrome.querySelector(".terra-window-tab-strip")).toHaveAttribute(
+      "data-tauri-drag-region",
+      "true",
+    );
+    expect(chrome.querySelector("[data-workspace-tab-id='workspace-a']")).toHaveAttribute(
+      "data-tauri-drag-region",
+      "true",
+    );
+    expect(chrome.querySelector(".terra-window-meta")).toHaveAttribute(
+      "data-tauri-drag-region",
+      "true",
+    );
+
+    // Controls must remain native targets so tab selection/close and toolbar
+    // actions do not start moving the native window.
+    expect(screen.getByRole("button", { name: "Abrir workspace Alpha" })).not.toHaveAttribute(
+      "data-tauri-drag-region",
+    );
+    expect(screen.getByRole("button", { name: "Fechar workspace Alpha" })).not.toHaveAttribute(
+      "data-tauri-drag-region",
+    );
+    expect(shellStyles).toMatch(/\.terra-window-brand\s*>\s*\*,[\s\S]*pointer-events:\s*none/);
+  });
+
   it("renders the navigator, content, dock and telemetry slots", () => {
     render(
       <ApplicationShell

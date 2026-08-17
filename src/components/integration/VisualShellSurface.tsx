@@ -523,7 +523,16 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
 
   useEffect(() => {
     const ids = new Set(props.workspaces.map((workspace) => workspace.id));
+    // Keep an explicitly closed tab closed while the backend workspace still
+    // exists. The workspace list is also the source for labels/status updates,
+    // so blindly opening every listed workspace here re-opened a tab as soon
+    // as closeWorkspaceTab changed the shell state (the topbar close action
+    // looked like it had only reordered the tabs).
+    const recentlyClosedIds = new Set(
+      shell.recentlyClosedTabs.map((tab) => tab.workspaceId),
+    );
     props.workspaces.forEach((workspace) => {
+      if (recentlyClosedIds.has(workspace.id)) return;
       const existing = shell.workspaceTabs.find((tab) => tab.workspaceId === workspace.id);
       const state = workspace.terminals.some((terminal) => terminal.id in props.exited) ? "attention" : "ready";
       if (existing?.label === workspace.name && existing.state === state) return;
@@ -534,7 +543,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     shell.workspaceTabs.forEach((tab) => {
       if (!ids.has(tab.workspaceId)) shell.closeWorkspaceTab(tab.workspaceId);
     });
-  }, [props.exited, props.workspaces, shell.closeWorkspaceTab, shell.openWorkspaceTab, shell.workspaceTabs]);
+  }, [props.exited, props.workspaces, shell.closeWorkspaceTab, shell.openWorkspaceTab, shell.recentlyClosedTabs, shell.workspaceTabs]);
 
   useEffect(() => {
     if (shell.activeSurface === "workbench" && !shell.activeWorkspaceId && props.activeId) {

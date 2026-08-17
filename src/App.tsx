@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, MotionConfig, motion } from "motion/react";
+import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { MotionConfig } from "motion/react";
+import { useShallow } from "zustand/react/shallow";
 import { listen } from "@tauri-apps/api/event";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
 import { api } from "./api";
 import { checkForUpdate, installPendingUpdate } from "./updater";
@@ -12,337 +13,359 @@ import type {
   NotificationItem,
   NotificationPayload,
   ResumeItem,
+  SpawnedTerminal,
   TitlePayload,
   VoiceDownloadProgress,
   VoiceModelInfo,
   VoiceStatus,
+  WorkspaceGroup,
   Workspace,
 } from "./types";
-import { backdropAnim, modalAnim } from "./motion";
-import { ResumeDialog } from "./components/ResumeDialog";
-import { Sidebar } from "./components/Sidebar";
-import { StatusBar } from "./components/StatusBar";
-import { TerminalGrid } from "./components/TerminalGrid";
-import { TopBar } from "./components/TopBar";
+import {
+  AgentPickerDialog,
+  RenameDialog,
+  type RenameTargetKind,
+  WorkspaceDialog,
+} from "./components/integration/dialogs";
+import { ConfirmActionDialog } from "./components/overlays/Dialog";
+import type { FocusedAgentAction } from "./components/overlays/CommandPalette";
+import {
+  createInitialVoiceCapsuleModel,
+  canExecuteVoiceIntent,
+  isDestructiveVoiceIntent,
+  reduceVoiceCapsuleModel,
+  type VoiceCapsuleIntent,
+  type VoiceSendPayload,
+} from "./components/voice";
 import { getTerminal } from "./terminalRegistry";
+import { createDebouncedTask } from "./lib/async/debounce";
+import {
+  GRID_COL_OPTIONS,
+  HOTKEY_ACTIONS,
+  matchHotkey,
+  type Hotkey,
+  usePreferencesStore,
+} from "./stores/preferencesStore";
+import { useTerminalRuntimeStore } from "./stores/terminalRuntimeStore";
+import { useUiStore } from "./stores/uiStore";
+import { useShellStore } from "./stores/shellStore";
+import { useOrchestrationStore } from "./stores/orchestrationStore";
+import { planResume } from "./lib/session/resumePlanner";
+import { createSpawnQueue } from "./lib/session/spawnQueue";
+import { createInitializationGate, type InitializationGate } from "./lib/session/initializationGate";
+import { dismissResumeItems } from "./lib/session/resumeDismiss";
+import { isCurrentSpawnedTerminalRunning } from "./lib/session/terminalLifecycle";
+import { workspaceIdForTerminal } from "./lib/session/terminalOwnership";
+import { selectWorkspaceContainerId } from "./lib/session/workspaceContainerSelection";
+import {
+  isTerminalSuspended,
+  suspendedGroupIds,
+} from "./lib/session/resumeSelection";
+import { parseVoiceCommand } from "./lib/voiceCommands";
+import {
+  buildVoicePrompt,
+  profileForCommand,
+  resolveResumeCommand,
+} from "./lib/features/agentProfiles";
+import type { SettingsSectionId } from "./components/settings";
+import type {
+  SnapshotFeedback,
+  SnapshotOperation,
+} from "./components/integration/settings/SettingsPanels";
 import "./App.css";
 
-interface Hotkey {
-  key: string;
-  meta: boolean;
-  shift: boolean;
-  ctrl: boolean;
-  alt: boolean;
-}
-
-const mk = (
-  key: string,
-  meta = false,
-  shift = false,
-  ctrl = false,
-  alt = false,
-): Hotkey => ({ key, meta, shift, ctrl, alt });
-
-const IS_MAC =
-  typeof navigator !== "undefined" &&
-  /mac/i.test(navigator.platform || navigator.userAgent);
-
-const wsSelect = (n: number): Hotkey =>
-  IS_MAC ? mk(String(n), true) : mk(String(n), false, false, true);
-
-const termSelect = (n: number): Hotkey =>
-  IS_MAC ? mk(String(n), true, true) : mk(String(n), false, true, true);
-
-// On Windows the meta key is the Win key: Win+W opens Widgets, Win+Enter
-// launches Narrator, Win+= drives the Magnifier, etc. Use Ctrl+Shift / Alt
-// combos there; keep Cmd combos on macOS.
-const DEFAULT_HOTKEYS: Record<string, Hotkey> = {
-  newWorkspace: IS_MAC ? mk("n", true, true) : mk("n", false, true, true),
-  renameWorkspace: IS_MAC ? mk("r", true, true) : mk("r", false, true, true),
-  deleteWorkspace: IS_MAC
-    ? mk("Backspace", true, true)
-    : mk("Backspace", false, true, true),
-  newTerminal: IS_MAC ? mk("t", true) : mk("t", false, true, true),
-  closeTerminal: IS_MAC ? mk("w", true) : mk("w", false, true, true),
-  maximizeTerminal: IS_MAC ? mk("Enter", true) : mk("Enter", false, false, false, true),
-  minimizeTerminal: IS_MAC
-    ? mk("Enter", true, true)
-    : mk("Enter", false, true, false, true),
-  increaseFontSize: IS_MAC ? mk("=", true) : mk("=", false, false, true),
-  decreaseFontSize: IS_MAC ? mk("-", true) : mk("-", false, false, true),
-  resetFontSize: IS_MAC ? mk("0", true) : mk("0", false, false, true),
-  toggleVoice: IS_MAC ? mk(" ", true, true) : mk(" ", false, true, true),
-  selectWorkspace1: wsSelect(1),
-  selectWorkspace2: wsSelect(2),
-  selectWorkspace3: wsSelect(3),
-  selectWorkspace4: wsSelect(4),
-  selectWorkspace5: wsSelect(5),
-  selectWorkspace6: wsSelect(6),
-  selectWorkspace7: wsSelect(7),
-  selectWorkspace8: wsSelect(8),
-  selectWorkspace9: wsSelect(9),
-  selectTerminal1: termSelect(1),
-  selectTerminal2: termSelect(2),
-  selectTerminal3: termSelect(3),
-  selectTerminal4: termSelect(4),
-  selectTerminal5: termSelect(5),
-  selectTerminal6: termSelect(6),
-  selectTerminal7: termSelect(7),
-  selectTerminal8: termSelect(8),
-  selectTerminal9: termSelect(9),
-};
-
-const MIN_FONT_SIZE = 8;
-const MAX_FONT_SIZE = 32;
-const DEFAULT_FONT_SIZE = 13;
-const MAX_NOTIF_ITEMS = 50;
 const BRANCH_POLL_MS = 10000;
 const UPDATE_CHECK_MS = 60 * 60 * 1000;
-const GRID_COL_OPTIONS = [2, 3, 4, 5, 6];
-const DEFAULT_GRID_COLS = 2;
 
-const SETTINGS_SECTIONS = [
-  { id: "terminal", label: "Terminal" },
-  { id: "voice", label: "Voice input" },
-  { id: "shortcuts", label: "Keyboard shortcuts" },
-  { id: "accessibility", label: "Accessibility" },
-  { id: "about", label: "About" },
-] as const;
+const LazyResumeDialog = lazy(async () => {
+  const module = await import("./components/ResumeDialog");
+  return { default: module.ResumeDialog };
+});
 
-type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["id"];
+const LazyVisualShellSurface = lazy(async () => {
+  const module = await import("./components/integration/VisualShellSurface");
+  return { default: module.VisualShellSurface };
+});
 
-// Agent-native session continuation for the startup resume dialog. Only the
-// base binary is mapped; anything else (shell, custom commands) respawns
-// with its original command, which is a fresh start for that program.
-const RESUME_COMMANDS: Record<string, string> = {
-  claude: "claude --continue",
-  codex: "codex resume --last",
-  opencode: "opencode --continue",
-  kimi: "kimi --continue",
-};
+const LazySettingsDialog = lazy(async () => {
+  const module = await import("./components/settings/SettingsDialog");
+  return { default: module.SettingsDialog };
+});
 
-function resumeCommandFor(command: string): string {
-  const base = command.trim().split(/\s+/)[0];
-  return RESUME_COMMANDS[base] ?? command;
-}
+const LazySettingsSectionPanel = lazy(async () => {
+  const module = await import("./components/integration/settings/SettingsPanels");
+  return { default: module.SettingsSectionPanel };
+});
 
-const VOICE_LANGUAGES = [
-  { code: "auto", label: "Auto-detect" },
-  { code: "en", label: "English" },
-  { code: "es", label: "Spanish" },
-  { code: "fr", label: "French" },
-  { code: "de", label: "German" },
-  { code: "it", label: "Italian" },
-  { code: "pt", label: "Portuguese" },
-  { code: "nl", label: "Dutch" },
-  { code: "pl", label: "Polish" },
-  { code: "ru", label: "Russian" },
-  { code: "uk", label: "Ukrainian" },
-  { code: "tr", label: "Turkish" },
-  { code: "ar", label: "Arabic" },
-  { code: "hi", label: "Hindi" },
-  { code: "zh", label: "Chinese" },
-  { code: "ja", label: "Japanese" },
-  { code: "ko", label: "Korean" },
-];
-
-function MicLevelMeter({ active }: { active: boolean }) {
-  const fillRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!active) return;
-    const unlisten = listen<number>("voice-audio-level", (e) => {
-      const el = fillRef.current;
-      if (!el) return;
-      const level = Math.min(1, e.payload * 10);
-      el.style.transform = `scaleX(${level})`;
-    });
-    return () => {
-      unlisten.then((u) => u());
-    };
-  }, [active]);
-
+function AppLoadingSurface({ label }: { label: string }) {
   return (
-    <div className="mic-test-meter">
-      <div className="mic-test-meter-fill" ref={fillRef} />
+    <div className="terra-app-loading" role="status" aria-live="polite">
+      <span>Carregando {label}…</span>
     </div>
   );
 }
 
-function loadFontSize(): number {
-  const raw = Number(localStorage.getItem("termFontSize"));
-  return Number.isFinite(raw) && raw >= MIN_FONT_SIZE && raw <= MAX_FONT_SIZE
-    ? Math.round(raw)
-    : DEFAULT_FONT_SIZE;
+function resumeCommandFor(command: string): string {
+  const profile = profileForCommand(command);
+  return resolveResumeCommand(profile, command);
 }
 
-function loadGridCols(): number {
-  const raw = Number(localStorage.getItem("gridCols"));
-  return GRID_COL_OPTIONS.includes(raw) ? raw : DEFAULT_GRID_COLS;
+/** Compare spoken labels without making callers know about locale accents. */
+function normalizeVoiceLookup(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[!?.,:]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
 }
 
-const HOTKEY_ACTIONS = [
-  { id: "newWorkspace", label: "New workspace" },
-  { id: "renameWorkspace", label: "Rename workspace" },
-  { id: "deleteWorkspace", label: "Delete workspace" },
-  { id: "newTerminal", label: "New terminal" },
-  { id: "closeTerminal", label: "Close focused terminal" },
-  { id: "maximizeTerminal", label: "Maximize terminal (toggle)" },
-  { id: "minimizeTerminal", label: "Minimize terminal" },
-  { id: "increaseFontSize", label: "Increase terminal font size" },
-  { id: "decreaseFontSize", label: "Decrease terminal font size" },
-  { id: "resetFontSize", label: "Reset terminal font size" },
-  { id: "toggleVoice", label: "Toggle voice input" },
-  { id: "selectWorkspace1", label: "Select workspace 1" },
-  { id: "selectWorkspace2", label: "Select workspace 2" },
-  { id: "selectWorkspace3", label: "Select workspace 3" },
-  { id: "selectWorkspace4", label: "Select workspace 4" },
-  { id: "selectWorkspace5", label: "Select workspace 5" },
-  { id: "selectWorkspace6", label: "Select workspace 6" },
-  { id: "selectWorkspace7", label: "Select workspace 7" },
-  { id: "selectWorkspace8", label: "Select workspace 8" },
-  { id: "selectWorkspace9", label: "Select workspace 9" },
-  { id: "selectTerminal1", label: "Focus terminal 1" },
-  { id: "selectTerminal2", label: "Focus terminal 2" },
-  { id: "selectTerminal3", label: "Focus terminal 3" },
-  { id: "selectTerminal4", label: "Focus terminal 4" },
-  { id: "selectTerminal5", label: "Focus terminal 5" },
-  { id: "selectTerminal6", label: "Focus terminal 6" },
-  { id: "selectTerminal7", label: "Focus terminal 7" },
-  { id: "selectTerminal8", label: "Focus terminal 8" },
-  { id: "selectTerminal9", label: "Focus terminal 9" },
-];
+type DurableScrollbackApi = {
+  setDurableScrollbackEnabled?: (enabled: boolean) => Promise<void>;
+};
 
-function loadHotkeys(): Record<string, Hotkey> {
-  try {
-    const raw = localStorage.getItem("hotkeys");
-    if (raw) {
-      const parsed: unknown = JSON.parse(raw);
-      const clean: Record<string, Hotkey> = {};
-      for (const [action, def] of Object.entries(DEFAULT_HOTKEYS)) {
-        const v = (parsed as Record<string, unknown>)?.[action];
-        if (
-          v &&
-          typeof v === "object" &&
-          typeof (v as Hotkey).key === "string" &&
-          (v as Hotkey).key.length > 0 &&
-          ["meta", "shift", "ctrl", "alt"].every(
-            (m) => typeof (v as unknown as Record<string, unknown>)[m] === "boolean",
-          )
-        ) {
-          const h = v as Hotkey;
-          clean[action] = {
-            key: h.key,
-            meta: h.meta,
-            shift: h.shift,
-            ctrl: h.ctrl,
-            alt: h.alt,
-          };
-        } else {
-          clean[action] = def;
-        }
-      }
-      return clean;
-    }
-  } catch {
-    // corrupted value; fall back to defaults
-  }
-  return { ...DEFAULT_HOTKEYS };
+function describeSnapshotError(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return "A operação do snapshot falhou. Nada foi alterado.";
 }
 
-function formatHotkey(h: Hotkey): string {
-  let s = "";
-  if (h.ctrl) s += "⌃";
-  if (h.alt) s += "⌥";
-  if (h.shift) s += "⇧";
-  if (h.meta) s += "⌘";
-  s +=
-    h.key === " " ? "Space" : h.key.length === 1 ? h.key.toUpperCase() : h.key;
-  return s;
-}
-
-function matchHotkey(e: KeyboardEvent, h: Hotkey): boolean {
-  return (
-    e.key.toLowerCase() === h.key.toLowerCase() &&
-    e.metaKey === h.meta &&
-    e.ctrlKey === h.ctrl &&
-    e.altKey === h.alt &&
-    e.shiftKey === h.shift
-  );
+function describeInitializationError(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return "Não foi possível carregar os workspaces. Tente novamente.";
 }
 
 function App() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [defaultAgent, setDefaultAgent] = useState<string | null>(
-    () => localStorage.getItem("defaultAgent"),
-  );
-  const [exited, setExited] = useState<Record<string, number | null>>({});
-  const [notifications, setNotifications] = useState<Record<string, number>>(
-    {},
-  );
-  const [notifItems, setNotifItems] = useState<NotificationItem[]>([]);
-  const [branches, setBranches] = useState<Record<string, string>>({});
-  const [contextUsage, setContextUsage] = useState<Record<string, number>>({});
-  const [titles, setTitles] = useState<Record<string, string>>({});
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [focusedId, setFocusedId] = useState<string | null>(null);
   const [showNewWs, setShowNewWs] = useState(false);
   const [newWsName, setNewWsName] = useState("");
   const [newWsCwd, setNewWsCwd] = useState("");
+  const [newWsGroupId, setNewWsGroupId] = useState<string | null>(null);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
   const [pickerTarget, setPickerTarget] = useState<string | null>(null);
+  const [pickerTargetPane, setPickerTargetPane] = useState<string | null>(null);
   const [pickerSaveDefault, setPickerSaveDefault] = useState(false);
-  const [hotkeys, setHotkeys] = useState<Record<string, Hotkey>>(loadHotkeys);
-  const [showSettings, setShowSettings] = useState(false);
-  const [settingsSection, setSettingsSection] =
-    useState<SettingsSection>("terminal");
-  const [capturing, setCapturing] = useState<string | null>(null);
-  const [renameTrigger, setRenameTrigger] = useState<{
+  const [renameTarget, setRenameTarget] = useState<{
+    kind: RenameTargetKind;
     id: string;
-    n: number;
+    value: string;
   } | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => localStorage.getItem("sidebarCollapsed") === "1",
+  const [showNewGroup, setShowNewGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [showResumeQueue, setShowResumeQueue] = useState(false);
+  const [initializationError, setInitializationError] = useState<string | null>(null);
+  const [initializationRunning, setInitializationRunning] = useState(false);
+  const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
+  const [settingsSection, setSettingsSection] =
+    useState<SettingsSectionId>("terminal");
+  const [capturing, setCapturing] = useState<string | null>(null);
+  const {
+    activeId,
+    expandedId,
+    focusedId,
+    setActiveId,
+    setExpandedId,
+    setFocusedId,
+  } = useUiStore(
+    useShallow((state) => ({
+      activeId: state.activeId,
+      expandedId: state.expandedId,
+      focusedId: state.focusedId,
+      setActiveId: state.setActiveId,
+      setExpandedId: state.setExpandedId,
+      setFocusedId: state.setFocusedId,
+    })),
   );
-  const [fontSize, setFontSize] = useState<number>(loadFontSize);
-  const [defaultShell, setDefaultShell] = useState(
-    () => localStorage.getItem("defaultShell") ?? "",
+  const {
+    snapshot: orchestrationSnapshot,
+    groups,
+    flags,
+    sync: syncOrchestration,
+    setFeatureFlag,
+    setContainerVisible,
+    setGroupSuspended,
+    setProjectGroup,
+    setActivePane: setActivePaneSnapshot,
+    persistenceError: orchestrationPersistenceError,
+    clearPersistenceError,
+    detachedTerminalIds,
+    setTerminalDetached,
+    reattachTerminal,
+  } = useOrchestrationStore(
+    useShallow((state) => ({
+      snapshot: state.snapshot,
+      groups: state.groups,
+      flags: state.flags,
+      sync: state.sync,
+      setFeatureFlag: state.setFeatureFlag,
+      setContainerVisible: state.setContainerVisible,
+      setGroupSuspended: state.setGroupSuspended,
+      setProjectGroup: state.setProjectGroup,
+      setActivePane: state.setActivePane,
+      persistenceError: state.persistenceError,
+      clearPersistenceError: state.clearPersistenceError,
+      detachedTerminalIds: state.detachedTerminalIds,
+      setTerminalDetached: state.setTerminalDetached,
+      reattachTerminal: state.reattachTerminal,
+    })),
   );
-  const [reduceMotion, setReduceMotion] = useState(
-    () => localStorage.getItem("reduceMotion") === "1",
+  const {
+    exited,
+    notifications,
+    notifItems,
+    branches,
+    contextUsage,
+    titles,
+    resumeItems,
+    resumeSavedAt,
+    setExited,
+    setContextUsage,
+    setTitles,
+    addNotification,
+    clearNotificationCount,
+    markTerminalRead,
+    markAllRead,
+    clearAllNotifications,
+    pushSystemNotification,
+    notifyUpdateAvailable,
+    setBranches,
+    setResumeItems,
+    setResumeSavedAt,
+    dropResumeItem,
+    clearTerminal,
+    clearTerminals,
+  } = useTerminalRuntimeStore(
+    useShallow((state) => ({
+      exited: state.exited,
+      notifications: state.notifications,
+      notifItems: state.notifItems,
+      branches: state.branches,
+      contextUsage: state.contextUsage,
+      titles: state.titles,
+      resumeItems: state.resumeItems,
+      resumeSavedAt: state.resumeSavedAt,
+      setExited: state.setExited,
+      setContextUsage: state.setContextUsage,
+      setTitles: state.setTitles,
+      addNotification: state.addNotification,
+      clearNotificationCount: state.clearNotificationCount,
+      markTerminalRead: state.markTerminalRead,
+      markAllRead: state.markAllRead,
+      clearAllNotifications: state.clearAllNotifications,
+      pushSystemNotification: state.pushSystemNotification,
+      notifyUpdateAvailable: state.notifyUpdateAvailable,
+      setBranches: state.setBranches,
+      setResumeItems: state.setResumeItems,
+      setResumeSavedAt: state.setResumeSavedAt,
+      dropResumeItem: state.dropResumeItem,
+      clearTerminal: state.clearTerminal,
+      clearTerminals: state.clearTerminals,
+    })),
+  );
+  const {
+    defaultAgent,
+    hotkeys,
+    fontSize,
+    defaultShell,
+    reduceMotion,
+    gridCols,
+    voiceEnabled,
+    voiceLang,
+    voiceModel,
+    voiceInputDevice,
+    setDefaultAgent,
+    setHotkeys,
+    resetHotkeys,
+    changeFontSize,
+    resetFontSize,
+    setDefaultShell,
+    setReduceMotion,
+    setGridCols,
+    setVoiceEnabled,
+    setVoiceLang,
+    setVoiceModel,
+    setVoiceInputDevice,
+  } = usePreferencesStore(
+    useShallow((state) => ({
+      defaultAgent: state.defaultAgent,
+      hotkeys: state.hotkeys,
+      fontSize: state.fontSize,
+      defaultShell: state.defaultShell,
+      reduceMotion: state.reduceMotion,
+      gridCols: state.gridCols,
+      voiceEnabled: state.voiceEnabled,
+      voiceLang: state.voiceLang,
+      voiceModel: state.voiceModel,
+      voiceInputDevice: state.voiceInputDevice,
+      setDefaultAgent: state.setDefaultAgent,
+      setHotkeys: state.setHotkeys,
+      resetHotkeys: state.resetHotkeys,
+      changeFontSize: state.changeFontSize,
+      resetFontSize: state.resetFontSize,
+      setDefaultShell: state.setDefaultShell,
+      setReduceMotion: state.setReduceMotion,
+      setGridCols: state.setGridCols,
+      setVoiceEnabled: state.setVoiceEnabled,
+      setVoiceLang: state.setVoiceLang,
+      setVoiceModel: state.setVoiceModel,
+      setVoiceInputDevice: state.setVoiceInputDevice,
+    })),
   );
 
   useEffect(() => {
     document.documentElement.classList.toggle("reduce-motion", reduceMotion);
   }, [reduceMotion]);
 
+  // Keep the backend's scrollback writer aligned with the opt-in flag. The
+  // optional lookup is a fail-closed bridge while older native binaries are
+  // upgraded; once the command is available, a disabled flag explicitly
+  // turns persistence off and failures stay contained to this feature.
+  useEffect(() => {
+    const setter = (api as typeof api & DurableScrollbackApi)
+      .setDurableScrollbackEnabled;
+    if (typeof setter !== "function") {
+      console.warn("durable scrollback command is unavailable; keeping it disabled");
+      return;
+    }
+    setter(flags.durableScrollback).catch((error) => {
+      console.warn("failed to sync durable scrollback setting:", error);
+    });
+  }, [flags.durableScrollback]);
+
+  useEffect(() => {
+    if (!orchestrationPersistenceError) return;
+    pushSystemNotification(
+      `Não foi possível salvar ${orchestrationPersistenceError.operation}: ${orchestrationPersistenceError.message}`,
+    );
+    clearPersistenceError();
+  }, [
+    orchestrationPersistenceError,
+    clearPersistenceError,
+    pushSystemNotification,
+  ]);
+
   const updateReduceMotion = (on: boolean) => {
     setReduceMotion(on);
-    localStorage.setItem("reduceMotion", on ? "1" : "0");
   };
   const agentsRef = useRef<AgentInfo[]>([]);
   const agentsReadyRef = useRef<Promise<void>>(Promise.resolve());
   const [availableShells, setAvailableShells] = useState<string[]>([]);
-  const [gridCols, setGridCols] = useState<number>(loadGridCols);
-  const [resumeItems, setResumeItems] = useState<ResumeItem[] | null>(null);
-  const [resumeSavedAt, setResumeSavedAt] = useState<number | null>(null);
-  const [voiceEnabled, setVoiceEnabled] = useState(
-    () => localStorage.getItem("voiceEnabled") === "1",
-  );
-  const [voiceLang, setVoiceLang] = useState(
-    () => localStorage.getItem("voiceLanguage") ?? "auto",
-  );
-  const [voiceModel, setVoiceModel] = useState<string | null>(
-    () => localStorage.getItem("voiceModel"),
-  );
-  const [voiceInputDevice, setVoiceInputDevice] = useState<string | null>(
-    () => localStorage.getItem("voiceInputDevice"),
-  );
   const [voiceInputDevices, setVoiceInputDevices] = useState<string[]>([]);
   const [micTesting, setMicTesting] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
+  const [voiceCapsule, dispatchVoiceCapsule] = useReducer(
+    reduceVoiceCapsuleModel,
+    undefined,
+    createInitialVoiceCapsuleModel,
+  );
+  const [voiceLevel, setVoiceLevel] = useState(0);
+  const [voiceSamples, setVoiceSamples] = useState<number[]>([]);
+  const [voiceFeedback, setVoiceFeedback] = useState<string | null>(null);
+  const [voiceSubmitted, setVoiceSubmitted] = useState(false);
   const [voiceModels, setVoiceModels] = useState<VoiceModelInfo[]>([]);
   const [voiceDl, setVoiceDl] = useState<{
     id: string;
@@ -350,112 +373,187 @@ function App() {
   } | null>(null);
   const [micAvailable, setMicAvailable] = useState<boolean | null>(null);
   const [appVersion, setAppVersion] = useState<string>("");
+  const [snapshotOperation, setSnapshotOperation] =
+    useState<SnapshotOperation | null>(null);
+  const [snapshotFeedback, setSnapshotFeedback] =
+    useState<SnapshotFeedback | null>(null);
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [updateInstalling, setUpdateInstalling] = useState(false);
   const [updateCheckState, setUpdateCheckState] = useState<
     "idle" | "checking" | "uptodate" | "error"
   >("idle");
   const inited = useRef(false);
+  const initializationGateRef = useRef<InitializationGate | null>(null);
+  if (!initializationGateRef.current) {
+    initializationGateRef.current = createInitializationGate();
+  }
   // Authoritative set of terminal ids the UI tracks; mutated only by
   // spawn/close paths (never rebuilt from `workspaces`, which would race
   // with pending refreshes and silently drop live ids).
   const liveIdsRef = useRef<Set<string>>(new Set());
-  const notifKeyRef = useRef(1);
   const spawnSeqRef = useRef<Record<string, number>>({});
   const lastFocusByWs = useRef<Record<string, string>>({});
   const prevActiveId = useRef<string | null>(null);
+  const persistedPaneSelectionRef = useRef<string | null>(null);
+  const resumingTerminalIdsRef = useRef<Set<string>>(new Set());
+  const resumeQueueMutationRef = useRef(false);
+
+  /**
+   * `spawn_terminal` can resolve after a short-lived child has already been
+   * reaped and its exit event emitted. Register the id before the query, then
+   * reconcile the returned generation with the backend's live snapshot so a
+   * missed event cannot leave dead metadata rendered as an active terminal.
+   */
+  const registerSpawnedTerminal = async (result: SpawnedTerminal) => {
+    const id = result.meta.id;
+    liveIdsRef.current.add(id);
+    spawnSeqRef.current[id] = result.seq;
+    try {
+      const running = await api.runningTerminals();
+      const isRunning = isCurrentSpawnedTerminalRunning(id, result.seq, running);
+      setExited((previous) => {
+        const next = { ...previous };
+        if (isRunning) {
+          delete next[id];
+        } else if (!(id in next)) {
+          // The exit event may have been emitted before liveIdsRef was
+          // registered. Preserve a code received by a concurrent listener;
+          // otherwise null is the intentional unknown-code marker.
+          next[id] = null;
+        }
+        return next;
+      });
+      if (!isRunning) {
+        setContextUsage((previous) => {
+          const next = { ...previous };
+          delete next[id];
+          return next;
+        });
+      }
+    } catch (error) {
+      // Registration remains authoritative even when this best-effort
+      // reconciliation cannot query an older native binary.
+      console.warn(`failed to reconcile spawned terminal ${id}:`, error);
+    }
+  };
 
   const refresh = useCallback(async () => {
     try {
       const list = await api.listWorkspaces();
+      const loadedGroups = await api.listGroups().catch(() => [] as WorkspaceGroup[]);
+      syncOrchestration(list, loadedGroups);
       setWorkspaces(list);
+      const visibleIds = new Set(
+        (useOrchestrationStore.getState().snapshot?.containers ?? [])
+          .filter((container) => container.visible)
+          .map((container) => container.projectId)
+          .filter((id): id is string => Boolean(id)),
+      );
       setActiveId((prev) =>
-        prev && list.some((w) => w.id === prev) ? prev : (list[0]?.id ?? null),
+        prev && visibleIds.has(prev)
+          ? prev
+          : (list.find((workspace) => visibleIds.has(workspace.id))?.id ?? list[0]?.id ?? null),
       );
     } catch (err) {
       console.error("failed to list workspaces:", err);
     }
-  }, []);
+  }, [syncOrchestration]);
 
-  // One-time init: load workspaces and offer to resume the terminals that
-  // were running at last close. Guarded so React StrictMode's double-invoke
-  // doesn't spawn everything twice.
-  useEffect(() => {
-    if (inited.current) return;
-    inited.current = true;
+  // Load workspaces and offer to resume terminals that were running at last
+  // close. The gate coalesces StrictMode/concurrent attempts, while a failed
+  // attempt clears `inited` so the visible retry action can safely run again.
+  const initializeApplication = async () => {
+    let list = await api.listWorkspaces();
+    if (list.length === 0) {
+      await api.createWorkspace("default", "");
+      list = await api.listWorkspaces();
+    }
+    const loadedGroups = await api.listGroups().catch(() => [] as WorkspaceGroup[]);
+    syncOrchestration(list, loadedGroups);
+    setWorkspaces(list);
+    const visibleIds = new Set(
+      (useOrchestrationStore.getState().snapshot?.containers ?? [])
+        .filter((container) => container.visible)
+        .map((container) => container.projectId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    setActiveId((previous) =>
+      previous && visibleIds.has(previous)
+        ? previous
+        : (list.find((workspace) => visibleIds.has(workspace.id))?.id ?? list[0]?.id ?? null),
+    );
 
-    (async () => {
-      try {
-        let list = await api.listWorkspaces();
-        if (list.length === 0) {
-          await api.createWorkspace("default", "");
-          list = await api.listWorkspaces();
+    const running = await api.runningTerminals();
+    const runningIds = new Set(running.map((r) => r.id));
+    for (const ws of list) {
+      for (const t of ws.terminals) liveIdsRef.current.add(t.id);
+    }
+    for (const r of running) {
+      spawnSeqRef.current[r.id] = r.seq;
+    }
+    const suspendedGroups = suspendedGroupIds(loadedGroups);
+    const suspendedProjects = new Set(
+      loadedGroups
+        .filter((group) => group.suspended === true)
+        .flatMap((group) => group.projectIds),
+    );
+    // Persisted terminals that are no longer alive were running when the
+    // app last closed; offer to resume them instead of silently respawning.
+    const items: ResumeItem[] = [];
+    const deadIds: string[] = [];
+    for (const ws of list) {
+      for (const t of ws.terminals) {
+        if (runningIds.has(t.id)) continue;
+        // Suspended sessions are deliberate dormant state. This also covers
+        // imported snapshots, whose backend marks every session suspended.
+        if (
+          isTerminalSuspended(ws, t, suspendedGroups) ||
+          suspendedProjects.has(ws.id)
+        ) {
+          continue;
         }
-        setWorkspaces(list);
-        setActiveId(list[0]?.id ?? null);
-
-        const running = await api.runningTerminals();
-        const runningIds = new Set(running.map((r) => r.id));
-        for (const ws of list) {
-          for (const t of ws.terminals) liveIdsRef.current.add(t.id);
-        }
-        for (const r of running) {
-          spawnSeqRef.current[r.id] = r.seq;
-        }
-        // Persisted terminals that are no longer alive were running when the
-        // app last closed; offer to resume them instead of silently
-        // respawning, so agent-native session continuation can be used.
-        const items: ResumeItem[] = [];
-        const deadIds: string[] = [];
-        for (const ws of list) {
-          for (const t of ws.terminals) {
-            if (runningIds.has(t.id)) continue;
-            deadIds.push(t.id);
-            items.push({
-              terminalId: t.id,
-              wsId: ws.id,
-              wsName: ws.name,
-              cwd: ws.cwd,
-              command: t.command,
-              agentId: t.command.trim().split(/\s+/)[0] || "shell",
-              resumeCommand: resumeCommandFor(t.command),
-            });
-          }
-        }
-        if (items.length > 0) {
-          // Mark persisted-dead terminals as exited up front so the status
-          // bar doesn't count them as running and panes show the exited
-          // overlay instead of a blank live-looking terminal.
-          setExited((prev) => {
-            const next = { ...prev };
-            for (const id of deadIds) next[id] = null;
-            return next;
-          });
-          setResumeItems(items);
-          api.storeSavedAt().then(setResumeSavedAt).catch(() => {});
-        }
-      } catch (err) {
-        console.error("initialization failed:", err);
+        deadIds.push(t.id);
+        items.push({
+          terminalId: t.id,
+          wsId: ws.id,
+          wsName: ws.name,
+          cwd: ws.cwd,
+          command: t.command,
+          agentId: t.command.trim().split(/\s+/)[0] || "shell",
+          resumeCommand: resumeCommandFor(t.command),
+        });
       }
-    })();
+    }
+    if (items.length > 0) {
+      // Mark persisted-dead terminals as exited up front so panes show the
+      // exited overlay instead of a blank live-looking terminal.
+      setExited((prev) => {
+        const next = { ...prev };
+        for (const id of deadIds) next[id] = null;
+        return next;
+      });
+      setResumeItems(items);
+      setShowResumeQueue(true);
+      api.storeSavedAt().then(setResumeSavedAt).catch(() => {});
+    }
 
-    agentsReadyRef.current = api
+    const agentsReady = api
       .detectAgents()
       .then((a) => {
         agentsRef.current = a;
         setAgents(a);
       })
       .catch(() => {});
+    agentsReadyRef.current = agentsReady;
+    await agentsReady;
 
     getVersion()
       .then(setAppVersion)
       .catch(() => {});
-    runUpdateCheck();
-    setInterval(runUpdateCheck, UPDATE_CHECK_MS);
 
     // Push persisted voice settings into the backend (model load is async).
     // If the mic is gone while the feature was left enabled, disable it.
-    if (localStorage.getItem("voiceEnabled") === "1") {
+    if (voiceEnabled) {
       api
         .voiceMicAvailable()
         .then((avail) => {
@@ -463,17 +561,36 @@ function App() {
           if (!avail) disableVoiceInput(false);
         })
         .catch(() => {});
-      api
-        .voiceSetLanguage(localStorage.getItem("voiceLanguage") ?? "auto")
-        .catch(() => {});
-      api
-        .voiceSetInputDevice(localStorage.getItem("voiceInputDevice"))
-        .catch(() => {});
-      const model = localStorage.getItem("voiceModel");
-      if (model) {
-        api.voiceSetModel(model).catch(handleVoiceModelLoadError);
+      api.voiceSetLanguage(voiceLang).catch(() => {});
+      api.voiceSetInputDevice(voiceInputDevice).catch(() => {});
+      if (voiceModel) {
+        api.voiceSetModel(voiceModel).catch(handleVoiceModelLoadError);
       }
     }
+  };
+
+  const startInitialization = () => {
+    const gate = initializationGateRef.current;
+    if (!gate || gate.isRunning()) return;
+    inited.current = true;
+    setInitializationError(null);
+    setInitializationRunning(true);
+    void gate.run(initializeApplication).then(
+      () => {
+        setInitializationRunning(false);
+      },
+      (error) => {
+        console.error("initialization failed:", error);
+        inited.current = false;
+        setInitializationError(describeInitializationError(error));
+        setInitializationRunning(false);
+      },
+    );
+  };
+
+  useEffect(() => {
+    if (inited.current) return;
+    startInitialization();
   }, []);
 
   // Global backend event listeners. Registered in a dedicated effect (no
@@ -496,26 +613,7 @@ function App() {
       "terminal-notification",
       (e) => {
         if (!liveIdsRef.current.has(e.payload.id)) return;
-        setNotifications((prev) => ({
-          ...prev,
-          [e.payload.id]: (prev[e.payload.id] ?? 0) + e.payload.count,
-        }));
-        if (e.payload.messages.length > 0) {
-          const ts = Date.now();
-          const added = e.payload.messages
-            .map((message) => ({
-              key: notifKeyRef.current++,
-              terminalId: e.payload.id,
-              workspaceId: e.payload.workspace_id,
-              message,
-              ts,
-              read: false,
-            }))
-            .reverse();
-          setNotifItems((prev) =>
-            [...added, ...prev].slice(0, MAX_NOTIF_ITEMS),
-          );
-        }
+        addNotification(e.payload);
       },
     );
     const unlistenCtx = listen<ContextPayload>("terminal-context", (e) => {
@@ -526,10 +624,17 @@ function App() {
       if (!liveIdsRef.current.has(e.payload.id)) return;
       setTitles((prev) => ({ ...prev, [e.payload.id]: e.payload.title }));
     });
+    const refreshWorkspaces = createDebouncedTask(() => {
+      void refresh();
+    }, 75);
     const unlistenWs = listen("workspaces-changed", () => {
-      refresh();
+      // Layout drags and group updates can emit several events in one turn;
+      // rearming a short debounce keeps secondary windows current without
+      // issuing a request per intermediate frame.
+      refreshWorkspaces.schedule();
     });
     return () => {
+      refreshWorkspaces.cancel();
       unlisten.then((u) => u());
       unlistenNotif.then((u) => u());
       unlistenCtx.then((u) => u());
@@ -539,8 +644,16 @@ function App() {
   }, [refresh]);
 
   const active = workspaces.find((w) => w.id === activeId) ?? null;
-  const showResume = resumeItems !== null && resumeItems.length > 0;
-  const modalOpen = showNewWs || showAgentPicker || showSettings || showResume;
+  const showResume =
+    showResumeQueue && resumeItems !== null && resumeItems.length > 0;
+  const modalOpen =
+    showNewWs ||
+    showAgentPicker ||
+    showSettings ||
+    showResume ||
+    renameTarget !== null ||
+    showNewGroup ||
+    pendingImportPath !== null;
 
   // Poll git branches for all workspace directories. Keyed off the id:cwd
   // signature so terminal spawns/resizes don't restart the interval.
@@ -595,6 +708,63 @@ function App() {
     });
   }, [activeId, workspaces]);
 
+  // Persist the selected pane whenever the workspace or focused tab changes.
+  // The backend API currently stores the pane; including the focused terminal
+  // in the dedupe key keeps the local active-tab projection in step without
+  // issuing a request for every workspace refresh or terminal event.
+  useEffect(() => {
+    if (!activeId || !orchestrationSnapshot) return;
+    const workspace = workspaces.find((candidate) => candidate.id === activeId);
+    if (!workspace) return;
+    const focused = focusedId
+      ? workspace.terminals.find((terminal) => terminal.id === focusedId)
+      : undefined;
+    const snapshotTab = focusedId
+      ? orchestrationSnapshot.tabs.find(
+          (tab) => tab.ptyId === focusedId || tab.id === focused?.tabId,
+        )
+      : undefined;
+    const project = orchestrationSnapshot.projects.find(
+      (candidate) => candidate.id === activeId,
+    );
+    // A migrated legacy workspace may have a synthetic pane in the frontend
+    // snapshot while the Rust store still has no pane metadata. Only persist
+    // a selection when there is a focused terminal, and materialize that
+    // terminal's placement before selecting a synthetic pane backend-side.
+    if (!focused) return;
+    const paneId = focused.paneId ?? snapshotTab?.paneId ?? project?.activePaneId ?? null;
+    if (!paneId) return;
+    const tabId = focused.tabId ?? snapshotTab?.id ?? `tab-${focused.id}`;
+    const selectionKey = `${activeId}:${paneId ?? ""}:${focusedId ?? ""}`;
+    if (persistedPaneSelectionRef.current === selectionKey) return;
+    // Set the key before the async boundary: a failed IPC call should be
+    // visible in logs but must not create a retry storm during refreshes.
+    persistedPaneSelectionRef.current = selectionKey;
+    const timer = window.setTimeout(() => {
+      // setTerminalPlacement is also the backend's authoritative way to mark
+      // the active tab inside a pane, so call it on a deduped focus change
+      // even when the terminal already has placement metadata.
+      api.setTerminalPlacement({
+        workspaceId: activeId,
+        terminalId: focused.id,
+        paneId,
+        tabId,
+      })
+        .then(() => api.setActivePane({ workspaceId: activeId, paneId }))
+        .then(() => setActivePaneSnapshot(paneId))
+        .catch((error) => {
+          console.warn("failed to persist active pane/tab:", error);
+        });
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [
+    activeId,
+    focusedId,
+    workspaces,
+    orchestrationSnapshot,
+    setActivePaneSnapshot,
+  ]);
+
   useEffect(() => {
     if (!focusedId || !activeId || modalOpen) return;
     const ae = document.activeElement as HTMLElement | null;
@@ -603,7 +773,11 @@ function App() {
     return () => cancelAnimationFrame(raf);
   }, [activeId, focusedId, modalOpen]);
 
-  const spawnTerminalInto = async (wsId: string, command: string) => {
+  const spawnTerminalInto = async (
+    wsId: string,
+    command: string,
+    placement?: { paneId: string; tabId?: string },
+  ) => {
     // Spawn at an existing pane's size when possible: the PTY otherwise
     // starts at 80x24 and the child draws its first frame at the wrong size
     // before the pane's fit can correct it (worst on Windows/ConPTY).
@@ -619,8 +793,20 @@ function App() {
       sibling?.rows,
       defaultShell || undefined,
     );
-    liveIdsRef.current.add(res.meta.id);
-    spawnSeqRef.current[res.meta.id] = res.seq;
+    await registerSpawnedTerminal(res);
+    if (placement?.paneId) {
+      await api
+        .setTerminalPlacement({
+          workspaceId: wsId,
+          terminalId: res.meta.id,
+          paneId: placement.paneId,
+          tabId: placement.tabId ?? `tab-${res.meta.id}`,
+        })
+        .catch((err) => {
+          console.error("failed to persist terminal placement:", err);
+          pushSystemNotification("Terminal started, but its tab placement was not saved");
+        });
+    }
     setFocusedId(res.meta.id);
     await refresh();
   };
@@ -630,15 +816,7 @@ function App() {
     pushSystemNotification(`Failed to start terminal: ${String(err)}`);
   };
 
-  const openPicker = (wsId: string) => {
-    setActiveId(wsId);
-    setExpandedId(null);
-    setPickerTarget(wsId);
-    setPickerSaveDefault(!!defaultAgent);
-    setShowAgentPicker(true);
-  };
-
-  const quickNewTerminal = async (wsId: string) => {
+  const quickNewTerminal = async (wsId: string, paneId: string | null = null) => {
     setActiveId(wsId);
     setExpandedId(null);
     // Wait for agent detection: at startup `agents` is still empty, and
@@ -648,9 +826,10 @@ function App() {
       defaultAgent &&
       agentsRef.current.some((a) => a.id === defaultAgent && a.available);
     if (defAvailable) {
-      spawnTerminalInto(wsId, defaultAgent).catch(reportSpawnError);
+      spawnTerminalInto(wsId, defaultAgent, paneId ? { paneId } : undefined).catch(reportSpawnError);
     } else {
       setPickerTarget(wsId);
+      setPickerTargetPane(paneId);
       setPickerSaveDefault(false);
       setShowAgentPicker(true);
     }
@@ -659,39 +838,23 @@ function App() {
   const chooseAgent = async (agentId: string) => {
     if (pickerSaveDefault) {
       setDefaultAgent(agentId);
-      localStorage.setItem("defaultAgent", agentId);
     }
     setShowAgentPicker(false);
     if (pickerTarget) {
-      await spawnTerminalInto(pickerTarget, agentId).catch(reportSpawnError);
+      await spawnTerminalInto(
+        pickerTarget,
+        agentId,
+        pickerTargetPane ? { paneId: pickerTargetPane } : undefined,
+      ).catch(reportSpawnError);
     }
+    setPickerTargetPane(null);
   };
 
   const closeTerminal = async (id: string) => {
     liveIdsRef.current.delete(id);
     delete spawnSeqRef.current[id];
     await api.killTerminal(id).catch(() => {});
-    setExited((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    setContextUsage((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    setTitles((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    setNotifications((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    setNotifItems((prev) => prev.filter((n) => n.terminalId !== id));
+    clearTerminal(id);
     if (expandedId === id) setExpandedId(null);
     if (focusedId === id) {
       const ws = workspaces.find((w) => w.terminals.some((t) => t.id === id));
@@ -703,7 +866,11 @@ function App() {
   };
 
   const restartTerminal = async (id: string, command: string) => {
-    if (!active) return;
+    const ownerWorkspaceId = workspaceIdForTerminal(workspaces, orchestrationSnapshot, id);
+    if (!ownerWorkspaceId) {
+      console.warn(`cannot restart terminal ${id}: workspace owner is unknown`);
+      return;
+    }
     liveIdsRef.current.add(id);
     try {
       // Kill the old PTY first (store entry is kept so position/width are
@@ -714,41 +881,21 @@ function App() {
       const term = getTerminal(id);
       await api.stopTerminal(id);
       const res = await api.spawnTerminal(
-        active.id,
+        ownerWorkspaceId,
         command,
         id,
         term?.cols,
         term?.rows,
         defaultShell || undefined,
       );
-      spawnSeqRef.current[id] = res.seq;
+      await registerSpawnedTerminal(res);
     } catch (err) {
       console.error(`failed to restart terminal ${id}:`, err);
       setExited((prev) => ({ ...prev, [id]: null }));
       await refresh();
       return;
     }
-    setExited((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    setContextUsage((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    setTitles((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    setNotifications((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    setNotifItems((prev) => prev.filter((n) => n.terminalId !== id));
+    clearTerminal(id);
     await refresh();
   };
 
@@ -768,118 +915,543 @@ function App() {
         term?.rows,
         defaultShell || undefined,
       );
-      liveIdsRef.current.add(item.terminalId);
-      spawnSeqRef.current[item.terminalId] = res.seq;
-      setExited((prev) => {
-        const next = { ...prev };
-        delete next[item.terminalId];
-        return next;
-      });
+      await registerSpawnedTerminal(res);
     } catch (err) {
       console.error(`failed to resume terminal ${item.terminalId}:`, err);
       setExited((prev) => ({ ...prev, [item.terminalId]: null }));
+      throw err;
     }
   };
 
-  const dropResumeItem = (terminalId: string) =>
-    setResumeItems((prev) => {
-      if (!prev) return prev;
-      const next = prev.filter((i) => i.terminalId !== terminalId);
-      return next.length > 0 ? next : null;
+  const resumeItemsWithQueue = async (items: readonly ResumeItem[]) => {
+    const queue = createSpawnQueue<ResumeItem, void>({
+      concurrency: 2,
+      run: (item) => spawnResumed(item),
     });
+    const pending = items.map((item) =>
+      queue.enqueue({ id: item.terminalId, input: item }),
+    );
+    await queue.whenIdle();
+    return Promise.all(pending);
+  };
+
+  const notifyResumeFailures = (
+    results: ReadonlyArray<Awaited<ReturnType<typeof resumeItemsWithQueue>>[number]>,
+    labels: ReadonlyMap<string, string>,
+  ) => {
+    for (const result of results) {
+      if (result.status === "succeeded") continue;
+      const detail =
+        result.error instanceof Error
+          ? result.error.message
+          : String(result.error ?? result.status);
+      const label = labels.get(result.id) ?? result.id;
+      pushSystemNotification(`Failed to resume ${label}: ${detail}`);
+    }
+  };
 
   const resumeOne = async (item: ResumeItem) => {
-    await spawnResumed(item);
-    dropResumeItem(item.terminalId);
+    if (resumeQueueMutationRef.current || resumingTerminalIdsRef.current.has(item.terminalId)) return;
+    resumeQueueMutationRef.current = true;
+    resumingTerminalIdsRef.current.add(item.terminalId);
+    try {
+      await spawnResumed(item);
+      dropResumeItem(item.terminalId);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      pushSystemNotification(`Failed to resume ${item.wsName}: ${detail}`);
+    } finally {
+      resumingTerminalIdsRef.current.delete(item.terminalId);
+      resumeQueueMutationRef.current = false;
+    }
     await refresh();
   };
 
   const dismissOne = async (item: ResumeItem) => {
-    // killTerminal removes the store entry even when no PTY is alive.
-    liveIdsRef.current.delete(item.terminalId);
-    delete spawnSeqRef.current[item.terminalId];
-    await api.killTerminal(item.terminalId).catch(() => {});
-    dropResumeItem(item.terminalId);
-    await refresh();
+    if (resumeQueueMutationRef.current) return;
+    resumeQueueMutationRef.current = true;
+    try {
+      // Only clear local ownership after the backend confirms deletion. A
+      // rejected kill must leave the item retryable and the runtime refs intact.
+      const [result] = await dismissResumeItems([item], (candidate) => api.killTerminal(candidate.terminalId));
+      if (result?.status === "failed") {
+        const detail = result.error instanceof Error ? result.error.message : String(result.error);
+        console.error(`failed to dismiss resume item ${item.terminalId}:`, result.error);
+        pushSystemNotification(
+          `Não foi possível descartar ${item.wsName}. A sessão permanece na fila; tente novamente. ${detail}`,
+        );
+        return;
+      }
+      liveIdsRef.current.delete(item.terminalId);
+      delete spawnSeqRef.current[item.terminalId];
+      dropResumeItem(item.terminalId);
+      await refresh();
+    } finally {
+      resumeQueueMutationRef.current = false;
+    }
   };
 
   const resumeAll = async () => {
     const items = resumeItems ?? [];
-    setResumeItems(null);
-    await Promise.all(items.map(spawnResumed));
-    await refresh();
+    if (items.length === 0 || resumeQueueMutationRef.current) return;
+    resumeQueueMutationRef.current = true;
+    try {
+      // Close the modal while the bounded queue owns these stable terminal IDs;
+      // failed items are put back below for an explicit retry.
+      setResumeItems(null);
+      const results = await resumeItemsWithQueue(items);
+      const labels = new Map(items.map((item) => [item.terminalId, item.wsName]));
+      notifyResumeFailures(results, labels);
+      const failed = new Set(
+        results
+          .filter((result) => result.status !== "succeeded")
+          .map((result) => result.id),
+      );
+      setResumeItems(failed.size > 0 ? items.filter((item) => failed.has(item.terminalId)) : null);
+      await refresh();
+    } finally {
+      resumeQueueMutationRef.current = false;
+    }
   };
 
   const dismissAll = async () => {
     const items = resumeItems ?? [];
-    setResumeItems(null);
-    for (const i of items) {
-      liveIdsRef.current.delete(i.terminalId);
-      delete spawnSeqRef.current[i.terminalId];
+    if (items.length === 0 || resumeQueueMutationRef.current) return;
+    resumeQueueMutationRef.current = true;
+    try {
+      const results = await dismissResumeItems(items, (item) => api.killTerminal(item.terminalId));
+      const failed: ResumeItem[] = [];
+      for (const result of results) {
+        if (result.status === "failed") {
+          failed.push(result.item);
+          const detail = result.error instanceof Error ? result.error.message : String(result.error);
+          console.error(`failed to dismiss resume item ${result.item.terminalId}:`, result.error);
+          pushSystemNotification(
+            `Não foi possível descartar ${result.item.wsName}. A sessão permanece na fila; tente novamente. ${detail}`,
+          );
+          continue;
+        }
+        liveIdsRef.current.delete(result.item.terminalId);
+        delete spawnSeqRef.current[result.item.terminalId];
+      }
+      setResumeItems(failed.length > 0 ? failed : null);
+      await refresh();
+    } finally {
+      resumeQueueMutationRef.current = false;
     }
-    await Promise.all(
-      items.map((i) => api.killTerminal(i.terminalId).catch(() => {})),
-    );
-    await refresh();
-  };
-
-  const markTerminalRead = (id: string) => {
-    setNotifItems((prev) =>
-      prev.some((n) => n.terminalId === id && !n.read)
-        ? prev.map((n) => (n.terminalId === id ? { ...n, read: true } : n))
-        : prev,
-    );
   };
 
   const clearNotifications = (id: string) => {
-    setNotifications((prev) => {
-      if (!(id in prev)) return prev;
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
+    clearNotificationCount(id);
     markTerminalRead(id);
-  };
-
-  const markAllRead = () => {
-    setNotifItems((prev) =>
-      prev.some((n) => !n.read)
-        ? prev.map((n) => ({ ...n, read: true }))
-        : prev,
-    );
-    setNotifications({});
-  };
-
-  const clearAllNotifications = () => {
-    setNotifItems([]);
-    setNotifications({});
   };
 
   const jumpToNotification = (item: NotificationItem) => {
     const ws = workspaces.find((w) => w.id === item.workspaceId);
     if (ws?.terminals.some((t) => t.id === item.terminalId)) {
-      setActiveId(item.workspaceId);
+      selectWorkspace(item.workspaceId, item.terminalId);
       setFocusedId(item.terminalId);
     }
     clearNotifications(item.terminalId);
   };
 
-  const wsOrderRef = useRef<Workspace[]>([]);
-  wsOrderRef.current = workspaces;
-
-  const reorderWorkspacesLocal = (ordered: Workspace[]) => {
-    setWorkspaces(ordered);
-  };
-
-  const persistWorkspaceOrder = () => {
-    api
-      .reorderWorkspaces(wsOrderRef.current.map((w) => w.id))
-      .catch(() => {});
-  };
-
   const renameWorkspace = async (id: string, name: string) => {
     await api.renameWorkspace(id, name).catch(() => {});
     await refresh();
+  };
+
+  const submitRename = async () => {
+    if (!renameTarget) return;
+    const target = renameTarget;
+    const nextName = target.value.trim();
+    if (!nextName) return;
+    setRenameTarget(null);
+    if (target.kind === "workspace") {
+      await renameWorkspace(target.id, nextName);
+    } else {
+      await renameGroup(target.id, nextName);
+    }
+  };
+
+  const containerIdForWorkspace = (
+    workspaceId: string,
+    visibleOnly = false,
+    focusedTerminalId = focusedId,
+  ): string | null =>
+    selectWorkspaceContainerId(orchestrationSnapshot, workspaces, workspaceId, {
+      focusedTerminalId,
+      visibleOnly,
+    });
+
+  /** Hide exactly one visual container. PTYs and sibling containers remain intact. */
+  const hideContainer = (containerId: string) => {
+    const before = useOrchestrationStore.getState().snapshot;
+    const container = before?.containers.find((candidate) => candidate.id === containerId);
+    if (!container) return;
+    setContainerVisible(containerId, false);
+    if (!container.projectId || activeId !== container.projectId) return;
+
+    const after = useOrchestrationStore.getState().snapshot;
+    const visibleContainers = (after?.containers ?? []).filter(
+      (candidate) => candidate.visible && candidate.id !== containerId && candidate.projectId,
+    );
+    const next =
+      visibleContainers.find((candidate) => candidate.projectId !== container.projectId) ??
+      visibleContainers[0];
+    setActiveId(next?.projectId ?? null);
+    setExpandedId(null);
+    setFocusedId(null);
+  };
+
+  /** Hide the workspace's persisted active container when invoked by chrome/navigation. */
+  const hideWorkspace = (id: string) => {
+    const containerId = containerIdForWorkspace(id);
+    if (containerId) {
+      hideContainer(containerId);
+      return;
+    }
+    if (activeId !== id) return;
+    const next = workspaces.find((workspace) => {
+      if (workspace.id === id) return false;
+      return Boolean(containerIdForWorkspace(workspace.id, true));
+    });
+    setActiveId(next?.id ?? null);
+    setExpandedId(null);
+    setFocusedId(null);
+  };
+
+  const selectWorkspace = (id: string, focusedTerminalId?: string) => {
+    const containerId = containerIdForWorkspace(id, false, focusedTerminalId);
+    if (containerId) setContainerVisible(containerId, true);
+    setActiveId(id);
+    setExpandedId(null);
+  };
+
+  const createGroup = () => {
+    setNewGroupName("");
+    setShowNewGroup(true);
+  };
+
+  const submitNewGroup = async () => {
+    const name = newGroupName.trim();
+    if (!name) return;
+    setShowNewGroup(false);
+    setNewGroupName("");
+    await api.createGroup(name).then(() => refresh()).catch((err) => {
+      console.error("failed to create group:", err);
+    });
+  };
+
+  const renameGroup = async (id: string, name: string) => {
+    await api.renameGroup(id, name).then(() => refresh()).catch((err) => {
+      console.error(`failed to rename group ${id}:`, err);
+    });
+  };
+
+  const assignWorkspaceGroup = async (workspaceId: string, groupId: string | null) => {
+    setProjectGroup(workspaceId, groupId);
+    setWorkspaces((previous) => previous.map((workspace) =>
+      workspace.id === workspaceId ? { ...workspace, groupId } : workspace,
+    ));
+    await api.setWorkspaceGroup(workspaceId, groupId).then(() => refresh()).catch(async (err) => {
+      console.error(`failed to assign workspace ${workspaceId} to group:`, err);
+      await refresh();
+    });
+  };
+
+  const groupWorkspaceIds = (groupId: string): string[] => {
+    const group = groups.find((candidate) => candidate.id === groupId);
+    const fromGroup = group?.projectIds ?? [];
+    const fromWorkspaces = workspaces
+      .filter((workspace) => workspace.groupId === groupId)
+      .map((workspace) => workspace.id);
+    return [...new Set([...fromGroup, ...fromWorkspaces])];
+  };
+
+  const terminalEntriesForGroup = (groupId: string) =>
+    groupWorkspaceIds(groupId).flatMap((workspaceId) => {
+      const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
+      return (workspace?.terminals ?? []).map((terminal) => ({ workspace, terminal }));
+    }).filter((entry): entry is { workspace: Workspace; terminal: Workspace["terminals"][number] } => Boolean(entry.workspace));
+
+  const suspendGroup = async (groupId: string) => {
+    const entries = terminalEntriesForGroup(groupId);
+    try {
+      // The backend owns the group lifecycle now: it marks metadata first and
+      // then stops every PTY without deleting scrollback or terminal records.
+      await api.suspendGroup(groupId);
+    } catch (err) {
+      console.error(`failed to suspend group ${groupId}:`, err);
+      return;
+    }
+    setGroupSuspended(groupId, true);
+    const suspendedIds = new Set(entries.map(({ terminal }) => terminal.id));
+    setWorkspaces((previous) => previous.map((workspace) => ({
+      ...workspace,
+      terminals: workspace.terminals.map((terminal) =>
+        suspendedIds.has(terminal.id) ? { ...terminal, suspended: true } : terminal,
+      ),
+    })));
+    await refresh();
+  };
+
+  const resumeGroup = async (groupId: string) => {
+    const group = groups.find((candidate) => candidate.id === groupId);
+    const groupName = group?.name ?? groupId;
+    const entries = terminalEntriesForGroup(groupId);
+    const candidates = entries.map(({ workspace, terminal }) => ({
+      terminalId: terminal.id,
+      projectId: workspace.id,
+      projectName: workspace.name,
+      groupId,
+      groupName,
+      cwd: workspace.cwd,
+      command: terminal.command,
+      resumeCommand: resumeCommandFor(terminal.command),
+    }));
+    const plan = planResume(candidates);
+    const resumeItems: ResumeItem[] = plan.items.map((candidate) => ({
+      terminalId: candidate.terminalId,
+      wsId: candidate.projectId,
+      wsName: candidate.projectName,
+      cwd: candidate.cwd ?? "",
+      command: candidate.command ?? "shell",
+      agentId: candidate.agentId ?? candidate.command?.trim().split(/\s+/)[0] ?? "shell",
+      resumeCommand: candidate.resumeCommand ?? candidate.command ?? "shell",
+    }));
+    const results = await resumeItemsWithQueue(resumeItems);
+    const labels = new Map(resumeItems.map((item) => [item.terminalId, groupName]));
+    notifyResumeFailures(results, labels);
+    const failed = results.filter((result) => result.status !== "succeeded");
+    if (failed.length > 0) {
+      // Restore the group-wide suspended invariant. Successful spawns are
+      // stopped again so a retry never leaves a half-active group behind.
+      await api.suspendGroup(groupId).catch((err) => {
+        console.error(`failed to restore suspended group ${groupId}:`, err);
+      });
+      setGroupSuspended(groupId, true);
+      pushSystemNotification(
+        `${failed.length} agent${failed.length === 1 ? "" : "s"} in ${groupName} could not be resumed; the group remains suspended`,
+      );
+      await refresh();
+      return;
+    }
+    try {
+      await api.resumeGroup(groupId);
+      setGroupSuspended(groupId, false);
+    } catch (err) {
+      console.error(`failed to resume group ${groupId}:`, err);
+      await api.suspendGroup(groupId).catch((restoreError) => {
+        console.error(`failed to restore suspended group ${groupId}:`, restoreError);
+      });
+      setGroupSuspended(groupId, true);
+      pushSystemNotification(`Could not activate group ${groupName}`);
+    }
+    await refresh();
+  };
+
+  const resolveVoiceTerminal = (target: string) => {
+    const needle = normalizeVoiceLookup(target);
+    if (!needle) return null;
+    for (const workspace of workspaces) {
+      const terminal = workspace.terminals.find((candidate) => {
+        const title = titles[candidate.id] ?? "";
+        const command = candidate.command.trim();
+        return [candidate.id, title, command, command.split(/\s+/)[0] ?? ""]
+          .some((value) => normalizeVoiceLookup(value) === needle);
+      });
+      if (terminal) return { workspace, terminal };
+    }
+    const workspace = workspaces.find(
+      (candidate) =>
+        normalizeVoiceLookup(candidate.id) === needle ||
+        normalizeVoiceLookup(candidate.name) === needle,
+    );
+    const terminal = workspace?.terminals[0];
+    return workspace && terminal ? { workspace, terminal } : null;
+  };
+
+  const focusVoiceTarget = (target: string): boolean => {
+    const match = resolveVoiceTerminal(target);
+    if (!match) return false;
+    reattachTerminal(match.terminal.id);
+    selectWorkspace(match.workspace.id);
+    setFocusedId(match.terminal.id);
+    return true;
+  };
+
+  const targetLabelForVoiceIntent = (intent: VoiceCapsuleIntent | null): string | null => {
+    if (!intent) return focusedId ? titles[focusedId] ?? focusedId : null;
+    switch (intent.type) {
+      case "focus":
+      case "stop":
+        return intent.target ?? null;
+      case "suspend-group":
+      case "resume-group":
+        return intent.group;
+      case "new-agent":
+        return intent.agent ?? "Agente padrão";
+      case "open-fleet":
+        return "Frota Terra";
+    }
+  };
+
+  const resolveVoiceGroup = (target: string): string | null => {
+    const needle = normalizeVoiceLookup(target);
+    return groups.find(
+      (group) =>
+        normalizeVoiceLookup(group.id) === needle ||
+        normalizeVoiceLookup(group.name) === needle,
+    )?.id ?? null;
+  };
+
+  const startVoiceAgent = async (agentTarget?: string) => {
+    if (!active) {
+      pushSystemNotification("Select a workspace before starting an agent");
+      return;
+    }
+    if (!agentTarget) {
+      await quickNewTerminal(active.id);
+      return;
+    }
+    const needle = normalizeVoiceLookup(agentTarget);
+    const agent = agents.find(
+      (candidate) =>
+        candidate.available &&
+        (normalizeVoiceLookup(candidate.id) === needle ||
+          normalizeVoiceLookup(candidate.label) === needle),
+    );
+    if (!agent) {
+      pushSystemNotification(`Agent not available: ${agentTarget}`);
+      return;
+    }
+    await spawnTerminalInto(active.id, agent.id);
+  };
+
+  const executeVoiceIntent = async (
+    intent: VoiceCapsuleIntent,
+    confirmed = false,
+  ): Promise<boolean> => {
+    if (!canExecuteVoiceIntent(intent, confirmed)) {
+      setVoiceFeedback("Confirme a ação destrutiva na cápsula para continuar.");
+      return false;
+    }
+    try {
+      switch (intent.type) {
+        case "open-fleet":
+          useShellStore.getState().navigate("fleet");
+          setVoiceFeedback("Frota aberta.");
+          return true;
+        case "focus":
+          if (!focusVoiceTarget(intent.target)) {
+            pushSystemNotification(`Terminal não encontrado: ${intent.target}`);
+            setVoiceFeedback(`Não encontrei o terminal ${intent.target}.`);
+            return false;
+          }
+          setVoiceFeedback(`Foco alterado para ${intent.target}.`);
+          return true;
+        case "suspend-group": {
+          const groupId = resolveVoiceGroup(intent.group);
+          if (!groupId) {
+            pushSystemNotification(`Grupo não encontrado: ${intent.group}`);
+            setVoiceFeedback(`Não encontrei o grupo ${intent.group}.`);
+            return false;
+          }
+          await suspendGroup(groupId);
+          setVoiceFeedback(`Grupo ${intent.group} suspenso.`);
+          return true;
+        }
+        case "resume-group": {
+          const groupId = resolveVoiceGroup(intent.group);
+          if (!groupId) {
+            pushSystemNotification(`Grupo não encontrado: ${intent.group}`);
+            setVoiceFeedback(`Não encontrei o grupo ${intent.group}.`);
+            return false;
+          }
+          await resumeGroup(groupId);
+          setVoiceFeedback(`Grupo ${intent.group} retomado.`);
+          return true;
+        }
+        case "new-agent":
+          await startVoiceAgent(intent.agent);
+          setVoiceFeedback(intent.agent ? `Agente ${intent.agent} iniciado.` : "Novo agente preparado.");
+          return true;
+        case "stop": {
+          const match = intent.target ? resolveVoiceTerminal(intent.target) : null;
+          if (!match) {
+            setVoiceFeedback(intent.target ? `Não encontrei o terminal ${intent.target}.` : "Informe qual terminal deve parar.");
+            return false;
+          }
+          await closeTerminal(match.terminal.id);
+          setVoiceFeedback(`Terminal ${intent.target} parado.`);
+          return true;
+        }
+      }
+    } catch (err) {
+      console.error("voice orchestration command failed:", err);
+      setVoiceFeedback("Não foi possível executar a ação de voz.");
+      pushSystemNotification("Falha ao executar a ação de voz");
+      return false;
+    }
+  };
+
+  const stopFleetTerminals = async (ids: string[]) => {
+    try {
+      await Promise.all(ids.map((id) => api.stopTerminal(id)));
+      await refresh();
+    } catch (err) {
+      console.error("failed to stop fleet terminals:", err);
+      pushSystemNotification("Could not stop all selected agents");
+      await refresh();
+    }
+  };
+
+  const resumeFleetTerminals = async (ids: string[]) => {
+    const entries = ids.flatMap((id) => {
+      for (const workspace of workspaces) {
+        const terminal = workspace.terminals.find((candidate) => candidate.id === id);
+        if (terminal) return [{ workspace, terminal }];
+      }
+      return [];
+    });
+    const queue = createSpawnQueue<(typeof entries)[number], void>({
+      concurrency: 2,
+      run: async ({ workspace, terminal }) => {
+        const term = getTerminal(terminal.id);
+        const result = await api.spawnTerminal(
+          workspace.id,
+          resolveResumeCommand(profileForCommand(terminal.command), terminal.command),
+          terminal.id,
+          term?.cols,
+          term?.rows,
+          defaultShell || undefined,
+        );
+        await registerSpawnedTerminal(result);
+      },
+    });
+    const pending = entries.map(({ workspace, terminal }) =>
+      queue.enqueue({
+        id: terminal.id,
+        input: { workspace, terminal },
+      }),
+    );
+    await queue.whenIdle();
+    const results = await Promise.all(pending);
+    for (const result of results) {
+      if (result.status === "succeeded") continue;
+      const detail =
+        result.error instanceof Error
+          ? result.error.message
+          : String(result.error ?? result.status);
+      pushSystemNotification(`Failed to resume fleet agent ${result.id}: ${detail}`);
+    }
+    await refresh();
+  };
+
+  /** Detaching is visual-only and durable; the PTY remains alive for re-open. */
+  const detachTab = (id: string) => {
+    setTerminalDetached(id, true);
+    setFocusedId((current) => (current === id ? null : current));
   };
 
   const pickFolder = async () => {
@@ -897,20 +1469,120 @@ function App() {
     }
   };
 
+  const exportWorkspaceSnapshot = async () => {
+    if (snapshotOperation) return;
+    setSnapshotOperation("exporting");
+    try {
+      const path = await saveDialog({
+        title: "Export Terra Swarm snapshot",
+        defaultPath: "terra-swarm-snapshot.json",
+        filters: [{ name: "Terra Swarm snapshot", extensions: ["json"] }],
+      });
+      // Tauri returns null when the native picker is cancelled. Keep that a
+      // true no-op: no IPC call and no replacement of the current feedback.
+      if (typeof path !== "string" || !path.trim()) return;
+      setSnapshotFeedback(null);
+      const transfer = await api.exportWorkspaceSnapshot(path);
+      setSnapshotFeedback({
+        kind: "success",
+        message: `Snapshot exportado (${transfer.workspaceCount} workspace${transfer.workspaceCount === 1 ? "" : "s"}, ${transfer.terminalCount} terminal${transfer.terminalCount === 1 ? "" : "s"}).`,
+        backupPath: transfer.path,
+      });
+    } catch (error) {
+      console.error("workspace snapshot export failed:", error);
+      setSnapshotFeedback({
+        kind: "error",
+        message: describeSnapshotError(error),
+      });
+    } finally {
+      setSnapshotOperation(null);
+    }
+  };
+
+  const performImportWorkspaceSnapshot = async (path: string) => {
+    if (snapshotOperation || !path.trim()) return;
+    setPendingImportPath(null);
+    setSnapshotOperation("importing");
+    try {
+      setSnapshotFeedback(null);
+      const transfer = await api.importWorkspaceSnapshot(path);
+
+      // Import is metadata-only and the backend stops every PTY before the
+      // store is replaced. Drop stale runtime references without respawning
+      // imported sessions implicitly; the user can resume them explicitly.
+      const previousTerminalIds = [...liveIdsRef.current];
+      liveIdsRef.current.clear();
+      spawnSeqRef.current = {};
+      clearTerminals(previousTerminalIds);
+      clearAllNotifications();
+      setExited({});
+      setContextUsage({});
+      setTitles({});
+      setResumeItems(null);
+      setResumeSavedAt(null);
+      setExpandedId(null);
+      setFocusedId(null);
+      await refresh();
+
+      setSnapshotFeedback({
+        kind: "success",
+        message: `Snapshot importado (${transfer.workspaceCount} workspace${transfer.workspaceCount === 1 ? "" : "s"}, ${transfer.suspendedTerminalCount} terminal${transfer.suspendedTerminalCount === 1 ? "" : "s"} suspenso${transfer.suspendedTerminalCount === 1 ? "" : "s"}).`,
+        backupPath: transfer.backupPath,
+      });
+    } catch (error) {
+      console.error("workspace snapshot import failed:", error);
+      setSnapshotFeedback({
+        kind: "error",
+        message: describeSnapshotError(error),
+      });
+    } finally {
+      setSnapshotOperation(null);
+    }
+  };
+
+  const importWorkspaceSnapshot = async () => {
+    if (snapshotOperation || pendingImportPath) return;
+    try {
+      const path = await openDialog({
+        title: "Importar snapshot do Terra Swarm",
+        multiple: false,
+        directory: false,
+        filters: [{ name: "Snapshot Terra Swarm", extensions: ["json"] }],
+      });
+      // Tauri returns null when the native picker is cancelled. Do not ask
+      // for confirmation or mutate anything when no file was selected.
+      if (typeof path !== "string" || !path.trim()) return;
+      setPendingImportPath(path);
+    } catch (error) {
+      console.error("workspace snapshot picker failed:", error);
+    }
+  };
+
   const createWorkspace = async () => {
     try {
       const ws = await api.createWorkspace(
         newWsName.trim() || "workspace",
         newWsCwd,
       );
+      if (newWsGroupId) {
+        await api.setWorkspaceGroup(ws.id, newWsGroupId).catch((error) => {
+          console.error(`failed to assign new workspace ${ws.id} to group:`, error);
+        });
+      }
       setShowNewWs(false);
       setNewWsName("");
       setNewWsCwd("");
+      setNewWsGroupId(null);
       await refresh();
       setActiveId(ws.id);
     } catch (err) {
       console.error("failed to create workspace:", err);
     }
+  };
+
+  const openWorkspaceCreator = (groupId: string | null = null) => {
+    setNewWsGroupId(groupId);
+    setShowNewWs(true);
   };
 
   const closeWorkspace = async (id: string) => {
@@ -920,29 +1592,7 @@ function App() {
       delete spawnSeqRef.current[t.id];
     }
     delete lastFocusByWs.current[id];
-    setExited((prev) => {
-      const next = { ...prev };
-      for (const t of terms) delete next[t.id];
-      return next;
-    });
-    setNotifications((prev) => {
-      const next = { ...prev };
-      for (const t of terms) delete next[t.id];
-      return next;
-    });
-    setNotifItems((prev) =>
-      prev.filter((n) => !terms.some((t) => t.id === n.terminalId)),
-    );
-    setContextUsage((prev) => {
-      const next = { ...prev };
-      for (const t of terms) delete next[t.id];
-      return next;
-    });
-    setTitles((prev) => {
-      const next = { ...prev };
-      for (const t of terms) delete next[t.id];
-      return next;
-    });
+    clearTerminals(terms.map((term) => term.id));
     try {
       await api.closeWorkspace(id);
     } catch (err) {
@@ -953,29 +1603,6 @@ function App() {
       setFocusedId(null);
     }
     await refresh();
-  };
-
-  const toggleSidebar = () => {
-    setSidebarCollapsed((prev) => {
-      localStorage.setItem("sidebarCollapsed", prev ? "0" : "1");
-      return !prev;
-    });
-  };
-
-  const changeFontSize = (delta: number) => {
-    setFontSize((prev) => {
-      const next = Math.min(
-        MAX_FONT_SIZE,
-        Math.max(MIN_FONT_SIZE, prev + delta),
-      );
-      localStorage.setItem("termFontSize", String(next));
-      return next;
-    });
-  };
-
-  const resetFontSize = () => {
-    setFontSize(DEFAULT_FONT_SIZE);
-    localStorage.removeItem("termFontSize");
   };
 
   const refreshVoiceModels = useCallback(() => {
@@ -997,55 +1624,34 @@ function App() {
       .catch((err) => console.error("voice toggle failed:", err));
   }, [voiceEnabled]);
 
-  const pushSystemNotification = (message: string) => {
-    setNotifItems((prev) =>
-      [
-        {
-          key: notifKeyRef.current++,
-          terminalId: "",
-          workspaceId: "",
-          message,
-          ts: Date.now(),
-          read: false,
-          system: true,
-        },
-        ...prev,
-      ].slice(0, MAX_NOTIF_ITEMS),
-    );
-  };
-
-  const notifyUpdateAvailable = (version: string, current: string) => {
+  const handleUpdateAvailable = useCallback((version: string, current: string) => {
     setUpdateVersion(version);
-    setNotifItems((prev) =>
-      [
-        {
-          key: notifKeyRef.current++,
-          terminalId: "",
-          workspaceId: "",
-          message: `Version ${version} is available (installed: ${current}).`,
-          ts: Date.now(),
-          read: false,
-          system: true,
-          update: true,
-        },
-        ...prev.filter((n) => !n.update),
-      ].slice(0, MAX_NOTIF_ITEMS),
-    );
-  };
+    notifyUpdateAvailable(version, current);
+  }, [notifyUpdateAvailable]);
 
-  const runUpdateCheck = () => {
-    checkForUpdate().then((result) => {
-      if (result.kind === "update") {
-        notifyUpdateAvailable(result.version, result.current);
-      }
-    });
-  };
+  const runUpdateCheck = useCallback(() => {
+    void checkForUpdate()
+      .then((result) => {
+        if (result.kind === "update") {
+          handleUpdateAvailable(result.version, result.current);
+        }
+      })
+      .catch((error) => {
+        console.warn("update check failed:", error);
+      });
+  }, [handleUpdateAvailable]);
+
+  useEffect(() => {
+    runUpdateCheck();
+    const interval = window.setInterval(runUpdateCheck, UPDATE_CHECK_MS);
+    return () => window.clearInterval(interval);
+  }, [runUpdateCheck]);
 
   const manualUpdateCheck = () => {
     setUpdateCheckState("checking");
     checkForUpdate().then((result) => {
       if (result.kind === "update") {
-        notifyUpdateAvailable(result.version, result.current);
+        handleUpdateAvailable(result.version, result.current);
         setUpdateCheckState("idle");
       } else {
         setUpdateCheckState(result.kind === "none" ? "uptodate" : "error");
@@ -1066,14 +1672,12 @@ function App() {
   const handleVoiceModelLoadError = (err: unknown) => {
     console.error("voice model load failed:", err);
     setVoiceModel(null);
-    localStorage.removeItem("voiceModel");
     refreshVoiceModels();
     pushSystemNotification("Voice model failed to load — select it again");
   };
 
   const disableVoiceInput = (notify: boolean) => {
     setVoiceEnabled(false);
-    localStorage.setItem("voiceEnabled", "0");
     if (notify) {
       pushSystemNotification("Microphone disconnected — voice input disabled");
     }
@@ -1082,7 +1686,6 @@ function App() {
   const updateVoiceEnabled = (on: boolean) => {
     if (!on) {
       setVoiceEnabled(false);
-      localStorage.setItem("voiceEnabled", "0");
       return;
     }
     // Never enable without a microphone connected
@@ -1092,7 +1695,6 @@ function App() {
         setMicAvailable(avail);
         if (!avail) return;
         setVoiceEnabled(true);
-        localStorage.setItem("voiceEnabled", "1");
         api.voiceSetLanguage(voiceLang).catch(() => {});
         api.voiceSetInputDevice(voiceInputDevice).catch(() => {});
         if (voiceModel) {
@@ -1106,18 +1708,12 @@ function App() {
 
   const updateVoiceLang = (lang: string) => {
     setVoiceLang(lang);
-    localStorage.setItem("voiceLanguage", lang);
     api.voiceSetLanguage(lang).catch(() => {});
   };
 
   const updateVoiceInputDevice = (device: string) => {
     const value = device === "" ? null : device;
     setVoiceInputDevice(value);
-    if (value) {
-      localStorage.setItem("voiceInputDevice", value);
-    } else {
-      localStorage.removeItem("voiceInputDevice");
-    }
     api.voiceSetInputDevice(value).catch(() => {});
     // Switch the live test stream to the newly picked device so the meter
     // reflects whatever is actually selected.
@@ -1164,38 +1760,110 @@ function App() {
   voiceFocusRef.current = focusedId;
   const voiceEnabledRef = useRef(voiceEnabled);
   voiceEnabledRef.current = voiceEnabled;
+  const voiceCommandsEnabledRef = useRef(flags.voiceCommands);
+  voiceCommandsEnabledRef.current = flags.voiceCommands;
 
-  // Voice backend events. On completion the transcript is written into the
-  // focused terminal (bracketed-paste aware) and focus is returned to it.
+  const isVoiceModelError = (message: unknown): boolean => {
+    const text = String(message ?? "").toLocaleLowerCase("pt-BR");
+    return text.includes("model") || text.includes("modelo") || text.includes("whisper");
+  };
+
+  // Voice backend events. Parsed intents stop at the capsule preview; they
+  // are executed only by the explicit Send/Confirm action below. Everything
+  // else becomes a profile-aware prompt; transcript text is never interpreted
+  // as a shell command.
   useEffect(() => {
-    const unRecStart = listen("voice-recording-started", () =>
-      setVoiceStatus("recording"),
-    );
-    const unTrStart = listen("voice-transcription-started", () =>
-      setVoiceStatus("transcribing"),
-    );
+    const unRecStart = listen("voice-recording-started", () => {
+      setVoiceStatus("recording");
+      setVoiceFeedback(null);
+      setVoiceSubmitted(false);
+      setVoiceLevel(0);
+      setVoiceSamples([]);
+      dispatchVoiceCapsule({ type: "start-listening" });
+    });
+    const unRecStop = listen("voice-recording-stopped", () => {
+      setVoiceStatus("transcribing");
+      dispatchVoiceCapsule({ type: "stop-listening" });
+    });
+    const unAudioLevel = listen<number>("voice-audio-level", (e) => {
+      const level = Math.max(0, Math.min(1, Number(e.payload) || 0));
+      setVoiceLevel(level);
+      setVoiceSamples((previous) => [...previous.slice(-31), level]);
+    });
+    const unTrStart = listen("voice-transcription-started", () => {
+      setVoiceStatus("transcribing");
+      dispatchVoiceCapsule({ type: "begin-transcription" });
+    });
     const unTrDone = listen<string>("voice-transcription-complete", (e) => {
       setVoiceStatus("idle");
-      const text = e.payload;
-      if (!text.trim()) return;
+      const text = e.payload.trim();
+      if (!text) {
+        dispatchVoiceCapsule({ type: "transcription-ready", transcript: "", intent: null });
+        setVoiceFeedback("Não ouvi uma transcrição. Tente novamente.");
+        return;
+      }
+      if (voiceCommandsEnabledRef.current) {
+        const intent = parseVoiceCommand(text);
+        if (intent) {
+          dispatchVoiceCapsule({ type: "transcription-ready", transcript: text, intent });
+          setVoiceSubmitted(false);
+          setVoiceFeedback(isDestructiveVoiceIntent(intent)
+            ? "Revise o alvo e confirme a ação para executar."
+            : "Revise a intenção e envie quando estiver pronto.");
+          return;
+        }
+      }
+
+      // Ordinary dictation keeps the useful legacy behavior: it is pasted
+      // into the focused terminal as text and never evaluated by the voice
+      // layer. The transcript remains visible after the send.
+      dispatchVoiceCapsule({ type: "transcription-ready", transcript: text, intent: null });
+      setVoiceSubmitted(false);
       const id = voiceFocusRef.current;
-      if (!id) return;
+      if (!id) {
+        setVoiceFeedback("Transcrição pronta; selecione um terminal para enviar o ditado.");
+        return;
+      }
       const term = getTerminal(id);
-      if (!term) return;
-      const data = term.modes.bracketedPasteMode
-        ? `\u001b[200~${text}\u001b[201~`
+      if (!term) {
+        setVoiceFeedback("O terminal em foco não está disponível.");
+        return;
+      }
+      const focusedMeta = workspaces
+        .flatMap((workspace) => workspace.terminals)
+        .find((candidate) => candidate.id === id);
+      const prompt = voiceCommandsEnabledRef.current && focusedMeta
+        ? buildVoicePrompt(profileForCommand(focusedMeta.command), text)
         : text;
-      api.writeTerminal(id, data).catch(() => {});
-      term.focus();
+      const data = term.modes.bracketedPasteMode
+        ? `\u001b[200~${prompt}\u001b[201~`
+        : prompt;
+      api.writeTerminal(id, data).then(() => {
+        term.focus();
+        setVoiceSubmitted(true);
+        setVoiceFeedback("Ditado enviado ao terminal em foco.");
+      }).catch((error) => {
+        console.error("voice dictation write failed:", error);
+        dispatchVoiceCapsule({ type: "fail", message: "Não foi possível enviar o ditado ao terminal." });
+        setVoiceFeedback("Não foi possível enviar o ditado ao terminal.");
+      });
     });
     const unTrErr = listen<string>("voice-transcription-error", (e) => {
       setVoiceStatus("idle");
+      dispatchVoiceCapsule({ type: "fail", message: e.payload || "Falha na transcrição." });
+      setVoiceFeedback(e.payload || "Falha na transcrição.");
       console.error("voice transcription error:", e.payload);
+      if (isVoiceModelError(e.payload)) {
+        setSettingsSection("voice");
+        setShowSettings(true);
+      }
     });
     const unRecErr = listen<string>("voice-recording-error", (e) => {
       setVoiceStatus("idle");
+      dispatchVoiceCapsule({ type: "fail", message: e.payload || "Falha ao capturar o microfone." });
+      setVoiceFeedback(e.payload || "Falha ao capturar o microfone.");
       console.error("voice recording error:", e.payload);
-      if (e.payload.includes("model")) {
+      if (isVoiceModelError(e.payload)) {
         setSettingsSection("voice");
         setShowSettings(true);
       }
@@ -1210,7 +1878,6 @@ function App() {
     });
     const unModelChanged = listen<string>("voice-model-changed", (e) => {
       setVoiceModel(e.payload);
-      localStorage.setItem("voiceModel", e.payload);
       refreshVoiceModels();
     });
     const unMicChanged = listen<boolean>("voice-mic-changed", (e) => {
@@ -1220,6 +1887,8 @@ function App() {
     });
     return () => {
       unRecStart.then((u) => u());
+      unRecStop.then((u) => u());
+      unAudioLevel.then((u) => u());
       unTrStart.then((u) => u());
       unTrDone.then((u) => u());
       unTrErr.then((u) => u());
@@ -1229,7 +1898,7 @@ function App() {
       unModelChanged.then((u) => u());
       unMicChanged.then((u) => u());
     };
-  }, [refreshVoiceModels, refreshVoiceInputDevices]);
+  }, [refreshVoiceModels, refreshVoiceInputDevices, workspaces]);
 
   // Refresh mic presence and the model list whenever the settings page opens
   useEffect(() => {
@@ -1256,9 +1925,8 @@ function App() {
   }, [showSettings, settingsSection, micTesting, stopMicTest]);
 
   const applyGridLayout = async (cols: number) => {
-    if (!GRID_COL_OPTIONS.includes(cols)) return;
+    if (!(GRID_COL_OPTIONS as readonly number[]).includes(cols)) return;
     setGridCols(cols);
-    localStorage.setItem("gridCols", String(cols));
     // Even out every pane to an equal share of the row, then reload the
     // workspaces so all grids re-layout on the new column count.
     const basis = Math.floor(100 / cols);
@@ -1332,10 +2000,12 @@ function App() {
         e.stopPropagation();
         switch (action) {
           case "newWorkspace":
-            setShowNewWs(true);
+            openWorkspaceCreator();
             break;
           case "renameWorkspace":
-            if (active) setRenameTrigger({ id: active.id, n: Date.now() });
+            if (active) {
+              setRenameTarget({ kind: "workspace", id: active.id, value: active.name });
+            }
             break;
           case "deleteWorkspace":
             if (active) actions.closeWorkspace(active.id);
@@ -1440,7 +2110,6 @@ function App() {
       }
       const next = { ...hotkeys, [capturing]: hk };
       setHotkeys(next);
-      localStorage.setItem("hotkeys", JSON.stringify(next));
       setCapturing(null);
     };
     window.addEventListener("keydown", handler, { capture: true });
@@ -1448,575 +2117,433 @@ function App() {
       window.removeEventListener("keydown", handler, { capture: true });
   }, [capturing, hotkeys]);
 
-  const resetHotkeys = () => {
-    setHotkeys({ ...DEFAULT_HOTKEYS });
-    localStorage.removeItem("hotkeys");
-    setCapturing(null);
+  const handleFocusedAgentAction = async (
+    action: FocusedAgentAction,
+    context: { workspaceId: string; terminalId: string; command: string },
+  ) => {
+    const workspace = workspaces.find((candidate) => candidate.id === context.workspaceId);
+    const terminal = workspace?.terminals.find((candidate) => candidate.id === context.terminalId);
+    if (!workspace || !terminal) return;
+    switch (action) {
+      case "interrupt":
+        await api.writeTerminal(terminal.id, "\u0003").catch(() => {});
+        return;
+      case "restart":
+        await restartTerminal(terminal.id, terminal.command);
+        return;
+      case "stop":
+        await closeTerminal(terminal.id);
+        return;
+      case "clear-scrollback":
+        clearTerminal(terminal.id);
+        pushSystemNotification("Histórico visual limpo para o agente em foco");
+        return;
+      case "resume": {
+        const term = getTerminal(terminal.id);
+        const result = await api.spawnTerminal(
+          workspace.id,
+          resolveResumeCommand(profileForCommand(terminal.command), terminal.command),
+          terminal.id,
+          term?.cols,
+          term?.rows,
+          defaultShell || undefined,
+        );
+        await registerSpawnedTerminal(result);
+        await refresh();
+        return;
+      }
+    }
+  };
+
+  const startVoiceCapture = () => {
+    if (!voiceEnabled) {
+      toggleVoice();
+      return;
+    }
+    api.voiceToggleRecording().catch((error) => {
+      console.error("voice start failed:", error);
+      setVoiceFeedback("Não foi possível iniciar a captura de voz.");
+    });
+  };
+
+  const stopVoiceCapture = () => {
+    if (voiceStatus !== "recording") return;
+    api.voiceToggleRecording().catch((error) => {
+      console.error("voice stop failed:", error);
+      setVoiceFeedback("Não foi possível parar a captura de voz.");
+    });
+  };
+
+  const cancelVoiceCapture = () => {
+    if (voiceStatus === "recording") {
+      api.voiceToggleRecording().catch(() => {});
+    }
+    dispatchVoiceCapsule({ type: "cancel" });
+    setVoiceStatus("idle");
+    setVoiceSubmitted(false);
+    setVoiceFeedback(null);
+    setVoiceLevel(0);
+    setVoiceSamples([]);
+  };
+
+  const retryVoiceCapture = () => {
+    if (!voiceEnabled) {
+      toggleVoice();
+      return;
+    }
+    dispatchVoiceCapsule({ type: "retry" });
+    setVoiceSubmitted(false);
+    setVoiceFeedback(null);
+    api.voiceToggleRecording().catch((error) => {
+      console.error("voice retry failed:", error);
+      dispatchVoiceCapsule({ type: "fail", message: "Não foi possível iniciar uma nova captura." });
+      setVoiceFeedback("Não foi possível iniciar uma nova captura.");
+    });
+  };
+
+  const sendVoicePayload = async (payload: VoiceSendPayload, confirmed: boolean) => {
+    if (payload.intent) {
+      const success = await executeVoiceIntent(payload.intent, confirmed);
+      if (success) setVoiceSubmitted(true);
+      return;
+    }
+
+    // A transcript without a parsed intent is ordinary dictation. It can be
+    // retried from the capsule if no terminal was focused when transcription
+    // completed, but is always sent as text (never interpreted here).
+    const id = voiceFocusRef.current;
+    const term = id ? getTerminal(id) : null;
+    if (!id || !term) {
+      setVoiceFeedback("Selecione um terminal para enviar o ditado.");
+      return;
+    }
+    const focusedMeta = workspaces
+      .flatMap((workspace) => workspace.terminals)
+      .find((candidate) => candidate.id === id);
+    const prompt = voiceCommandsEnabledRef.current && focusedMeta
+      ? buildVoicePrompt(profileForCommand(focusedMeta.command), payload.transcript)
+      : payload.transcript;
+    const data = term.modes.bracketedPasteMode
+      ? `\u001b[200~${prompt}\u001b[201~`
+      : prompt;
+    try {
+      await api.writeTerminal(id, data);
+      term.focus();
+      setVoiceSubmitted(true);
+      setVoiceFeedback("Ditado enviado ao terminal em foco.");
+    } catch (error) {
+      console.error("voice dictation write failed:", error);
+      dispatchVoiceCapsule({ type: "fail", message: "Não foi possível enviar o ditado ao terminal." });
+      setVoiceFeedback("Não foi possível enviar o ditado ao terminal.");
+    }
   };
 
   return (
     <MotionConfig reducedMotion={reduceMotion ? "always" : "user"}>
-    <div className="app">
-      <TopBar
+      {initializationError ? (
+        <div className="terra-initialization-error" role="alert" aria-live="assertive">
+          <div>
+            <strong>Falha ao carregar o Terra</strong>
+            <span>{initializationError}</span>
+          </div>
+          <button type="button" onClick={startInitialization} disabled={initializationRunning}>
+            {initializationRunning ? "Tentando novamente…" : "Tentar novamente"}
+          </button>
+        </div>
+      ) : null}
+      <Suspense fallback={<AppLoadingSurface label="workspace" />}>
+        <LazyVisualShellSurface
         workspaces={workspaces}
-        activeName={active?.name ?? null}
-        items={notifItems}
-        notificationCount={notifItems.reduce(
-          (n, it) => n + (it.read ? 0 : 1),
-          0,
-        )}
-        gridCols={gridCols}
-        onGridLayoutChange={applyGridLayout}
+        groups={groups}
+        agents={agents}
+        snapshot={orchestrationSnapshot}
+        activeId={activeId}
+        focusedId={focusedId}
+        expandedId={expandedId}
+        exited={exited}
+        notifications={notifications}
+        contextUsage={contextUsage}
+        titles={titles}
+        branches={branches}
+        notificationItems={notifItems}
+        resumeCount={resumeItems?.length ?? 0}
+        appVersion={appVersion}
+        onOpenResume={() => setShowResumeQueue(true)}
+        detachedTerminalIds={detachedTerminalIds}
+        fontSize={fontSize}
+        voiceEnabled={voiceEnabled}
+        voiceStatus={voiceStatus}
+        voiceState={voiceCapsule.state}
+        voiceTranscript={voiceCapsule.partialTranscript}
+        voicePartialTranscript={voiceCapsule.partialTranscript}
+        voiceFinalTranscript={voiceCapsule.finalTranscript}
+        voiceIntent={voiceCapsule.intent}
+        voiceTargetAgent={targetLabelForVoiceIntent(voiceCapsule.intent)}
+        voiceLevel={voiceLevel}
+        voiceSamples={voiceSamples}
+        voiceError={voiceCapsule.error}
+        voiceSubmitted={voiceSubmitted}
+        voiceFeedback={voiceFeedback}
+        onFocus={setFocusedId}
+        onSelectWorkspace={selectWorkspace}
+        onNewWorkspace={() => openWorkspaceCreator()}
+        onNewAgent={(workspaceId, paneId, agentId) => {
+          if (agentId) {
+            void spawnTerminalInto(
+              workspaceId,
+              agentId,
+              paneId ? { paneId } : undefined,
+            ).catch(reportSpawnError);
+            return;
+          }
+          void quickNewTerminal(workspaceId, paneId ?? null);
+        }}
+        onClearNotifications={clearNotifications}
         onMarkAllRead={markAllRead}
         onClearAll={clearAllNotifications}
-        onJump={jumpToNotification}
-        onUpdateClick={installUpdate}
-        updateInstalling={updateInstalling}
-        voiceEnabled={voiceEnabled}
-        voiceStatus={voiceStatus}
-        onVoiceClick={toggleVoice}
-      />
-      <div className="app-row">
-        <Sidebar
-        workspaces={workspaces}
-        activeId={activeId}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={toggleSidebar}
-        onSelect={(id) => {
-          setActiveId(id);
-          setExpandedId(null);
+        onJumpToNotification={jumpToNotification}
+        onRestart={restartTerminal}
+        onKill={closeTerminal}
+        onDetach={detachTab}
+        onReattach={(id) => {
+          reattachTerminal(id);
+          setFocusedId(id);
         }}
-        onAdd={() => setShowNewWs(true)}
-        onClose={closeWorkspace}
-        onRename={renameWorkspace}
-        onReorder={reorderWorkspacesLocal}
-        onPersistOrder={persistWorkspaceOrder}
-        onQuickNew={quickNewTerminal}
-        onPickNew={openPicker}
-        onOpenSettings={() => setShowSettings(true)}
-        renameTrigger={renameTrigger}
-        notifications={notifications}
-        branches={branches}
-      />
-
-      <main className="main">
-        {active ? (
-          <>
-            {workspaces
-              .filter((w) => w.terminals.length > 0)
-              .map((w) => (
-                <TerminalGrid
-                  key={w.id}
-                  workspaceId={w.id}
-                  terminals={w.terminals}
-                  fontSize={fontSize}
-                  gridCols={gridCols}
-                  hidden={w.id !== active.id}
-                  expandedId={w.id === active.id ? expandedId : null}
-                  focusedId={focusedId}
-                  exited={exited}
-                  notifications={notifications}
-                  contextUsage={contextUsage}
-                  titles={titles}
-                  branch={branches[w.id]}
-                  onClearNotifications={clearNotifications}
-                  onFocus={setFocusedId}
-                  onToggleExpand={setExpandedId}
-                  onRestart={restartTerminal}
-                  onClose={closeTerminal}
-                />
-              ))}
-            {active.terminals.length === 0 && (
-              <div className="empty">
-                <p>No terminals running.</p>
-                <button
-                  className="add-terminal"
-                  onClick={() => openPicker(active.id)}
-                >
-                  + New terminal
-                </button>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="empty">
-            <p>No workspaces. Create one to get started.</p>
-            <button className="add-terminal" onClick={() => setShowNewWs(true)}>
-              + New workspace
-            </button>
-          </div>
-        )}
-      </main>
-      </div>
-
-      <StatusBar
-        workspaces={workspaces}
-        agents={agents}
-        exited={exited}
-        branch={active ? branches[active.id] : undefined}
-        voiceEnabled={voiceEnabled}
-        voiceStatus={voiceStatus}
-      />
-
-      <AnimatePresence>
-      {showResume && (
-        <ResumeDialog
-          items={resumeItems}
-          savedAt={resumeSavedAt}
-          onResume={resumeOne}
-          onDismiss={dismissOne}
-          onResumeAll={resumeAll}
-          onDismissAll={dismissAll}
+        onToggleExpand={setExpandedId}
+        onHideWorkspace={hideWorkspace}
+        onHideContainer={hideContainer}
+        loadFiles={api.listWorkspaceFiles}
+        loadGitStatus={api.gitStatus}
+        onCreateGroup={createGroup}
+        onCreateProject={(groupId) => openWorkspaceCreator(groupId)}
+        onRenameNode={(node) => {
+          if (node.kind === "project") {
+            const workspace = workspaces.find((candidate) => candidate.id === node.id);
+            setRenameTarget({
+              kind: "workspace",
+              id: node.id,
+              value: workspace?.name ?? node.id,
+            });
+          } else if (node.kind === "group") {
+            const group = groups.find((candidate) => candidate.id === node.id);
+            setRenameTarget({
+              kind: "group",
+              id: node.id,
+              value: group?.name ?? node.id,
+            });
+          }
+        }}
+        onAssignGroup={assignWorkspaceGroup}
+        onReorderWorkspaces={(workspaceIds) => {
+          const byId = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
+          setWorkspaces(workspaceIds.map((id) => byId.get(id)).filter((workspace): workspace is Workspace => Boolean(workspace)));
+          void api.reorderWorkspaces(workspaceIds).catch((error) => {
+            console.error("failed to persist workspace order:", error);
+            void refresh();
+          });
+        }}
+        onSuspendGroup={(groupId) => {
+          void suspendGroup(groupId);
+        }}
+        onResumeGroup={(groupId) => {
+          void resumeGroup(groupId);
+        }}
+        onBatchStop={(ids) => {
+          void stopFleetTerminals(ids);
+        }}
+        onBatchResume={(ids) => {
+          void resumeFleetTerminals(ids);
+        }}
+        onOpenSettings={() => {
+          setSettingsSection("terminal");
+          setShowSettings(true);
+        }}
+        onOpenVoiceSettings={() => {
+          setSettingsSection("voice");
+          setShowSettings(true);
+        }}
+        onToggleVoice={toggleVoice}
+        onVoiceStartListening={startVoiceCapture}
+        onVoiceStopListening={stopVoiceCapture}
+        onVoiceCancel={cancelVoiceCapture}
+        onVoiceRetry={retryVoiceCapture}
+        onVoiceSend={(payload) => {
+          void sendVoicePayload(payload, false);
+        }}
+        onVoiceConfirm={(payload) => {
+          void sendVoicePayload(payload, true);
+        }}
+        onExportWorkspace={() => {
+          void exportWorkspaceSnapshot();
+        }}
+        onImportWorkspace={() => {
+          void importWorkspaceSnapshot();
+        }}
+        onFocusedAgentAction={(action, context) => {
+          void handleFocusedAgentAction(action, context);
+        }}
         />
-      )}
-      </AnimatePresence>
+      </Suspense>
 
-      <AnimatePresence>
-      {showNewWs && (
-        <motion.div
-          className="modal-backdrop"
-          {...backdropAnim}
-          onClick={() => setShowNewWs(false)}
-        >
-          <motion.div
-            className="modal"
-            {...modalAnim}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2>New workspace</h2>
-            <label>
-              Name
-              <input
-                autoFocus
-                value={newWsName}
-                onChange={(e) => setNewWsName(e.target.value)}
-                placeholder="my-project"
-              />
-            </label>
-            <label>
-              Folder
-              <div className="modal-folder">
-                <input
-                  value={newWsCwd}
-                  onChange={(e) => setNewWsCwd(e.target.value)}
-                  placeholder="~ (home)"
+      {showResume ? (
+        <Suspense fallback={<AppLoadingSurface label="fila de retomada" />}>
+          <LazyResumeDialog
+            items={resumeItems}
+            savedAt={resumeSavedAt}
+            onResume={resumeOne}
+            onDismiss={dismissOne}
+            onResumeAll={resumeAll}
+            onDismissAll={dismissAll}
+            onDefer={() => setShowResumeQueue(false)}
+          />
+        </Suspense>
+      ) : null}
+
+      <WorkspaceDialog
+        cwd={newWsCwd}
+        groupName={newWsGroupId ? groups.find((group) => group.id === newWsGroupId)?.name : null}
+        name={newWsName}
+        onBrowse={pickFolder}
+        onCwdChange={setNewWsCwd}
+        onNameChange={setNewWsName}
+        onOpenChange={setShowNewWs}
+        onSubmit={createWorkspace}
+        open={showNewWs}
+      />
+
+      <AgentPickerDialog
+        agents={agents}
+        onChoose={chooseAgent}
+        onOpenChange={setShowAgentPicker}
+        onSaveDefaultChange={setPickerSaveDefault}
+        open={showAgentPicker}
+        saveDefault={pickerSaveDefault}
+      />
+
+      <RenameDialog
+        kind={renameTarget?.kind ?? "workspace"}
+        onChange={(value) => {
+          setRenameTarget((current) => current ? { ...current, value } : current);
+        }}
+        onOpenChange={(open) => {
+          if (!open) setRenameTarget(null);
+        }}
+        onSubmit={submitRename}
+        open={renameTarget !== null}
+        value={renameTarget?.value ?? ""}
+      />
+
+      <RenameDialog
+        kind="group"
+        mode="create"
+        onChange={setNewGroupName}
+        onOpenChange={(open) => {
+          setShowNewGroup(open);
+          if (!open) setNewGroupName("");
+        }}
+        onSubmit={submitNewGroup}
+        open={showNewGroup}
+        value={newGroupName}
+      />
+
+      <ConfirmActionDialog
+        description="A importação substituirá os metadados atuais dos workspaces. Os terminais ativos serão interrompidos e os processos não serão incluídos no arquivo."
+        onConfirm={() => pendingImportPath ? performImportWorkspaceSnapshot(pendingImportPath) : undefined}
+        onOpenChange={(open) => {
+          if (!open) setPendingImportPath(null);
+        }}
+        open={pendingImportPath !== null}
+        title="Importar snapshot?"
+        confirmLabel="Importar snapshot"
+      />
+
+      {showSettings ? (
+        <Suspense fallback={<AppLoadingSurface label="configurações" />}>
+          <LazySettingsDialog
+            open
+            onOpenChange={(open) => {
+              setShowSettings(open);
+              if (!open) setCapturing(null);
+            }}
+            activeSection={settingsSection}
+            onActiveSectionChange={(section) => {
+              setSettingsSection(section);
+              setCapturing(null);
+            }}
+            title="Configurações"
+            description="Preferências do workbench, agentes e ambiente local."
+            renderSection={({ section }) => (
+              <Suspense fallback={<AppLoadingSurface label="seção" />}>
+                <LazySettingsSectionPanel
+                  section={section}
+                  agents={agents}
+                  defaultAgent={defaultAgent}
+                  onDefaultAgentChange={setDefaultAgent}
+                  availableShells={availableShells}
+                  defaultShell={defaultShell}
+                  onDefaultShellChange={setDefaultShell}
+                  fontSize={fontSize}
+                  onFontSizeChange={changeFontSize}
+                  onFontSizeReset={resetFontSize}
+                  gridCols={gridCols}
+                  onGridLayoutChange={applyGridLayout}
+                  reduceMotion={reduceMotion}
+                  onReduceMotionChange={updateReduceMotion}
+                  flags={flags}
+                  onFeatureFlagChange={setFeatureFlag}
+                  voiceEnabled={voiceEnabled}
+                  onVoiceEnabledChange={updateVoiceEnabled}
+                  voiceLang={voiceLang}
+                  onVoiceLangChange={updateVoiceLang}
+                  voiceInputDevice={voiceInputDevice}
+                  voiceInputDevices={voiceInputDevices}
+                  onVoiceInputDeviceChange={updateVoiceInputDevice}
+                  micAvailable={micAvailable}
+                  micTesting={micTesting}
+                  onMicTestToggle={toggleMicTest}
+                  voiceModels={voiceModels}
+                  voiceDownload={voiceDl}
+                  onVoiceModelSelect={selectVoiceModel}
+                  onVoiceModelDownload={downloadVoiceModel}
+                  hotkeys={hotkeys}
+                  capturing={capturing}
+                  onCaptureHotkey={setCapturing}
+                  onResetHotkeys={() => {
+                    resetHotkeys();
+                    setCapturing(null);
+                  }}
+                  snapshotOperation={snapshotOperation}
+                  snapshotFeedback={snapshotFeedback}
+                  onExportSnapshot={() => {
+                    void exportWorkspaceSnapshot();
+                  }}
+                  onImportSnapshot={() => {
+                    void importWorkspaceSnapshot();
+                  }}
+                  appVersion={appVersion}
+                  updateVersion={updateVersion}
+                  updateInstalling={updateInstalling}
+                  updateCheckState={updateCheckState}
+                  onManualUpdateCheck={manualUpdateCheck}
+                  onInstallUpdate={installUpdate}
                 />
-                <button onClick={pickFolder}>Browse…</button>
-              </div>
-            </label>
-            <div className="modal-actions">
-              <button onClick={() => setShowNewWs(false)}>Cancel</button>
-              <button className="primary" onClick={createWorkspace}>
-                Create
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-      {showAgentPicker && (
-        <motion.div
-          className="modal-backdrop blur-strong"
-          {...backdropAnim}
-          onClick={() => setShowAgentPicker(false)}
-        >
-          <motion.div
-            className="modal"
-            {...modalAnim}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2>New terminal</h2>
-            <div className="agent-list">
-              {agents.map((a) => (
-                <button
-                  key={a.id}
-                  className="agent-option"
-                  disabled={!a.available}
-                  onClick={() => chooseAgent(a.id)}
-                >
-                  <span className={`pane-badge agent-${a.id}`}>{a.id}</span>
-                  <span className="agent-option-label">{a.label}</span>
-                  {!a.available && (
-                    <span className="agent-option-missing">not found</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            <label className="picker-default">
-              <input
-                type="checkbox"
-                checked={pickerSaveDefault}
-                onChange={(e) => setPickerSaveDefault(e.target.checked)}
-              />
-              Save as default (quick-add skips this dialog)
-            </label>
-          </motion.div>
-        </motion.div>
-      )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-      {showSettings && (
-        <motion.div
-          className="modal-backdrop"
-          {...backdropAnim}
-          onClick={() => {
-            setShowSettings(false);
-            setCapturing(null);
-          }}
-        >
-          <motion.div
-            className="modal settings-modal"
-            {...modalAnim}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2>Settings</h2>
-            <div className="settings-body">
-              <nav className="settings-nav">
-                {SETTINGS_SECTIONS.map((s) => (
-                  <button
-                    key={s.id}
-                    className={`settings-nav-item ${
-                      settingsSection === s.id ? "active" : ""
-                    }`}
-                    onClick={() => {
-                      setSettingsSection(s.id);
-                      setCapturing(null);
-                    }}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </nav>
-              <div className="settings-content">
-                {settingsSection === "terminal" && (
-                  <>
-                    <div className="settings-title">Terminal font size</div>
-                    <div className="font-stepper">
-                      <button
-                        className="font-stepper-btn"
-                        onClick={() => changeFontSize(-1)}
-                        disabled={fontSize <= MIN_FONT_SIZE}
-                      >
-                        −
-                      </button>
-                      <span className="font-stepper-value">{fontSize}px</span>
-                      <button
-                        className="font-stepper-btn"
-                        onClick={() => changeFontSize(1)}
-                        disabled={fontSize >= MAX_FONT_SIZE}
-                      >
-                        +
-                      </button>
-                    </div>
-                    <div className="settings-title">Grid layout</div>
-                    <div className="grid-cols-row">
-                      <span className="grid-cols-label">
-                        Terminals side-by-side
-                      </span>
-                      <div className="grid-cols-picker">
-                        {GRID_COL_OPTIONS.map((n) => (
-                          <button
-                            key={n}
-                            className={`grid-cols-option ${
-                              gridCols === n ? "active" : ""
-                            }`}
-                            onClick={() => applyGridLayout(n)}
-                          >
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="settings-title">Default shell</div>
-                    <div className="voice-row">
-                      <select
-                        className="voice-select"
-                        value={defaultShell}
-                        onChange={(e) => {
-                          const shell = e.target.value;
-                          setDefaultShell(shell);
-                          if (shell) {
-                            localStorage.setItem("defaultShell", shell);
-                          } else {
-                            localStorage.removeItem("defaultShell");
-                          }
-                        }}
-                      >
-                        <option value="">System default</option>
-                        {(defaultShell &&
-                        !availableShells.includes(defaultShell)
-                          ? [defaultShell, ...availableShells]
-                          : availableShells
-                        ).map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </>
-                )}
-                {settingsSection === "voice" && (
-                  <>
-                    <div className="settings-title">Voice input</div>
-                    <div className="toggle-row">
-                      <div className="toggle-row-text">
-                        <span className="toggle-row-label">
-                          Enable voice input
-                        </span>
-                        <span className="toggle-row-desc">
-                          Speech-to-text into the focused terminal
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={voiceEnabled}
-                        aria-label="Enable voice input"
-                        className={`toggle-switch ${voiceEnabled ? "on" : ""}`}
-                        disabled={micAvailable === false && !voiceEnabled}
-                        onClick={() => updateVoiceEnabled(!voiceEnabled)}
-                      >
-                        <span className="toggle-knob" />
-                      </button>
-                    </div>
-                    {micAvailable === false && !voiceEnabled && (
-                      <div className="voice-hint">
-                        No microphone detected — connect one to enable voice
-                        input.
-                      </div>
-                    )}
-                    {voiceEnabled && (
-                      <>
-                        <div className="voice-row">
-                          <span className="hotkey-label">Language</span>
-                          <select
-                            className="voice-select"
-                            value={voiceLang}
-                            onChange={(e) => updateVoiceLang(e.target.value)}
-                          >
-                            {VOICE_LANGUAGES.map((l) => (
-                              <option key={l.code} value={l.code}>
-                                {l.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="voice-row">
-                          <span className="hotkey-label">Input device</span>
-                          <select
-                            className="voice-select"
-                            title={voiceInputDevice ?? "System default"}
-                            value={voiceInputDevice ?? ""}
-                            onChange={(e) =>
-                              updateVoiceInputDevice(e.target.value)
-                            }
-                          >
-                            <option value="">System default</option>
-                            {voiceInputDevice &&
-                              !voiceInputDevices.includes(voiceInputDevice) && (
-                                <option value={voiceInputDevice}>
-                                  {voiceInputDevice} (disconnected)
-                                </option>
-                              )}
-                            {voiceInputDevices.map((d) => (
-                              <option key={d} value={d}>
-                                {d}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="voice-row">
-                          <span className="hotkey-label">
-                            Test microphone
-                          </span>
-                          <div className="mic-test-row">
-                            <MicLevelMeter active={micTesting} />
-                            <button
-                              type="button"
-                              className="hotkey-chip"
-                              onClick={toggleMicTest}
-                            >
-                              {micTesting ? "Stop" : "Test"}
-                            </button>
-                          </div>
-                        </div>
-                        {micTesting && (
-                          <div className="voice-hint">
-                            Speak into the mic — you should hear yourself
-                            (with a slight delay) and the bar should move. Use
-                            headphones to avoid feedback.
-                          </div>
-                        )}
-                        <div className="voice-model-list">
-                          {voiceModels.length === 0 && (
-                            <div className="voice-hint">Loading models…</div>
-                          )}
-                          {voiceModels.length > 0 &&
-                            !voiceModels.some((m) => m.downloaded) && (
-                              <div className="voice-hint">
-                                Download a model to start using voice input.
-                              </div>
-                            )}
-                          {voiceModels.map((m) => (
-                            <div className="hotkey-row" key={m.id}>
-                              <span
-                                className="hotkey-label"
-                                title={m.description}
-                              >
-                                {m.display_name}
-                                <span className="voice-model-size">
-                                  {m.size_label}
-                                </span>
-                              </span>
-                              {voiceDl?.id === m.id ? (
-                                <span className="hotkey-capturing">
-                                  {Math.floor(voiceDl.percent)}%
-                                </span>
-                              ) : m.active ? (
-                                <span className="voice-chip active">
-                                  Active
-                                </span>
-                              ) : m.downloaded ? (
-                                <button
-                                  className="hotkey-chip"
-                                  onClick={() => selectVoiceModel(m.id)}
-                                >
-                                  Use
-                                </button>
-                              ) : (
-                                <button
-                                  className="hotkey-chip"
-                                  onClick={() => downloadVoiceModel(m.id)}
-                                  disabled={voiceDl !== null}
-                                >
-                                  Download
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
-                {settingsSection === "shortcuts" && (
-                  <>
-                    <div className="settings-title">Keyboard shortcuts</div>
-                    <div className="hotkey-list">
-                      {HOTKEY_ACTIONS.map((a) => (
-                        <div className="hotkey-row" key={a.id}>
-                          <span className="hotkey-label">{a.label}</span>
-                          {capturing === a.id ? (
-                            <span className="hotkey-capturing">
-                              Press shortcut… (Esc cancels)
-                            </span>
-                          ) : (
-                            <button
-                              className="hotkey-chip"
-                              onClick={() => setCapturing(a.id)}
-                              title="Click to rebind"
-                            >
-                              {formatHotkey(hotkeys[a.id])}
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="settings-section-actions">
-                      <button onClick={resetHotkeys}>Reset defaults</button>
-                    </div>
-                  </>
-                )}
-                {settingsSection === "accessibility" && (
-                  <>
-                    <div className="settings-title">Accessibility</div>
-                    <div className="toggle-row">
-                      <div className="toggle-row-text">
-                        <span className="toggle-row-label">Reduce motion</span>
-                        <span className="toggle-row-desc">
-                          Minimize animations and transitions across the app
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={reduceMotion}
-                        aria-label="Reduce motion"
-                        className={`toggle-switch ${reduceMotion ? "on" : ""}`}
-                        onClick={() => updateReduceMotion(!reduceMotion)}
-                      >
-                        <span className="toggle-knob" />
-                      </button>
-                    </div>
-                  </>
-                )}
-                {settingsSection === "about" && (
-                  <>
-                    <div className="settings-title">Terra Swarm</div>
-                    <div className="voice-row">
-                      <span className="hotkey-label">Version</span>
-                      <span className="voice-chip">
-                        {appVersion || "unknown"}
-                      </span>
-                    </div>
-                    <div className="settings-title">Updates</div>
-                    {updateVersion ? (
-                      <div className="voice-row">
-                        <span className="hotkey-label">
-                          Version {updateVersion} available
-                        </span>
-                        <button
-                          className="hotkey-chip"
-                          disabled={updateInstalling}
-                          onClick={installUpdate}
-                        >
-                          {updateInstalling ? "Installing…" : "Update now"}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="voice-row">
-                        <span className="hotkey-label">
-                          {updateCheckState === "checking"
-                            ? "Checking for updates…"
-                            : updateCheckState === "uptodate"
-                              ? "You're up to date"
-                              : updateCheckState === "error"
-                                ? "Update check failed"
-                                : "Checks automatically every hour"}
-                        </span>
-                        <button
-                          className="hotkey-chip"
-                          disabled={updateCheckState === "checking"}
-                          onClick={manualUpdateCheck}
-                        >
-                          Check for updates
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="modal-actions">
+              </Suspense>
+            )}
+            footerSlot={
               <button
-                className="primary"
+                type="button"
+                className="settings-dialog-done"
                 onClick={() => {
                   setShowSettings(false);
                   setCapturing(null);
                 }}
               >
-                Done
+                Concluído
               </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-      </AnimatePresence>
-    </div>
+            }
+          />
+        </Suspense>
+      ) : null}
     </MotionConfig>
   );
 }

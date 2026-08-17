@@ -1,0 +1,57 @@
+// @vitest-environment jsdom
+
+import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import { SettingsDialog } from "./SettingsDialog";
+import settingsStyles from "./SettingsDialog.module.css?raw";
+
+describe("SettingsDialog", () => {
+  it("navigates settings sections and renders the selected slot", async () => {
+    const user = userEvent.setup();
+    const onActiveSectionChange = vi.fn();
+    render(
+      <SettingsDialog
+        onActiveSectionChange={onActiveSectionChange}
+        onOpenChange={vi.fn()}
+        open
+        slots={{
+          voice: ({ section }) => <p>Voice settings for {section.label}</p>,
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("dialog", { name: "Configurações" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Voz" }));
+    expect(onActiveSectionChange).toHaveBeenCalledWith("voice");
+    expect(screen.getByText("Voice settings for Voz")).toBeInTheDocument();
+  });
+
+  it("filters categories through the accessible settings search", async () => {
+    const user = userEvent.setup();
+    render(<SettingsDialog onOpenChange={vi.fn()} open />);
+
+    const search = screen.getByRole("searchbox", { name: "Buscar configurações" });
+    await user.type(search, "voz");
+    expect(screen.getByRole("tab", { name: "Voz" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Perfil" })).not.toBeInTheDocument();
+    expect(screen.getByText("1 resultado")).toBeInTheDocument();
+  });
+
+  it("keeps Ctrl+K inside settings and focuses the search", () => {
+    render(<SettingsDialog onOpenChange={vi.fn()} open />);
+
+    const search = screen.getByRole("searchbox", { name: "Buscar configurações" });
+    screen.getByRole("tab", { name: "Voz" }).focus();
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+
+    expect(search).toHaveFocus();
+  });
+
+  it("lets the settings content scroll only when its content needs it", () => {
+    expect(settingsStyles).toMatch(
+      /\.sectionContent\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?box-sizing:\s*border-box;/,
+    );
+    expect(settingsStyles).toMatch(/\.main\s*\{[\s\S]*?overflow-y:\s*auto;/);
+  });
+});

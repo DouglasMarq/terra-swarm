@@ -5,6 +5,10 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api } from "../api";
 import type { OutputChunk } from "../types";
 import { registerTerminal, unregisterTerminal, getTerminal } from "../terminalRegistry";
+import {
+  createFitScheduler,
+  createTerminalResizeQueue,
+} from "../lib/terminalFitScheduler";
 import "@xterm/xterm/css/xterm.css";
 
 interface Props {
@@ -26,7 +30,14 @@ interface Props {
   onFocus: () => void;
   onToggleExpand: () => void;
   onRestart: () => void;
+  /** Legacy close means the visual terminal close action. */
   onClose: () => void;
+  /** Detach a tab without ending its PTY, when the orchestration model is on. */
+  onDetach?: () => void;
+  /** Explicitly destructive PTY action; intentionally separate from detach. */
+  onKill?: () => void;
+  /** Hidden tabs remain mounted so switching tabs never kills a PTY. */
+  hidden?: boolean;
 }
 
 function MaximizeIcon() {
@@ -88,12 +99,33 @@ function MinimizeIcon() {
 }
 
 export function TerminalPane(props: Props) {
-  const { id, command, fontSize, exited, expanded, basis, height, entering, dragOver, notifications, contextUsed, title, focused } =
-    props;
+  const {
+    id,
+    command,
+    fontSize,
+    exited,
+    expanded,
+    basis,
+    height,
+    entering,
+    dragOver,
+    notifications,
+    contextUsed,
+    title,
+    focused,
+    hidden = false,
+  } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<(() => void) | null>(null);
+  const resizeQueueRef = useRef<ReturnType<typeof createTerminalResizeQueue> | null>(null);
   const appliedFontSize = useRef(fontSize);
+  // Keep the long-lived xterm effect aware of the latest backend lifecycle.
+  // The component intentionally survives a PTY exit so it can show scrollback
+  // and restart controls, but geometry observers must stop addressing a PTY
+  // that no longer exists.
+  const exitedRef = useRef(exited);
+  exitedRef.current = exited;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -140,96 +172,60 @@ export function TerminalPane(props: Props) {
       ) {
         if (e.type === "keydown") {
           e.preventDefault();
-          api.writeTerminal(id, "\n").catch((err) => warnThrottled("write", err));
+          if (!exitedRef.current) {
+            api.writeTerminal(id, "\n").catch((err) => warnThrottled("write", err));
+          }
         }
         return false;
       }
       return true;
     });
 
-    let lastCols = 0;
-    let lastRows = 0;
-    // fit() silently no-ops while the renderer has no cell metrics yet
-    // (fresh webview at startup, or open() ran inside a display:none grid),
-    // and a single full-width pane never changes size afterwards, so a failed
-    // initial fit would stick the terminal at 80x24 until a window resize.
-    // Report failure and retry with backoff until the fit actually takes.
-    // proposeDimensions() can also return degenerate-but-truthy results
-    // ({cols:2,rows:1} for a 0-height container, {NaN,NaN} inside a
-    // display:none subtree) — treat those as failures so the retry loop
-    // survives instead of poisoning lastCols/lastRows.
-    const fitAndSend = (): boolean => {
+    const resizeQueue = createTerminalResizeQueue(({ cols, rows }) => {
+      // A skipped resize must reject rather than resolve: the queue only
+      // remembers dimensions after a successful send, and a PTY exit can be
+      // followed by a restart with the same geometry.
+      if (exitedRef.current) return Promise.reject(new Error("terminal exited"));
+      return api.resizeTerminal(id, cols, rows).catch((err) => {
+        // An exit event can race an in-flight resize. Once the UI knows the
+        // process is gone this is expected lifecycle, not an actionable error.
+        if (!exitedRef.current) warnThrottled("resize", err);
+        throw err;
+      });
+    });
+
+    // FitAddon intentionally returns a minimum 2x1 geometry even for a
+    // display:none parent. Check the real box first so a zero-sized mount
+    // never poisons the PTY with a tiny resize.
+    const fitAndSend = (): void => {
       try {
+        if (exitedRef.current) return;
+        const box = container.getBoundingClientRect();
+        if (!(box.width > 0 && box.height > 0)) return;
         const d = fit.proposeDimensions();
         if (
           !d ||
           !Number.isFinite(d.cols) ||
           !Number.isFinite(d.rows) ||
-          d.cols < 10 ||
-          d.rows < 3
+          d.cols < 1 ||
+          d.rows < 1
         ) {
-          return false;
+          return;
         }
         fit.fit();
-        if (term.cols !== lastCols || term.rows !== lastRows) {
-          lastCols = term.cols;
-          lastRows = term.rows;
-          api
-            .resizeTerminal(id, term.cols, term.rows)
-            .catch((err) => warnThrottled("resize", err));
-        }
-        return true;
+        if (term.cols < 1 || term.rows < 1) return;
+        resizeQueue.request({ cols: term.cols, rows: term.rows });
       } catch {
-        return false;
-      }
-    };
-    fitRef.current = fitAndSend;
-
-    // ConPTY (and some TUIs) can miss the very first resize because it lands
-    // before the child has attached its console handler, and same-size
-    // resizes are deduped afterwards — so after the first valid fit, nudge
-    // the PTY with a rows-1/rows pair to force fresh resize events the
-    // child cannot miss.
-    const confirmTimers: number[] = [];
-    let confirmed = false;
-    const confirmResize = () => {
-      if (disposed || confirmed) return;
-      confirmed = true;
-      for (const delay of [400, 1500]) {
-        confirmTimers.push(
-          window.setTimeout(() => {
-            if (disposed || term.cols < 10 || term.rows < 4) return;
-            if (term.cols !== lastCols || term.rows !== lastRows) return;
-            const { cols, rows } = term;
-            api
-              .resizeTerminal(id, cols, rows - 1)
-              .then(() => api.resizeTerminal(id, cols, rows))
-              .catch(() => {});
-          }, delay),
-        );
+        // The renderer can still be measuring while the pane is entering the
+        // layout. The observer/focus/visibility signals will schedule a new
+        // coalesced fit once a real box exists.
       }
     };
 
-    let fitTimer = 0;
-    const scheduleFit = (attempt = 0) => {
-      if (disposed || fitTimer) return;
-      fitTimer = window.setTimeout(
-        () => {
-          fitTimer = 0;
-          if (disposed) return;
-          if (fitAndSend()) {
-            confirmResize();
-            return;
-          }
-          if (attempt >= 50) return;
-          scheduleFit(attempt + 1);
-        },
-        attempt === 0 ? 0 : Math.min(1000, 100 * 2 ** Math.min(attempt, 3)),
-      );
-    };
-
-    const raf = requestAnimationFrame(() => scheduleFit());
-    const retry = setTimeout(() => scheduleFit(), 800);
+    const fitScheduler = createFitScheduler(fitAndSend);
+    fitRef.current = fitScheduler.schedule;
+    resizeQueueRef.current = resizeQueue;
+    fitScheduler.schedule();
 
     // Output pipeline with real backpressure: each chunk is handed to xterm
     // with a completion callback, and the next chunk is only drained once
@@ -309,9 +305,10 @@ export function TerminalPane(props: Props) {
     // silently dropped under backpressure.
     let writeChain: Promise<void> = Promise.resolve();
     const dataSub = term.onData((data) => {
+      if (disposed || exitedRef.current) return;
       writeChain = writeChain.then(async () => {
         for (let attempt = 0; ; attempt++) {
-          if (disposed) return;
+          if (disposed || exitedRef.current) return;
           try {
             await api.writeTerminal(id, data);
             return;
@@ -328,33 +325,36 @@ export function TerminalPane(props: Props) {
       });
     });
 
-    let resizeRaf = 0;
     const observer = new ResizeObserver(() => {
-      if (resizeRaf) return;
-      resizeRaf = requestAnimationFrame(() => {
-        resizeRaf = 0;
-        if (fitAndSend()) confirmResize();
-        else scheduleFit();
-      });
+      fitScheduler.schedule();
     });
     observer.observe(container);
+
+    const onWindowResize = () => fitScheduler.schedule();
+    const onVisibilityChange = () => fitScheduler.schedule();
+    window.addEventListener("resize", onWindowResize);
+    window.addEventListener("focus", onWindowResize);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       disposed = true;
       writeBuf = "";
-      cancelAnimationFrame(raf);
-      cancelAnimationFrame(resizeRaf);
-      clearTimeout(retry);
-      clearTimeout(fitTimer);
-      for (const t of confirmTimers) clearTimeout(t);
+      fitScheduler.dispose();
+      resizeQueue.dispose();
       observer.disconnect();
+      window.removeEventListener("resize", onWindowResize);
+      window.removeEventListener("focus", onWindowResize);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       dataSub.dispose();
       unlisten?.();
       unregisterTerminal(id, term);
       term.dispose();
       fitRef.current = null;
+      resizeQueueRef.current = null;
     };
   }, [id]);
+
+  const previousExited = useRef(exited);
 
   useEffect(() => {
     if (appliedFontSize.current === fontSize) return;
@@ -365,6 +365,17 @@ export function TerminalPane(props: Props) {
     fitRef.current?.();
   }, [fontSize, id]);
 
+  // A hidden workbench tab can keep the same box dimensions while its
+  // `display` state changes. ResizeObserver is not guaranteed to report that
+  // transition, so treat visibility/focus/preset changes as explicit fit
+  // signals as well.
+  useEffect(() => {
+    const resumed = previousExited.current && !exited;
+    previousExited.current = exited;
+    if (resumed) resizeQueueRef.current?.reset();
+    fitRef.current?.();
+  }, [basis, exited, expanded, focused, height, hidden, id]);
+
   return (
     <div
       ref={rootRef}
@@ -372,8 +383,14 @@ export function TerminalPane(props: Props) {
       className={`pane ${expanded ? "expanded" : ""} ${entering ? "pane-enter" : ""} ${
         dragOver ? "drag-over" : ""
       } ${focused ? "focused" : ""}`}
-      style={{ flex: `1 1 calc(${basis}% - 12px)`, height }}
+      style={{
+        flex: `1 1 calc(${basis}% - 12px)`,
+        height,
+        display: hidden ? "none" : undefined,
+      }}
+      aria-hidden={hidden}
       onMouseDown={() => {
+        if (hidden) return;
         props.onFocus();
         if (notifications > 0) props.onClearNotifications();
       }}
@@ -421,10 +438,21 @@ export function TerminalPane(props: Props) {
             className="pane-btn pane-close"
             title="Close terminal"
             onMouseDown={(e) => e.stopPropagation()}
-            onClick={props.onClose}
+            onClick={props.onDetach ?? props.onClose}
           >
             ×
           </button>
+          {props.onKill && (
+            <button
+              className="pane-btn pane-kill"
+              title="Kill PTY"
+              aria-label="Kill PTY"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={props.onKill}
+            >
+              ■
+            </button>
+          )}
         </div>
       </div>
       <div className="pane-body" ref={containerRef} />
@@ -433,7 +461,8 @@ export function TerminalPane(props: Props) {
           <span>process exited</span>
           <div className="pane-overlay-actions">
             <button onClick={props.onRestart}>Restart</button>
-            <button onClick={props.onClose}>Close</button>
+            <button onClick={props.onDetach ?? props.onClose}>Detach</button>
+            {props.onKill && <button onClick={props.onKill}>Kill</button>}
           </div>
         </div>
       )}

@@ -48,17 +48,6 @@ export interface NavigatorNodeRef {
   kind: NavigatorNodeKind;
 }
 
-export type DropIntent = "before" | "inside" | "after";
-
-export interface MoveNodePayload extends NavigatorNodeRef {
-  /** The destination parent, or null for the navigator root. */
-  parentId: string | null;
-  /** Destination index among siblings after removing the dragged node. */
-  index: number;
-  intent: DropIntent;
-  targetId: string;
-}
-
 export interface NavigatorNotificationMap {
   readonly [id: string]: number | readonly unknown[] | undefined;
 }
@@ -73,6 +62,8 @@ export interface NavigatorNodeActions {
   onOpen?: (node: NavigatorNodeRef) => void;
   onCreate?: (node: NavigatorNodeRef) => void;
   onRename?: (node: NavigatorNodeRef) => void;
+  /** Request destructive removal of a persisted project/workspace. */
+  onDelete?: (node: NavigatorNodeRef) => void;
   onHide?: (node: NavigatorNodeRef) => void;
   onSuspend?: (node: NavigatorNodeRef) => void;
   onResume?: (node: NavigatorNodeRef) => void;
@@ -81,7 +72,6 @@ export interface NavigatorNodeActions {
 
 export interface NavigatorBaseNode {
   id: string;
-  dragId: string;
   kind: NavigatorNodeKind;
   name: string;
   parentId: string | null;
@@ -152,13 +142,11 @@ export type NavigatorNode =
 export interface NavigatorTree {
   roots: NavigatorNode[];
   byId: Readonly<Record<string, NavigatorNode>>;
-  byDragId: Readonly<Record<string, NavigatorNode>>;
   ungrouped: NavigatorProjectNode[];
 }
 
 export interface FlatNavigatorNode {
   id: string;
-  dragId: string;
   kind: NavigatorNodeKind;
   name: string;
   parentId: string | null;
@@ -196,12 +184,12 @@ export interface NavigatorPanelProps {
   onCreateWorkspace?: (groupId: string | null) => void;
   onCreateAgent?: (workspaceId: string) => void;
   onRenameNode?: (node: NavigatorNodeRef) => void;
+  onDeleteWorkspace?: (workspaceId: string) => void;
   onHideContainer?: (workspaceId: string) => void;
   onHideWorkspace?: (workspaceId: string) => void;
   onSuspendGroup?: (groupId: string) => void;
   onResumeGroup?: (groupId: string) => void;
   onContextMenu?: (event: MouseEvent<HTMLElement>, node: NavigatorNodeRef) => void;
-  onMoveNode?: (payload: MoveNodePayload) => void;
   /** Lazy metadata-only directory loader for the Files activity. */
   loadFiles?: NavigatorFilesLoader;
   /** Structured branch/status loader for the Git activity. */
@@ -228,8 +216,6 @@ export interface ProjectTreeProps extends Omit<NavigatorPanelProps, "className" 
 
 export interface NavigatorRowProps {
   node: NavigatorNode;
-  /** Whether this host supplied a durable tree mutation for project DnD. */
-  dragEnabled?: boolean;
   expanded: boolean;
   selected: boolean;
   active: boolean;
@@ -237,12 +223,7 @@ export interface NavigatorRowProps {
   actions: NavigatorNodeActions;
   onToggle?: (id: string) => void;
   onSelect?: (node: NavigatorNode) => void;
-  dropIntent?: DropIntent | null;
   style?: CSSProperties;
-}
-
-export function navigatorDragId(kind: NavigatorNodeKind, id: string): string {
-  return `terra-navigator:${kind}:${id}`;
 }
 
 export function navigatorRef(node: NavigatorNode): NavigatorNodeRef {

@@ -144,6 +144,17 @@
   line-height: 1.45;
 }
 
+.pickerDefaultHint {
+  margin: 12px 24px 0;
+  color: var(--terra-text-muted, #8e8e96);
+  font-size: 10px;
+}
+
+.pickerDefaultHint strong {
+  color: var(--terra-text, #e4e4e7);
+  font-weight: 600;
+}
+
 .pickerDefault input {
   margin-top: 1px;
   accent-color: var(--terra-accent, #fafafa);

@@ -9,7 +9,6 @@ export interface GroupNodeProps {
   actions?: NavigatorNodeActions;
   onToggle?: (id: string) => void;
   onSelect?: (node: NavigatorGroupNode) => void;
-  dropIntent?: "before" | "inside" | "after" | null;
 }
 
 /** Terra's group row: a calm container for related projects and agents. */

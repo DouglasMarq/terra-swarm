@@ -36,7 +36,6 @@ export function PaneFrame({
   group,
   active = false,
   renderTab,
-  dragHandle,
   onFocusTab,
   onNewTab,
   onDetachTab,
@@ -89,8 +88,6 @@ export function PaneFrame({
       {hasTabs ? (
         <SubTabLane
           tabs={laneTabs}
-          containerId={container.id}
-          paneId={projection.pane.id}
           onFocusTab={(tabId) => onFocusTab?.(tabId, location)}
           onNewTab={() => onNewTab?.(location)}
           onDetachTab={(tabId) => onDetachTab?.(tabId, location)}
@@ -98,19 +95,6 @@ export function PaneFrame({
         />
       ) : null}
       <div className="terra-pane-frame__body">
-        {dragHandle ? (
-          <header className="terra-pane-frame__toolbar">
-            <button
-              type="button"
-              className="terra-pane-frame__drag"
-              aria-label={`Reordenar painel ${projection.pane.id}`}
-              {...dragHandle.attributes}
-              {...dragHandle.listeners}
-            >
-              ⠿
-            </button>
-          </header>
-        ) : null}
         <div className="terra-pane-frame__surface">
           {projection.tabs.length > 0 ? (
             <div className="terra-pane-tab-surfaces">{tabNodes}</div>

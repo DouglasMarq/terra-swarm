@@ -1,7 +1,5 @@
-import { CSS } from "@dnd-kit/utilities";
 import { Bot, ChevronDown, ChevronRight, Folder, FolderOpen, GitBranch, MoreHorizontal, Pause, Play, Plus, SquareTerminal, Workflow } from "../../components/icons";
-import { Eye, EyeOff, Pencil } from "lucide-react";
-import { useSortable } from "@dnd-kit/sortable";
+import { Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import type { NavigatorAgentNode, NavigatorGroupNode, NavigatorNode, NavigatorNodeActions, NavigatorProjectNode, NavigatorRowProps } from "./types";
 import { navigatorRef } from "./types";
@@ -65,6 +63,12 @@ function rowActions(node: NavigatorNode, actions: NavigatorNodeActions): ReactNo
       actions.onRename?.(ref);
     }));
   }
+  if (node.kind === "project" && actions.onDelete) {
+    result.push(actionButton("delete", "Excluir projeto", <Trash2 aria-hidden="true" size={13} />, (event) => {
+      stop(event);
+      actions.onDelete?.(ref);
+    }));
+  }
   if (node.kind === "project" && actions.onHide) {
     const visible = (node as NavigatorProjectNode).visible;
     result.push(actionButton(visible ? "hide" : "show", visible ? "Ocultar projeto" : "Mostrar projeto", visible ? <EyeOff aria-hidden="true" size={13} /> : <Eye aria-hidden="true" size={13} />, (event) => {
@@ -97,7 +101,6 @@ function rowActions(node: NavigatorNode, actions: NavigatorNodeActions): ReactNo
 
 export function NavigatorNodeRow({
   node,
-  dragEnabled = false,
   expanded,
   selected,
   active,
@@ -105,21 +108,8 @@ export function NavigatorNodeRow({
   actions,
   onToggle,
   onSelect,
-  dropIntent,
   style,
 }: NavigatorRowProps) {
-  const sortable = useSortable({
-    id: node.dragId,
-    // Only projects have a persisted reorder/assignment handler. Groups and
-    // agents remain valid drop targets, but never advertise a drag affordance
-    // that would be discarded by the host.
-    disabled: {
-      draggable: node.kind !== "project" || !dragEnabled,
-      droppable: !dragEnabled || (node.kind !== "group" && node.kind !== "project"),
-    },
-    data: { nodeId: node.id, nodeKind: node.kind },
-  });
-  const transform = CSS.Transform.toString(sortable.transform);
   const canToggle = node.children.length > 0;
   const ref = navigatorRef(node);
   const className = [
@@ -129,11 +119,7 @@ export function NavigatorNodeRow({
     selected ? styles.selected : "",
     active ? styles.active : "",
     visible ? "" : styles.hiddenRow,
-    dropIntent ? styles[`drop${dropIntent[0].toUpperCase()}${dropIntent.slice(1)}`] : "",
   ].filter(Boolean).join(" ");
-  const dragAttributes = node.kind === "project" && dragEnabled ? sortable.attributes : {};
-  const dragListeners = node.kind === "project" && dragEnabled ? sortable.listeners : undefined;
-
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -147,17 +133,11 @@ export function NavigatorNodeRow({
     } else if (event.key === "ArrowLeft" && canToggle && expanded) {
       event.preventDefault();
       onToggle?.(node.id);
-    } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-      // dnd-kit owns the sortable keyboard movement. Keeping the key event
-      // available here lets its KeyboardSensor move through treeitems.
-      return;
     }
   }
 
   return (
     <div
-      {...dragAttributes}
-      {...dragListeners}
       aria-expanded={canToggle ? expanded : undefined}
       aria-label={labelFor(node)}
       aria-level={node.depth + 1}
@@ -179,10 +159,9 @@ export function NavigatorNodeRow({
       }}
       onContextMenu={(event) => actions.onContextMenu?.(event, ref)}
       onKeyDown={handleKeyDown}
-      ref={sortable.setNodeRef}
       role="treeitem"
-      tabIndex={node.kind === "project" && dragEnabled ? undefined : 0}
-      style={{ ...style, paddingInlineStart: `${8 + node.depth * 18}px`, transform: transform ?? undefined, transition: sortable.transition ?? undefined }}
+      tabIndex={0}
+      style={{ ...style, paddingInlineStart: `${8 + node.depth * 18}px` }}
     >
       <span className={styles.indent} aria-hidden="true" />
       <button

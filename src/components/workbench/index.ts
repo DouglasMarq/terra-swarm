@@ -3,18 +3,8 @@ export { EmptyPaneCell } from "./EmptyPaneCell";
 export { PaneFrame } from "./PaneFrame";
 export { PaneGrid } from "./PaneGrid";
 export { ProjectContainer } from "./ProjectContainer";
-export {
-  SUBTAB_DND_PREFIX,
-  SubTabLane,
-  subTabDndId,
-} from "./SubTabLane";
+export { SubTabLane } from "./SubTabLane";
 export { WorkspaceWorkbench } from "./WorkspaceWorkbench";
-export {
-  CONTAINER_DND_PREFIX,
-  containerDndId,
-  readContainerDndId,
-} from "./SortableProjectContainer";
-export { PANE_DND_PREFIX, paneDndId, readPaneDndId } from "./SortablePaneFrame";
 export {
   CONTAINER_CLOSE_SEMANTICS,
   TAB_DETACH_SEMANTICS,
@@ -50,7 +40,6 @@ export type {
   SubTabLaneTab,
   WorkbenchActionCallbacks,
   WorkbenchContainerProjection,
-  WorkbenchDragHandleProps,
   WorkbenchLocation,
   WorkbenchLayoutMode,
   WorkbenchPaneProjection,

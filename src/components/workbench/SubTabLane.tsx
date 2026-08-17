@@ -1,19 +1,6 @@
 import { useState, type MouseEvent } from "react";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import type { CSSProperties } from "react";
 import type { SubTabLaneProps, SubTabLaneTab } from "./types";
 import { ConfirmActionDialog } from "../overlays/Dialog";
-
-export const SUBTAB_DND_PREFIX = "terra-subtab:";
-
-export function subTabDndId(tabId: string): string {
-  return `${SUBTAB_DND_PREFIX}${tabId}`;
-}
 
 function tabLabel(entry: SubTabLaneTab): string {
   const value = entry.tab.title || entry.tab.command || "Terminal";
@@ -28,55 +15,31 @@ function stop(event: MouseEvent<HTMLButtonElement>): void {
   event.stopPropagation();
 }
 
-function SortableSubTab({
+function SubTab({
   entry,
-  containerId,
-  paneId,
   onFocusTab,
   onDetachTab,
   onRequestKill,
 }: {
   entry: SubTabLaneTab;
-  containerId?: string;
-  paneId?: string;
   onFocusTab?: (tabId: string) => void;
   onDetachTab?: (tabId: string) => void;
   onRequestKill?: (entry: SubTabLaneTab) => void;
 }) {
   const title = tabTitle(entry);
-  const sortable = useSortable({
-    id: subTabDndId(entry.tab.id),
-    data: {
-      type: "tab",
-      tabId: entry.tab.id,
-      containerId,
-      paneId,
-    },
-  });
-  const style: CSSProperties = {
-    transform: CSS.Transform.toString(sortable.transform),
-    transition: sortable.transition,
-  };
 
   return (
     <div
-      ref={sortable.setNodeRef}
       className="terra-subtab-lane__tab"
-      style={style}
       data-active={entry.active}
       data-status={entry.status ?? "idle"}
       data-unread={entry.unread === true}
-      data-dragging={sortable.isDragging}
-      data-tab-dnd-id={subTabDndId(entry.tab.id)}
       role="group"
       title={title}
     >
       <button
-        ref={sortable.setActivatorNodeRef}
         type="button"
         className="terra-subtab-lane__tab-button"
-        {...sortable.attributes}
-        {...sortable.listeners}
         aria-label={`Focar ${title}`}
         aria-pressed={entry.active}
         onClick={() => onFocusTab?.(entry.tab.id)}
@@ -120,8 +83,6 @@ export function SubTabLane({
   onNewTab,
   onDetachTab,
   onKillTab,
-  containerId,
-  paneId,
   className,
 }: SubTabLaneProps) {
   const [pendingKill, setPendingKill] = useState<SubTabLaneTab | null>(null);
@@ -129,22 +90,15 @@ export function SubTabLane({
   return (
     <>
       <aside className={className ? `terra-subtab-lane ${className}` : "terra-subtab-lane"} aria-label="Abas do painel">
-      <SortableContext
-        items={tabs.map((entry) => subTabDndId(entry.tab.id))}
-        strategy={verticalListSortingStrategy}
-      >
         {tabs.map((entry) => (
-          <SortableSubTab
+          <SubTab
             key={entry.tab.id}
             entry={entry}
-            containerId={containerId}
-            paneId={paneId}
             onFocusTab={onFocusTab}
             onDetachTab={onDetachTab}
             onRequestKill={onKillTab ? setPendingKill : undefined}
           />
         ))}
-      </SortableContext>
       {onNewTab ? (
         <button
           type="button"

@@ -69,6 +69,24 @@ describe("integration dialogs", () => {
     expect(onSaveDefaultChange).toHaveBeenCalledWith(true);
   });
 
+  it("makes the current default and update option explicit in the picker", () => {
+    render(
+      <AgentPickerDialog
+        agents={agents}
+        defaultAgent="codex"
+        onChoose={vi.fn()}
+        onOpenChange={vi.fn()}
+        onSaveDefaultChange={vi.fn()}
+        open
+        saveDefault
+      />,
+    );
+
+    expect(document.body).toHaveTextContent(/Perfil padrão atual:\s*codex/);
+    expect(screen.getByText("Definir a escolha como perfil padrão para os próximos agentes.")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox")).toBeChecked();
+  });
+
   it("submits a controlled rename with the edited value", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();

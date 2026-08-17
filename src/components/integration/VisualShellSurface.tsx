@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { ApplicationShell } from "../shell/ApplicationShell";
 import { NavigatorPanel } from "../navigation/NavigatorPanel";
-import type { ActivityTab, MoveNodePayload, NavigatorFilesLoader, NavigatorGitLoader, NavigatorNodeRef } from "../navigation/types";
+import type { ActivityTab, NavigatorFilesLoader, NavigatorGitLoader, NavigatorNodeRef } from "../navigation/types";
 import { HomeDashboard, type HomeActiveGroup, type HomeRecentWorkspace, type HomeTimelineEvent } from "../home/HomeDashboard";
 import type { WorkbenchLocation, WorkbenchTabRenderContext } from "../workbench/types";
 import type { CommandConfirmRequest, FocusedAgentAction } from "../overlays/CommandPalette";
@@ -162,14 +162,13 @@ export interface VisualShellSurfaceProps {
   onReattach: (id: string) => void;
   onToggleExpand: (id: string | null) => void;
   onHideWorkspace: (id: string) => void;
+  onDeleteWorkspace?: (id: string) => void;
   onHideContainer?: (containerId: string) => void;
   loadFiles?: NavigatorFilesLoader;
   loadGitStatus?: NavigatorGitLoader;
   onCreateGroup: () => void;
   onCreateProject: (groupId: string | null) => void;
   onRenameNode: (node: NavigatorNodeRef) => void;
-  onAssignGroup: (workspaceId: string, groupId: string | null) => void;
-  onReorderWorkspaces?: (workspaceIds: string[]) => void;
   onSuspendGroup: (groupId: string) => void;
   onResumeGroup: (groupId: string) => void;
   onBatchStop: (ids: string[]) => void;
@@ -409,21 +408,11 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     setContainerFullscreen: state.setContainerFullscreen,
     setContainerActivePane: state.setContainerActivePane,
     setActivePane: state.setActivePane,
-    reorderContainers: state.reorderContainers,
-    reorderPanes: state.reorderPanes,
-    reorderTabs: state.reorderTabs,
-    movePane: state.movePane,
     setWorkspaceLayout: state.setWorkspaceLayout,
   })));
   const orchestration = useMemo(
     () => ({
       ...orchestrationActions,
-      movePane: (
-        paneId: string,
-        _fromContainerId: string,
-        toContainerId: string,
-        index: number,
-      ) => orchestrationActions.movePane(paneId, toContainerId, index),
     }),
     [orchestrationActions],
   );
@@ -593,26 +582,6 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     }
   };
 
-  const handleMoveNode = (payload: MoveNodePayload) => {
-    if (payload.kind !== "project") {
-      if (payload.kind === "agent") props.onFocus(payload.id);
-      return;
-    }
-    const targetGroupId = payload.parentId && wireGroups.some((group) => group.id === payload.parentId) ? payload.parentId : null;
-    props.onAssignGroup(payload.id, targetGroupId);
-    if (payload.intent !== "inside") {
-      const order = props.workspaces.map((workspace) => workspace.id).filter((id) => id !== payload.id);
-      const targetIndex = payload.targetId ? order.indexOf(payload.targetId) : -1;
-      const index = targetIndex < 0 ? order.length : payload.intent === "after" ? targetIndex + 1 : targetIndex;
-      order.splice(Math.max(0, Math.min(index, order.length)), 0, payload.id);
-      const reordered = order.map((id) => props.workspaces.find((workspace) => workspace.id === id)).filter((workspace): workspace is Workspace => Boolean(workspace));
-      // Navigator DnD can only invoke the already-supported workspace reorder
-      // path; it does not invent a new backend mutation for agent nesting.
-      props.onReorderWorkspaces?.(reordered.map((workspace) => workspace.id));
-      props.onSelectWorkspace(payload.id);
-    }
-  };
-
   const recent = useMemo<HomeRecentWorkspace[]>(() => props.workspaces.slice(0, 8).map((workspace) => ({ id: workspace.id, name: workspace.name, detail: workspace.cwd || "Diretório padrão", agentCount: workspace.terminals.length, status: statusForWorkspace(workspace, props.exited, props.notifications, props.contextUsage) })), [props.contextUsage, props.exited, props.notifications, props.workspaces]);
   const activeGroups = useMemo<HomeActiveGroup[]>(() => props.groups.map((group) => ({ id: group.id, name: group.name, workspaceCount: group.projectIds.length, agentCount: props.workspaces.filter((workspace) => group.projectIds.includes(workspace.id)).reduce((count, workspace) => count + workspace.terminals.length, 0), status: group.suspended ? "warn" : "good", detail: group.suspended ? "Grupo suspenso" : "Sessões coordenadas" })), [props.groups, props.workspaces]);
   const timeline = useMemo<HomeTimelineEvent[]>(() => props.notificationItems.slice(0, 8).map((item) => ({ id: String(item.key), label: item.message, detail: item.system ? "Terra" : item.workspaceId, time: timeLabel(item.ts), tone: item.read ? "neutral" : "warn", icon: item.system ? Activity : Bot })), [props.notificationItems]);
@@ -676,7 +645,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     );
   };
 
-  const navigator = <NavigatorPanel {...navigatorActivityProps} workspaces={props.workspaces} snapshot={props.snapshot} groups={wireGroups} activeWorkspaceId={props.activeId} activeContainerId={props.snapshot?.activeContainerId ?? null} activePaneId={props.snapshot?.activePaneId ?? null} activeTerminalId={props.focusedId} collapsedIds={shell.navigatorCollapsedIds} onCollapsedChange={shell.setNavigatorCollapsedIds} exited={props.exited} notifications={props.notifications} contextUsage={props.contextUsage} branches={Object.entries(props.branches).map(([workspaceId, name]) => ({ id: `${workspaceId}:${name}`, name, workspaceId }))} containerVisibility={containerVisibility} onOpenWorkspace={(id) => navigate("workbench", id)} onOpenTerminal={(workspaceId, terminalId) => { props.onSelectWorkspace(workspaceId); focusTerminal(terminalId); }} onFocus={focusTerminal} onCreateGroup={props.onCreateGroup} onCreateProject={props.onCreateProject} onCreateAgent={(workspaceId) => props.onNewAgent(workspaceId)} onRenameNode={props.onRenameNode} onHideWorkspace={props.onHideWorkspace} onHideContainer={props.onHideWorkspace} onSuspendGroup={props.onSuspendGroup} onResumeGroup={props.onResumeGroup} onMoveNode={handleMoveNode} emptyState={<div className="terra-navigator-empty"><FolderKanban size={18} /><span>Crie um projeto para começar.</span></div>} />;
+  const navigator = <NavigatorPanel {...navigatorActivityProps} workspaces={props.workspaces} snapshot={props.snapshot} groups={wireGroups} activeWorkspaceId={props.activeId} activeContainerId={props.snapshot?.activeContainerId ?? null} activePaneId={props.snapshot?.activePaneId ?? null} activeTerminalId={props.focusedId} collapsedIds={shell.navigatorCollapsedIds} onCollapsedChange={shell.setNavigatorCollapsedIds} exited={props.exited} notifications={props.notifications} contextUsage={props.contextUsage} branches={Object.entries(props.branches).map(([workspaceId, name]) => ({ id: `${workspaceId}:${name}`, name, workspaceId }))} containerVisibility={containerVisibility} onOpenWorkspace={(id) => navigate("workbench", id)} onOpenTerminal={(workspaceId, terminalId) => { props.onSelectWorkspace(workspaceId); focusTerminal(terminalId); }} onFocus={focusTerminal} onCreateGroup={props.onCreateGroup} onCreateProject={props.onCreateProject} onCreateAgent={(workspaceId) => props.onNewAgent(workspaceId)} onRenameNode={props.onRenameNode} onDeleteWorkspace={props.onDeleteWorkspace} onHideWorkspace={props.onHideWorkspace} onHideContainer={props.onHideWorkspace} onSuspendGroup={props.onSuspendGroup} onResumeGroup={props.onResumeGroup} emptyState={<div className="terra-navigator-empty"><FolderKanban size={18} /><span>Crie um projeto para começar.</span></div>} />;
 
   const surface = shell.activeSurface;
   const homeQuickActions = [
@@ -689,7 +658,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       : []),
     { id: "reopen-workspace", label: "Reabrir workspace", description: "Restaurar uma aba visual fechada", icon: RotateCcw, disabled: shell.recentlyClosedTabs.length === 0 },
   ];
-  const content = surface === "home" ? <HomeDashboard greeting="Bom dia" subtitle="Uma console silenciosa para coordenar seus agentes." pulse={{ activeAgents: activeCount, totalAgents: totalCount, queuedRuns: props.resumeCount ?? 0, completedRuns: Object.keys(props.exited).length, throughput: activeCount ? `${activeCount} em execução` : "em espera", tone: activeCount ? "stable" : "offline", note: activeCount ? "A frota está pronta para o próximo handoff." : "Inicie um agente para acender o pulso da frota." }} quickActions={homeQuickActions} recentWorkspaces={recent} activeGroups={activeGroups} timeline={timeline} onQuickAction={(id) => { if (id === "new-workspace") props.onNewWorkspace(); else if (id === "new-agent") props.onNewAgent(props.activeId ?? props.workspaces[0]?.id ?? ""); else if (id === "open-fleet") navigate("fleet"); else if (id === "voice-command") props.onToggleVoice(); else if (id === "resume-sessions") props.onOpenResume?.(); else if (id === "reopen-workspace") { const candidate = shell.recentlyClosedTabs[0]; if (shell.reopenWorkspaceTab() && candidate) props.onSelectWorkspace(candidate.workspaceId); } }} onOpenWorkspace={(id) => navigate("workbench", id)} onOpenGroup={(id) => { const workspaceId = props.groups.find((group) => group.id === id)?.projectIds[0]; navigate("workbench", workspaceId ?? null); }} /> : surface === "workbench" ? (source ? <WorkspaceWorkbench source={source} renderTab={renderTab} onNewContainer={props.onNewWorkspace} onFocusTab={(tabId, location) => { if (location) orchestration.setContainerActivePane(location.containerId, location.paneId); const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) focusWorkbenchTab(tab.ptyId, location); else props.onFocus(tabId); }} onNewTab={(location: WorkbenchLocation) => props.onNewAgent(location.projectId ?? props.activeId ?? "", location.paneId)} onDetachTab={(tabId) => { const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) props.onDetach(tab.ptyId); }} onKillTab={(tabId) => { const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) props.onKill(tab.ptyId); }} onCollapseContainer={orchestration.setContainerCollapsed} onFullscreenContainer={orchestration.setContainerFullscreen} onLayoutChange={({ containerId, layout }) => orchestration.setContainerState(containerId, { layout })} onReorderContainers={orchestration.reorderContainers} onReorderPanes={orchestration.reorderPanes} onReorderTabs={orchestration.reorderTabs} onMovePane={orchestration.movePane} onWorkspaceLayoutChange={orchestration.setWorkspaceLayout} onHideContainer={props.onHideContainer ?? ((containerId) => { const container = props.snapshot?.containers.find((candidate) => candidate.id === containerId); if (container?.projectId) props.onHideWorkspace(container.projectId); })} sortable emptyState={<div className="terra-workbench__empty"><LayoutGrid size={20} /><strong>Nenhum workspace visível</strong><button type="button" onClick={props.onNewWorkspace}>Novo workspace</button></div>} /> : <div className="terra-workbench__empty"><LayoutGrid size={20} /><strong>Nenhum workspace carregado</strong></div>) : surface === "fleet" ? <FleetCommandCenter workspaces={props.workspaces} groups={wireGroups} exited={props.exited} notifications={props.notifications} contextUsage={props.contextUsage} titles={props.titles} branches={props.branches} onFocus={(terminalId) => focusTerminal(terminalId)} onVoice={() => props.onToggleVoice()} onStop={(terminalId) => props.onBatchStop([terminalId])} onResume={(terminalId) => props.onBatchResume([terminalId])} onSuspendGroup={props.onSuspendGroup} onResumeGroup={props.onResumeGroup} onBatchAction={(action, ids) => { if (action === "stop") props.onBatchStop(ids); else if (action === "resume") props.onBatchResume(ids); else if (action === "focus" && ids[0]) focusTerminal(ids[0]); else if (action === "voice") props.onToggleVoice(); }} /> : surface === "events" ? <EventsSurface items={props.notificationItems} onFocus={props.onJumpToNotification} onMarkAllRead={props.onMarkAllRead} onClearAll={props.onClearAll} /> : <div className="terra-settings-surface"><Settings2 size={22} /><h1>Configurações</h1><p>Preferências, voz, atalhos e portabilidade do workspace.</p><button type="button" onClick={props.onOpenSettings}>Abrir configurações</button></div>;
+  const content = surface === "home" ? <HomeDashboard greeting="Bom dia" subtitle="Uma console silenciosa para coordenar seus agentes." pulse={{ activeAgents: activeCount, totalAgents: totalCount, queuedRuns: props.resumeCount ?? 0, completedRuns: Object.keys(props.exited).length, throughput: activeCount ? `${activeCount} em execução` : "em espera", tone: activeCount ? "stable" : "offline", note: activeCount ? "A frota está pronta para o próximo handoff." : "Inicie um agente para acender o pulso da frota." }} quickActions={homeQuickActions} recentWorkspaces={recent} activeGroups={activeGroups} timeline={timeline} onQuickAction={(id) => { if (id === "new-workspace") props.onNewWorkspace(); else if (id === "new-agent") props.onNewAgent(props.activeId ?? props.workspaces[0]?.id ?? ""); else if (id === "open-fleet") navigate("fleet"); else if (id === "voice-command") props.onToggleVoice(); else if (id === "resume-sessions") props.onOpenResume?.(); else if (id === "reopen-workspace") { const candidate = shell.recentlyClosedTabs[0]; if (shell.reopenWorkspaceTab() && candidate) props.onSelectWorkspace(candidate.workspaceId); } }} onOpenWorkspace={(id) => navigate("workbench", id)} onOpenGroup={(id) => { const workspaceId = props.groups.find((group) => group.id === id)?.projectIds[0]; navigate("workbench", workspaceId ?? null); }} /> : surface === "workbench" ? (source ? <WorkspaceWorkbench source={source} renderTab={renderTab} onNewContainer={props.onNewWorkspace} onFocusTab={(tabId, location) => { if (location) orchestration.setContainerActivePane(location.containerId, location.paneId); const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) focusWorkbenchTab(tab.ptyId, location); else props.onFocus(tabId); }} onNewTab={(location: WorkbenchLocation) => props.onNewAgent(location.projectId ?? props.activeId ?? "", location.paneId)} onDetachTab={(tabId) => { const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) props.onDetach(tab.ptyId); }} onKillTab={(tabId) => { const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) props.onKill(tab.ptyId); }} onCollapseContainer={orchestration.setContainerCollapsed} onFullscreenContainer={orchestration.setContainerFullscreen} onLayoutChange={({ containerId, layout }) => orchestration.setContainerState(containerId, { layout })} onWorkspaceLayoutChange={orchestration.setWorkspaceLayout} onHideContainer={props.onHideContainer ?? ((containerId) => { const container = props.snapshot?.containers.find((candidate) => candidate.id === containerId); if (container?.projectId) props.onHideWorkspace(container.projectId); })} emptyState={<div className="terra-workbench__empty"><LayoutGrid size={20} /><strong>Nenhum workspace visível</strong><button type="button" onClick={props.onNewWorkspace}>Novo workspace</button></div>} /> : <div className="terra-workbench__empty"><LayoutGrid size={20} /><strong>Nenhum workspace carregado</strong></div>) : surface === "fleet" ? <FleetCommandCenter workspaces={props.workspaces} groups={wireGroups} exited={props.exited} notifications={props.notifications} contextUsage={props.contextUsage} titles={props.titles} branches={props.branches} onFocus={(terminalId) => focusTerminal(terminalId)} onVoice={() => props.onToggleVoice()} onStop={(terminalId) => props.onBatchStop([terminalId])} onResume={(terminalId) => props.onBatchResume([terminalId])} onSuspendGroup={props.onSuspendGroup} onResumeGroup={props.onResumeGroup} onBatchAction={(action, ids) => { if (action === "stop") props.onBatchStop(ids); else if (action === "resume") props.onBatchResume(ids); else if (action === "focus" && ids[0]) focusTerminal(ids[0]); else if (action === "voice") props.onToggleVoice(); }} /> : surface === "events" ? <EventsSurface items={props.notificationItems} onFocus={props.onJumpToNotification} onMarkAllRead={props.onMarkAllRead} onClearAll={props.onClearAll} /> : <div className="terra-settings-surface"><Settings2 size={22} /><h1>Configurações</h1><p>Preferências, voz, atalhos e portabilidade do workspace.</p><button type="button" onClick={props.onOpenSettings}>Abrir configurações</button></div>;
 
   const selectedLabel = props.focusedId ? props.titles[props.focusedId] || props.focusedId : null;
   return <>

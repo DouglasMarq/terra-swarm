@@ -4,7 +4,6 @@ import { AgentNode } from "./AgentNode";
 import { GroupNode } from "./GroupNode";
 import { NavigatorNodeRow } from "./NavigatorNodeRow";
 import { ProjectNode } from "./ProjectNode";
-import type { DropIntent } from "./types";
 import type {
   NavigatorAgentNode,
   NavigatorContainerNode,
@@ -23,7 +22,6 @@ export interface ProjectTreeViewProps extends Omit<NavigatorPanelProps, "classNa
   expandedIds: ReadonlySet<string>;
   onToggle: (id: string) => void;
   onCreateGroup?: () => void;
-  dropIntents?: Readonly<Record<string, DropIntent | undefined>>;
 }
 
 function nodeSelected(node: NavigatorNode, props: ProjectTreeViewProps): boolean {
@@ -71,6 +69,9 @@ function actionSet(props: ProjectTreeViewProps): NavigatorNodeActions {
       }
     },
     onRename: props.onRenameNode,
+    onDelete: (ref) => {
+      if (ref.kind === "project") props.onDeleteWorkspace?.(ref.id);
+    },
     onHide: (ref) => {
       if (ref.kind === "project") hide?.(ref.id);
     },
@@ -88,8 +89,6 @@ function renderNode(node: NavigatorNode, props: ProjectTreeViewProps, actions: N
   const expanded = props.expandedIds.has(node.id);
   const common = {
     active: nodeActive(node, props),
-    dragEnabled: Boolean(props.onMoveNode),
-    dropIntent: props.dropIntents?.[node.id] ?? null,
     expanded,
     selected: nodeSelected(node, props),
     visible: node.kind === "project" ? node.visible : true,
@@ -114,9 +113,9 @@ function renderNode(node: NavigatorNode, props: ProjectTreeViewProps, actions: N
   );
 }
 
-/** Tree renderer kept separate so the panel can own DnD lifecycle and headers. */
-export function ProjectTree({ tree, expandedIds, onToggle, onCreateGroup, dropIntents, ...props }: ProjectTreeViewProps) {
-  const viewProps: ProjectTreeViewProps = { tree, expandedIds, onToggle, onCreateGroup, dropIntents, ...props };
+/** Tree renderer kept separate so the panel can own headers and actions. */
+export function ProjectTree({ tree, expandedIds, onToggle, onCreateGroup, ...props }: ProjectTreeViewProps) {
+  const viewProps: ProjectTreeViewProps = { tree, expandedIds, onToggle, onCreateGroup, ...props };
   const actions = actionSet(viewProps);
   const groups = tree.roots.filter((node): node is NavigatorGroupNode => node.kind === "group");
   const ungrouped = tree.roots.filter((node): node is NavigatorProjectNode => node.kind === "project");

@@ -13,17 +13,13 @@ export {
   normalizeSearchText,
   nodeRefFromId,
 } from "./treeModel";
-export { getDropProjection } from "./dropProjection";
 export type { AgentNodeProps } from "./AgentNode";
 export type { GroupNodeProps } from "./GroupNode";
 export type { ProjectNodeProps } from "./ProjectNode";
 export type { BuildNavigatorTreeOptions } from "./treeModel";
-export type { DropProjection, DropProjectionInput, ProjectionRect } from "./dropProjection";
 export type {
   ActivityTab,
-  DropIntent,
   FlatNavigatorNode,
-  MoveNodePayload,
   NavigatorAgentNode,
   NavigatorBranch,
   NavigatorContainerNode,

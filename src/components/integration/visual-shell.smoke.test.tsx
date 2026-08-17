@@ -67,7 +67,6 @@ function shellProps(overrides: Partial<VisualShellSurfaceProps> = {}): VisualShe
     onCreateGroup: vi.fn(),
     onCreateProject: vi.fn(),
     onRenameNode: vi.fn(),
-    onAssignGroup: vi.fn(),
     onSuspendGroup: vi.fn(),
     onResumeGroup: vi.fn(),
     onBatchStop: vi.fn(),

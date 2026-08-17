@@ -1,5 +1,3 @@
-import type { CSSProperties } from "react";
-import { CSS } from "@dnd-kit/utilities";
 import { ContainerLayout } from "./ContainerLayout";
 import {
   GRID_DIMENSION_VALUES,
@@ -16,8 +14,6 @@ function projectLabel(props: ProjectContainerProps): string {
 export function ProjectContainer({
   projection,
   renderTab,
-  dragHandle,
-  sortable = false,
   visible = projection.container.visible && !projection.container.closed,
   onCollapseContainer,
   onFullscreenContainer,
@@ -52,17 +48,6 @@ export function ProjectContainer({
       aria-hidden={!visible}
     >
       <header className="terra-project-container__header">
-        {dragHandle ? (
-          <button
-            type="button"
-            className="terra-project-container__drag"
-            aria-label={`Reordenar ${label}`}
-            {...dragHandle.attributes}
-            {...dragHandle.listeners}
-          >
-            ⠿
-          </button>
-        ) : null}
         <button
           type="button"
           className="terra-project-container__action"
@@ -180,24 +165,9 @@ export function ProjectContainer({
           projection={projection}
           renderTab={renderTab}
           mode={mode}
-          sortable={sortable}
           {...actions}
         />
       </div>
     </section>
   );
-}
-
-/**
- * Style helper for consumers that want to compose a sortable card without
- * coupling their app shell to dnd-kit's transform shape.
- */
-export function sortableTransformStyle(
-  transform: Parameters<typeof CSS.Transform.toString>[0],
-  transition?: string,
-): CSSProperties {
-  return {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
 }

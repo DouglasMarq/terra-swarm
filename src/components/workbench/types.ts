@@ -1,8 +1,4 @@
 import type {
-  DraggableAttributes,
-  DraggableSyntheticListeners,
-} from "@dnd-kit/core";
-import type {
   Group,
   LayoutMode,
   Pane,
@@ -59,11 +55,6 @@ export interface WorkbenchLocation {
   projectId: string | null;
 }
 
-export interface WorkbenchDragHandleProps {
-  attributes: DraggableAttributes;
-  listeners?: DraggableSyntheticListeners;
-}
-
 export interface ContainerLayoutChange {
   containerId: string;
   layout: WorkspaceLayout;
@@ -89,17 +80,6 @@ export interface WorkbenchActionCallbacks {
   /** Hides a visual container while preserving every mounted terminal surface. */
   onHideContainer?: (containerId: string) => void;
   onLayoutChange?: (change: ContainerLayoutChange) => void;
-  /** Reorders only containers belonging to the supplied project. */
-  onReorderContainers?: (projectId: string, containerIds: string[]) => void;
-  onReorderPanes?: (containerId: string, paneIds: string[]) => void;
-  /** Reorders tabs within one pane and persists the pane's visual order. */
-  onReorderTabs?: (paneId: string, tabIds: string[]) => void;
-  onMovePane?: (
-    paneId: string,
-    fromContainerId: string,
-    toContainerId: string,
-    toIndex: number,
-  ) => void;
   /** Persists a workspace-level visual preset (Auto, Spotlight, Sidebar, Grid). */
   onWorkspaceLayoutChange?: (projectId: string, layout: WorkspaceLayout) => void;
 }
@@ -112,18 +92,12 @@ export interface WorkspaceWorkbenchProps extends WorkbenchActionCallbacks {
   onNewContainer?: () => void;
   /** Optional empty state for a source with no containers. */
   emptyState?: ReactNode;
-  /** Enables drag/reorder affordances without changing the domain lifecycle. */
-  sortable?: boolean;
 }
 
 export interface ProjectContainerProps extends WorkbenchActionCallbacks {
   projection: WorkbenchContainerProjection;
   renderTab: WorkbenchTabRenderer;
   visible?: boolean;
-  sortable?: boolean;
-  /** Visual-only marker while a pane is over an incompatible project. */
-  invalidPaneDropContainerId?: string | null;
-  dragHandle?: WorkbenchDragHandleProps;
 }
 
 export interface PaneFrameProps extends WorkbenchActionCallbacks {
@@ -133,8 +107,6 @@ export interface PaneFrameProps extends WorkbenchActionCallbacks {
   group: Group | null;
   active?: boolean;
   renderTab: WorkbenchTabRenderer;
-  sortable?: boolean;
-  dragHandle?: WorkbenchDragHandleProps;
 }
 
 export interface SubTabLaneTab {
@@ -146,8 +118,6 @@ export interface SubTabLaneTab {
 
 export interface SubTabLaneProps {
   tabs: readonly SubTabLaneTab[];
-  containerId?: string;
-  paneId?: string;
   onFocusTab?: (tabId: string) => void;
   onNewTab?: () => void;
   onDetachTab?: (tabId: string) => void;
@@ -168,8 +138,6 @@ export interface EmptyPaneCellProps {
 export interface ContainerLayoutProps extends WorkbenchActionCallbacks {
   projection: WorkbenchContainerProjection;
   renderTab: WorkbenchTabRenderer;
-  sortable?: boolean;
   /** Explicitly controlled mode wins over the persisted container layout. */
   mode?: WorkbenchLayoutMode;
-  dragHandle?: WorkbenchDragHandleProps;
 }

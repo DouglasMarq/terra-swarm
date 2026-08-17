@@ -1,7 +1,5 @@
-import { rectSortingStrategy, SortableContext } from "@dnd-kit/sortable";
 import { EmptyPaneCell } from "./EmptyPaneCell";
 import { PaneGrid } from "./PaneGrid";
-import { paneDndId } from "./SortablePaneFrame";
 import type { ContainerLayoutProps } from "./types";
 
 /**
@@ -13,7 +11,6 @@ export function ContainerLayout({
   projection,
   renderTab,
   mode,
-  sortable,
   onLayoutChange,
   ...actions
 }: ContainerLayoutProps) {
@@ -34,47 +31,38 @@ export function ContainerLayout({
     );
   }
   return (
-    <SortableContext
-      items={projection.panes.map(({ pane }) => paneDndId(projection.container.id, pane.id))}
-      strategy={rectSortingStrategy}
-    >
-      <PaneGrid
-        projection={projection}
-        mode={mode}
-        activePaneId={activePaneId}
-        onLayoutChange={onLayoutChange}
-        renderPane={(paneProjection) => (
-          <ContainerPaneSurface
-            projection={projection}
-            paneProjection={paneProjection}
-            renderTab={renderTab}
-            active={paneProjection.pane.id === activePaneId}
-            sortable={sortable}
-            {...actions}
-          />
-        )}
-      />
-    </SortableContext>
+    <PaneGrid
+      projection={projection}
+      mode={mode}
+      activePaneId={activePaneId}
+      onLayoutChange={onLayoutChange}
+      renderPane={(paneProjection) => (
+        <ContainerPaneSurface
+          projection={projection}
+          paneProjection={paneProjection}
+          renderTab={renderTab}
+          active={paneProjection.pane.id === activePaneId}
+          {...actions}
+        />
+      )}
+    />
   );
 }
 
 import { PaneFrame } from "./PaneFrame";
 import type { PaneFrameProps, WorkbenchContainerProjection, WorkbenchPaneProjection } from "./types";
-import { SortablePaneFrame } from "./SortablePaneFrame";
 
 interface ContainerPaneSurface
   extends Omit<PaneFrameProps, "projection" | "container" | "project" | "group" | "renderTab"> {
   projection: WorkbenchContainerProjection;
   paneProjection: WorkbenchPaneProjection;
   renderTab: PaneFrameProps["renderTab"];
-  sortable?: boolean;
 }
 
 function ContainerPaneSurface({
   projection,
   paneProjection,
   renderTab,
-  sortable,
   ...actions
 }: ContainerPaneSurface) {
   const paneProps = {
@@ -85,5 +73,5 @@ function ContainerPaneSurface({
     renderTab,
     ...actions,
   };
-  return sortable ? <SortablePaneFrame {...paneProps} /> : <PaneFrame {...paneProps} />;
+  return <PaneFrame {...paneProps} />;
 }

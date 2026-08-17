@@ -9,7 +9,6 @@ export interface ProjectNodeProps {
   actions?: NavigatorNodeActions;
   onToggle?: (id: string) => void;
   onSelect?: (node: NavigatorProjectNode) => void;
-  dropIntent?: "before" | "inside" | "after" | null;
 }
 
 /** Project rows represent visible containers while preserving PTY identity underneath. */

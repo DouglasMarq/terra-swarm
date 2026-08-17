@@ -3,8 +3,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { invalidPaneDropTarget, WorkspaceWorkbench } from "./WorkspaceWorkbench";
-import { projectWorkbench } from "./projection";
+import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
 import type { WorkspaceSnapshotV2 } from "../../types";
 import workbenchStyles from "./workbench.css?raw";
 
@@ -65,24 +64,23 @@ describe("WorkspaceWorkbench", () => {
     render(
       <WorkspaceWorkbench
         renderTab={({ tab }) => <div>Terminal {tab.title}</div>}
-        sortable={false}
         source={snapshot}
       />,
     );
 
     const workbench = document.querySelector(".terra-workbench");
     const list = document.querySelector(".terra-workbench__list");
-    const sortable = document.querySelector(".terra-workbench__sortable");
+    const container = document.querySelector(".terra-workbench__container");
     expect(workbench).toBeInTheDocument();
     expect(list).toHaveAttribute("data-container-count", "1");
-    expect(sortable).toHaveAttribute("data-visible", "true");
-    expect(sortable).toHaveAttribute("data-collapsed", "false");
-    expect(sortable).toHaveAttribute("data-fullscreen", "false");
-    expect(sortable?.querySelector(".terra-project-container__surface")).toBeInTheDocument();
-    expect(sortable?.querySelector(".terra-pane-grid")).toBeInTheDocument();
-    expect(sortable?.querySelector(".terra-pane-frame")).toBeInTheDocument();
-    expect(sortable?.querySelector(".terra-pane-frame__surface")).toBeInTheDocument();
-    expect(sortable?.querySelector(".terra-pane-tab-surfaces")).toBeInTheDocument();
+    expect(container).toHaveAttribute("data-visible", "true");
+    expect(container).toHaveAttribute("data-collapsed", "false");
+    expect(container).toHaveAttribute("data-fullscreen", "false");
+    expect(container?.querySelector(".terra-project-container__surface")).toBeInTheDocument();
+    expect(container?.querySelector(".terra-pane-grid")).toBeInTheDocument();
+    expect(container?.querySelector(".terra-pane-frame")).toBeInTheDocument();
+    expect(container?.querySelector(".terra-pane-frame__surface")).toBeInTheDocument();
+    expect(container?.querySelector(".terra-pane-tab-surfaces")).toBeInTheDocument();
     expect(document.querySelector(".terra-project-container__meta")).not.toBeInTheDocument();
   });
 
@@ -110,7 +108,6 @@ describe("WorkspaceWorkbench", () => {
       <WorkspaceWorkbench
         onNewTab={onNewTab}
         renderTab={({ tab }) => <div>Terminal {tab.title}</div>}
-        sortable={false}
         source={emptyPaneSource}
       />,
     );
@@ -156,7 +153,6 @@ describe("WorkspaceWorkbench", () => {
       <WorkspaceWorkbench
         onNewTab={onNewTab}
         renderTab={({ tab }) => <div>Terminal {tab.title}</div>}
-        sortable={false}
         source={emptyContainerSource}
       />,
     );
@@ -178,7 +174,6 @@ describe("WorkspaceWorkbench", () => {
     render(
       <WorkspaceWorkbench
         renderTab={({ tab }) => <div className="pane">Terminal {tab.title}</div>}
-        sortable={false}
         source={snapshot}
       />,
     );
@@ -186,7 +181,7 @@ describe("WorkspaceWorkbench", () => {
     const selectors = [
       ".terra-workbench",
       ".terra-workbench__list",
-      ".terra-workbench__sortable",
+      ".terra-workbench__container",
       ".terra-project-container",
       ".terra-project-container__surface",
       ".terra-pane-grid",
@@ -199,10 +194,10 @@ describe("WorkspaceWorkbench", () => {
     const elements = selectors.map((selector) => document.querySelector(selector));
     expect(elements.every((element) => element)).toBe(true);
     expect(workbenchStyles).toMatch(
-      /\.terra-workbench \.terra-workbench__list > \.terra-workbench__sortable\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?flex:\s*1 1 0;/,
+      /\.terra-workbench \.terra-workbench__list > \.terra-workbench__container\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?flex:\s*1 1 0;/,
     );
     expect(workbenchStyles).toMatch(
-      /\.terra-workbench \.terra-workbench__sortable > \.terra-project-container\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?flex:\s*1 1 auto;/,
+      /\.terra-workbench \.terra-workbench__container > \.terra-project-container\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?flex:\s*1 1 auto;/,
     );
     expect(workbenchStyles).toMatch(
       /\.terra-pane-tab-surface > \.pane\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?width:\s*100%;[\s\S]*?height:\s*100%;/,
@@ -256,7 +251,7 @@ describe("WorkspaceWorkbench", () => {
       />,
     );
 
-    const wrappers = [...document.querySelectorAll(".terra-workbench__sortable")];
+    const wrappers = [...document.querySelectorAll(".terra-workbench__container")];
     expect(wrappers).toHaveLength(2);
     expect(wrappers[0]).toHaveAttribute("data-collapsed", "false");
     expect(wrappers[1]).toHaveAttribute("data-collapsed", "true");
@@ -272,7 +267,6 @@ describe("WorkspaceWorkbench", () => {
         onHideContainer={onHideContainer}
         onKillTab={onKillTab}
         renderTab={({ tab }) => <div>Terminal {tab.title}</div>}
-        sortable={false}
         source={snapshot}
       />,
     );
@@ -290,7 +284,6 @@ describe("WorkspaceWorkbench", () => {
       <WorkspaceWorkbench
         onKillTab={onKillTab}
         renderTab={({ tab }) => <div>Terminal {tab.title}</div>}
-        sortable={false}
         source={snapshot}
       />,
     );
@@ -449,9 +442,7 @@ describe("WorkspaceWorkbench", () => {
     });
   });
 
-  it("makes lane agents keyboard-sortable while keeping pane order scoped", async () => {
-    const user = userEvent.setup();
-    const onReorderTabs = vi.fn();
+  it("keeps agent tabs focusable without any reorder affordance", async () => {
     const source: WorkspaceSnapshotV2 = {
       ...snapshot,
       panes: [{
@@ -472,27 +463,18 @@ describe("WorkspaceWorkbench", () => {
     };
     render(
       <WorkspaceWorkbench
-        onReorderTabs={onReorderTabs}
         renderTab={({ tab }) => <div>Terminal {tab.title}</div>}
         source={source}
       />,
     );
 
     const first = screen.getByRole("button", { name: "Focar Luna Max" });
-    expect(first).toHaveAttribute("aria-roledescription", "sortable");
-    const firstTab = first.closest("[data-tab-dnd-id]");
-    expect(firstTab).toBeInTheDocument();
-    first.focus();
-    await user.keyboard("{Enter}");
-    expect(firstTab).toHaveAttribute("data-dragging", "true");
-    await user.keyboard("{Escape}");
-    expect(firstTab).toHaveAttribute("data-dragging", "false");
-    expect(onReorderTabs).not.toHaveBeenCalled();
+    expect(first).not.toHaveAttribute("aria-roledescription");
+    expect(first.closest("[data-tab-dnd-id]")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Reordenar/ })).not.toBeInTheDocument();
   });
 
-  it("marks a cross-project pane destination invalid and never moves it", async () => {
-    const user = userEvent.setup();
-    const onMovePane = vi.fn();
+  it("does not expose pane drag handles or cross-project drop state", () => {
     const secondProject = {
       ...snapshot.projects[0],
       id: "project-2",
@@ -534,28 +516,14 @@ describe("WorkspaceWorkbench", () => {
 
     render(
       <WorkspaceWorkbench
-        onMovePane={onMovePane}
         renderTab={({ tab }) => <div>Terminal {tab.title}</div>}
         source={source}
       />,
     );
 
-    const dragHandle = screen.getByRole("button", { name: "Reordenar painel pane-1" });
-    dragHandle.focus();
-    await user.keyboard("{Enter}");
-    await user.keyboard("{ArrowDown}");
-    await user.keyboard("{Enter}");
-
-    expect(onMovePane).not.toHaveBeenCalled();
-    const projected = projectWorkbench(source);
-    expect(invalidPaneDropTarget(
-      projected,
-      { type: "pane", paneId: "pane-1", containerId: "container-1" },
-      { type: "pane", paneId: "pane-2", containerId: "container-2" },
-    )).toBe("container-2");
-    expect(workbenchStyles).toMatch(
-      /\.terra-workbench__sortable\[data-drop-invalid="true"\]\s*\{[\s\S]*?outline:\s*1px solid var\(--workbench-danger\);/,
-    );
+    expect(screen.queryByRole("button", { name: /Reordenar/ })).not.toBeInTheDocument();
+    expect(document.querySelector("[data-drop-invalid]")).toBeNull();
+    expect(workbenchStyles).not.toMatch(/dnd|drag|drop-invalid|sortable/i);
   });
 
 });

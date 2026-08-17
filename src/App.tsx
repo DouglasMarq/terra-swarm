@@ -153,6 +153,7 @@ function App() {
     id: string;
     value: string;
   } | null>(null);
+  const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -188,7 +189,6 @@ function App() {
     setFeatureFlag,
     setContainerVisible,
     setGroupSuspended,
-    setProjectGroup,
     setActivePane: setActivePaneSnapshot,
     persistenceError: orchestrationPersistenceError,
     clearPersistenceError,
@@ -204,7 +204,6 @@ function App() {
       setFeatureFlag: state.setFeatureFlag,
       setContainerVisible: state.setContainerVisible,
       setGroupSuspended: state.setGroupSuspended,
-      setProjectGroup: state.setProjectGroup,
       setActivePane: state.setActivePane,
       persistenceError: state.persistenceError,
       clearPersistenceError: state.clearPersistenceError,
@@ -652,6 +651,7 @@ function App() {
     showSettings ||
     showResume ||
     renameTarget !== null ||
+    workspaceToDelete !== null ||
     showNewGroup ||
     pendingImportPath !== null;
 
@@ -835,19 +835,39 @@ function App() {
     }
   };
 
+  /**
+   * The in-panel empty state is an explicit agent-creation affordance. Keep
+   * it chooser-first even when a default exists so the user can change the
+   * profile for this launch and optionally persist that choice as the new
+   * default.
+   */
+  const chooseAgentForPanel = async (wsId: string, paneId: string | null = null) => {
+    setActiveId(wsId);
+    setExpandedId(null);
+    await agentsReadyRef.current;
+    setPickerTarget(wsId);
+    setPickerTargetPane(paneId);
+    setPickerSaveDefault(true);
+    setShowAgentPicker(true);
+  };
+
   const chooseAgent = async (agentId: string) => {
     if (pickerSaveDefault) {
       setDefaultAgent(agentId);
     }
     setShowAgentPicker(false);
-    if (pickerTarget) {
+    const target = pickerTarget;
+    const targetPane = pickerTargetPane;
+    setPickerTarget(null);
+    setPickerTargetPane(null);
+    setPickerSaveDefault(false);
+    if (target) {
       await spawnTerminalInto(
-        pickerTarget,
+        target,
         agentId,
-        pickerTargetPane ? { paneId: pickerTargetPane } : undefined,
+        targetPane ? { paneId: targetPane } : undefined,
       ).catch(reportSpawnError);
     }
-    setPickerTargetPane(null);
   };
 
   const closeTerminal = async (id: string) => {
@@ -1145,17 +1165,6 @@ function App() {
   const renameGroup = async (id: string, name: string) => {
     await api.renameGroup(id, name).then(() => refresh()).catch((err) => {
       console.error(`failed to rename group ${id}:`, err);
-    });
-  };
-
-  const assignWorkspaceGroup = async (workspaceId: string, groupId: string | null) => {
-    setProjectGroup(workspaceId, groupId);
-    setWorkspaces((previous) => previous.map((workspace) =>
-      workspace.id === workspaceId ? { ...workspace, groupId } : workspace,
-    ));
-    await api.setWorkspaceGroup(workspaceId, groupId).then(() => refresh()).catch(async (err) => {
-      console.error(`failed to assign workspace ${workspaceId} to group:`, err);
-      await refresh();
     });
   };
 
@@ -1585,24 +1594,33 @@ function App() {
     setShowNewWs(true);
   };
 
-  const closeWorkspace = async (id: string) => {
+  const closeWorkspace = async (id: string): Promise<boolean> => {
     const terms = workspaces.find((w) => w.id === id)?.terminals ?? [];
+    try {
+      await api.closeWorkspace(id);
+    } catch (err) {
+      console.error(`failed to close workspace ${id}:`, err);
+      pushSystemNotification(`Não foi possível excluir o projeto: ${String(err)}`);
+      return false;
+    }
     for (const t of terms) {
       liveIdsRef.current.delete(t.id);
       delete spawnSeqRef.current[t.id];
     }
     delete lastFocusByWs.current[id];
     clearTerminals(terms.map((term) => term.id));
-    try {
-      await api.closeWorkspace(id);
-    } catch (err) {
-      console.error(`failed to close workspace ${id}:`, err);
-    }
     if (activeId === id) {
       setExpandedId(null);
       setFocusedId(null);
     }
     await refresh();
+    return true;
+  };
+
+  const requestDeleteWorkspace = (id: string) => {
+    if (workspaces.some((workspace) => workspace.id === id)) {
+      setWorkspaceToDelete(id);
+    }
   };
 
   const refreshVoiceModels = useCallback(() => {
@@ -2296,7 +2314,7 @@ function App() {
             ).catch(reportSpawnError);
             return;
           }
-          void quickNewTerminal(workspaceId, paneId ?? null);
+          void chooseAgentForPanel(workspaceId, paneId ?? null);
         }}
         onClearNotifications={clearNotifications}
         onMarkAllRead={markAllRead}
@@ -2311,6 +2329,7 @@ function App() {
         }}
         onToggleExpand={setExpandedId}
         onHideWorkspace={hideWorkspace}
+        onDeleteWorkspace={requestDeleteWorkspace}
         onHideContainer={hideContainer}
         loadFiles={api.listWorkspaceFiles}
         loadGitStatus={api.gitStatus}
@@ -2332,15 +2351,6 @@ function App() {
               value: group?.name ?? node.id,
             });
           }
-        }}
-        onAssignGroup={assignWorkspaceGroup}
-        onReorderWorkspaces={(workspaceIds) => {
-          const byId = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
-          setWorkspaces(workspaceIds.map((id) => byId.get(id)).filter((workspace): workspace is Workspace => Boolean(workspace)));
-          void api.reorderWorkspaces(workspaceIds).catch((error) => {
-            console.error("failed to persist workspace order:", error);
-            void refresh();
-          });
         }}
         onSuspendGroup={(groupId) => {
           void suspendGroup(groupId);
@@ -2413,8 +2423,16 @@ function App() {
 
       <AgentPickerDialog
         agents={agents}
+        defaultAgent={defaultAgent}
         onChoose={chooseAgent}
-        onOpenChange={setShowAgentPicker}
+        onOpenChange={(open) => {
+          setShowAgentPicker(open);
+          if (!open) {
+            setPickerTarget(null);
+            setPickerTargetPane(null);
+            setPickerSaveDefault(false);
+          }
+        }}
         onSaveDefaultChange={setPickerSaveDefault}
         open={showAgentPicker}
         saveDefault={pickerSaveDefault}
@@ -2455,6 +2473,28 @@ function App() {
         open={pendingImportPath !== null}
         title="Importar snapshot?"
         confirmLabel="Importar snapshot"
+      />
+
+      <ConfirmActionDialog
+        description={(() => {
+          const project = workspaceToDelete
+            ? workspaces.find((workspace) => workspace.id === workspaceToDelete)
+            : null;
+          return project
+            ? `Excluir o projeto “${project.name}” e encerrar seus agentes? Esta ação não pode ser desfeita.`
+            : "Excluir este projeto e encerrar seus agentes? Esta ação não pode ser desfeita.";
+        })()}
+        onConfirm={async () => {
+          if (!workspaceToDelete) return;
+          const deleted = await closeWorkspace(workspaceToDelete);
+          if (deleted) setWorkspaceToDelete(null);
+        }}
+        onOpenChange={(open) => {
+          if (!open) setWorkspaceToDelete(null);
+        }}
+        open={workspaceToDelete !== null}
+        title="Excluir projeto?"
+        confirmLabel="Excluir projeto"
       />
 
       {showSettings ? (

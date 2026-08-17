@@ -9,6 +9,8 @@ export interface AgentPickerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   agents: readonly AgentInfo[];
+  /** Existing quick-add default, when the picker was opened from the panel. */
+  defaultAgent?: string | null;
   saveDefault: boolean;
   onSaveDefaultChange: (save: boolean) => void;
   onChoose: (agentId: string) => void | Promise<void>;
@@ -22,6 +24,7 @@ export function AgentPickerDialog({
   onSaveDefaultChange,
   open,
   saveDefault,
+  defaultAgent = null,
 }: AgentPickerDialogProps) {
   return (
     <TerraDialog
@@ -59,13 +62,18 @@ export function AgentPickerDialog({
           ))
         )}
       </div>
+      {defaultAgent ? (
+        <p className={styles.pickerDefaultHint}>
+          Perfil padrão atual: <strong>{defaultAgent}</strong>
+        </p>
+      ) : null}
       <label className={styles.pickerDefault}>
         <input
           checked={saveDefault}
           onChange={(event) => onSaveDefaultChange(event.target.checked)}
           type="checkbox"
         />
-        <span>Usar como perfil padrão (atalhos não perguntarão novamente).</span>
+        <span>Definir a escolha como perfil padrão para os próximos agentes.</span>
       </label>
       <DialogFooter>
         <Button onClick={() => onOpenChange(false)} type="button" variant="ghost">

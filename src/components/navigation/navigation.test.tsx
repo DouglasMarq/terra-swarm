@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { NavigatorPanel } from "./NavigatorPanel";
@@ -91,6 +91,44 @@ describe("NavigatorPanel", () => {
     expect(screen.queryByRole("treeitem", { name: "Projeto Terra API" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("treeitem", { name: "Grupo Core" }));
     expect(screen.getByRole("treeitem", { name: "Projeto Terra API" })).toBeInTheDocument();
+  });
+
+  it("does not expose drag affordances and supports project deletion on hover", async () => {
+    const user = userEvent.setup();
+    const onDeleteWorkspace = vi.fn();
+    render(
+      <NavigatorPanel
+        onDeleteWorkspace={onDeleteWorkspace}
+        workspaces={workspaces}
+        groups={groups}
+      />,
+    );
+
+    const project = screen.getByRole("treeitem", { name: "Projeto Terra API" });
+    expect(project).not.toHaveAttribute("aria-roledescription", "sortable");
+    await user.click(within(project).getByRole("button", { name: "Excluir projeto" }));
+    expect(onDeleteWorkspace).toHaveBeenCalledWith("ws-api");
+  });
+
+  it("opens a delete action from the project context menu", async () => {
+    const user = userEvent.setup();
+    const onDeleteWorkspace = vi.fn();
+    render(
+      <NavigatorPanel
+        onDeleteWorkspace={onDeleteWorkspace}
+        workspaces={workspaces}
+        groups={groups}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByRole("treeitem", { name: "Projeto Terra API" }), {
+      clientX: 32,
+      clientY: 42,
+    });
+    const menu = screen.getByRole("menu", { name: "Menu de contexto do projeto" });
+    expect(menu).toBeInTheDocument();
+    await user.click(within(menu).getByRole("menuitem", { name: "Excluir projeto" }));
+    expect(onDeleteWorkspace).toHaveBeenCalledWith("ws-api");
   });
 
   it("keeps group creation contextual to the groups section", async () => {

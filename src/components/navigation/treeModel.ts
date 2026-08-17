@@ -11,7 +11,6 @@ import type {
   WorkspaceSnapshotV2,
 } from "../../types";
 import {
-  navigatorDragId,
   type FlatNavigatorNode,
   type NavigatorAgentNode,
   type NavigatorBranch,
@@ -245,18 +244,16 @@ function hierarchyForWorkspace(
 
 function indexTree(roots: readonly NavigatorNode[]): NavigatorTree {
   const byId: Record<string, NavigatorNode> = {};
-  const byDragId: Record<string, NavigatorNode> = {};
   const ungrouped: NavigatorProjectNode[] = [];
 
   const visit = (node: NavigatorNode) => {
     byId[node.id] = node;
-    byDragId[node.dragId] = node;
     if (node.kind === "agent" && node.tabId) byId[node.terminalId] = node;
     if (node.kind === "project" && node.parentId === null) ungrouped.push(node);
     node.children.forEach(visit);
   };
   roots.forEach(visit);
-  return { roots: [...roots], byId, byDragId, ungrouped };
+  return { roots: [...roots], byId, ungrouped };
 }
 
 /**
@@ -277,7 +274,6 @@ export function buildNavigatorTree(
   for (const group of groups) {
     groupNodes.set(group.id, {
       id: group.id,
-      dragId: navigatorDragId("group", group.id),
       kind: "group",
       name: group.name,
       parentId: group.parentGroupId && group.parentGroupId !== group.id ? group.parentGroupId : null,
@@ -309,7 +305,6 @@ export function buildNavigatorTree(
       containerId?: string,
     ): NavigatorAgentNode => ({
       id: tabId ?? terminal.id,
-      dragId: navigatorDragId("agent", tabId ?? terminal.id),
       kind: "agent",
       name: terminal.command || terminal.id,
       parentId,
@@ -367,7 +362,6 @@ export function buildNavigatorTree(
       const children = [...tabChildren, ...fallbackChildren];
       return {
         id: pane.id,
-        dragId: navigatorDragId("pane", pane.id),
         kind: "pane",
         name: pane.id,
         parentId: container.id,
@@ -411,7 +405,6 @@ export function buildNavigatorTree(
       ));
       return {
         id: container.id,
-        dragId: navigatorDragId("container", container.id),
         kind: "container",
         name: container.id,
         parentId: projectId,
@@ -438,7 +431,6 @@ export function buildNavigatorTree(
     const projectChildren: NavigatorNode[] = structuralChildren.length > 0 ? structuralChildren : agents;
     const project: NavigatorProjectNode = {
       id: projectId,
-      dragId: navigatorDragId("project", projectId),
       kind: "project",
       name: workspace.name || workspace.id,
       parentId: groupId,
@@ -525,7 +517,6 @@ export function flattenNavigatorTree(
   const visit = (node: NavigatorNode) => {
     result.push({
       id: node.id,
-      dragId: node.dragId,
       kind: node.kind,
       name: node.name,
       parentId: node.parentId,
@@ -542,6 +533,6 @@ export function flattenNavigatorTree(
 }
 
 export function nodeRefFromId(tree: NavigatorTree, id: string): { id: string; kind: NavigatorNodeKind } | null {
-  const node = tree.byId[id] ?? tree.byDragId[id];
+  const node = tree.byId[id];
   return node ? { id: node.id, kind: node.kind } : null;
 }

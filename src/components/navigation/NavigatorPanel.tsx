@@ -1,19 +1,6 @@
-import {
-  DndContext,
-  DragOverlay,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragMoveEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
-import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { Folder, GitBranch, Plus, Search } from "../../components/icons";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { getDropProjection, type DropProjection } from "./dropProjection";
+import { Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState, type ChangeEvent, type MouseEvent } from "react";
 import { ProjectTree } from "./ProjectTree";
 import { NavigatorFilesView } from "./NavigatorFilesView";
 import { NavigatorGitView } from "./NavigatorGitView";
@@ -21,7 +8,7 @@ import {
   buildNavigatorTree,
   filterNavigatorTree,
 } from "./treeModel";
-import type { ActivityTab, NavigatorNode, NavigatorPanelProps } from "./types";
+import type { ActivityTab, NavigatorNode, NavigatorNodeRef, NavigatorPanelProps } from "./types";
 import styles from "./Navigator.module.css";
 
 const ACTIVITY_TABS: readonly { id: ActivityTab; label: string }[] = [
@@ -46,28 +33,11 @@ function classes(...values: Array<string | undefined | false>): string {
   return values.filter(Boolean).join(" ");
 }
 
-function overlayLabel(node: NavigatorNode): string {
-  if (node.kind === "group") return `Grupo · ${node.name}`;
-  if (node.kind === "project") return `Projeto · ${node.name}`;
-  return `Agente · ${node.name}`;
-}
-
-function latestRect(event: DragMoveEvent | DragEndEvent) {
-  const overRect = event.over?.rect;
-  const initial = event.active.rect.current.initial;
-  if (!overRect || !initial) return null;
-  return {
-    overRect,
-    pointerY: initial.top + event.delta.y + initial.height / 2,
-    pointerX: initial.left + event.delta.x + initial.width / 2,
-  };
-}
-
 const EMPTY_COLLAPSED_IDS: readonly string[] = [];
 
 /**
- * Full navigator surface. DnD state lives here; ProjectTree remains a pure
- * presentation of the normalized tree and can be reused in compact layouts.
+ * Full navigator surface. Project ordering is intentionally static; the
+ * panel only exposes explicit create, focus, hide and delete actions.
  */
 export function NavigatorPanel({
   workspaces,
@@ -94,12 +64,12 @@ export function NavigatorPanel({
   onCreateWorkspace,
   onCreateAgent,
   onRenameNode,
+  onDeleteWorkspace,
   onHideContainer,
   onHideWorkspace,
   onSuspendGroup,
   onResumeGroup,
   onContextMenu,
-  onMoveNode,
   loadFiles,
   loadGitStatus,
   activeActivity = "projects",
@@ -113,9 +83,11 @@ export function NavigatorPanel({
 }: NavigatorPanelProps) {
   const [query, setQuery] = useState("");
   const [localCollapsed, setLocalCollapsed] = useState<Set<string>>(() => new Set(defaultCollapsedIds));
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
-  const [projection, setProjection] = useState<DropProjection | null>(null);
-  const projectionRef = useRef<DropProjection | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    node: NavigatorNodeRef;
+    x: number;
+    y: number;
+  } | null>(null);
   const controlledCollapsed = collapsedIds !== undefined;
   const enabledActivities = useMemo(() => {
     const source = availableActivities ?? (capabilities
@@ -144,12 +116,6 @@ export function NavigatorPanel({
     collapsed.forEach((id) => result.delete(id));
     return result;
   }, [collapsed, expandableIds, query]);
-  const activeNode = activeDragId ? tree.byDragId[activeDragId] ?? tree.byId[activeDragId] : null;
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
   useEffect(() => {
     if (controlledCollapsed) return;
     setLocalCollapsed((current) => {
@@ -159,6 +125,20 @@ export function NavigatorPanel({
     });
   }, [controlledCollapsed, defaultCollapsedIds]);
 
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [contextMenu]);
+
   function toggleNode(id: string) {
     const next = new Set(collapsed);
     if (next.has(id)) next.delete(id);
@@ -167,56 +147,24 @@ export function NavigatorPanel({
     onCollapsedChange?.([...next]);
   }
 
-  function updateProjection(event: DragMoveEvent | DragEndEvent): DropProjection | null {
-    const over = event.over;
-    const rect = latestRect(event);
-    if (!over || !rect || !activeDragId) {
-      projectionRef.current = null;
-      setProjection(null);
-      return null;
-    }
-    const next = getDropProjection({
-      activeId: activeDragId,
-      overId: String(over.id),
-      overRect: rect.overRect,
-      pointerY: rect.pointerY,
-      pointerX: rect.pointerX,
-      nodes: tree,
-    });
-    projectionRef.current = next;
-    setProjection(next);
-    return next;
-  }
-
-  function handleDragStart(event: DragStartEvent) {
-    setActiveDragId(String(event.active.id));
-    projectionRef.current = null;
-    setProjection(null);
-  }
-
-  function handleDragMove(event: DragMoveEvent) {
-    updateProjection(event);
-  }
-
-  function handleDragEnd(event: DragEndEvent) {
-    const next = updateProjection(event) ?? projectionRef.current;
-    if (next?.canDrop) onMoveNode?.(next);
-    setActiveDragId(null);
-    projectionRef.current = null;
-    setProjection(null);
-  }
-
-  function handleDragCancel() {
-    setActiveDragId(null);
-    projectionRef.current = null;
-    setProjection(null);
-  }
-
   function handleQuery(event: ChangeEvent<HTMLInputElement>) {
     setQuery(event.target.value);
   }
 
-  const dropIntents = projection ? { [projection.targetId]: projection.intent } : {};
+  function handleContextMenu(event: MouseEvent<HTMLElement>, node: NavigatorNodeRef) {
+    event.preventDefault();
+    event.stopPropagation();
+    onContextMenu?.(event, node);
+    if (node.kind !== "project" || !onDeleteWorkspace) return;
+    const width = typeof window === "undefined" ? 1024 : window.innerWidth;
+    const height = typeof window === "undefined" ? 768 : window.innerHeight;
+    setContextMenu({
+      node,
+      x: Math.max(8, Math.min(event.clientX, width - 196)),
+      y: Math.max(8, Math.min(event.clientY, height - 52)),
+    });
+  }
+
   const projectCount = workspaces.length;
   const createProject = onCreateProject ?? onCreateWorkspace;
 
@@ -250,7 +198,6 @@ export function NavigatorPanel({
         </label>
       </header>
       {selectedActivity === "projects" ? <div className={styles.treeViewport}>
-        <DndContext collisionDetection={closestCenter} onDragCancel={handleDragCancel} onDragEnd={handleDragEnd} onDragMove={handleDragMove} onDragStart={handleDragStart} sensors={sensors}>
           <ProjectTree
             activeTerminalId={activeTerminalId}
             activeWorkspaceId={activeWorkspaceId}
@@ -259,19 +206,18 @@ export function NavigatorPanel({
             branches={branches}
             contextUsage={contextUsage}
             containerVisibility={containerVisibility}
-            dropIntents={dropIntents}
             exited={exited}
             groups={groups}
             expandedIds={expandedIds}
             notifications={notifications}
-            onContextMenu={onContextMenu}
+            onContextMenu={handleContextMenu}
             onCreateAgent={onCreateAgent}
             onCreateGroup={onCreateGroup}
             onCreateProject={createProject}
+            onDeleteWorkspace={onDeleteWorkspace}
             onFocus={onFocus}
             onHideContainer={onHideContainer}
             onHideWorkspace={onHideWorkspace}
-            onMoveNode={onMoveNode}
             onOpenTerminal={onOpenTerminal}
             onOpenWorkspace={onOpenWorkspace}
             onRenameNode={onRenameNode}
@@ -282,10 +228,29 @@ export function NavigatorPanel({
             tree={filteredTree}
             workspaces={workspaces}
           />
-          <DragOverlay dropAnimation={null}>
-            {activeNode ? <div className={styles.dragOverlay}><span aria-hidden="true"><Folder size={14} /></span><span>{overlayLabel(activeNode)}</span><span className={styles.dragOverlayKind}>{activeNode.kind}</span></div> : null}
-          </DragOverlay>
-        </DndContext>
+        {contextMenu ? (
+          <div
+            aria-label="Menu de contexto do projeto"
+            className={styles.contextMenu}
+            onPointerDown={(event) => event.stopPropagation()}
+            role="menu"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button
+              className={styles.contextMenuItem}
+              onClick={() => {
+                const projectId = contextMenu.node.id;
+                setContextMenu(null);
+                onDeleteWorkspace?.(projectId);
+              }}
+              role="menuitem"
+              type="button"
+            >
+              <Trash2 aria-hidden="true" size={14} />
+              <span>Excluir projeto</span>
+            </button>
+          </div>
+        ) : null}
         {emptyState && workspaces.length === 0 ? emptyState : null}
       </div> : selectedActivity === "files" && loadFiles ? <NavigatorFilesView activeWorkspaceId={activeWorkspaceId} loadFiles={loadFiles} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} /> : selectedActivity === "git" && loadGitStatus ? <NavigatorGitView activeWorkspaceId={activeWorkspaceId} loadGitStatus={loadGitStatus} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} /> : <div className={styles.integrationView}><div className={styles.integrationEmpty}>Esta atividade não está disponível.</div></div>}
       <footer className={styles.footer}>

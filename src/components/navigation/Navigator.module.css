@@ -655,39 +655,39 @@
   padding: 0;
 }
 
-.dropBefore::before,
-.dropAfter::after,
-.dropInside::before {
-  position: absolute;
-  right: 3px;
-  left: 3px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--accent, #9fadc8);
-  box-shadow: 0 0 7px color-mix(in srgb, var(--accent, #9fadc8) 46%, transparent);
-  content: "";
-  pointer-events: none;
+.contextMenu {
+  position: fixed;
+  z-index: 30;
+  min-width: 184px;
+  padding: 4px;
+  border: 1px solid var(--navigator-border);
+  border-radius: 6px;
+  background: var(--navigator-bg);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 32%);
 }
 
-.dropBefore::before {
-  top: -2px;
-}
-
-.dropAfter::after {
-  bottom: -2px;
-}
-
-.dropInside {
-  border-color: color-mix(in srgb, var(--accent, #9fadc8) 60%, var(--navigator-border));
-  background: color-mix(in srgb, var(--accent, #9fadc8) 12%, transparent);
-}
-
-.dropInside::before {
-  inset: 1px;
-  height: auto;
-  border: 1px dashed color-mix(in srgb, var(--accent, #9fadc8) 70%, transparent);
+.contextMenuItem {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--navigator-text);
   background: transparent;
-  box-shadow: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-align: start;
+}
+
+.contextMenuItem:hover,
+.contextMenuItem:focus-visible {
+  color: #ffd8dc;
+  background: color-mix(in srgb, #e5636f 18%, var(--navigator-bg));
+  outline: none;
 }
 
 .emptyState {
@@ -707,28 +707,6 @@
   color: var(--navigator-muted);
   font-size: 12px;
   font-weight: 500;
-}
-
-.dragOverlay {
-  display: flex;
-  max-width: 260px;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--accent, #9fadc8) 55%, var(--navigator-border));
-  border-radius: 6px;
-  color: var(--navigator-text);
-  background: var(--navigator-bg);
-  box-shadow: 0 12px 28px rgb(0 0 0 / 25%);
-  font-size: 11px;
-  pointer-events: none;
-}
-
-.dragOverlayKind {
-  color: var(--navigator-faint);
-  font-size: 9px;
-  letter-spacing: .06em;
-  text-transform: uppercase;
 }
 
 .footer {

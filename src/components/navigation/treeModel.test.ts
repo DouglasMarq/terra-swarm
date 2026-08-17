@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../types";
 import { buildNavigatorTree, filterNavigatorTree, flattenNavigatorTree, normalizeSearchText } from "./treeModel";
-import { getDropProjection } from "./dropProjection";
 
 function workspace(id: string, name: string, terminalIds: string[] = [], groupId: string | null = null): Workspace {
   return {
@@ -120,28 +119,5 @@ describe("navigator tree model", () => {
     expect(project?.children[0]?.children[0]?.children.map((node) => node.kind)).toEqual(["agent"]);
     expect(tree.byId["tab-one"]?.kind).toBe("agent");
     expect(tree.byId["agent-one"]?.kind).toBe("agent");
-  });
-});
-
-describe("navigator drop projection", () => {
-  const tree = buildNavigatorTree([workspace("p-one", "Aplicação", ["a-one", "a-two"]), workspace("p-two", "Dados", ["a-three"])]);
-  const rect = { top: 100, bottom: 140, height: 40, left: 0 };
-
-  it("projects before and after among siblings", () => {
-    const before = getDropProjection({ activeId: "p-two", overId: "p-one", overRect: rect, pointerY: 105, nodes: tree });
-    const after = getDropProjection({ activeId: "p-one", overId: "p-two", overRect: rect, pointerY: 135, nodes: tree });
-    expect(before && { parentId: before.parentId, index: before.index, intent: before.intent }).toEqual({ parentId: null, index: 0, intent: "before" });
-    expect(after && { parentId: after.parentId, index: after.index, intent: after.intent }).toEqual({ parentId: null, index: 1, intent: "after" });
-  });
-
-  it("projects inside only when the target accepts the dragged kind", () => {
-    const insideProject = getDropProjection({ activeId: "a-three", overId: "p-one", overRect: rect, pointerY: 120, nodes: tree });
-    const insideAgent = getDropProjection({ activeId: "a-one", overId: "a-three", overRect: rect, pointerY: 120, nodes: tree });
-    expect(insideProject && { parentId: insideProject.parentId, intent: insideProject.intent }).toEqual({ parentId: "p-one", intent: "inside" });
-    expect(insideAgent?.intent).toBe("after");
-  });
-
-  it("rejects dropping a node into its own descendant", () => {
-    expect(getDropProjection({ activeId: "p-one", overId: "a-one", overRect: rect, pointerY: 120, nodes: tree })).toBeNull();
   });
 });

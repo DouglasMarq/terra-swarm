@@ -8,7 +8,6 @@ export interface AgentNodeProps {
   active?: boolean;
   actions?: NavigatorNodeActions;
   onSelect?: (node: NavigatorAgentNode) => void;
-  dropIntent?: "before" | "inside" | "after" | null;
 }
 
 /** Agent rows expose PTY status and remain independently focusable. */

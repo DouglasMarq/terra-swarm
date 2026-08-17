@@ -30,6 +30,12 @@
   font: inherit;
 }
 
+/* With Tauri's overlay title bar, macOS places the native traffic lights over
+ * the webview. Reserve their horizontal footprint before chrome content. */
+.terra-shell[data-platform="mac"] .terra-window-chrome {
+  padding-left: 78px;
+}
+
 .terra-shell button:focus-visible,
 .terra-shell [role="button"]:focus-visible,
 .terra-shell [role="tab"]:focus-visible,

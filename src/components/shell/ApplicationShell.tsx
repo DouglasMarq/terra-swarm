@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Group as PanelGroup, Panel, Separator } from "react-resizable-panels";
 import type { Layout } from "react-resizable-panels";
 import { PanelRightOpen } from "lucide-react";
+import { detectShortcutPlatform } from "../../lib/platform/shortcuts";
 import { ActivityRail, type ActivityRailProps } from "./ActivityRail";
 import {
   RightDock,
@@ -93,7 +94,11 @@ export function ApplicationShell({
     : undefined;
 
   return (
-    <div className={shellClassName} data-shell-surface={chrome?.activeSurface ?? "home"}>
+    <div
+      className={shellClassName}
+      data-platform={detectShortcutPlatform()}
+      data-shell-surface={chrome?.activeSurface ?? "home"}
+    >
       <WindowChrome {...chrome} />
       <div className="terra-shell-body">
         <ActivityRail {...activity} />

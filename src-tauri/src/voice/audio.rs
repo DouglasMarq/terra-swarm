@@ -902,3 +902,48 @@ fn build_test_streams(
 
     Ok((input_stream, output_stream))
 }
+
+#[cfg(test)]
+mod resample_tests {
+    use super::*;
+
+    /// Same setup `start_capture` uses for a 48kHz mic.
+    #[test]
+    fn downsamples_48k_sine_to_16k_without_losing_level() {
+        let mut resampler = Fft::<f32>::new(
+            48000,
+            TARGET_SAMPLE_RATE as usize,
+            RESAMPLE_CHUNK_SIZE,
+            1,
+            FixedSync::Input,
+        )
+        .unwrap();
+
+        let amplitude = 0.5f32;
+        let input: Vec<f32> = (0..48000)
+            .map(|i| amplitude * (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 48000.0).sin())
+            .collect();
+
+        let mut out = Vec::new();
+        for chunk in input.chunks_exact(RESAMPLE_CHUNK_SIZE) {
+            let output = resampler.process(&MonoSlice(chunk), None).unwrap();
+            out.extend((0..output.frames()).map(|i| output.read_sample(0, i).unwrap()));
+        }
+
+        // Output runs at a third of the input rate; the FFT block size delays
+        // up to one output chunk, so allow that much shortfall.
+        let chunks = input.len() / RESAMPLE_CHUNK_SIZE;
+        let expected = chunks * RESAMPLE_CHUNK_SIZE / 3;
+        assert!(
+            out.len() <= expected && expected - out.len() <= RESAMPLE_CHUNK_SIZE / 3,
+            "got {} frames, expected ~{expected}",
+            out.len()
+        );
+
+        // Skip the filter warm-up, then the tone should keep its RMS (A/√2).
+        let tail = &out[out.len() / 2..];
+        let rms = (tail.iter().map(|s| s * s).sum::<f32>() / tail.len() as f32).sqrt();
+        let want = amplitude / std::f32::consts::SQRT_2;
+        assert!((rms - want).abs() < want * 0.05, "rms {rms}, want {want}");
+    }
+}

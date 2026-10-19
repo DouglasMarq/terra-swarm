@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { lazy, Suspense, useMemo, useState } from "react";
 
 import { AppErrorBoundary, LoadingScreen } from "../system";
@@ -22,7 +23,7 @@ function LazyApp({ attempt }: LazyAppProps) {
         <LoadingScreen
           phase="booting"
           progress={30}
-          status="carregando a superfície do workspace"
+          status={t("system.loadingSurface")}
         />
       }
     >

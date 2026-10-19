@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { AlertCircle, CheckCircle2, Info, TriangleAlert, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, type CSSProperties } from "react";
@@ -83,7 +84,7 @@ function ToastCard({
           type="button"
           className={styles.toastClose}
           onClick={() => onDismiss(toast.id)}
-          aria-label={`Dispensar: ${toast.title}`}
+          aria-label={t("system.dismiss", { name: toast.title })}
         >
           <X size={14} aria-hidden="true" />
         </button>

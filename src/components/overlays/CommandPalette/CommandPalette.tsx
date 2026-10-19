@@ -1,3 +1,4 @@
+import { useLocale, useT } from "../../../i18n";
 import {
   ArchiveRestore,
   Bot,
@@ -96,6 +97,8 @@ export function CommandPalette({
   onRequestConfirm,
   onOpenChange,
 }: CommandPaletteProps) {
+  const t = useT();
+  const locale = useLocale();
   const [query, setQuery] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const commands = useMemo(
@@ -116,7 +119,9 @@ export function CommandPalette({
         agentLabels,
         resumeCount,
       }),
-    [agentLabels, resumeCount, agents, dockOpen, focusedGroupId, focusedTerminalId, focusedWorkspaceId, groups, hasDetachedTabs, hasRecentlyClosedTabs, recentCommandIds, voiceEnabled, voiceRecording, workspaces],
+    // `locale` re-runs the model so labels follow a language switch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [locale, agentLabels, resumeCount, agents, dockOpen, focusedGroupId, focusedTerminalId, focusedWorkspaceId, groups, hasDetachedTabs, hasRecentlyClosedTabs, recentCommandIds, voiceEnabled, voiceRecording, workspaces],
   );
   const visibleCommands = useMemo(() => filterCommands(commands, query), [commands, query]);
   const visibleGroups = useMemo(
@@ -144,16 +149,16 @@ export function CommandPalette({
       onOpenChange(false);
       return;
     }
-    setStatusMessage("Este comando ainda não está disponível neste contexto.");
+    setStatusMessage(t("palette.unavailable"));
   }
 
   return (
     <Command.Dialog
       aria-describedby="terra-command-palette-description"
-      aria-label="Paleta de comandos Terra"
+      aria-label={t("palette.title")}
       className={styles.dialog}
       contentClassName={styles.dialogContent}
-      label="Paleta de comandos Terra"
+      label={t("palette.title")}
       loop
       onOpenChange={onOpenChange}
       open={open}
@@ -164,21 +169,21 @@ export function CommandPalette({
         <div className={styles.searchRow}>
           <span className={styles.searchGlyph} aria-hidden="true">⌕</span>
           <Command.Input
-            aria-label="Buscar comandos"
+            aria-label={t("palette.searchPlaceholder")}
             autoFocus
             className={styles.input}
             onValueChange={setQuery}
-            placeholder="Buscar comando, projeto ou agente…"
+            placeholder={t("palette.searchPlaceholder")}
             value={query}
           />
           <kbd className={styles.escapeKey}>Esc</kbd>
         </div>
         <p className={styles.description} id="terra-command-palette-description">
-          Ações rápidas para navegar e orquestrar o Terra.
+          {t("palette.hint")}
         </p>
-        <Command.List aria-label="Resultados de comandos" className={styles.list}>
+        <Command.List aria-label={t("palette.title")} className={styles.list}>
           {visibleGroups.length === 0 ? (
-            <Command.Empty className={styles.empty}>Nenhum comando encontrado.</Command.Empty>
+            <Command.Empty className={styles.empty}>{t("palette.empty")}</Command.Empty>
           ) : (
             visibleGroups.map((group) => (
               <Command.Group className={styles.group} heading={group.label} key={group.id} value={group.id}>
@@ -199,7 +204,7 @@ export function CommandPalette({
                         <span className={styles.itemDescription}>{command.description}</span>
                       </span>
                       {command.shortcut ? <kbd className={styles.itemShortcut}>{command.shortcut}</kbd> : null}
-                      {command.confirmation ? <span className={styles.confirmHint}>Confirmar</span> : null}
+                      {command.confirmation ? <span className={styles.confirmHint}>{t("common.confirm")}</span> : null}
                     </Command.Item>
                   );
                 })}
@@ -208,8 +213,8 @@ export function CommandPalette({
           )}
         </Command.List>
         <div className={styles.footer}>
-          <span><kbd>↑</kbd><kbd>↓</kbd> navegar</span>
-          <span><kbd>Enter</kbd> executar</span>
+          <span><kbd>↑</kbd><kbd>↓</kbd> {t("palette.navigate")}</span>
+          <span><kbd>Enter</kbd> {t("palette.run")}</span>
           <span className={styles.footerStatus} aria-live="polite">{statusMessage}</span>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { useMemo } from "react";
 import { EmptyPaneCell } from "./EmptyPaneCell";
 import { projectWorkbench } from "./projection";
@@ -72,9 +73,9 @@ export function WorkspaceWorkbench({
         <div className="terra-workbench__list">
           {emptyState ?? (
             <EmptyPaneCell
-              label="Nenhum projeto aberto"
-              description="Abra um projeto para criar agentes e acompanhar o trabalho neste espaço."
-              actionLabel="Criar projeto"
+              label={t("workbench.noProject")}
+              description={t("workbench.noProjectHint")}
+              actionLabel={t("workbench.createProject")}
               onNewTab={onNewContainer}
             />
           )}

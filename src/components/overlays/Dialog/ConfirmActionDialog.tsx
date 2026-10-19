@@ -1,3 +1,4 @@
+import { t } from "../../../i18n";
 import { AlertTriangle } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -28,7 +29,7 @@ export interface ConfirmActionDialogProps {
  */
 export function ConfirmActionDialog({
   busy = false,
-  cancelLabel = "Cancelar",
+  cancelLabel = t("common.cancel"),
   confirmLabel,
   description,
   intent = "destructive",

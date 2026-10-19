@@ -1,3 +1,4 @@
+import { t } from "../../../i18n";
 import type { AgentInfo, TerminalMeta, Workspace, WorkspaceGroup } from "../../../types";
 
 export type CommandGroupId = "recent" | "navigation" | "create" | "agent" | "settings";
@@ -154,12 +155,13 @@ export const COMMAND_GROUP_ORDER: readonly CommandGroupId[] = [
   "settings",
 ];
 
+/** Group headings, translated on read so the palette follows the locale. */
 export const COMMAND_GROUP_LABELS: Readonly<Record<CommandGroupId, string>> = {
-  recent: "Recentes",
-  navigation: "Navegação",
-  create: "Criar",
-  agent: "Agente focado",
-  settings: "Configurações",
+  get recent() { return t("palette.groups.recent"); },
+  get navigation() { return t("palette.groups.navigation"); },
+  get create() { return t("palette.groups.create"); },
+  get agent() { return t("palette.groups.agent"); },
+  get settings() { return t("palette.groups.settings"); },
 };
 
 function normalizeText(value: string): string {
@@ -196,7 +198,7 @@ function command(
 }
 
 function workspaceLabel(workspace: Workspace): string {
-  return workspace.name.trim() || workspace.cwd || "Projeto sem nome";
+  return workspace.name.trim() || workspace.cwd || t("palette.unnamedProject");
 }
 
 function terminalLabel(terminal: TerminalMeta): string {
@@ -277,17 +279,17 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
   const commands: CommandDescriptor[] = [
     command({
       id: "navigate:workbench",
-      label: "Ir para Workbench",
-      description: "Abrir o espaço de trabalho e os terminais",
+      label: t("palette.goWorkbench"),
+      description: t("palette.goWorkbenchDesc"),
       group: "navigation",
-      keywords: ["terminal", "projetos", "workspace", "bancada"],
+      keywords: ["terminal", "projetos", "projects", "workspace", "bancada", "workbench"],
       icon: "workbench",
       intent: { kind: "navigate", route: "workbench" },
     }),
     command({
       id: "navigate:fleet",
-      label: "Abrir frota",
-      description: "Ver todos os agentes e seus estados",
+      label: t("palette.openFleet"),
+      description: t("palette.openFleetDesc"),
       group: "navigation",
       keywords: ["fleet", "frota", "agentes", "status"],
       icon: "fleet",
@@ -295,8 +297,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
     }),
     command({
       id: "navigate:settings",
-      label: "Abrir Configurações",
-      description: "Preferências, recursos e atalhos do Terra",
+      label: t("palette.openSettings"),
+      description: t("palette.openSettingsDesc"),
       group: "navigation",
       keywords: ["configuracoes", "configurações", "preferencias", "preferências", "settings"],
       icon: "settings",
@@ -309,8 +311,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
     commands.push(
       command({
         id: `open-group:${safeIdPart(group.id)}`,
-        label: `Abrir grupo ${groupName}`,
-        description: "Navegar para os projetos deste grupo",
+        label: t("palette.openGroup", { name: groupName }),
+        description: t("palette.openGroupDesc"),
         group: "navigation",
         keywords: [groupName, "grupo", "projeto", "abrir"],
         icon: "group",
@@ -324,8 +326,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
     commands.push(
       command({
         id: `open-workspace:${safeIdPart(workspace.id)}`,
-        label: `Abrir projeto ${name}`,
-        description: workspace.cwd || "Abrir container do projeto",
+        label: t("palette.openProject", { name }),
+        description: workspace.cwd || t("palette.openProjectDesc"),
         group: "navigation",
         keywords: [name, workspace.cwd, "projeto", "workspace", "abrir"],
         icon: "folder",
@@ -340,8 +342,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       commands.push(
         command({
           id: `open-terminal:${safeIdPart(workspace.id)}:${safeIdPart(terminal.id)}`,
-          label: agentLabel ? `${primary} · ${name}` : `Abrir ${terminalName} · ${name}`,
-          description: agentLabel ? `${tag} · Focar o terminal deste agente` : "Focar o terminal deste agente",
+          label: agentLabel ? `${primary} · ${name}` : t("palette.openAgent", { name: terminalName, project: name }),
+          description: agentLabel ? `${tag} · ${t("palette.openAgentDesc")}` : t("palette.openAgentDesc"),
           group: "navigation",
           keywords: [terminalName, primary, tag, name, workspace.cwd, "agente", "terminal", "focar"],
           icon: "terminal",
@@ -354,8 +356,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
   commands.push(
     command({
       id: "create:project",
-      label: "Novo projeto",
-      description: "Adicionar um projeto ao Terra",
+      label: t("palette.newProject"),
+      description: t("palette.newProjectDesc"),
       group: "create",
       keywords: ["criar", "projeto", "workspace", "novo"],
       icon: "plus",
@@ -363,8 +365,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
     }),
     command({
       id: "create:group",
-      label: "Novo grupo",
-      description: "Organizar projetos em um novo grupo",
+      label: t("palette.newGroup"),
+      description: t("palette.newGroupDesc"),
       group: "create",
       keywords: ["criar", "grupo", "organizar", "novo"],
       icon: "group",
@@ -372,10 +374,10 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
     }),
     command({
       id: "create:agent",
-      label: hasAgentWorkspace ? "Novo agente…" : "Novo agente… (selecione um projeto)",
+      label: hasAgentWorkspace ? t("palette.newAgent") : t("palette.newAgentNoProject"),
       description: hasAgentWorkspace
-        ? "Escolher um agente disponível para iniciar"
-        : "Selecione um projeto antes de iniciar um agente",
+        ? t("palette.newAgentDesc")
+        : t("palette.pickProjectFirst"),
       group: "create",
       keywords: ["criar", "agente", "terminal", "novo"],
       icon: "agent",
@@ -389,8 +391,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
     commands.push(
       command({
         id: `create:project:${safeIdPart(group.id)}`,
-        label: `Novo projeto em ${groupName}`,
-        description: "Criar projeto já associado a este grupo",
+        label: t("palette.newProjectIn", { name: groupName }),
+        description: t("palette.newProjectInDesc"),
         group: "create",
         keywords: ["criar", "projeto", groupName, "grupo"],
         icon: "folder",
@@ -406,15 +408,15 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       command({
         id: `create-agent:${safeIdPart(agent.id)}`,
         label: !agent.available
-          ? `${agentName} indisponível`
+          ? t("palette.agentUnavailable", { name: agentName })
           : hasAgentWorkspace
-            ? `Iniciar ${agentName}`
-            : `${agentName} — selecione um projeto`,
+            ? t("palette.startAgent", { name: agentName })
+            : t("palette.startAgentNoProject", { name: agentName }),
         description: !agent.available
-          ? "Agente não detectado nesta máquina"
+          ? t("palette.agentUnavailableDesc")
           : hasAgentWorkspace
-            ? "Iniciar este agente no projeto atual"
-            : "Selecione um projeto antes de iniciar um agente",
+            ? t("palette.startAgentDesc")
+            : t("palette.pickProjectFirst"),
         group: "create",
         keywords: [agentName, agent.id, "agente", "iniciar", "disponível", "disponivel"],
         icon: "agent",
@@ -433,8 +435,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
     commands.push(
       command({
         id: "agent:open-focused",
-        label: `Focar ${contextLabel}`,
-        description: "Voltar para o agente selecionado",
+        label: t("palette.focus", { name: contextLabel }),
+        description: t("palette.focusDesc"),
         group: "agent",
         keywords: ["agente", "focar", "selecionado", context.command, context.workspaceName],
         icon: "terminal",
@@ -442,8 +444,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       }),
       command({
         id: "agent:resume-focused",
-        label: `Retomar ${contextLabel}`,
-        description: "Retomar a sessão pausada deste agente",
+        label: t("palette.resume", { name: contextLabel }),
+        description: t("palette.resumeDesc"),
         group: "agent",
         keywords: ["retomar", "resume", "continuar", "agente", context.command],
         icon: "play",
@@ -463,43 +465,43 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
     }[] = [
       {
         id: "agent:interrupt-focused",
-        label: `Interromper ${contextLabel}`,
-        description: "Enviar interrupção para o processo do agente",
+        label: t("palette.interrupt", { name: contextLabel }),
+        description: t("palette.interruptDesc"),
         keywords: ["interromper", "parar", "cancelar", "agente"],
         icon: "stop",
         kind: "interrupt-agent",
         action: "interrupt",
-        title: "Interromper agente?",
+        title: t("palette.interruptTitle"),
       },
       {
         id: "agent:restart-focused",
-        label: `Reiniciar ${contextLabel}`,
-        description: "Parar e iniciar novamente a sessão do agente",
+        label: t("palette.restart", { name: contextLabel }),
+        description: t("palette.restartDesc"),
         keywords: ["reiniciar", "restart", "agente"],
         icon: "restart",
         kind: "restart-agent",
         action: "restart",
-        title: "Reiniciar agente?",
+        title: t("palette.restartTitle"),
       },
       {
         id: "agent:stop-focused",
-        label: `Encerrar ${contextLabel}`,
-        description: "Encerrar o processo e liberar o terminal",
+        label: t("palette.stop", { name: contextLabel }),
+        description: t("palette.stopDesc"),
         keywords: ["encerrar", "parar", "stop", "matar", "kill", "agente"],
         icon: "stop",
         kind: "stop-agent",
         action: "stop",
-        title: "Encerrar agente?",
+        title: t("palette.stopTitle"),
       },
       {
         id: "agent:clear-focused",
-        label: `Limpar histórico de ${contextLabel}`,
-        description: "Apagar o scrollback persistido desta sessão",
+        label: t("palette.clear", { name: contextLabel }),
+        description: t("palette.clearDesc"),
         keywords: ["limpar", "histórico", "historico", "scrollback", "agente"],
         icon: "clear",
         kind: "clear-scrollback",
         action: "clear-scrollback",
-        title: "Limpar histórico?",
+        title: t("palette.clearTitle"),
       },
     ];
     for (const candidate of destructiveFocusedCommands) {
@@ -516,7 +518,7 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
             candidate.id,
             candidate.kind,
             candidate.title,
-            `${candidate.description}. Essa ação exige confirmação.`,
+            `${candidate.description}. ${t("palette.needsConfirm")}`,
             context,
             candidate.action,
           ),
@@ -528,8 +530,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
   commands.push(
     command({
       id: "settings:toggle-dock",
-      label: data.dockOpen === false ? "Abrir dock lateral" : "Fechar dock lateral",
-      description: "Alternar o painel contextual da direita",
+      label: data.dockOpen === false ? t("palette.openInspector") : t("palette.closeInspector"),
+      description: t("palette.toggleInspectorDesc"),
       group: "settings",
       keywords: ["dock", "painel", "lateral", "direita", "alternar"],
       icon: "dock",
@@ -539,8 +541,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       data.voiceEnabled === false
         ? {
             id: "settings:voice",
-            label: "Configurar entrada por voz",
-            description: "Abrir Configurações para ativar a captura de voz",
+            label: t("palette.voiceSetup"),
+            description: t("palette.voiceSetupDesc"),
             group: "settings",
             keywords: ["voz", "voice", "microfone", "configurar", "ativar"],
             icon: "voice",
@@ -549,8 +551,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
         : data.voiceRecording
           ? {
               id: "voice:stop",
-              label: "Parar captura de voz",
-              description: "Parar a gravação e transcrever o comando atual",
+              label: t("palette.voiceStop"),
+              description: t("palette.voiceStopDesc"),
               group: "settings",
               keywords: ["voz", "voice", "microfone", "parar", "gravar", "captura"],
               icon: "voice",
@@ -558,8 +560,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
             }
           : {
               id: "voice:start",
-              label: "Iniciar captura de voz",
-              description: "Começar a gravação para ditado ou comando",
+              label: t("palette.voiceStart"),
+              description: t("palette.voiceStartDesc"),
               group: "settings",
               keywords: ["voz", "voice", "microfone", "iniciar", "gravar", "captura"],
               icon: "voice",
@@ -568,8 +570,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
     ),
     command({
       id: "settings:export",
-      label: "Exportar workspace",
-      description: "Salvar um snapshot dos projetos e sessões",
+      label: t("palette.export"),
+      description: t("palette.exportDesc"),
       group: "settings",
       keywords: ["exportar", "backup", "snapshot", "salvar", "workspace"],
       icon: "export",
@@ -577,8 +579,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
     }),
     command({
       id: "settings:import",
-      label: "Importar workspace…",
-      description: "Restaurar um snapshot salvo anteriormente",
+      label: t("palette.import"),
+      description: t("palette.importDesc"),
       group: "settings",
       keywords: ["importar", "restaurar", "snapshot", "backup", "workspace"],
       icon: "import",
@@ -586,16 +588,16 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       confirmation: {
         kind: "import-snapshot",
         commandId: "settings:import",
-        title: "Importar workspace?",
-        description: "A importação pode substituir o estado atual. Escolha um snapshot e confirme no host.",
+        title: t("palette.importTitle"),
+        description: t("palette.importConfirm"),
         resourceId: "workspace-snapshot",
-        resourceLabel: "Workspace atual",
+        resourceLabel: t("palette.currentWorkspace"),
       },
     }),
     command({
       id: "settings:reattach-terminal",
-      label: "Reanexar terminal destacado",
-      description: "Recolocar o terminal destacado no Workbench",
+      label: t("palette.reattach"),
+      description: t("palette.reattachDesc"),
       group: "settings",
       keywords: ["reanexar", "reattach", "terminal", "destacado", "anexar"],
       icon: "reopen",
@@ -604,8 +606,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
     }),
     command({
       id: "settings:resume-sessions",
-      label: "Retomar sessões…",
-      description: `${data.resumeCount ?? 0} sessão(ões) salva(s) esperando`,
+      label: t("palette.resumeSessions"),
+      description: t("palette.resumeSessionsDesc", { count: data.resumeCount ?? 0 }),
       group: "settings",
       keywords: ["retomar", "sessões", "resume", "continuar", "abertura"],
       icon: "agent",
@@ -614,8 +616,8 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
     }),
     command({
       id: "settings:reopen-tab",
-      label: "Reabrir workspace fechado",
-      description: "Restaurar a última aba visualmente fechada",
+      label: t("palette.reopen"),
+      description: t("palette.reopenDesc"),
       group: "settings",
       keywords: ["reabrir", "aba", "tab", "workspace", "fechado"],
       icon: "reopen",

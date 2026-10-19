@@ -1,3 +1,4 @@
+import { t } from "../../../i18n";
 import { Check, CircleAlert } from "lucide-react";
 
 import type { AgentInfo } from "../../../types";
@@ -29,18 +30,18 @@ export function AgentPickerDialog({
   return (
     <TerraDialog
       className={styles.dialog}
-      description="Escolha o perfil que será executado neste terminal."
+      description={t("dialogs.picker.description")}
       onOpenChange={onOpenChange}
       open={open}
-      title="Novo terminal"
+      title={t("palette.newAgent")}
     >
-      <div aria-label="Perfis de agente" className={styles.agentList} role="list">
+      <div aria-label={t("dialogs.picker.profiles")} className={styles.agentList} role="list">
         {agents.length === 0 ? (
-          <p className={styles.emptyAgents}>Nenhum perfil foi detectado ainda.</p>
+          <p className={styles.emptyAgents}>{t("settingsPanels.detectedNone")}</p>
         ) : (
           agents.map((agent) => (
             <button
-              aria-label={`${agent.label}${agent.available ? "" : " (indisponível)"}`}
+              aria-label={agent.available ? agent.label : t("dialogs.picker.unavailableNamed", { name: agent.label })}
               className={styles.agentOption}
               disabled={!agent.available}
               key={agent.id}
@@ -55,7 +56,7 @@ export function AgentPickerDialog({
                 <Check aria-hidden="true" size={15} strokeWidth={1.8} />
               ) : (
                 <span className={styles.agentMissing}>
-                  <CircleAlert aria-hidden="true" size={13} /> indisponível
+                  <CircleAlert aria-hidden="true" size={13} /> {t("dialogs.picker.unavailable")}
                 </span>
               )}
             </button>
@@ -73,11 +74,11 @@ export function AgentPickerDialog({
           onChange={(event) => onSaveDefaultChange(event.target.checked)}
           type="checkbox"
         />
-        <span>Definir a escolha como perfil padrão para os próximos agentes.</span>
+        <span>{t("dialogs.picker.saveDefault")}</span>
       </label>
       <DialogFooter>
         <Button onClick={() => onOpenChange(false)} type="button" variant="ghost">
-          Cancelar
+          {t("common.cancel")}
         </Button>
       </DialogFooter>
     </TerraDialog>

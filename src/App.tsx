@@ -52,6 +52,7 @@ import { useShellStore } from "./stores/shellStore";
 import { useOrchestrationStore } from "./stores/orchestrationStore";
 import { planResume } from "./lib/session/resumePlanner";
 import { buildAgentLabels } from "./domain/agentLabels";
+import { t, useLocale } from "./i18n";
 import { pickAgentName } from "./domain/agentNames";
 import { createSpawnQueue } from "./lib/session/spawnQueue";
 import { createInitializationGate, type InitializationGate } from "./lib/session/initializationGate";
@@ -130,16 +131,18 @@ type DurableScrollbackApi = {
 function describeSnapshotError(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "string" && error.trim()) return error;
-  return "A operação do snapshot falhou. Nada foi alterado.";
+  return t("app.snapshotFailed");
 }
 
 function describeInitializationError(error: unknown): string {
   if (error instanceof Error && error.message.trim()) return error.message;
   if (typeof error === "string" && error.trim()) return error;
-  return "Não foi possível carregar os workspaces. Tente novamente.";
+  return t("app.loadFailed");
 }
 
 function App() {
+  // Re-render on a language switch so dialogs and labels built here follow it.
+  useLocale();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [showNewWs, setShowNewWs] = useState(false);
@@ -353,7 +356,7 @@ function App() {
   useEffect(() => {
     if (!orchestrationPersistenceError) return;
     pushSystemNotification(
-      `Não foi possível salvar ${orchestrationPersistenceError.operation}: ${orchestrationPersistenceError.message}`,
+      t("app.saveFailed", { what: orchestrationPersistenceError.operation, detail: orchestrationPersistenceError.message }),
     );
     clearPersistenceError();
   }, [
@@ -839,7 +842,7 @@ function App() {
 
   const reportSpawnError = (err: unknown) => {
     console.error("failed to spawn terminal:", err);
-    pushSystemNotification(`Failed to start terminal: ${String(err)}`);
+    pushSystemNotification(t("app.spawnFailed", { detail: String(err) }));
   };
 
   const quickNewTerminal = async (wsId: string, paneId: string | null = null) => {
@@ -1024,7 +1027,7 @@ function App() {
         const detail = result.error instanceof Error ? result.error.message : String(result.error);
         console.error(`failed to dismiss resume item ${item.terminalId}:`, result.error);
         pushSystemNotification(
-          `Não foi possível descartar ${item.wsName}. A sessão permanece na fila; tente novamente. ${detail}`,
+          t("app.dismissFailed", { name: item.wsName, detail }),
         );
         return;
       }
@@ -1081,7 +1084,7 @@ function App() {
           const detail = result.error instanceof Error ? result.error.message : String(result.error);
           console.error(`failed to dismiss resume item ${result.item.terminalId}:`, result.error);
           pushSystemNotification(
-            `Não foi possível descartar ${result.item.wsName}. A sessão permanece na fila; tente novamente. ${detail}`,
+            t("app.dismissFailed", { name: result.item.wsName, detail }),
           );
           continue;
         }
@@ -1347,7 +1350,7 @@ function App() {
       case "resume-group":
         return intent.group;
       case "new-agent":
-        return intent.agent ?? "Agente padrão";
+        return intent.agent ?? t("app.defaultAgent");
       case "open-fleet":
         return "Frota Terra";
     }
@@ -1390,7 +1393,7 @@ function App() {
     confirmed = false,
   ): Promise<boolean> => {
     if (!canExecuteVoiceIntent(intent, confirmed)) {
-      setVoiceFeedback("Confirme a ação destrutiva na cápsula para continuar.");
+      setVoiceFeedback(t("app.voice.confirmDestructive"));
       return false;
     }
     try {
@@ -1401,8 +1404,8 @@ function App() {
           return true;
         case "focus":
           if (!focusVoiceTarget(intent.target)) {
-            pushSystemNotification(`Terminal não encontrado: ${intent.target}`);
-            setVoiceFeedback(`Não encontrei o terminal ${intent.target}.`);
+            pushSystemNotification(t("app.voice.terminalNotFound", { name: intent.target }));
+            setVoiceFeedback(t("app.voice.terminalNotFound", { name: intent.target }));
             return false;
           }
           setVoiceFeedback(`Foco alterado para ${intent.target}.`);
@@ -1410,8 +1413,8 @@ function App() {
         case "suspend-group": {
           const groupId = resolveVoiceGroup(intent.group);
           if (!groupId) {
-            pushSystemNotification(`Grupo não encontrado: ${intent.group}`);
-            setVoiceFeedback(`Não encontrei o grupo ${intent.group}.`);
+            pushSystemNotification(t("app.voice.groupNotFound", { name: intent.group }));
+            setVoiceFeedback(t("app.voice.groupNotFound", { name: intent.group }));
             return false;
           }
           await suspendGroup(groupId);
@@ -1421,8 +1424,8 @@ function App() {
         case "resume-group": {
           const groupId = resolveVoiceGroup(intent.group);
           if (!groupId) {
-            pushSystemNotification(`Grupo não encontrado: ${intent.group}`);
-            setVoiceFeedback(`Não encontrei o grupo ${intent.group}.`);
+            pushSystemNotification(t("app.voice.groupNotFound", { name: intent.group }));
+            setVoiceFeedback(t("app.voice.groupNotFound", { name: intent.group }));
             return false;
           }
           await resumeGroup(groupId);
@@ -1431,12 +1434,12 @@ function App() {
         }
         case "new-agent":
           await startVoiceAgent(intent.agent);
-          setVoiceFeedback(intent.agent ? `Agente ${intent.agent} iniciado.` : "Novo agente preparado.");
+          setVoiceFeedback(intent.agent ? t("app.voice.agentStarted", { name: intent.agent }) : t("app.voice.agentReady"));
           return true;
         case "stop": {
           const match = intent.target ? resolveVoiceTerminal(intent.target) : null;
           if (!match) {
-            setVoiceFeedback(intent.target ? `Não encontrei o terminal ${intent.target}.` : "Informe qual terminal deve parar.");
+            setVoiceFeedback(intent.target ? t("app.voice.terminalNotFound", { name: intent.target }) : t("app.voice.whichStop"));
             return false;
           }
           await closeTerminal(match.terminal.id);
@@ -1446,8 +1449,8 @@ function App() {
       }
     } catch (err) {
       console.error("voice orchestration command failed:", err);
-      setVoiceFeedback("Não foi possível executar a ação de voz.");
-      pushSystemNotification("Falha ao executar a ação de voz");
+      setVoiceFeedback(t("app.voice.actionFailed"));
+      pushSystemNotification(t("app.voice.actionFailed"));
       return false;
     }
   };
@@ -1542,7 +1545,7 @@ function App() {
       const transfer = await api.exportWorkspaceSnapshot(path);
       setSnapshotFeedback({
         kind: "success",
-        message: `Snapshot exportado (${transfer.workspaceCount} workspace${transfer.workspaceCount === 1 ? "" : "s"}, ${transfer.terminalCount} terminal${transfer.terminalCount === 1 ? "" : "s"}).`,
+        message: t("app.snapshotExported", { workspaces: transfer.workspaceCount, terminals: transfer.terminalCount }),
         backupPath: transfer.path,
       });
     } catch (error) {
@@ -1583,7 +1586,7 @@ function App() {
 
       setSnapshotFeedback({
         kind: "success",
-        message: `Snapshot importado (${transfer.workspaceCount} workspace${transfer.workspaceCount === 1 ? "" : "s"}, ${transfer.suspendedTerminalCount} terminal${transfer.suspendedTerminalCount === 1 ? "" : "s"} suspenso${transfer.suspendedTerminalCount === 1 ? "" : "s"}).`,
+        message: t("app.snapshotImported", { workspaces: transfer.workspaceCount, terminals: transfer.suspendedTerminalCount }),
         backupPath: transfer.backupPath,
       });
     } catch (error) {
@@ -1648,7 +1651,7 @@ function App() {
       await api.closeWorkspace(id);
     } catch (err) {
       console.error(`failed to close workspace ${id}:`, err);
-      pushSystemNotification(`Não foi possível excluir o projeto: ${String(err)}`);
+      pushSystemNotification(t("app.deleteFailed", { detail: String(err) }));
       return false;
     }
     for (const t of terms) {
@@ -1834,14 +1837,14 @@ function App() {
   const deliverDictation = async (id: string, text: string): Promise<void> => {
     const meta = workspaces.flatMap((workspace) => workspace.terminals).find((candidate) => candidate.id === id);
     if (meta && id in exitedRef.current) {
-      setVoiceFeedback("Retomando o agente para enviar o ditado…");
+      setVoiceFeedback(t("app.voice.resuming"));
       await restartTerminal(id, resolveResumeCommand(profileForCommand(meta.command), meta.command));
       // Give the agent's CLI a moment to draw its prompt before pasting.
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
     const term = getTerminal(id);
     if (!term) {
-      setVoiceFeedback("O terminal escolhido não está disponível.");
+      setVoiceFeedback(t("app.voice.targetUnavailable"));
       return;
     }
     const prompt = voiceCommandsEnabledRef.current && meta
@@ -1854,11 +1857,11 @@ function App() {
       await api.writeTerminal(id, data);
       term.focus();
       setVoiceSubmitted(true);
-      setVoiceFeedback("Ditado enviado.");
+      setVoiceFeedback(t("app.voice.sent"));
     } catch (error) {
       console.error("voice dictation write failed:", error);
-      dispatchVoiceCapsule({ type: "fail", message: "Não foi possível enviar o ditado ao terminal." });
-      setVoiceFeedback("Não foi possível enviar o ditado ao terminal.");
+      dispatchVoiceCapsule({ type: "fail", message: t("app.voice.sendFailed") });
+      setVoiceFeedback(t("app.voice.sendFailed"));
     }
   };
   const deliverDictationRef = useRef(deliverDictation);
@@ -1909,7 +1912,7 @@ function App() {
       const text = e.payload.trim();
       if (!text) {
         dispatchVoiceCapsule({ type: "transcription-ready", transcript: "", intent: null });
-        setVoiceFeedback("Não ouvi uma transcrição. Tente novamente.");
+        setVoiceFeedback(t("app.voice.noTranscript"));
         return;
       }
       if (voiceCommandsEnabledRef.current) {
@@ -1918,8 +1921,8 @@ function App() {
           dispatchVoiceCapsule({ type: "transcription-ready", transcript: text, intent });
           setVoiceSubmitted(false);
           setVoiceFeedback(isDestructiveVoiceIntent(intent)
-            ? "Revise o alvo e confirme a ação para executar."
-            : "Revise a intenção e envie quando estiver pronto.");
+            ? t("app.voice.reviewDestructive")
+            : t("app.voice.reviewIntent"));
           return;
         }
       }
@@ -1931,15 +1934,15 @@ function App() {
       setVoiceSubmitted(false);
       const id = voiceFocusRef.current;
       if (!id) {
-        setVoiceFeedback("Transcrição pronta; selecione um terminal para enviar o ditado.");
+        setVoiceFeedback(t("app.voice.readyPickTarget"));
         return;
       }
       void deliverDictationRef.current(id, text);
     });
     const unTrErr = listen<string>("voice-transcription-error", (e) => {
       setVoiceStatus("idle");
-      dispatchVoiceCapsule({ type: "fail", message: e.payload || "Falha na transcrição." });
-      setVoiceFeedback(e.payload || "Falha na transcrição.");
+      dispatchVoiceCapsule({ type: "fail", message: e.payload || t("app.voice.transcriptionFailed") });
+      setVoiceFeedback(e.payload || t("app.voice.transcriptionFailed"));
       console.error("voice transcription error:", e.payload);
       if (isVoiceModelError(e.payload)) {
         setSettingsSection("voice");
@@ -2226,7 +2229,7 @@ function App() {
         // Clear what the user sees, not only the cached runtime state.
         getTerminal(terminal.id)?.clear();
         clearTerminal(terminal.id);
-        pushSystemNotification("Histórico visual limpo para o agente em foco");
+        pushSystemNotification(t("app.historyCleared"));
         return;
       case "resume": {
         const term = getTerminal(terminal.id);
@@ -2252,7 +2255,7 @@ function App() {
     }
     api.voiceToggleRecording().catch((error) => {
       console.error("voice start failed:", error);
-      setVoiceFeedback("Não foi possível iniciar a captura de voz.");
+      setVoiceFeedback(t("app.voice.startFailed"));
     });
   };
 
@@ -2260,7 +2263,7 @@ function App() {
     if (voiceStatus !== "recording") return;
     api.voiceToggleRecording().catch((error) => {
       console.error("voice stop failed:", error);
-      setVoiceFeedback("Não foi possível parar a captura de voz.");
+      setVoiceFeedback(t("app.voice.stopFailed"));
     });
   };
 
@@ -2286,8 +2289,8 @@ function App() {
     setVoiceFeedback(null);
     api.voiceToggleRecording().catch((error) => {
       console.error("voice retry failed:", error);
-      dispatchVoiceCapsule({ type: "fail", message: "Não foi possível iniciar uma nova captura." });
-      setVoiceFeedback("Não foi possível iniciar uma nova captura.");
+      dispatchVoiceCapsule({ type: "fail", message: t("app.voice.retryFailed") });
+      setVoiceFeedback(t("app.voice.retryFailed"));
     });
   };
 
@@ -2303,14 +2306,14 @@ function App() {
     // completed, but is always sent as text (never interpreted here).
     const id = voiceFocusRef.current;
     if (!id) {
-      setVoiceFeedback("Selecione um terminal para enviar o ditado.");
+      setVoiceFeedback(t("app.voice.pickTarget"));
       return;
     }
     await deliverDictation(id, payload.transcript);
   };
 
   const settingsPage = showSettings ? (
-        <Suspense fallback={<AppLoadingSurface label="configurações" />}>
+        <Suspense fallback={<AppLoadingSurface label={t("common.settings")} />}>
           <LazySettingsDialog
             variant="page"
             open
@@ -2324,7 +2327,7 @@ function App() {
               setCapturing(null);
             }}
             renderSection={({ section }) => (
-              <Suspense fallback={<AppLoadingSurface label="seção" />}>
+              <Suspense fallback={<AppLoadingSurface label={t("settings.title")} />}>
                 <LazySettingsSectionPanel
                   section={section}
                   agents={agents}
@@ -2389,11 +2392,11 @@ function App() {
       {initializationError ? (
         <div className="terra-initialization-error" role="alert" aria-live="assertive">
           <div>
-            <strong>Falha ao carregar o Terra</strong>
+            <strong>{t("system.initFailed")}</strong>
             <span>{initializationError}</span>
           </div>
           <button type="button" onClick={startInitialization} disabled={initializationRunning}>
-            {initializationRunning ? "Tentando novamente…" : "Tentar novamente"}
+            {initializationRunning ? t("system.retrying") : t("nav.retry")}
           </button>
         </div>
       ) : null}
@@ -2600,14 +2603,14 @@ function App() {
       />
 
       <ConfirmActionDialog
-        description="A importação substituirá os metadados atuais dos workspaces. Os terminais ativos serão interrompidos e os processos não serão incluídos no arquivo."
+        description={t("app.importDescription")}
         onConfirm={() => pendingImportPath ? performImportWorkspaceSnapshot(pendingImportPath) : undefined}
         onOpenChange={(open) => {
           if (!open) setPendingImportPath(null);
         }}
         open={pendingImportPath !== null}
-        title="Importar snapshot?"
-        confirmLabel="Importar snapshot"
+        title={t("app.importTitle")}
+        confirmLabel={t("settingsPanels.importSnapshot")}
       />
 
       <ConfirmActionDialog
@@ -2616,8 +2619,8 @@ function App() {
             ? workspaces.find((workspace) => workspace.id === workspaceToDelete)
             : null;
           return project
-            ? `Excluir o projeto “${project.name}” e encerrar seus agentes? Esta ação não pode ser desfeita.`
-            : "Excluir este projeto e encerrar seus agentes? Esta ação não pode ser desfeita.";
+            ? t("app.deleteProjectNamed", { name: project.name })
+            : t("app.deleteProject");
         })()}
         onConfirm={async () => {
           if (!workspaceToDelete) return;
@@ -2628,8 +2631,8 @@ function App() {
           if (!open) setWorkspaceToDelete(null);
         }}
         open={workspaceToDelete !== null}
-        title="Excluir projeto?"
-        confirmLabel="Excluir projeto"
+        title={t("app.deleteTitle")}
+        confirmLabel={t("app.deleteConfirm")}
       />
 
     </MotionConfig>

@@ -341,7 +341,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         if (!cancelled) {
           const message = error instanceof Error && error.message.trim()
             ? error.message
-            : "Runtime indisponível.";
+            : t("inspector.unavailable");
           dispatchInspectorRuntime({ type: "failure", terminalId, requestId, error: message });
         }
       }
@@ -793,7 +793,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       title={pendingCommandConfirmation?.title}
       description={pendingCommandConfirmation ? `${pendingCommandConfirmation.resourceLabel}: ${pendingCommandConfirmation.description}` : ""}
       intent={pendingCommandConfirmation?.kind === "stop-agent" ? "destructive" : "default"}
-      confirmLabel={pendingCommandConfirmation?.kind === "import-snapshot" ? "Continuar importação" : pendingCommandConfirmation?.kind === "stop-agent" ? t("pane.confirmKill.confirm") : "Confirmar ação"}
+      confirmLabel={pendingCommandConfirmation?.kind === "import-snapshot" ? t("system.continueImport") : pendingCommandConfirmation?.kind === "stop-agent" ? t("pane.confirmKill.confirm") : t("dialogs.confirmTitle")}
       onConfirm={() => {
         const request = pendingCommandConfirmation;
         if (!request) return;
@@ -816,12 +816,12 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       onOpenChange={(open) => {
         if (!open) setPendingInspectorAction(null);
       }}
-      title={pendingInspectorAction?.action === "kill" ? "Encerrar sessão" : "Reiniciar sessão"}
+      title={pendingInspectorAction?.action === "kill" ? t("pane.confirmKill.confirm") : t("system.restartSession")}
       description={pendingInspectorAction
         ? `${pendingInspectorAction.target.displayName} · ${pendingInspectorAction.target.command}`
         : ""}
       intent={pendingInspectorAction?.action === "kill" ? "destructive" : "default"}
-      confirmLabel={pendingInspectorAction?.action === "kill" ? "Encerrar sessão" : "Reiniciar sessão"}
+      confirmLabel={pendingInspectorAction?.action === "kill" ? t("pane.confirmKill.confirm") : t("system.restartSession")}
       onConfirm={() => {
         const request = pendingInspectorAction;
         if (!request) return;

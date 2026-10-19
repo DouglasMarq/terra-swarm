@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { AlertTriangle, Check, ClipboardCopy, RefreshCw } from "lucide-react";
 import {
   Component,
@@ -116,11 +117,10 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
             </span>
             <div>
               <h1 id="terra-error-title" className={styles.errorTitle}>
-                Esta superfície saiu do eixo
+                {t("system.errorTitle")}
               </h1>
               <p className={styles.errorDescription}>
-                O workspace continua protegido. Tente reabrir a superfície ou copie um relatório
-                redigido para investigar o incidente.
+                {t("system.errorBody")}
               </p>
             </div>
           </div>
@@ -132,7 +132,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
               onClick={this.reset}
             >
               <RefreshCw size={14} aria-hidden="true" />
-              Tentar novamente
+              {t("nav.retry")}
             </button>
             <button type="button" className={styles.errorButton} onClick={this.copyDetails}>
               {this.state.copied ? (
@@ -140,7 +140,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
               ) : (
                 <ClipboardCopy size={14} aria-hidden="true" />
               )}
-              {this.state.copied ? "Copiado" : "Copiar relatório"}
+              {this.state.copied ? t("system.copied") : t("system.copyReport")}
             </button>
           </div>
         </section>

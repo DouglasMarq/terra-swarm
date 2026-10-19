@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { AlertCircle, ChevronDown, ChevronRight, FileText, Folder, Link2, LoaderCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Workspace, WorkspaceFileEntry, WorkspaceFileListing } from "../../types";
@@ -22,7 +23,7 @@ export interface NavigatorFilesViewProps {
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) return error.message;
   if (typeof error === "string" && error.trim()) return error;
-  return "Não foi possível listar este diretório.";
+  return t("nav.filesView.error");
 }
 
 function FileIcon({ entry }: { entry: WorkspaceFileEntry }) {
@@ -157,15 +158,15 @@ export function NavigatorFilesView({
         <div className={styles.integrationError} style={{ paddingInlineStart: `${12 + depth * 16}px` }}>
           <AlertCircle aria-hidden="true" size={13} />
           <span>{state.error}</span>
-          <button aria-label="Tentar novamente" onClick={() => void loadDirectory(relativePath, true)} type="button"><RefreshCw size={12} /></button>
+          <button aria-label={t("nav.retry")} onClick={() => void loadDirectory(relativePath, true)} type="button"><RefreshCw size={12} /></button>
         </div>
       );
     }
     if (state.loading && !state.listing) {
-      return <div className={styles.integrationLoading}><LoaderCircle className={styles.spin} size={14} /> Carregando arquivos…</div>;
+      return <div className={styles.integrationLoading}><LoaderCircle className={styles.spin} size={14} /> {t("nav.filesView.loading")}</div>;
     }
     if (!state.listing || state.listing.entries.length === 0) {
-      return <div className={styles.integrationEmpty}>Nenhum arquivo neste diretório.</div>;
+      return <div className={styles.integrationEmpty}>{t("nav.filesView.empty")}</div>;
     }
     return (
       <>
@@ -178,25 +179,25 @@ export function NavigatorFilesView({
             </div>
           );
         })}
-        {state.listing.truncated ? <div className={styles.integrationNotice}>Lista limitada a {state.listing.limit} itens.</div> : null}
+        {state.listing.truncated ? <div className={styles.integrationNotice}>{t("nav.filesView.truncated", { count: state.listing.limit })}</div> : null}
         {state.error ? <div className={styles.integrationNotice}>{state.error}</div> : null}
       </>
     );
   };
 
   return (
-    <section aria-label="Arquivos" className={styles.integrationView}>
+    <section aria-label={t("nav.files")} className={styles.integrationView}>
       <div className={styles.integrationToolbar}>
         <label className={styles.integrationSelectLabel}>
-          <span>Projeto</span>
-          <select aria-label="Projeto dos arquivos" className={styles.integrationSelect} onChange={(event) => onSelectWorkspace?.(event.target.value)} value={workspace?.id ?? ""}>
-            <option value="">Selecione um projeto</option>
+          <span>{t("nav.project")}</span>
+          <select aria-label={t("nav.filesView.project")} className={styles.integrationSelect} onChange={(event) => onSelectWorkspace?.(event.target.value)} value={workspace?.id ?? ""}>
+            <option value="">{t("nav.pickProject")}</option>
             {workspaces.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
           </select>
         </label>
-        <button aria-label="Atualizar arquivos" className={styles.integrationRefresh} disabled={!workspace} onClick={() => void loadDirectory("", true)} type="button"><RefreshCw size={13} /></button>
+        <button aria-label={t("nav.filesView.refresh")} className={styles.integrationRefresh} disabled={!workspace} onClick={() => void loadDirectory("", true)} type="button"><RefreshCw size={13} /></button>
       </div>
-      {!workspace ? <div className={styles.integrationEmpty}>Selecione um projeto para explorar seus arquivos.</div> : <div className={styles.integrationList}>{renderDirectory("", 0)}</div>}
+      {!workspace ? <div className={styles.integrationEmpty}>{t("nav.filesView.pick")}</div> : <div className={styles.integrationList}>{renderDirectory("", 0)}</div>}
     </section>
   );
 }

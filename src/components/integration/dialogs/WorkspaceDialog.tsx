@@ -1,3 +1,4 @@
+import { t } from "../../../i18n";
 import { FolderOpen } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
@@ -50,15 +51,15 @@ export function WorkspaceDialog({
   return (
     <TerraDialog
       className={styles.dialog}
-      description="Defina um nome e, opcionalmente, a pasta de trabalho."
+      description={t("dialogs.workspace.description")}
       onOpenChange={onOpenChange}
       open={open}
-      title="Novo workspace"
+      title={t("shell.newWorkspace")}
     >
       <form className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.field}>
           <label className={styles.label} htmlFor="terra-new-workspace-name">
-            Nome
+            {t("rename.name")}
           </label>
           <input
             aria-describedby={submitted && !nameIsValid ? "terra-workspace-name-error" : undefined}
@@ -68,29 +69,29 @@ export function WorkspaceDialog({
             data-invalid={submitted && !nameIsValid ? "true" : undefined}
             id="terra-new-workspace-name"
             onChange={(event) => onNameChange(event.target.value)}
-            placeholder="meu-projeto"
+            placeholder={t("dialogs.workspace.namePlaceholder")}
             type="text"
             value={name}
           />
           {submitted && !nameIsValid ? (
             <span className={styles.error} id="terra-workspace-name-error" role="alert">
-              Informe um nome para o workspace.
+              {t("dialogs.workspace.nameRequired")}
             </span>
           ) : (
-            <span className={styles.hint}>Você poderá renomeá-lo depois.</span>
+            <span className={styles.hint}>{t("dialogs.workspace.renameLater")}</span>
           )}
         </div>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="terra-new-workspace-cwd">
-            Pasta de trabalho <span className={styles.hint}>(opcional)</span>
+            {t("dialogs.workspace.folder")} <span className={styles.hint}>{t("dialogs.workspace.optional")}</span>
           </label>
           <div className={styles.folderRow}>
             <input
               className={styles.folderInput}
               id="terra-new-workspace-cwd"
               onChange={(event) => onCwdChange(event.target.value)}
-              placeholder="Diretório atual"
+              placeholder={t("dialogs.workspace.currentFolder")}
               type="text"
               value={cwd}
             />
@@ -102,21 +103,21 @@ export function WorkspaceDialog({
               type="button"
               variant="ghost"
             >
-              Escolher
+              {t("dialogs.workspace.browse")}
             </Button>
           </div>
         </div>
 
-        {groupName ? <div className={styles.context}>Será criado no grupo “{groupName}”.</div> : null}
+        {groupName ? <div className={styles.context}>{t("dialogs.workspace.inGroup", { name: groupName })}</div> : null}
 
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="ghost">
-              Cancelar
+              {t("common.cancel")}
             </Button>
           </DialogClose>
           <Button type="submit" variant="primary">
-            Criar workspace
+            {t("dialogs.workspace.create")}
           </Button>
         </DialogFooter>
       </form>

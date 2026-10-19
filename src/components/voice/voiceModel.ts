@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import type { VoiceIntent } from "../../lib/voiceCommands";
 
 /**
@@ -150,31 +151,31 @@ export function reduceVoiceCapsuleModel(
 export function voiceIntentLabel(intent: VoiceCapsuleIntent): string {
   switch (intent.type) {
     case "focus":
-      return `Focar em ${intent.target}`;
+      return t("voiceIntent.focus", { name: intent.target });
     case "open-fleet":
-      return "Abrir frota";
+      return t("palette.openFleet");
     case "suspend-group":
-      return `Suspender grupo ${intent.group}`;
+      return t("voiceIntent.suspendGroup", { name: intent.group });
     case "resume-group":
-      return `Retomar grupo ${intent.group}`;
+      return t("voiceIntent.resumeGroup", { name: intent.group });
     case "new-agent":
-      return intent.agent ? `Criar agente ${intent.agent}` : "Criar novo agente";
+      return intent.agent ? t("voiceIntent.newAgentNamed", { name: intent.agent }) : t("voiceIntent.newAgent");
     case "stop":
-      return intent.target ? `Parar ${intent.target}` : "Parar agente";
+      return intent.target ? t("voiceIntent.stopNamed", { name: intent.target }) : t("voiceIntent.stop");
   }
 }
 
 export function voiceStateLabel(state: VoiceCapsuleState): string {
   switch (state) {
     case "idle":
-      return "Pronto para ouvir";
+      return t("voiceState.idle");
     case "listening":
-      return "Ouvindo";
+      return t("shell.voiceListening");
     case "transcribing":
-      return "Transcrevendo";
+      return t("shell.voiceTranscribing");
     case "preview":
-      return "Prévia pronta";
+      return t("voiceState.preview");
     case "error":
-      return "Falha na captura";
+      return t("voiceState.error");
   }
 }

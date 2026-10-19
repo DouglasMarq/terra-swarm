@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import type { ErrorInfo } from "react";
 
 const MAX_NAME_LENGTH = 100;
@@ -43,10 +44,10 @@ export function getSafeErrorDetails(error: unknown, info?: ErrorInfo | null): Sa
   const message = errorMessage(error);
   const componentStack = sanitizeText(info?.componentStack?.trim() ?? "", MAX_STACK_LENGTH);
   const text = [
-    "Terra Swarm — relatório de erro",
-    `Tipo: ${name}`,
-    `Mensagem: ${message}`,
-    componentStack ? `Árvore de componentes:\n${componentStack}` : "",
+    t("system.reportTitle"),
+    `${t("system.reportType")}: ${name}`,
+    `${t("system.reportMessage")}: ${message}`,
+    componentStack ? `${t("system.reportTree")}:\n${componentStack}` : "",
   ]
     .filter(Boolean)
     .join("\n");

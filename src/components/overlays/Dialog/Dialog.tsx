@@ -1,3 +1,4 @@
+import { t } from "../../../i18n";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import {
@@ -114,7 +115,7 @@ export function TerraDialog({
           {children}
           {footer ? <DialogFooter>{footer}</DialogFooter> : null}
           {showCloseButton ? (
-            <DialogClose className={styles.closeButton} aria-label="Fechar">
+            <DialogClose className={styles.closeButton} aria-label={t("common.close")}>
               <X aria-hidden="true" size={16} strokeWidth={1.8} />
             </DialogClose>
           ) : null}

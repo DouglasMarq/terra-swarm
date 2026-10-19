@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { create } from "zustand";
 import type {
   Group,
@@ -34,7 +35,7 @@ export interface OrchestrationPersistenceError {
 function persistenceErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) return error.message;
   if (typeof error === "string" && error.trim()) return error;
-  return "A persistência da alteração falhou.";
+  return t("system.persistFailed");
 }
 
 type PersistenceTransaction = {

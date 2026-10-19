@@ -30,6 +30,7 @@ rubato = "4.0.0"
 reqwest = { version = "0.13.4", features = ["rustls", "stream"], default-features = false }
 futures-util = "0.3.33"
 whisper-rs = "0.16.0"
+fontdb = "0.24.0"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

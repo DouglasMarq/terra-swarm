@@ -138,6 +138,10 @@ export interface IpcCommandContract {
     args: undefined;
     result: string[];
   };
+  listSystemFonts: {
+    args: undefined;
+    result: { name: string; monospace: boolean }[];
+  };
   writeTerminal: {
     args: { id: string; data: string };
     result: void;
@@ -264,6 +268,7 @@ export const IPC_COMMANDS = {
   setWorkspaceCollapsed: "set_workspace_collapsed",
   spawnTerminal: "spawn_terminal",
   listShells: "list_available_shells",
+  listSystemFonts: "list_system_fonts",
   writeTerminal: "write_terminal",
   resizeTerminal: "resize_terminal",
   killTerminal: "kill_terminal",

@@ -137,6 +137,83 @@
   width: 100%;
 }
 
+.fontPicker {
+  display: grid;
+  gap: 10px;
+}
+
+.fontFilters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fontFilters .chip {
+  flex: 0 0 auto;
+  min-height: 34px;
+}
+
+.fontFilters .chip[data-active="true"] {
+  border-color: var(--terra-border-strong, #3a3a42);
+  color: var(--terra-text, #e4e4e7);
+  background: var(--terra-bg-elevated, #222228);
+}
+
+.fontList {
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--terra-border, #26262c);
+  border-radius: 6px;
+  background: var(--terra-bg-panel, #17171b);
+}
+
+.fontOption {
+  display: flex;
+  min-height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px;
+  border-radius: 5px;
+  color: var(--terra-text, #e4e4e7);
+  text-align: left;
+}
+
+.fontOption:hover,
+.fontOption:focus-visible {
+  outline: 0;
+  background: var(--terra-bg-hover, #222228);
+}
+
+.fontOption[data-selected="true"] {
+  background: var(--terra-bg-elevated, #26262c);
+  box-shadow: inset 2px 0 0 var(--terra-amber, #e0b45c);
+}
+
+.fontOptionName {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fontOptionTag {
+  flex: 0 0 auto;
+  color: var(--terra-text-secondary);
+  font-family: var(--terra-font-mono);
+  font-size: 10px;
+}
+
+.fontEmpty {
+  padding: 10px;
+  color: var(--terra-text-secondary);
+  font-size: 12px;
+}
+
 .fontPreview {
   display: grid;
   gap: 2px;

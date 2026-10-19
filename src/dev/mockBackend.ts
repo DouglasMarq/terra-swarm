@@ -83,6 +83,12 @@ export function installMockBackend(): void {
       case "git_branch": return "main";
       case "store_saved_at": return Date.now() - 86_400_000;
       case "list_available_shells": return ["/bin/zsh", "/bin/bash"];
+      case "list_system_fonts":
+        return [
+          ["Andale Mono", true], ["Arial", false], ["Avenir Next", false], ["Courier New", true], ["Fira Code", true],
+          ["Georgia", false], ["Helvetica Neue", false], ["JetBrains Mono", true], ["Menlo", true], ["Monaco", true],
+          ["PT Mono", true], ["SF Mono", true], ["Times New Roman", false], ["Verdana", false],
+        ].map(([name, monospace]) => ({ name, monospace }));
       case "voice_list_models":
         return [
           { id: "base", display_name: "Base", size_label: "142 MB", description: "", downloaded: true, active: false },

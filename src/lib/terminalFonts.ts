@@ -1,14 +1,20 @@
 /**
- * Terminal font choice. The picker offers the well-known monospace fonts that
- * are actually installed (checked by measuring text, since the webview has no
- * font listing API) plus any name the user types.
+ * Terminal font choice. The backend lists every installed family (the
+ * webview has no font listing API); when it can't (browser preview), the
+ * well-known monospace fonts are detected by measuring text instead.
  */
+import { api } from "../api";
+
+export interface SystemFont {
+  name: string;
+  monospace: boolean;
+}
 
 /** Used when no font is chosen, and as the fallback after a chosen one. */
 export const DEFAULT_TERMINAL_FONT_STACK = "'SF Mono', Menlo, Monaco, 'Courier New', monospace";
 
-/** SF Mono is left out: it is the default already. */
 export const KNOWN_TERMINAL_FONTS: readonly string[] = [
+  "SF Mono",
   "Menlo",
   "Monaco",
   "JetBrains Mono",
@@ -69,4 +75,26 @@ export function isFontInstalled(name: string): boolean {
 
 export function installedTerminalFonts(candidates: readonly string[] = KNOWN_TERMINAL_FONTS): string[] {
   return candidates.filter(isFontInstalled);
+}
+
+let cached: Promise<SystemFont[]> | null = null;
+
+/** Installed font families, alphabetical. Loaded once per session. */
+export function loadSystemFonts(): Promise<SystemFont[]> {
+  cached ??= api
+    .listSystemFonts()
+    .then((fonts) => {
+      if (!Array.isArray(fonts) || fonts.length === 0) throw new Error("no fonts");
+      return fonts;
+    })
+    .catch(() => installedTerminalFonts().map((name) => ({ name, monospace: true })))
+    .then((fonts) => [...fonts].sort((a, b) => a.name.localeCompare(b.name)));
+  return cached;
+}
+
+/** Case- and accent-insensitive substring filter, optionally monospace only. */
+export function filterFonts(fonts: readonly SystemFont[], query: string, monospaceOnly: boolean): SystemFont[] {
+  const fold = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const needle = fold(query.trim());
+  return fonts.filter((font) => (!monospaceOnly || font.monospace) && (!needle || fold(font.name).includes(needle)));
 }

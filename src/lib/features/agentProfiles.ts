@@ -74,6 +74,41 @@ export const DEFAULT_AGENT_PROFILES: readonly AgentProfile[] = Object.freeze([
     resumeCommandStrategy: { kind: "fixed", command: "kimi --continue" },
     voicePromptBehavior: { ...DEFAULT_VOICE_BEHAVIOR },
   },
+  {
+    id: "copilot",
+    label: "GitHub Copilot",
+    command: "copilot",
+    resumeCommandStrategy: { kind: "fixed", command: "copilot --continue" },
+    voicePromptBehavior: { ...DEFAULT_VOICE_BEHAVIOR },
+  },
+  {
+    id: "aider",
+    label: "Aider",
+    command: "aider",
+    resumeCommandStrategy: { kind: "fixed", command: "aider --restore-chat-history" },
+    voicePromptBehavior: { ...DEFAULT_VOICE_BEHAVIOR },
+  },
+  // Agents below reopen with their original command: their CLIs either have
+  // no stable "continue last session" flag or it varies between versions.
+  ...([
+    ["gemini", "Gemini"],
+    ["grok", "Grok"],
+    ["qwen", "Qwen Code"],
+    ["deepseek", "DeepSeek"],
+    ["cursor-agent", "Cursor"],
+    ["amp", "Amp"],
+    ["goose", "Goose"],
+    ["crush", "Crush"],
+    ["droid", "Droid"],
+    ["cline", "Cline"],
+    ["auggie", "Auggie"],
+  ] as const).map(([id, label]): AgentProfile => ({
+    id,
+    label,
+    command: id,
+    resumeCommandStrategy: { kind: "original" },
+    voicePromptBehavior: { ...DEFAULT_VOICE_BEHAVIOR },
+  })),
 ]);
 
 function text(value: unknown): string | undefined {

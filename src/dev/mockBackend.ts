@@ -46,7 +46,11 @@ const agents: AgentInfo[] = [
   { id: "codex", label: "Codex", available: true },
   { id: "opencode", label: "OpenCode", available: true },
   { id: "kimi", label: "Kimi", available: true },
+  { id: "copilot", label: "GitHub Copilot", available: true },
   { id: "gemini", label: "Gemini", available: false },
+  { id: "grok", label: "Grok", available: false },
+  { id: "deepseek", label: "DeepSeek", available: false },
+  { id: "shell", label: "Shell", available: true },
 ];
 
 const ESC = "\u001b";

@@ -293,6 +293,7 @@ export const ptBR: Dictionary<typeof en> = {
     modelsTitle: "Modelos de transcrição",
     modelsHint: "Os modelos são baixados e rodam neste computador.",
     modelsLoading: "Carregando modelos…",
+    modelsFailed: "Não foi possível ler a lista de modelos.",
     modelsNone: "Baixe um modelo para começar a usar a entrada por voz.",
     active: "Ativo",
     use: "Usar",

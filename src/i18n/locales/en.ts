@@ -290,6 +290,7 @@ export const en = {
     modelsTitle: "Transcription models",
     modelsHint: "Models are downloaded and run on this computer.",
     modelsLoading: "Loading models…",
+    modelsFailed: "Couldn't read the model list.",
     modelsNone: "Download a model to start using voice input.",
     active: "Active",
     use: "Use",

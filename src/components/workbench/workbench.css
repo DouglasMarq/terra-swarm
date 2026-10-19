@@ -101,10 +101,13 @@
   transition: border-color 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
 }
 
+/* Full screen covers the sidebar and inspector but stays below the top bar,
+ * so the macOS traffic lights and the chrome remain usable. */
 .terra-project-container[data-fullscreen="true"] {
   position: fixed;
-  z-index: var(--terra-z-modal, 500);
-  inset: 12px;
+  /* Below the top bar (z 300) so its popovers still open over it. */
+  z-index: 250;
+  inset: 56px 8px 8px;
   width: auto;
   height: auto;
   min-height: 0;
@@ -546,7 +549,7 @@
   }
 
   .terra-project-container[data-fullscreen="true"] {
-    inset: 0;
+    inset: 48px 0 0;
     border-radius: 0;
   }
 }

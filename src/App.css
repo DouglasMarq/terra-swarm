@@ -141,30 +141,20 @@ body,
   background: transparent;
 }
 
+/* Neutral reset only. Buttons get their look from a class (.terra-button,
+ * .pane-btn, …); the old global padding/background/border leaked into every
+ * icon button and pushed icons off-centre. */
 button {
   font: inherit;
-  line-height: 14px; /* 6px padding + 1px border each side → 26px effective height */
-  color: var(--text);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-md);
-  padding: 6px 12px;
+  color: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
   cursor: pointer;
-  transition:
-    background var(--dur-hover) ease,
-    border-color var(--dur-hover) ease,
-    color var(--dur-hover) ease,
-    opacity var(--dur-hover) ease,
-    transform var(--dur-press) ease;
 }
 
-button:hover {
-  background: var(--bg-hover);
-  border-color: #40404a;
-}
-
-button:active:not(:disabled) {
-  transform: scale(0.97);
+button:disabled {
+  cursor: default;
 }
 
 /* ---------- top bar ---------- */

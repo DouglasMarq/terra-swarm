@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { PanelRightClose } from "lucide-react";
+import { useT } from "../../i18n";
 
 export interface RightDockProps {
   open?: boolean;
@@ -13,20 +14,21 @@ export interface RightDockProps {
 export function RightDock({
   open = true,
   onClose,
-  title = "Inspetor",
+  title,
   content,
 }: RightDockProps) {
+  const t = useT();
   if (!open) return null;
   return (
-    <aside className="terra-right-dock terra-anim-slide-in" aria-label="Inspetor do agente">
+    <aside className="terra-right-dock terra-anim-slide-in" aria-label={t("shell.inspector.label")}>
       <div className="terra-right-dock-header">
-        <span className="terra-right-dock-title">{title}</span>
+        <span className="terra-right-dock-title">{title ?? t("shell.inspector.title")}</span>
         <button
           className="terra-right-dock-close"
           type="button"
           onClick={onClose}
-          aria-label="Fechar inspetor"
-          title="Fechar inspetor"
+          aria-label={t("shell.inspector.hide")}
+          title={t("shell.inspector.hide")}
         >
           <PanelRightClose size={15} aria-hidden="true" />
         </button>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Bell, Mic, PanelLeft, PanelRight, Search } from "lucide-react";
+import { useT } from "../../i18n";
 
 export interface ChromeBreadcrumb {
   project?: string | null;
@@ -40,7 +41,7 @@ function withShortcut(label: string, shortcut?: string): string {
  */
 export function WindowChrome({
   breadcrumb,
-  title = "Terra Swarm",
+  title,
   sidebarCollapsed = false,
   onToggleSidebar,
   sidebarShortcut,
@@ -52,12 +53,13 @@ export function WindowChrome({
   notificationsPanel,
   onToggleVoice,
   voiceActive = false,
-  voiceLabel = "Voz",
+  voiceLabel,
   voiceShortcut,
   inspectorOpen = false,
   onToggleInspector,
   inspectorShortcut,
 }: WindowChromeProps) {
+  const t = useT();
   const notificationsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -77,12 +79,12 @@ export function WindowChrome({
     };
   }, [notificationsOpen, onNotificationsOpenChange]);
 
-  const sidebarLabel = withShortcut(sidebarCollapsed ? "Expandir barra lateral" : "Recolher barra lateral", sidebarShortcut);
-  const inspectorLabel = withShortcut(inspectorOpen ? "Fechar inspetor" : "Mostrar inspetor", inspectorShortcut);
-  const voiceTitle = withShortcut(voiceLabel, voiceShortcut);
+  const sidebarLabel = withShortcut(t(sidebarCollapsed ? "shell.sidebar.expand" : "shell.sidebar.collapse"), sidebarShortcut);
+  const inspectorLabel = withShortcut(t(inspectorOpen ? "shell.inspector.hide" : "shell.inspector.show"), inspectorShortcut);
+  const voiceTitle = withShortcut(voiceLabel ?? t("shell.voice"), voiceShortcut);
   const notificationLabel = attentionCount > 0
-    ? `${attentionCount} ${attentionCount === 1 ? "precisa" : "precisam"} de você`
-    : "Notificações";
+    ? t("shell.attention.button", { count: attentionCount })
+    : t("shell.attention.notifications");
 
   return (
     <header className="terra-window-chrome" data-tauri-drag-region="true">
@@ -99,7 +101,7 @@ export function WindowChrome({
         </button>
       ) : null}
 
-      <nav className="terra-window-breadcrumb" aria-label="Local atual" data-tauri-drag-region="true">
+      <nav className="terra-window-breadcrumb" aria-label={t("shell.location")} data-tauri-drag-region="true">
         {breadcrumb?.project ? (
           <>
             <span className="terra-window-breadcrumb-project" data-tauri-drag-region="true">{breadcrumb.project}</span>
@@ -114,7 +116,7 @@ export function WindowChrome({
             ) : null}
           </>
         ) : (
-          <span className="terra-window-breadcrumb-project" data-tauri-drag-region="true">{title}</span>
+          <span className="terra-window-breadcrumb-project" data-tauri-drag-region="true">{title ?? t("common.appName")}</span>
         )}
       </nav>
 
@@ -123,11 +125,11 @@ export function WindowChrome({
           className="terra-window-search"
           type="button"
           onClick={onOpenLauncher}
-          aria-label="Abrir ações rápidas"
-          title={withShortcut("Buscar ou comandar", launcherShortcut)}
+          aria-label={t("shell.search.open")}
+          title={withShortcut(t("shell.search.title"), launcherShortcut)}
         >
           <Search size={14} aria-hidden="true" />
-          <span className="terra-window-search-label">Buscar projeto, agente ou comando</span>
+          <span className="terra-window-search-label">{t("shell.search.placeholder")}</span>
           <kbd>{launcherShortcut}</kbd>
         </button>
       </div>

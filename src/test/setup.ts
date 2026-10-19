@@ -1,7 +1,13 @@
 import "@testing-library/jest-dom/vitest";
 
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, beforeEach } from "vitest";
+import { useLocaleStore } from "../i18n";
+
+// Component tests assert the Portuguese copy; the i18n suite covers English.
+beforeEach(() => {
+  useLocaleStore.setState({ locale: "pt-BR" });
+});
 
 afterEach(() => {
   if (typeof document !== "undefined") cleanup();

@@ -165,7 +165,8 @@ export const ptBR: Dictionary<typeof en> = {
     group: "Grupo",
   },
   fleet: {
-    summary: { one: "{count} agente em {projects} projetos", other: "{count} agentes em {projects} projetos" },
+    summary: { one: "{count} agente em {projects}", other: "{count} agentes em {projects}" },
+    projectCount: { one: "{count} projeto", other: "{count} projetos" },
     filterByState: "Filtrar por estado",
     needsYou: "Precisa de você",
     contextHigh: "Contexto em {count}%. Resuma a conversa ou comece uma sessão nova.",
@@ -446,6 +447,7 @@ export const ptBR: Dictionary<typeof en> = {
     needsConfirm: "Essa ação exige confirmação.",
   },
   app: {
+    resumeAgentFailed: "Não foi possível retomar {name}: {detail}",
     snapshotFailed: "A operação do snapshot falhou. Nada foi alterado.",
     loadFailed: "Não foi possível carregar os workspaces. Tente novamente.",
     saveFailed: "Não foi possível salvar {what}: {detail}",
@@ -573,6 +575,8 @@ export const ptBR: Dictionary<typeof en> = {
     error: "Falha na captura",
   },
   voiceCapsule: {
+    title: "Voz Terra",
+    processing: "Processando",
     target: "Agente alvo",
     collapse: "Recolher captura de voz",
     expand: "Expandir captura de voz",
@@ -589,6 +593,7 @@ export const ptBR: Dictionary<typeof en> = {
     send: "Enviar",
   },
   dialogs: {
+    currentDefault: "Perfil padrão atual:",
     confirmTitle: "Confirmar ação",
     confirmDestructive: "Confirmar exclusão",
     workspace: {

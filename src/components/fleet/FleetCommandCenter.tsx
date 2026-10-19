@@ -87,7 +87,7 @@ export function FleetCommandCenter({
       <header className="terra-fleet-head">
         <div className="terra-fleet-title">
           <h1>{t("common.fleet")}</h1>
-          <span>{t("fleet.summary", { count: model.agents.length, projects: projectCount })}</span>
+          <span>{t("fleet.summary", { count: model.agents.length, projects: t("fleet.projectCount", { count: projectCount }) })}</span>
         </div>
         <div className="terra-fleet-chips" role="group" aria-label={t("fleet.filterByState")}>
           {STATUS_ORDER.map((status) => (

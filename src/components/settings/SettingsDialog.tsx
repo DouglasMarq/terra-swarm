@@ -239,7 +239,8 @@ export function SettingsDialog({
                     type="search"
                     value={query}
                   />
-                  <kbd className={styles.searchShortcut}>{formatShortcut(SEARCH_HOTKEY)}</kbd>
+                  {/* On the page ⌘K opens the command palette, not this search. */}
+                  {isPage ? null : <kbd className={styles.searchShortcut}>{formatShortcut(SEARCH_HOTKEY)}</kbd>}
                 </label>
                 <div className={styles.resultCount} aria-live="polite">
                   {query ? t("settings.results", { count: visibleSections.length }) : resolvedTitle}

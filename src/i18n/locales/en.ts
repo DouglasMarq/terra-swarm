@@ -162,7 +162,8 @@ export const en = {
     group: "Group",
   },
   fleet: {
-    summary: { one: "{count} agent in {projects} projects", other: "{count} agents in {projects} projects" },
+    summary: { one: "{count} agent in {projects}", other: "{count} agents in {projects}" },
+    projectCount: { one: "{count} project", other: "{count} projects" },
     filterByState: "Filter by state",
     needsYou: "Needs you",
     contextHigh: "Context at {count}%. Summarize the conversation or start a new session.",
@@ -443,6 +444,7 @@ export const en = {
     needsConfirm: "This action needs confirmation.",
   },
   app: {
+    resumeAgentFailed: "Couldn't resume {name}: {detail}",
     snapshotFailed: "The snapshot operation failed. Nothing was changed.",
     loadFailed: "Couldn't load the workspaces. Try again.",
     saveFailed: "Couldn't save {what}: {detail}",
@@ -570,6 +572,8 @@ export const en = {
     error: "Capture failed",
   },
   voiceCapsule: {
+    title: "Terra voice",
+    processing: "Processing",
     target: "Target agent",
     collapse: "Collapse voice capture",
     expand: "Expand voice capture",
@@ -586,6 +590,7 @@ export const en = {
     send: "Send",
   },
   dialogs: {
+    currentDefault: "Current default profile:",
     confirmTitle: "Confirm action",
     confirmDestructive: "Confirm deletion",
     workspace: {

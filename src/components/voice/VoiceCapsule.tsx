@@ -163,7 +163,7 @@ export function VoiceCapsule({
       <header className={styles.header}>
         <div className={styles.headingGroup}>
           <span className={styles.eyebrow} id={titleId}>
-            <Mic aria-hidden="true" size={13} /> Voz Terra
+            <Mic aria-hidden="true" size={13} /> {t("voiceCapsule.title")}
           </span>
           <span
             className={styles.status}
@@ -277,7 +277,7 @@ export function VoiceCapsule({
           ) : null}
           {isBusy ? (
             <span className={styles.busyLabel}>
-              <LoaderCircle aria-hidden="true" size={14} /> Processando
+              <LoaderCircle aria-hidden="true" size={14} /> {t("voiceCapsule.processing")}
             </span>
           ) : null}
         </div>

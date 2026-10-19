@@ -474,6 +474,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
 
   const agentNames = usePreferencesStore((state) => state.agentNames);
   const agentLabels = useMemo(() => buildAgentLabels(props.workspaces, { titles: props.titles, names: agentNames }), [agentNames, props.titles, props.workspaces]);
+  const exitedIds = useMemo(() => Object.keys(props.exited), [props.exited]);
   const workspaceNames = useMemo(() => Object.fromEntries(props.workspaces.map((workspace) => [workspace.id, workspace.name])), [props.workspaces]);
   const agentStatus = (terminal: { id: string; suspended?: boolean }) => terminal.suspended
     ? "suspended" as const
@@ -752,10 +753,14 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       hasRecentlyClosedTabs={false}
       agentLabels={agentLabels}
       resumeCount={props.resumeCount ?? 0}
+      exitedTerminalIds={exitedIds}
       dockOpen={shell.dock.open}
       voiceEnabled={props.voiceEnabled}
       voiceRecording={voiceRecording}
       callbacks={{
+        onFocusedAgentAction: props.onFocusedAgentAction
+          ? (action, context) => props.onFocusedAgentAction?.(action, context)
+          : undefined,
         onNavigate: (route) => {
           if (route === "settings") {
             props.onOpenSettings();

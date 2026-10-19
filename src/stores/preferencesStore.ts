@@ -128,14 +128,20 @@ function loadNameSet(): NameSetId {
   return stored === "rivers" || stored === "custom" ? stored : "stars";
 }
 
-function loadNameList(): string[] {
+/** The user's own list lives apart from the presets, so picking "Stars" and
+ * coming back to "Custom" keeps it ("agentNameList" is the legacy key). */
+function loadCustomNameList(): string[] {
   try {
-    const parsed = JSON.parse(storageGet("agentNameList") ?? "null");
+    const parsed = JSON.parse(storageGet("agentNameListCustom") ?? storageGet("agentNameList") ?? "null");
     if (Array.isArray(parsed)) return parsed.filter((name): name is string => typeof name === "string" && name.trim().length > 0);
   } catch {
     // Fall back to the default list below.
   }
   return [...DEFAULT_NAME_LIST];
+}
+
+function nameListFor(set: NameSetId): string[] {
+  return set === "custom" ? loadCustomNameList() : [...NAME_SETS[set]];
 }
 
 function loadAgentNames(): Record<string, string> {
@@ -297,7 +303,7 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   autoResume: storageGet("autoResume") === "1",
   agentAutoNames: storageGet("agentAutoNames") === "1",
   agentNameSet: loadNameSet(),
-  agentNameList: loadNameList(),
+  agentNameList: nameListFor(loadNameSet()),
   avoidSimilarNames: storageGet("avoidSimilarNames") !== "0",
   namesExhausted: storageGet("namesExhausted") === "repeat" ? "repeat" : "type-number",
   agentNames: loadAgentNames(),
@@ -370,14 +376,12 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
 
   setAgentNameSet: (agentNameSet) => {
     storageSet("agentNameSet", agentNameSet);
-    const agentNameList = agentNameSet === "custom" ? loadNameList() : [...NAME_SETS[agentNameSet]];
-    if (agentNameSet !== "custom") storageSet("agentNameList", JSON.stringify(agentNameList));
-    set({ agentNameSet, agentNameList });
+    set({ agentNameSet, agentNameList: nameListFor(agentNameSet) });
   },
 
   setAgentNameList: (names) => {
     const agentNameList = [...new Set(names.map((name) => name.trim()).filter(Boolean))];
-    storageSet("agentNameList", JSON.stringify(agentNameList));
+    storageSet("agentNameListCustom", JSON.stringify(agentNameList));
     storageSet("agentNameSet", "custom");
     set({ agentNameList, agentNameSet: "custom" });
   },

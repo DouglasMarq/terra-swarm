@@ -89,6 +89,13 @@ export function buildAgentLabels(
   return result;
 }
 
+/** One-line label: the primary text plus the tag, without repeating either
+ * ("Animações · claude 2", "Lyra · claude", "claude"). */
+export function agentLabelText(label: Pick<AgentLabel, "primary" | "tag">): string {
+  if (label.tag.split(" · ").includes(label.primary) || label.tag === label.primary) return label.tag;
+  return `${label.primary} · ${label.tag}`;
+}
+
 /** Fallback for ids that are not (or no longer) in the workspace list. */
 export function fallbackAgentLabel(terminalId: string, workspaceId = ""): AgentLabel {
   return { terminalId, workspaceId, kind: "agente", tag: "agente", title: null, name: null, primary: "agente" };

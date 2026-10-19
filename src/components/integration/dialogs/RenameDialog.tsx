@@ -29,7 +29,8 @@ export function RenameDialog({
 }: RenameDialogProps) {
   const t = useT();
   const [submitted, setSubmitted] = useState(false);
-  const valid = value.trim().length > 0;
+  // Agents may clear their name; projects and groups need one.
+  const valid = kind === "terminal" || value.trim().length > 0;
   const noun = t(`rename.noun.${kind}`);
   const isCreate = mode === "create";
 

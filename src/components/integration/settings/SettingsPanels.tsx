@@ -37,6 +37,8 @@ export interface SnapshotFeedback {
   kind: "success" | "error";
   message: string;
   backupPath?: string | null;
+  /** "backup" after an import (the pre-import copy), "file" after an export. */
+  pathKind?: "backup" | "file";
 }
 
 export type UpdateCheckState = "idle" | "checking" | "uptodate" | "error";
@@ -640,7 +642,7 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
             <button className={styles.button} disabled={snapshotOperation !== null} onClick={onImportSnapshot}>{snapshotOperation === "importing" ? t("settingsPanels.importing") : t("settingsPanels.importSnapshot")}</button>
           </div>
           <p className={styles.hint}>{t("settingsPanels.importHint")}</p>
-          {snapshotFeedback ? <div className={`${styles.feedback} ${snapshotFeedback.kind === "error" ? styles.feedbackError : styles.feedbackSuccess}`} role={snapshotFeedback.kind === "error" ? "alert" : "status"} aria-live="polite"><span>{snapshotFeedback.message}</span>{snapshotFeedback.backupPath ? <span className={styles.path}>{snapshotFeedback.message.startsWith("Snapshot importado") ? t("settingsPanels.backup") : t("settingsPanels.file")}: {snapshotFeedback.backupPath}</span> : null}</div> : null}
+          {snapshotFeedback ? <div className={`${styles.feedback} ${snapshotFeedback.kind === "error" ? styles.feedbackError : styles.feedbackSuccess}`} role={snapshotFeedback.kind === "error" ? "alert" : "status"} aria-live="polite"><span>{snapshotFeedback.message}</span>{snapshotFeedback.backupPath ? <span className={styles.path}>{snapshotFeedback.pathKind === "backup" ? t("settingsPanels.backup") : t("settingsPanels.file")}: {snapshotFeedback.backupPath}</span> : null}</div> : null}
         </div>
       )}
 

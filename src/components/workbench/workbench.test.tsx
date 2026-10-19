@@ -441,8 +441,8 @@ describe("WorkspaceWorkbench", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Tamanho da grade" }));
-    expect(screen.getAllByRole("button", { name: /colunas × .* linhas/ })).toHaveLength(64);
-    await user.click(screen.getByRole("button", { name: "8 colunas × 8 linhas" }));
+    expect(screen.getAllByRole("button", { name: /^\d × \d$/ })).toHaveLength(64);
+    await user.click(screen.getByRole("button", { name: "8 × 8" }));
     expect(onLayoutChange).toHaveBeenCalledWith({
       containerId: "container-1",
       layout: expect.objectContaining({

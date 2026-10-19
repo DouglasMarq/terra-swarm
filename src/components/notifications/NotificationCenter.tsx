@@ -84,7 +84,7 @@ export function NotificationCenter({
             {t("notifications.needsYou", { count: attentionCount })}
           </button>
           <button type="button" aria-pressed={filter === "all"} data-active={filter === "all"} onClick={() => setFilter("all")}>
-            {t("notifications.all", { count: items.length })}
+            {t("notifications.all", { count: items.length + contextOnly.length })}
           </button>
         </div>
       </div>

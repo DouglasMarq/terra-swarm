@@ -2,6 +2,7 @@
 
 .pane {
   position: relative;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -65,7 +66,7 @@
 
 .pane-name {
   flex: 0 1 auto;
-  min-width: 0;
+  min-width: 3ch;
   overflow: hidden;
   color: var(--terra-text);
   font-weight: 600;
@@ -74,7 +75,11 @@
 }
 
 .pane-tag {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pane-title {
@@ -128,6 +133,7 @@
 .pane-actions {
   display: flex;
   flex: 0 0 auto;
+  margin-left: auto;
   align-items: center;
   gap: 2px;
 }
@@ -215,6 +221,21 @@
   gap: 8px;
 }
 
+/* Narrow panes (dense grids, Foco side column): keep the name and the
+ * Maximize/… buttons; drop the secondary details first. */
+@container (max-width: 380px) {
+  .pane-ctx,
+  .pane-title {
+    display: none;
+  }
+}
+
+@container (max-width: 260px) {
+  .pane-tag {
+    display: none;
+  }
+}
+
 /* ---------------------------------------------------------------- menu */
 
 .pane-menu {
@@ -223,10 +244,10 @@
 }
 
 .pane-menu-list {
-  position: absolute;
-  z-index: 20;
-  top: 30px;
-  right: 0;
+  /* Portalled to <body> and placed by PaneActionsMenu, so the pane's
+   * overflow: hidden never clips it. Above the fullscreen project (250). */
+  position: fixed;
+  z-index: 400;
   display: flex;
   width: 272px;
   flex-direction: column;

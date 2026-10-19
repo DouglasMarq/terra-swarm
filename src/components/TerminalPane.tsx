@@ -364,6 +364,11 @@ export function TerminalPane(props: Props) {
         props.onFocus();
         if (notifications > 0) props.onClearNotifications();
       }}
+      // Tabbing into the terminal must move focus too, or ⌘Enter and the
+      // other focused-pane shortcuts act on the previously clicked pane.
+      onFocusCapture={() => {
+        if (!hidden && !focused) props.onFocus();
+      }}
     >
       <div className="pane-header">
         <span className="terra-dot pane-dot" data-status={status} aria-hidden="true" />
@@ -419,7 +424,7 @@ export function TerminalPane(props: Props) {
           <span>{t("pane.exitedDetail")}</span>
           <div className="pane-overlay-actions">
             <button type="button" className="terra-button" onClick={props.onRestart}>{t("pane.restart")}</button>
-            <button type="button" className="terra-button" onClick={props.onDetach ?? props.onClose}>{t("pane.closePane")}</button>
+            <button type="button" className="terra-button" onClick={props.onClose}>{t("pane.closePane")}</button>
           </div>
         </div>
       )}

@@ -105,7 +105,7 @@ export function ProjectContainer({
           <button
             type="button"
             className="terra-button terra-button-primary terra-project-container__new"
-            onClick={() => actions.onNewTab?.({
+            onClick={() => (actions.onQuickNewTab ?? actions.onNewTab)?.({
               projectId: projection.project?.id ?? container.projectId ?? null,
               containerId: container.id,
               paneId: null,

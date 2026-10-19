@@ -167,10 +167,20 @@ export function NavigatorPanel({
     // The agent menu is wider and taller than the single "Delete project" item.
     const menuWidth = isAgentMenu ? 272 : 196;
     const menuHeight = isAgentMenu ? 360 : 52;
+    // Opened from the keyboard (ContextMenu key, Shift+F10, Enter on "…")
+    // there is no pointer position: anchor to the row or button instead.
+    let anchorX = event.clientX;
+    let anchorY = event.clientY;
+    if (anchorX === 0 && anchorY === 0) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      anchorX = rect.left;
+      anchorY = rect.bottom;
+    }
+    // 56px keeps it clear of the 48px window chrome and the macOS traffic lights.
     setContextMenu({
       node,
-      x: Math.max(8, Math.min(event.clientX, width - menuWidth)),
-      y: Math.max(8, Math.min(event.clientY, height - menuHeight)),
+      x: Math.max(8, Math.min(anchorX, width - menuWidth)),
+      y: Math.max(56, Math.min(anchorY, height - menuHeight)),
     });
   }
 

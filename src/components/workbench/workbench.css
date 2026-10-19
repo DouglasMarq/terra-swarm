@@ -66,12 +66,12 @@
   flex: 1 1 auto;
 }
 
-.terra-workbench__container[data-collapsed="true"] {
+.terra-workbench .terra-workbench__list > .terra-workbench__container[data-collapsed="true"] {
   min-height: 0;
   flex: 0 0 auto;
 }
 
-.terra-workbench__container[data-fullscreen="true"] {
+.terra-workbench .terra-workbench__list > .terra-workbench__container[data-fullscreen="true"] {
   min-height: 0;
   flex: 0 0 0;
 }
@@ -685,18 +685,24 @@
 }
 
 /* Maximize (⌘Enter or the pane's ⤢): the expanded pane takes the whole
- * project area; its siblings stay mounted (PTYs keep running) but hidden. */
-.terra-pane-grid--grid:has(.pane.expanded) {
+ * project area; its siblings stay mounted (PTYs keep running) but hidden.
+ * Only an expanded pane in the visible sub-tab counts. */
+.terra-pane-grid--grid:has(.terra-pane-tab-surface[data-active="true"] .pane.expanded) {
   grid-template-columns: minmax(0, 1fr) !important;
   grid-template-rows: minmax(0, 1fr) !important;
 }
 
-.terra-pane-grid:has(.pane.expanded) .terra-pane-grid__cell:not(:has(.pane.expanded)),
-.terra-pane-grid:has(.pane.expanded) .terra-pane-panel:not(:has(.pane.expanded)),
-.terra-pane-grid:has(.pane.expanded) .terra-pane-separator {
+.terra-pane-grid--grid:has(.terra-pane-tab-surface[data-active="true"] .pane.expanded) .terra-pane-grid__cell {
+  grid-column: 1 / -1 !important;
+  grid-row: 1 / -1 !important;
+}
+
+.terra-pane-grid:has(.terra-pane-tab-surface[data-active="true"] .pane.expanded) .terra-pane-grid__cell:not(:has(.terra-pane-tab-surface[data-active="true"] .pane.expanded)),
+.terra-pane-grid:has(.terra-pane-tab-surface[data-active="true"] .pane.expanded) .terra-pane-panel:not(:has(.terra-pane-tab-surface[data-active="true"] .pane.expanded)),
+.terra-pane-grid:has(.terra-pane-tab-surface[data-active="true"] .pane.expanded) .terra-pane-separator {
   display: none !important;
 }
 
-.terra-pane-grid:has(.pane.expanded) .terra-pane-panel:has(.pane.expanded) {
+.terra-pane-grid:has(.terra-pane-tab-surface[data-active="true"] .pane.expanded) .terra-pane-panel:has(.terra-pane-tab-surface[data-active="true"] .pane.expanded) {
   flex: 1 1 100% !important;
 }

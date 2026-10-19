@@ -123,7 +123,7 @@ describe("VisualShellSurface smoke flow", () => {
     await user.click(screen.getByRole("button", { name: "1 precisa de você" }));
     const center = screen.getByRole("dialog", { name: "Notificações" });
     expect(center).toHaveTextContent("Posso rodar npm test?");
-    await user.click(screen.getByRole("button", { name: "Ir para o pane" }));
+    await user.click(screen.getByRole("button", { name: "Ir para o painel" }));
     expect(props.onJumpToNotification).toHaveBeenCalled();
   });
 

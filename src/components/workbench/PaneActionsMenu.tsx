@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
 
 export interface PaneMenuItem {
@@ -27,13 +28,40 @@ export interface PaneActionsMenuProps {
  */
 export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
   const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // The list lives in a portal with fixed coordinates: panes clip their
+  // overflow, so an in-pane dropdown was cut off in dense grids. Open below
+  // the trigger, flip above when there is no room, and stay on screen.
+  useLayoutEffect(() => {
+    if (!open) {
+      setPosition(null);
+      return;
+    }
+    const place = () => {
+      const trigger = rootRef.current?.getBoundingClientRect();
+      const menu = menuRef.current;
+      if (!trigger || !menu) return;
+      const margin = 8;
+      const width = menu.offsetWidth;
+      const height = menu.offsetHeight;
+      const left = Math.min(Math.max(margin, trigger.right - width), window.innerWidth - width - margin);
+      let top = trigger.bottom + 4;
+      if (top + height > window.innerHeight - margin) top = Math.max(margin, trigger.top - 4 - height);
+      setPosition({ top, left });
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const close = (event: PointerEvent) => {
-      if (rootRef.current?.contains(event.target as Node)) return;
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
       setOpen(false);
     };
     document.addEventListener("pointerdown", close);
@@ -71,8 +99,21 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
       >
         <MoreHorizontal size={14} aria-hidden="true" />
       </button>
-      {open ? (
-        <div className="pane-menu-list terra-anim-pop" role="menu" aria-label={label} ref={menuRef} onKeyDown={onMenuKeyDown}>
+      {open ? createPortal(
+        <div
+          className="pane-menu-list terra-anim-pop"
+          role="menu"
+          aria-label={label}
+          ref={menuRef}
+          style={position ?? { top: 0, left: 0, visibility: "hidden" }}
+          onKeyDown={onMenuKeyDown}
+          onMouseDown={(event) => event.stopPropagation()}
+          onBlur={(event) => {
+            // Tabbing out of the menu closes it.
+            const next = event.relatedTarget as Node | null;
+            if (next && !menuRef.current?.contains(next)) setOpen(false);
+          }}
+        >
           {groups.filter((group) => group.length > 0).map((group, groupIndex) => (
             <div className="pane-menu-group" role="group" key={group[0]?.id ?? groupIndex}>
               {group.map((item) => (
@@ -98,7 +139,8 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
               ))}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );

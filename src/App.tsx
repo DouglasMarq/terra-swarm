@@ -100,10 +100,10 @@ const LazySettingsSectionPanel = lazy(async () => {
   return { default: module.SettingsSectionPanel };
 });
 
-function AppLoadingSurface({ label }: { label: string }) {
+function AppLoadingSurface(_props: { label?: string }) {
   return (
     <div className="terra-app-loading" role="status" aria-live="polite">
-      <span>Carregando {label}…</span>
+      <span>{t("shell.loading")}</span>
     </div>
   );
 }
@@ -1182,8 +1182,9 @@ function App() {
   const selectWorkspace = (id: string, focusedTerminalId?: string) => {
     const containerId = containerIdForWorkspace(id, false, focusedTerminalId);
     if (containerId) setContainerVisible(containerId, true);
+    // Clicking into a pane of the open project must not undo its maximize.
+    if (id !== activeId) setExpandedId(null);
     setActiveId(id);
-    setExpandedId(null);
   };
 
   const createGroup = () => {
@@ -1511,6 +1512,7 @@ function App() {
   /** Detaching is visual-only and durable; the PTY remains alive for re-open. */
   const detachTab = (id: string) => {
     setTerminalDetached(id, true);
+    setExpandedId((current) => (current === id ? null : current));
     setFocusedId((current) => (current === id ? null : current));
   };
 
@@ -2453,6 +2455,7 @@ function App() {
           }
           void chooseAgentForPanel(workspaceId, paneId ?? null);
         }}
+        onQuickNewAgent={(workspaceId) => void quickNewTerminal(workspaceId)}
         onClearNotifications={clearNotifications}
         onMarkAllRead={markAllRead}
         onClearAll={clearAllNotifications}

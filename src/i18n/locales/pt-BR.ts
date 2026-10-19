@@ -499,6 +499,7 @@ export const ptBR: Dictionary<typeof en> = {
     suspendGroup: "Suspender grupo",
     contextMenu: "Abrir menu de contexto",
     projectMenu: "Menu de contexto do projeto",
+    agentMenu: "Ações de {name}",
     createGroup: "Criar grupo",
     collapse: "Recolher",
     expand: "Expandir",

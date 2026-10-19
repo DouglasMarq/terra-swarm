@@ -496,6 +496,7 @@ export const en = {
     suspendGroup: "Suspend group",
     contextMenu: "Open context menu",
     projectMenu: "Project context menu",
+    agentMenu: "Actions for {name}",
     createGroup: "Create group",
     collapse: "Collapse",
     expand: "Expand",

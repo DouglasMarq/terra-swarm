@@ -131,6 +131,21 @@ describe("NavigatorPanel", () => {
     expect(onDeleteWorkspace).toHaveBeenCalledWith("ws-api");
   });
 
+  it("opens the agent actions from the agent row's … button", async () => {
+    const user = userEvent.setup();
+    const restart = vi.fn();
+    const agentMenu = vi.fn(() => [[{ id: "restart", label: "Reiniciar", onSelect: restart }]]);
+    render(<NavigatorPanel agentMenu={agentMenu} flatten workspaces={workspaces} groups={groups} />);
+
+    const row = screen.getByRole("treeitem", { name: "Agente luna-max" });
+    await user.click(within(row).getByRole("button", { name: "Abrir menu de contexto" }));
+    expect(agentMenu).toHaveBeenCalledWith("term-luna", "luna-max");
+    const menu = screen.getByRole("menu", { name: "Ações de luna-max" });
+    await user.click(within(menu).getByRole("menuitem", { name: "Reiniciar" }));
+    expect(restart).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
   it("keeps group creation contextual to the groups section", async () => {
     const onCreateGroup = vi.fn();
     render(<NavigatorPanel onCreateGroup={onCreateGroup} workspaces={workspaces} groups={groups} />);

@@ -1,3 +1,4 @@
+import type { PaneMenuGroups } from "../workbench/PaneActionsMenu";
 import type { CSSProperties, MouseEvent, ReactNode } from "react";
 import type {
   Pane,
@@ -212,9 +213,11 @@ export interface NavigatorPanelProps {
   flatten?: boolean;
   /** Replaces the title row (the sidebar puts its surface switch there). */
   headerSlot?: ReactNode;
+  /** Actions for an agent row's "…" / right-click menu (same as the pane menu). */
+  agentMenu?: (terminalId: string, command: string) => PaneMenuGroups;
 }
 
-export interface ProjectTreeProps extends Omit<NavigatorPanelProps, "className" | "style" | "title" | "emptyState" | "activeActivity" | "onActivityChange" | "onCreateGroup" | "agentLabels" | "flatten" | "headerSlot"> {
+export interface ProjectTreeProps extends Omit<NavigatorPanelProps, "className" | "style" | "title" | "emptyState" | "activeActivity" | "onActivityChange" | "onCreateGroup" | "agentLabels" | "flatten" | "headerSlot" | "agentMenu"> {
   tree: NavigatorTree;
   expandedIds: ReadonlySet<string>;
   searchQuery?: string;

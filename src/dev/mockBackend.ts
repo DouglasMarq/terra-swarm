@@ -96,7 +96,7 @@ export function installMockBackend(): void {
         ];
       case "voice_list_input_devices": return ["MacBook Pro Microphone"];
       case "voice_mic_available": return true;
-      case "plugin:app|version": return "2.0.3";
+      case "plugin:app|version": return "2.1.0";
       case "plugin:updater|check": return null;
       case "spawn_terminal": return { meta: { id: String(args.id ?? `pty-${Date.now()}`), command: String(args.command ?? "claude"), width: null }, seq: 1 };
       default: return undefined;

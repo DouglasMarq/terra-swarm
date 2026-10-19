@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { CheckCircle2, LoaderCircle, Orbit } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
@@ -17,10 +18,10 @@ export interface LoadingScreenProps {
 }
 
 const PHASE_LABELS: Record<LoadingScreenPhase, string> = {
-  booting: "preparando o núcleo",
-  hydrating: "restaurando o workspace",
-  connecting: "conectando aos agentes",
-  ready: "workspace pronto",
+  get booting() { return t("system.booting"); },
+  get hydrating() { return t("system.hydrating"); },
+  get connecting() { return t("system.connecting"); },
+  get ready() { return t("system.ready"); },
 };
 
 function clampProgress(progress: number) {
@@ -36,7 +37,7 @@ export function LoadingScreen({
   phase = "booting",
   progress,
   status,
-  subtitle = "Orquestrando sessões, agentes e sinais em um único espaço de trabalho.",
+  subtitle = t("system.subtitle"),
   title = "Terra Swarm",
 }: LoadingScreenProps) {
   const progressValue = progress === undefined ? undefined : clampProgress(progress);
@@ -47,7 +48,7 @@ export function LoadingScreen({
 
   return (
     <main className={rootClassName} aria-busy={phase !== "ready"}>
-      <section className={styles.loadingPanel} aria-label="Inicialização do Terra Swarm">
+      <section className={styles.loadingPanel} aria-label={t("system.startup")}>
         <div className={styles.loadingMark} aria-hidden="true">
           <Orbit />
         </div>
@@ -68,7 +69,7 @@ export function LoadingScreen({
           <div
             className={styles.loadingProgress}
             role="progressbar"
-            aria-label="Progresso da inicialização"
+            aria-label={t("system.progress")}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={progressValue}

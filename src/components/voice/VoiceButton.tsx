@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { Mic, MicOff } from "lucide-react";
 import type { ButtonHTMLAttributes } from "react";
 
@@ -27,8 +28,8 @@ export function VoiceButton({
   title,
   ...buttonProps
 }: VoiceButtonProps & { ariaLabel?: string }) {
-  const label = ariaLabel ?? (listening ? "Parar captura de voz" : "Iniciar captura de voz");
-  const hint = [pushToTalk ? "pressione e segure" : null, shortcut].filter(Boolean).join(" · ");
+  const label = ariaLabel ?? (listening ? t("palette.voiceStop") : t("palette.voiceStart"));
+  const hint = [pushToTalk ? t("voiceCapsule.holdToTalk") : null, shortcut].filter(Boolean).join(" · ");
   const classes = [styles.voiceButton, className].filter(Boolean).join(" ");
 
   return (

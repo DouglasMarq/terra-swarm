@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import type { ReactNode } from "react";
 import { EmptyPaneCell } from "./EmptyPaneCell";
 import { SubTabLane } from "./SubTabLane";
@@ -83,7 +84,7 @@ export function PaneFrame({
       className="terra-pane-frame"
       data-pane-id={projection.pane.id}
       data-active={active}
-      aria-label={`Painel ${projection.pane.id}`}
+      aria-label={t("workbench.pane", { name: projection.pane.id })}
     >
       {hasTabs && projection.tabs.length > 1 ? (
         <SubTabLane

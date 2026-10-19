@@ -1,3 +1,4 @@
+import { t } from "../../../i18n";
 export type ActionIntent = "default" | "destructive";
 
 /** Destructive operations always need a separate, explicit confirmation step. */
@@ -10,9 +11,9 @@ export function getConfirmationCopy(intent: ActionIntent): {
   confirmLabel: string;
 } {
   if (requiresConfirmation(intent)) {
-    return { title: "Confirmar ação", confirmLabel: "Confirmar exclusão" };
+    return { title: t("dialogs.confirmTitle"), confirmLabel: t("dialogs.confirmDestructive") };
   }
 
-  return { title: "Confirmar ação", confirmLabel: "Confirmar" };
+  return { title: t("dialogs.confirmTitle"), confirmLabel: t("common.confirm") };
 }
 

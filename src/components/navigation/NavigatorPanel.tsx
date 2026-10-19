@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { Folder, GitBranch, Plus, Search } from "../../components/icons";
 import { Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type ChangeEvent, type MouseEvent } from "react";
@@ -12,8 +13,8 @@ import type { ActivityTab, NavigatorNode, NavigatorNodeRef, NavigatorPanelProps 
 import styles from "./Navigator.module.css";
 
 const ACTIVITY_TABS: readonly { id: ActivityTab; label: string }[] = [
-  { id: "projects", label: "Projetos" },
-  { id: "files", label: "Arquivos" },
+  { id: "projects", get label() { return t("nav.projects"); } },
+  { id: "files", get label() { return t("nav.files"); } },
   { id: "git", label: "Git" },
 ];
 
@@ -76,7 +77,7 @@ export function NavigatorPanel({
   onActivityChange,
   capabilities,
   availableActivities,
-  title = "Terra Navigator",
+  title,
   className,
   style,
   emptyState,
@@ -172,17 +173,17 @@ export function NavigatorPanel({
   const createProject = onCreateProject ?? onCreateWorkspace;
 
   return (
-    <aside aria-label={title} className={classes(styles.panel, className)} style={style}>
+    <aside aria-label={title ?? t("shell.sidebar.label")} className={classes(styles.panel, className)} style={style}>
       <header className={styles.header}>
         {headerSlot ?? (
           <div className={styles.headerTop}>
             <div className={styles.titleCluster}>
               <span aria-hidden="true" className={styles.mark}><Folder size={13} /></span>
-              <h2 className={styles.title}>{title}</h2>
+              <h2 className={styles.title}>{title ?? t("shell.sidebar.label")}</h2>
             </div>
           </div>
         )}
-        <nav aria-label="Atividade" className={styles.activityTabs} role="tablist">
+        <nav aria-label={t("nav.activity")} className={styles.activityTabs} role="tablist">
           {ACTIVITY_TABS.filter((tab) => enabledActivities.includes(tab.id)).map((tab) => (
             <button
               aria-selected={selectedActivity === tab.id}
@@ -199,7 +200,7 @@ export function NavigatorPanel({
         </nav>
         <label className={styles.searchRow}>
           <Search aria-hidden="true" size={13} />
-          <input aria-label="Buscar projetos e agentes" className={styles.searchInput} onChange={handleQuery} placeholder="Buscar projetos, agentes…" type="search" value={query} />
+          <input aria-label={t("nav.search")} className={styles.searchInput} onChange={handleQuery} placeholder={t("nav.searchPlaceholder")} type="search" value={query} />
         </label>
       </header>
       {selectedActivity === "projects" ? <div className={styles.treeViewport}>
@@ -235,7 +236,7 @@ export function NavigatorPanel({
           />
         {contextMenu ? (
           <div
-            aria-label="Menu de contexto do projeto"
+            aria-label={t("nav.projectMenu")}
             className={styles.contextMenu}
             onPointerDown={(event) => event.stopPropagation()}
             role="menu"
@@ -252,15 +253,15 @@ export function NavigatorPanel({
               type="button"
             >
               <Trash2 aria-hidden="true" size={14} />
-              <span>Excluir projeto</span>
+              <span>{t("nav.deleteProject")}</span>
             </button>
           </div>
         ) : null}
         {emptyState && workspaces.length === 0 ? emptyState : null}
-      </div> : selectedActivity === "files" && loadFiles ? <NavigatorFilesView activeWorkspaceId={activeWorkspaceId} loadFiles={loadFiles} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} /> : selectedActivity === "git" && loadGitStatus ? <NavigatorGitView activeWorkspaceId={activeWorkspaceId} loadGitStatus={loadGitStatus} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} /> : <div className={styles.integrationView}><div className={styles.integrationEmpty}>Esta atividade não está disponível.</div></div>}
+      </div> : selectedActivity === "files" && loadFiles ? <NavigatorFilesView activeWorkspaceId={activeWorkspaceId} loadFiles={loadFiles} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} /> : selectedActivity === "git" && loadGitStatus ? <NavigatorGitView activeWorkspaceId={activeWorkspaceId} loadGitStatus={loadGitStatus} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} /> : <div className={styles.integrationView}><div className={styles.integrationEmpty}>{t("nav.unavailable")}</div></div>}
       <footer className={styles.footer}>
-        <span>{projectCount} projeto{projectCount === 1 ? "" : "s"}</span>
-        {createProject ? <button className={styles.footerAction} onClick={() => createProject(null)} type="button"><Plus aria-hidden="true" size={12} /> Novo projeto</button> : null}
+        <span>{t("nav.projectCount", { count: projectCount })}</span>
+        {createProject ? <button className={styles.footerAction} onClick={() => createProject(null)} type="button"><Plus aria-hidden="true" size={12} /> {t("palette.newProject")}</button> : null}
       </footer>
     </aside>
   );

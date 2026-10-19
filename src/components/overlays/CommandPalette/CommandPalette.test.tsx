@@ -24,7 +24,7 @@ describe("CommandPalette", () => {
 
     const input = screen.getByPlaceholderText("Buscar comando, projeto ou agente…");
     await user.type(input, "fleet");
-    const command = screen.getByRole("option", { name: /Abrir frota/ });
+    const command = screen.getByRole("option", { name: /Abrir a Frota/ });
     expect(command).toBeVisible();
     await user.click(command);
 

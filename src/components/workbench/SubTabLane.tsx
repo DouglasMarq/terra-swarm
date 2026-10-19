@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { useState, type MouseEvent } from "react";
 import type { SubTabLaneProps, SubTabLaneTab } from "./types";
 import { ConfirmActionDialog } from "../overlays/Dialog";
@@ -40,7 +41,7 @@ function SubTab({
       <button
         type="button"
         className="terra-subtab-lane__tab-button"
-        aria-label={`Focar ${title}`}
+        aria-label={t("lane.focus", { name: title })}
         aria-pressed={entry.active}
         onClick={() => onFocusTab?.(entry.tab.id)}
       >
@@ -51,7 +52,7 @@ function SubTab({
         <button
           type="button"
           className="terra-subtab-lane__close"
-          aria-label={`Desanexar ${title}`}
+          aria-label={t("lane.detach", { name: title })}
           onClick={(event) => {
             stop(event);
             onDetachTab(entry.tab.id);
@@ -64,7 +65,7 @@ function SubTab({
         <button
           type="button"
           className="terra-subtab-lane__kill"
-          aria-label={`Encerrar ${title}`}
+          aria-label={t("lane.kill", { name: title })}
           onClick={(event) => {
             stop(event);
             onRequestKill(entry);
@@ -89,7 +90,7 @@ export function SubTabLane({
 
   return (
     <>
-      <aside className={className ? `terra-subtab-lane ${className}` : "terra-subtab-lane"} aria-label="Abas do painel">
+      <aside className={className ? `terra-subtab-lane ${className}` : "terra-subtab-lane"} aria-label={t("lane.tabs")}>
         {tabs.map((entry) => (
           <SubTab
             key={entry.tab.id}
@@ -103,7 +104,7 @@ export function SubTabLane({
         <button
           type="button"
           className="terra-subtab-lane__new"
-          aria-label="Criar nova aba"
+          aria-label={t("lane.newTab")}
           onClick={onNewTab}
         >
           +
@@ -115,9 +116,9 @@ export function SubTabLane({
         onOpenChange={(open) => {
           if (!open) setPendingKill(null);
         }}
-        title={pendingKill ? `Encerrar ${tabTitle(pendingKill)}?` : "Encerrar terminal?"}
-        description={pendingKill ? `O processo do terminal “${tabTitle(pendingKill)}” será encerrado. Esta ação não pode ser desfeita.` : "O processo do terminal será encerrado."}
-        confirmLabel="Encerrar terminal"
+        title={pendingKill ? t("lane.killTitleNamed", { name: tabTitle(pendingKill) }) : t("lane.killTitle")}
+        description={pendingKill ? t("lane.killDescNamed", { name: tabTitle(pendingKill) }) : t("lane.killDesc")}
+        confirmLabel={t("lane.killConfirm")}
         onConfirm={() => {
           const tab = pendingKill;
           if (tab) onKillTab?.(tab.tab.id);

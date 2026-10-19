@@ -1,8 +1,13 @@
+import { ChevronDown, ChevronRight, Maximize2, Minimize2, X } from "lucide-react";
+import { useT } from "../../i18n";
 import { ContainerLayout } from "./ContainerLayout";
+import { GridSizePicker } from "./GridSizePicker";
 import {
-  GRID_DIMENSION_VALUES,
   gridDimensionsForLayout,
+  isAutoGrid,
+  visibleWorkbenchMode,
   workbenchModeForLayout,
+  workspaceLayoutForAutoGrid,
   workspaceLayoutForGrid,
 } from "./layout";
 import type { ProjectContainerProps, WorkbenchLayoutMode } from "./types";
@@ -22,13 +27,29 @@ export function ProjectContainer({
   onWorkspaceLayoutChange,
   ...actions
 }: ProjectContainerProps) {
+  const t = useT();
   const { container } = projection;
   const label = projectLabel({ projection, renderTab, visible, ...actions });
   const paneCount = projection.panes.length;
   const gridDimensions = gridDimensionsForLayout(container.layout, paneCount);
-  const mode: WorkbenchLayoutMode = projection.project
+  const storedMode: WorkbenchLayoutMode = projection.project
     ? workbenchModeForLayout(projection.project.layout)
     : container.layout.mode;
+  const visibleMode = visibleWorkbenchMode(storedMode);
+  const autoGrid = isAutoGrid(container.layout);
+
+  const setMode = (nextMode: "grid" | "spotlight"): void => {
+    const project = projection.project;
+    if (!project || !onWorkspaceLayoutChange) return;
+    onWorkspaceLayoutChange(project.id, {
+      ...project.layout,
+      mode: nextMode,
+      metadata: {
+        ...(project.layout.metadata ?? {}),
+        workbenchMode: nextMode,
+      },
+    });
+  };
 
   const updateGrid = (dimensions: Partial<typeof gridDimensions>): void => {
     if (!onLayoutChange) return;
@@ -51,111 +72,56 @@ export function ProjectContainer({
         <button
           type="button"
           className="terra-project-container__action"
-          aria-label={container.collapsed ? `Expandir ${label}` : `Recolher ${label}`}
+          aria-label={t(container.collapsed ? "workbench.expand" : "workbench.collapse", { name: label })}
           aria-expanded={!container.collapsed}
           onClick={() => onCollapseContainer?.(container.id, !container.collapsed)}
         >
-          {container.collapsed ? "⌄" : "⌃"}
+          {container.collapsed ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
         </button>
         <span className="terra-project-container__title">
           {label}
         </span>
         {projection.project && onWorkspaceLayoutChange ? (
-          <label className="terra-project-container__layout-select">
-            <span className="terra-visually-hidden">Layout de {label}</span>
-            <select
-              aria-label={`Layout de ${label}`}
-              value={mode}
-              onChange={(event) => {
-                const nextMode = event.target.value as WorkbenchLayoutMode;
-                onWorkspaceLayoutChange(projection.project!.id, {
-                  ...projection.project!.layout,
-                  mode: nextMode === "sidebar" ? "auto" : nextMode,
-                  metadata: {
-                    ...(projection.project!.layout.metadata ?? {}),
-                    workbenchMode: nextMode,
-                  },
-                });
-              }}
-            >
-              <option value="auto">Auto</option>
-              <option value="spotlight">Spotlight</option>
-              <option value="sidebar">Sidebar</option>
-              <option value="grid">Grid</option>
-            </select>
-          </label>
-        ) : null}
-        {mode === "grid" ? (
-          <div
-            className="terra-project-container__grid-controls"
-            role="group"
-            aria-label={`Configuração da grade de ${label}`}
-          >
-            <div className="terra-project-container__grid-control" role="group" aria-label="Colunas">
-              <span className="terra-project-container__grid-label">Colunas</span>
-              {GRID_DIMENSION_VALUES.map((value) => (
-                <button
-                  type="button"
-                  className="terra-project-container__grid-button"
-                  key={`column-${value}`}
-                  aria-label={`${value} ${value === 1 ? "coluna" : "colunas"}`}
-                  aria-pressed={gridDimensions.columns === value}
-                  disabled={!onLayoutChange}
-                  onClick={() => updateGrid({ columns: value })}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-            <div className="terra-project-container__grid-control" role="group" aria-label="Linhas">
-              <span className="terra-project-container__grid-label">Linhas</span>
-              {GRID_DIMENSION_VALUES.map((value) => (
-                <button
-                  type="button"
-                  className="terra-project-container__grid-button"
-                  key={`row-${value}`}
-                  aria-label={`${value} ${value === 1 ? "linha" : "linhas"}`}
-                  aria-pressed={gridDimensions.rows === value}
-                  disabled={!onLayoutChange}
-                  onClick={() => updateGrid({ rows: value })}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              className="terra-project-container__grid-auto"
-              aria-label="Ajustar grade automaticamente"
-              title="Ajustar grade automaticamente"
-              disabled={!onLayoutChange}
-              onClick={() => updateGrid(gridDimensionsForLayout(undefined, paneCount))}
-            >
-              Auto
+          <div className="terra-segmented terra-project-container__modes" role="group" aria-label={t("workbench.layout", { name: label })}>
+            <button type="button" aria-pressed={visibleMode === "grid"} data-active={visibleMode === "grid"} onClick={() => setMode("grid")}>
+              {t("workbench.grid")}
+            </button>
+            <button type="button" aria-pressed={visibleMode === "spotlight"} data-active={visibleMode === "spotlight"} onClick={() => setMode("spotlight")}>
+              {t("workbench.focus")}
             </button>
           </div>
+        ) : null}
+        {visibleMode === "grid" ? (
+          <GridSizePicker
+            dimensions={gridDimensions}
+            auto={autoGrid}
+            paneCount={paneCount}
+            disabled={!onLayoutChange}
+            onSelect={(dimensions) => updateGrid(dimensions)}
+            onAuto={() => onLayoutChange?.({ containerId: container.id, layout: workspaceLayoutForAutoGrid(container.layout) })}
+          />
         ) : null}
         <div className="terra-project-container__actions">
           {onFullscreenContainer ? (
             <button
               type="button"
               className="terra-project-container__action"
-              aria-label={container.fullscreen ? `Sair da tela cheia de ${label}` : `Tela cheia de ${label}`}
+              aria-label={t(container.fullscreen ? "workbench.exitFullscreen" : "workbench.fullscreen", { name: label })}
               aria-pressed={container.fullscreen}
               onClick={() => onFullscreenContainer(container.id, !container.fullscreen)}
             >
-              {container.fullscreen ? "↙" : "↗"}
+              {container.fullscreen ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
             </button>
           ) : null}
           {onHideContainer ? (
             <button
               type="button"
               className="terra-project-container__action"
-              aria-label={`Ocultar ${label}`}
-              title="Ocultar container (os terminais continuam ativos)"
+              aria-label={t("workbench.hide", { name: label })}
+              title={t("workbench.hideTitle")}
               onClick={() => onHideContainer(container.id)}
             >
-              ×
+              <X size={13} aria-hidden="true" />
             </button>
           ) : null}
         </div>
@@ -164,7 +130,7 @@ export function ProjectContainer({
         <ContainerLayout
           projection={projection}
           renderTab={renderTab}
-          mode={mode}
+          mode={visibleMode}
           {...actions}
         />
       </div>

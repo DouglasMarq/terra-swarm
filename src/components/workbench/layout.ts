@@ -54,10 +54,46 @@ export interface GridDimensions {
   rows: number;
 }
 
-const GRID_CONTROL_VALUES = [1, 2, 3, 4] as const;
+/** Largest grid the picker offers: 8 columns × 8 rows. */
+export const GRID_MAX = 8;
 
-/** Values exposed by the compact grid editor in the container header. */
+const GRID_CONTROL_VALUES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+
+/** Values exposed by the grid size picker in the container header. */
 export const GRID_DIMENSION_VALUES = GRID_CONTROL_VALUES;
+
+/** Automatic grids grow with the pane count up to this many columns. */
+export const AUTO_GRID_MAX_COLUMNS = 4;
+
+/**
+ * v3 shows two modes: Grade (a CSS grid, automatic or fixed) and Foco
+ * (spotlight). Older persisted modes read as an automatic grid.
+ */
+export type VisibleWorkbenchMode = "grid" | "spotlight";
+
+export function visibleWorkbenchMode(mode: WorkbenchLayoutMode): VisibleWorkbenchMode {
+  return mode === "spotlight" ? "spotlight" : "grid";
+}
+
+/** A grid is automatic until the user fixes its columns and rows. */
+export function isAutoGrid(layout: WorkspaceLayout | null | undefined): boolean {
+  return !(typeof layout?.columns === "number" && layout.columns >= 1 && typeof layout?.rows === "number" && layout.rows >= 1);
+}
+
+/** Drop fixed dimensions so the grid follows the pane count again. */
+export function workspaceLayoutForAutoGrid(layout: WorkspaceLayout): WorkspaceLayout {
+  const next: WorkspaceLayout = { ...layout, mode: "grid" };
+  delete next.columns;
+  delete next.rows;
+  if (layout.itemIds) next.itemIds = [...layout.itemIds];
+  if (layout.sizes) next.sizes = { ...layout.sizes };
+  if (layout.metadata) next.metadata = { ...layout.metadata };
+  return next;
+}
+
+function clampGrid(value: number): number {
+  return Math.max(1, Math.min(GRID_MAX, value));
+}
 
 function positiveInteger(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value >= 1
@@ -73,7 +109,7 @@ function positiveInteger(value: unknown, fallback: number): number {
 export function defaultGridDimensions(paneCount: number): GridDimensions {
   const count = Math.max(0, Math.floor(paneCount));
   if (count === 0) return { columns: 1, rows: 1 };
-  const columns = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(count))));
+  const columns = Math.min(AUTO_GRID_MAX_COLUMNS, Math.max(1, Math.ceil(Math.sqrt(count))));
   return { columns, rows: Math.max(1, Math.ceil(count / columns)) };
 }
 
@@ -105,8 +141,9 @@ export function workspaceLayoutForGrid(
   const current = gridDimensionsForLayout(layout, paneCount);
   const next: WorkspaceLayout = {
     ...layout,
-    columns: positiveInteger(dimensions.columns, current.columns),
-    rows: positiveInteger(dimensions.rows, current.rows),
+    mode: "grid",
+    columns: clampGrid(positiveInteger(dimensions.columns, current.columns)),
+    rows: clampGrid(positiveInteger(dimensions.rows, current.rows)),
   };
   if (layout.itemIds) next.itemIds = [...layout.itemIds];
   if (layout.sizes) next.sizes = { ...layout.sizes };

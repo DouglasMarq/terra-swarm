@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
@@ -304,7 +304,7 @@ describe("WorkspaceWorkbench", () => {
     });
   });
 
-  it("persists workspace presets from the container selector", async () => {
+  it("switches between Grade and Foco from the container header", async () => {
     const user = userEvent.setup();
     const onWorkspaceLayoutChange = vi.fn();
     render(
@@ -315,12 +315,14 @@ describe("WorkspaceWorkbench", () => {
       />,
     );
 
-    await user.selectOptions(screen.getByRole("combobox", { name: "Layout de Terra API" }), "sidebar");
+    const modes = screen.getByRole("group", { name: "Layout de Terra API" });
+    expect(within(modes).getByRole("button", { name: "Grade" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(within(modes).getByRole("button", { name: "Foco" }));
     expect(onWorkspaceLayoutChange).toHaveBeenCalledWith(
       "project-1",
       expect.objectContaining({
-        mode: "auto",
-        metadata: expect.objectContaining({ workbenchMode: "sidebar" }),
+        mode: "spotlight",
+        metadata: expect.objectContaining({ workbenchMode: "spotlight" }),
       }),
     );
   });
@@ -389,7 +391,7 @@ describe("WorkspaceWorkbench", () => {
     expect(screen.queryByText(/Custom grid/)).not.toBeInTheDocument();
   });
 
-  it("edits grid columns through the existing layout callback", async () => {
+  it("fixes the grid size from the 8×8 picker through the existing layout callback", async () => {
     const user = userEvent.setup();
     const onLayoutChange = vi.fn();
     const gridSource: WorkspaceSnapshotV2 = {
@@ -428,13 +430,15 @@ describe("WorkspaceWorkbench", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "3 colunas" }));
+    await user.click(screen.getByRole("button", { name: "Tamanho da grade" }));
+    expect(screen.getAllByRole("button", { name: /colunas × .* linhas/ })).toHaveLength(64);
+    await user.click(screen.getByRole("button", { name: "8 colunas × 8 linhas" }));
     expect(onLayoutChange).toHaveBeenCalledWith({
       containerId: "container-1",
       layout: expect.objectContaining({
         mode: "grid",
-        columns: 3,
-        rows: 1,
+        columns: 8,
+        rows: 8,
         itemIds: ["pane-1", "pane-2"],
         sizes: { "pane-1": 35, "pane-2": 65 },
         metadata: { source: "editor" },
@@ -526,4 +530,29 @@ describe("WorkspaceWorkbench", () => {
     expect(workbenchStyles).not.toMatch(/dnd|drag|drop-invalid|sortable/i);
   });
 
+
+  it("returns a fixed grid to automatic sizing", async () => {
+    const user = userEvent.setup();
+    const onLayoutChange = vi.fn();
+    const source: WorkspaceSnapshotV2 = {
+      ...snapshot,
+      projects: [{ ...snapshot.projects[0], layout: { mode: "grid", itemIds: ["container-1"] } }],
+      containers: [{ ...snapshot.containers[0], layout: { mode: "grid", columns: 3, rows: 2, itemIds: ["pane-1"] } }],
+    };
+    render(
+      <WorkspaceWorkbench
+        onLayoutChange={onLayoutChange}
+        onNewTab={vi.fn()}
+        renderTab={({ tab }) => <div>Terminal {tab.title}</div>}
+        source={source}
+      />,
+    );
+    expect(screen.getAllByRole("button", { name: "Novo agente" })).toHaveLength(5);
+    await user.click(screen.getByRole("button", { name: "Tamanho da grade" }));
+    await user.click(screen.getByRole("button", { name: "Automática" }));
+    const layout = onLayoutChange.mock.calls[0][0].layout;
+    expect(layout.mode).toBe("grid");
+    expect(layout.columns).toBeUndefined();
+    expect(layout.rows).toBeUndefined();
+  });
 });

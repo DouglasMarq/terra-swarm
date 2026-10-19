@@ -2,10 +2,19 @@ import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type 
 import { useShallow } from "zustand/react/shallow";
 import {
   Bot,
+  Copy,
+  Eraser,
   FolderKanban,
   Gauge,
   LayoutGrid,
+  PanelRight,
+  Power,
+  RotateCcw,
+  SquareArrowOutUpRight,
+  Square,
 } from "lucide-react";
+import type { PaneMenuGroups } from "../workbench/PaneActionsMenu";
+import { profileForCommand, resolveResumeCommand } from "../../lib/features/agentProfiles";
 import { ApplicationShell } from "../shell/ApplicationShell";
 import { CollapsedSidebar, Sidebar, SurfaceSwitch, type CollapsedSidebarProject } from "../shell/Sidebar";
 import { NotificationCenter } from "../notifications/NotificationCenter";
@@ -622,6 +631,61 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     focusTerminal(id);
   };
 
+  const attentionMessages = useMemo(() => {
+    const latest: Record<string, { ts: number; message: string }> = {};
+    for (const item of props.notificationItems) {
+      if (item.read || item.system) continue;
+      const current = latest[item.terminalId];
+      if (!current || current.ts < item.ts) latest[item.terminalId] = { ts: item.ts, message: item.message };
+    }
+    return Object.fromEntries(Object.entries(latest).map(([id, value]) => [id, value.message]));
+  }, [props.notificationItems]);
+
+  const workspaceIdFor = (terminalId: string) => props.workspaces.find((workspace) => workspace.terminals.some((terminal) => terminal.id === terminalId))?.id ?? null;
+
+  const buildPaneMenu = (ptyId: string, command: string): PaneMenuGroups => {
+    const workspaceId = workspaceIdFor(ptyId);
+    const detached = props.detachedTerminalIds.includes(ptyId);
+    const resumeCommand = resolveResumeCommand(profileForCommand(command), command);
+    const runAction = (action: FocusedAgentAction) => {
+      if (workspaceId) props.onFocusedAgentAction?.(action, { workspaceId, terminalId: ptyId, command });
+    };
+    const label = agentLabels[ptyId]?.primary ?? command;
+    return [
+      [
+        { id: "interrupt", label: t("pane.menu.interrupt"), icon: <Square size={13} />, shortcut: "⌃C", disabled: !workspaceId || !props.onFocusedAgentAction, onSelect: () => runAction("interrupt") },
+        { id: "restart", label: t("pane.menu.restart"), icon: <RotateCcw size={13} />, onSelect: () => props.onRestart(ptyId, command) },
+        detached
+          ? { id: "reattach", label: t("pane.menu.reattach"), icon: <SquareArrowOutUpRight size={13} />, onSelect: () => props.onReattach(ptyId) }
+          : { id: "detach", label: t("pane.menu.detach"), icon: <SquareArrowOutUpRight size={13} />, onSelect: () => props.onDetach(ptyId) },
+        { id: "inspector", label: t("pane.menu.inspector"), icon: <PanelRight size={13} />, shortcut: "⌘I", onSelect: () => { props.onFocus(ptyId); shell.setDockOpen(true); } },
+      ],
+      [
+        { id: "copy-resume", label: t("pane.menu.copyResume"), detail: resumeCommand, icon: <Copy size={13} />, onSelect: () => { void window.navigator.clipboard?.writeText(resumeCommand); } },
+        { id: "clear-history", label: t("pane.menu.clearHistory"), icon: <Eraser size={13} />, disabled: !workspaceId || !props.onFocusedAgentAction, onSelect: () => runAction("clear-scrollback") },
+      ],
+      [
+        {
+          id: "kill",
+          label: t("pane.menu.kill"),
+          icon: <Power size={13} />,
+          danger: true,
+          onSelect: () => setPendingCommandConfirmation({
+            kind: "stop-agent",
+            commandId: `pane:kill:${ptyId}`,
+            title: t("pane.confirmKill.title"),
+            description: t("pane.confirmKill.description"),
+            resourceId: ptyId,
+            resourceLabel: label,
+            workspaceId: workspaceId ?? undefined,
+            terminalId: ptyId,
+            action: "stop",
+          }),
+        },
+      ],
+    ];
+  };
+
   const renderTab = (context: WorkbenchTabRenderContext) => {
     const project = context.project;
     return (
@@ -637,6 +701,9 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
           titles={props.titles}
           branch={project ? props.branches[project.id] : undefined}
           detachedIds={new Set(props.detachedTerminalIds)}
+          labels={agentLabels}
+          attentionMessages={attentionMessages}
+          buildMenu={buildPaneMenu}
           onClearNotifications={props.onClearNotifications}
           onFocus={(id) => focusWorkbenchTab(id, { containerId: context.container.id, paneId: context.pane.id, projectId: context.project?.id ?? null })}
           onToggleExpand={props.onToggleExpand}
@@ -745,7 +812,8 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       }}
       title={pendingCommandConfirmation?.title}
       description={pendingCommandConfirmation ? `${pendingCommandConfirmation.resourceLabel}: ${pendingCommandConfirmation.description}` : ""}
-      confirmLabel={pendingCommandConfirmation?.kind === "import-snapshot" ? "Continuar importação" : "Confirmar ação"}
+      intent={pendingCommandConfirmation?.kind === "stop-agent" ? "destructive" : "default"}
+      confirmLabel={pendingCommandConfirmation?.kind === "import-snapshot" ? "Continuar importação" : pendingCommandConfirmation?.kind === "stop-agent" ? t("pane.confirmKill.confirm") : "Confirmar ação"}
       onConfirm={() => {
         const request = pendingCommandConfirmation;
         if (!request) return;

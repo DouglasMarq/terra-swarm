@@ -27,9 +27,15 @@
   height: 100% !important;
 }
 
+/* The selected terminal: a solid amber edge. An agent that needs you adds
+ * the pulsing glow below and the message strip, so the two stay distinct. */
 .pane.focused {
-  border-color: var(--terra-border-strong);
-  box-shadow: 0 0 0 1px #52525b, var(--terra-shadow-pane);
+  border-color: var(--terra-amber);
+  box-shadow: 0 0 0 1px var(--terra-amber-line), var(--terra-shadow-pane);
+}
+
+.pane.focused .pane-header {
+  background: color-mix(in srgb, var(--terra-amber) 6%, var(--terra-bg-panel));
 }
 
 .pane[data-status="attention"] {
@@ -130,6 +136,8 @@
   display: inline-grid;
   width: 26px;
   height: 26px;
+  /* The global button style adds 6px 12px padding; it pushed icons off-centre. */
+  padding: 0;
   place-items: center;
   border: 0;
   border-radius: var(--terra-radius-md);
@@ -211,6 +219,7 @@
 
 .pane-menu {
   position: relative;
+  display: inline-flex;
 }
 
 .pane-menu-list {

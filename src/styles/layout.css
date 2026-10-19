@@ -1,52 +1,6 @@
 /* Layout primitives for the Alethe-inspired orchestration shell. These are
  * deliberately framework-agnostic so React, Tauri, and future views can share
  * the same geometry while the product identity remains Terra. */
-.terra-foundation {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.terra-app-shell {
-  display: grid;
-  min-width: 0;
-  min-height: 0;
-  flex: 1;
-  grid-template-columns: var(--terra-sidebar-width, 272px) minmax(0, 1fr);
-  grid-template-rows: var(--terra-topbar-height, 38px) minmax(0, 1fr) var(--terra-statusbar-height, 24px);
-  grid-template-areas:
-    "topbar topbar"
-    "sidebar main"
-    "statusbar statusbar";
-  background: var(--terra-bg);
-}
-
-.terra-topbar {
-  grid-area: topbar;
-  min-width: 0;
-}
-
-.terra-sidebar {
-  grid-area: sidebar;
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-}
-
-.terra-main {
-  grid-area: main;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.terra-statusbar {
-  grid-area: statusbar;
-  min-width: 0;
-}
-
 .terra-surface-grid {
   display: grid;
   min-width: 0;

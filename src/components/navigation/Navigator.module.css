@@ -657,7 +657,8 @@
 
 .contextMenu {
   position: fixed;
-  z-index: 30;
+  /* Above the window chrome (300) and a fullscreen project (250). */
+  z-index: 400;
   min-width: 184px;
   padding: 4px;
   border: 1px solid var(--navigator-border);

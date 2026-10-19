@@ -223,8 +223,8 @@ describe("NavigatorPanel", () => {
 
     expect(within(screen.getByRole("treeitem", { name: "Grupo Core" })).getByRole("button", { name: "Renomear" })).toBeInTheDocument();
     expect(within(screen.getByRole("treeitem", { name: "Projeto Terra API" })).getByRole("button", { name: "Renomear" })).toBeInTheDocument();
-    expect(within(screen.getByRole("treeitem", { name: "Container container-api" })).queryByRole("button", { name: "Renomear" })).not.toBeInTheDocument();
-    expect(within(screen.getByRole("treeitem", { name: "Pane pane-api" })).queryByRole("button", { name: "Renomear" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("treeitem", { name: "Contêiner container-api" })).queryByRole("button", { name: "Renomear" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("treeitem", { name: "Painel pane-api" })).queryByRole("button", { name: "Renomear" })).not.toBeInTheDocument();
     expect(within(screen.getByRole("treeitem", { name: "Agente luna-max" })).queryByRole("button", { name: "Renomear" })).not.toBeInTheDocument();
   });
 

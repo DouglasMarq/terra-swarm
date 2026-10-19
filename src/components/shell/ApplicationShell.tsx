@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Group as PanelGroup, Panel, Separator } from "react-resizable-panels";
 import type { Layout } from "react-resizable-panels";
 import { detectShortcutPlatform } from "../../lib/platform/shortcuts";
@@ -83,6 +83,18 @@ export function ApplicationShell({
     if (!compact) setCompactSidebarOpen(false);
   }, [compact]);
 
+  // In compact mode ⌘B (which flips the persisted collapse flag) opens and
+  // closes the drawer, and leaving a surface closes it.
+  const lastCollapsed = useRef(sidebarCollapsed);
+  useEffect(() => {
+    if (lastCollapsed.current === sidebarCollapsed) return;
+    lastCollapsed.current = sidebarCollapsed;
+    if (compact) setCompactSidebarOpen((open) => !open);
+  }, [compact, sidebarCollapsed]);
+  useEffect(() => {
+    setCompactSidebarOpen(false);
+  }, [surface]);
+
   const compactChrome: WindowChromeProps | undefined = compact
     ? {
       ...chrome,
@@ -105,7 +117,16 @@ export function ApplicationShell({
             {compactSidebarOpen ? (
               <>
                 <button className="terra-shell-compact-backdrop" type="button" aria-label={t("shell.sidebar.collapse")} onClick={() => setCompactSidebarOpen(false)} />
-                <div className="terra-shell-compact-drawer terra-shell-compact-navigator">{sidebar}</div>
+                <div
+                  className="terra-shell-compact-drawer terra-shell-compact-navigator"
+                  onClick={(event) => {
+                    // Picking a project or agent closes the drawer; the row's own buttons don't.
+                    const target = event.target as HTMLElement;
+                    if (target.closest('[role="treeitem"]') && !target.closest("button")) setCompactSidebarOpen(false);
+                  }}
+                >
+                  {sidebar}
+                </div>
               </>
             ) : null}
             <main className="terra-shell-compact-main">{children}</main>

@@ -72,6 +72,8 @@ export interface PaneLayoutProps {
 export interface WorkbenchActionCallbacks {
   onFocusTab?: (tabId: string, location: WorkbenchLocation) => void;
   onNewTab?: (location: WorkbenchLocation) => void;
+  /** The header's "New agent ⌘T": starts the default agent like ⌘T does. */
+  onQuickNewTab?: (location: WorkbenchLocation) => void;
   onDetachTab?: (tabId: string, location: WorkbenchLocation) => void;
   /** Explicit destructive action. Hiding/closing a container never calls this. */
   onKillTab?: (tabId: string, location: WorkbenchLocation) => void;

@@ -13,6 +13,7 @@ import type {
   WorkbenchLayoutMode,
   WorkbenchPaneProjection,
 } from "./types";
+import { t } from "../../i18n";
 
 export interface PaneGridProps {
   projection: WorkbenchContainerProjection;
@@ -101,36 +102,65 @@ export function PaneGrid({
   onLayoutChange,
 }: PaneGridProps) {
   const mode = resolveLayoutMode(projection.container.layout, explicitMode);
-  const panes = paneOrder(projection, mode, activePaneId);
+  const isSpotlight = mode === "spotlight";
+  // Grade and Foco share one CSS grid with cells in a stable order, so
+  // focusing a pane or switching modes only moves cells; the terminals inside
+  // are never remounted (that lost scrollback, selection and keyboard focus).
+  const panes = paneOrder(projection, isSpotlight ? "grid" : mode, activePaneId);
   if (panes.length === 0) return null;
 
   const sizes = panelSizes(projection, mode, activePaneId);
   const orientation = mode === "vertical" || mode === "stack" ? "vertical" : "horizontal";
-  const isGrid = mode === "grid";
+  const isGrid = mode === "grid" || isSpotlight;
 
   if (isGrid) {
     const { columns, rows } = gridDimensionsForLayout(
       projection.container.layout,
       panes.length,
     );
+    const spotlightId = isSpotlight
+      ? (panes.find(({ pane }) => pane.id === activePaneId) ?? panes[0]).pane.id
+      : null;
+    const sideCount = panes.length - 1;
+    const gridStyle = isSpotlight
+      ? {
+          gridTemplateColumns: sideCount > 0 ? "minmax(0, 72fr) minmax(0, 28fr)" : "minmax(0, 1fr)",
+          gridTemplateRows: `repeat(${Math.max(1, sideCount)}, minmax(0, 1fr))`,
+        }
+      : {
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+          gridAutoRows: "minmax(0, 1fr)",
+        };
+    let sideIndex = 0;
     return (
       <div
         className="terra-pane-grid terra-pane-grid--grid"
         data-layout-mode={mode}
-        data-grid-columns={columns}
-        data-grid-rows={rows}
-        style={{
-          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-          gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
-          gridAutoRows: "minmax(0, 1fr)",
-        }}
+        data-grid-columns={isSpotlight ? undefined : columns}
+        data-grid-rows={isSpotlight ? undefined : rows}
+        style={gridStyle}
       >
-        {panes.map((paneProjection) => (
-          <div className="terra-pane-grid__cell terra-anim-rise" key={paneProjection.pane.id}>
-            {renderPane(paneProjection)}
-          </div>
-        ))}
-        {renderEmptySlot
+        {panes.map((paneProjection) => {
+          let placement: { gridColumn: string; gridRow: string } | undefined;
+          if (isSpotlight) {
+            if (paneProjection.pane.id === spotlightId) placement = { gridColumn: "1", gridRow: "1 / -1" };
+            else {
+              sideIndex += 1;
+              placement = { gridColumn: "2", gridRow: String(sideIndex) };
+            }
+          }
+          return (
+            <div
+              className="terra-pane-grid__cell terra-anim-rise"
+              key={paneProjection.pane.id}
+              style={placement}
+            >
+              {renderPane(paneProjection)}
+            </div>
+          );
+        })}
+        {renderEmptySlot && !isSpotlight
           ? Array.from({ length: Math.max(0, columns * rows - panes.length) }, (_, index) => (
             <div className="terra-pane-grid__cell terra-pane-grid__cell--empty" key={`empty-${index}`}>
               {renderEmptySlot(index)}
@@ -144,7 +174,7 @@ export function PaneGrid({
   return (
     <div className="terra-pane-grid" data-layout-mode={mode}>
       <Group
-        key={`${projection.container.id}:${mode}:${mode === "spotlight" ? activePaneId ?? "none" : "stable"}:${panes.map(({ pane }) => pane.id).join(",")}`}
+        key={`${projection.container.id}:${mode}:${panes.map(({ pane }) => pane.id).join(",")}`}
         id={`pane-group-${projection.container.id}`}
         className="terra-pane-grid"
         orientation={orientation}
@@ -182,7 +212,7 @@ export function PaneGrid({
                   key={`separator-${projection.container.id}-${paneProjection.pane.id}`}
                   id={`separator-${projection.container.id}-${paneProjection.pane.id}`}
                   className="terra-pane-separator"
-                  aria-label="Redimensionar painel"
+                  aria-label={t("grid.resize")}
                 />,
               ]
             : []),

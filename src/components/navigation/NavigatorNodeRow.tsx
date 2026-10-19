@@ -23,8 +23,8 @@ function IconForNode({ node, expanded }: { node: NavigatorNode; expanded: boolea
 function labelFor(node: NavigatorNode): string {
   if (node.kind === "agent") return t("nav.agentNode", { name: node.name });
   if (node.kind === "project") return t("nav.projectNode", { name: node.name });
-  if (node.kind === "container") return `Container ${node.name}`;
-  if (node.kind === "pane") return `Pane ${node.name}`;
+  if (node.kind === "container") return t("nav.containerNode", { name: node.name });
+  if (node.kind === "pane") return t("nav.paneNode", { name: node.name });
   return t("nav.groupNode", { name: node.name });
 }
 
@@ -122,6 +122,8 @@ export function NavigatorNodeRow({
     visible ? "" : styles.hiddenRow,
   ].filter(Boolean).join(" ");
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    // Keys on the row's own buttons (rename, delete, …) belong to them.
+    if (event.target !== event.currentTarget) return;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       if (node.kind === "group" && canToggle) onToggle?.(node.id);
@@ -185,7 +187,7 @@ export function NavigatorNodeRow({
       {node.kind === "agent" && (node as NavigatorAgentNode).tag ? (
           <span className={styles.nodeSubline}>{(node as NavigatorAgentNode).tag}</span>
         ) : node.kind === "agent" && (node as NavigatorAgentNode).branchIds.length > 0 ? (
-          <span className={styles.nodeSubline}><GitBranch aria-hidden="true" size={11} /> {(node as NavigatorAgentNode).branchIds.length} branch{(node as NavigatorAgentNode).branchIds.length === 1 ? "" : "es"}</span>
+          <span className={styles.nodeSubline}><GitBranch aria-hidden="true" size={11} /> {t("nav.branches", { count: (node as NavigatorAgentNode).branchIds.length })}</span>
         ) : null}
       </span>
       {!visible && node.kind === "project" ? <EyeOff aria-label={t("nav.hidden")} className={styles.visibilityIcon} size={12} /> : null}

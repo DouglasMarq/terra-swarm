@@ -925,3 +925,69 @@
 .agent .nodeName {
   color: var(--navigator-text);
 }
+
+/* Agent "…" menu: same actions and look as the pane menu. */
+.agentMenu {
+  width: 272px;
+  padding: 6px;
+  border-color: var(--terra-border-strong);
+  border-radius: var(--terra-radius-xl);
+  background: var(--terra-bg-elevated);
+  box-shadow: var(--terra-shadow-dropdown);
+  font-family: var(--terra-font-sans);
+  animation: terra-pop 150ms var(--terra-ease-out) both;
+}
+
+.agentMenuGroup + .agentMenuGroup {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--terra-border-strong);
+}
+
+.agentMenuItem {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--terra-font-size-body);
+  text-align: start;
+}
+
+.agentMenuItem:hover:not(:disabled),
+.agentMenuItem:focus-visible {
+  outline: none;
+  background: #2a2a31;
+}
+
+.agentMenuItem:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.agentMenuItem[data-danger="true"] {
+  color: var(--terra-red-ink);
+}
+
+.agentMenuIcon {
+  display: inline-grid;
+  width: 14px;
+  place-items: center;
+}
+
+.agentMenuLabel {
+  flex: 1 1 auto;
+}
+
+.agentMenuItem kbd {
+  color: var(--terra-text-secondary);
+  font-family: var(--terra-font-mono);
+  font-size: var(--terra-font-size-micro);
+}

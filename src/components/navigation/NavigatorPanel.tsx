@@ -84,6 +84,7 @@ export function NavigatorPanel({
   agentLabels,
   flatten = false,
   headerSlot,
+  agentMenu,
 }: NavigatorPanelProps) {
   const [query, setQuery] = useState("");
   const [localCollapsed, setLocalCollapsed] = useState<Set<string>>(() => new Set(defaultCollapsedIds));
@@ -159,13 +160,17 @@ export function NavigatorPanel({
     event.preventDefault();
     event.stopPropagation();
     onContextMenu?.(event, node);
-    if (node.kind !== "project" || !onDeleteWorkspace) return;
+    const isAgentMenu = node.kind === "agent" && Boolean(agentMenu);
+    if (!isAgentMenu && (node.kind !== "project" || !onDeleteWorkspace)) return;
     const width = typeof window === "undefined" ? 1024 : window.innerWidth;
     const height = typeof window === "undefined" ? 768 : window.innerHeight;
+    // The agent menu is wider and taller than the single "Delete project" item.
+    const menuWidth = isAgentMenu ? 272 : 196;
+    const menuHeight = isAgentMenu ? 360 : 52;
     setContextMenu({
       node,
-      x: Math.max(8, Math.min(event.clientX, width - 196)),
-      y: Math.max(8, Math.min(event.clientY, height - 52)),
+      x: Math.max(8, Math.min(event.clientX, width - menuWidth)),
+      y: Math.max(8, Math.min(event.clientY, height - menuHeight)),
     });
   }
 
@@ -234,7 +239,44 @@ export function NavigatorPanel({
             tree={filteredTree}
             workspaces={workspaces}
           />
-        {contextMenu ? (
+        {contextMenu && contextMenu.node.kind === "agent" && agentMenu ? (() => {
+          const agent = tree.byId[contextMenu.node.id];
+          if (!agent || agent.kind !== "agent") return null;
+          const groupsForAgent = agentMenu(agent.terminalId, agent.source.command).filter((group) => group.length > 0);
+          return (
+            <div
+              aria-label={t("nav.agentMenu", { name: agent.name })}
+              className={`${styles.contextMenu} ${styles.agentMenu}`}
+              onPointerDown={(event) => event.stopPropagation()}
+              role="menu"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+            >
+              {groupsForAgent.map((group, index) => (
+                <div className={styles.agentMenuGroup} role="group" key={group[0]?.id ?? index}>
+                  {group.map((item) => (
+                    <button
+                      className={styles.agentMenuItem}
+                      data-danger={item.danger}
+                      disabled={item.disabled}
+                      key={item.id}
+                      onClick={() => {
+                        setContextMenu(null);
+                        item.onSelect();
+                      }}
+                      role="menuitem"
+                      type="button"
+                    >
+                      <span className={styles.agentMenuIcon} aria-hidden="true">{item.icon}</span>
+                      <span className={styles.agentMenuLabel}>{item.label}</span>
+                      {item.shortcut ? <kbd>{item.shortcut}</kbd> : null}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          );
+        })() : null}
+        {contextMenu && contextMenu.node.kind === "project" ? (
           <div
             aria-label={t("nav.projectMenu")}
             className={styles.contextMenu}

@@ -755,3 +755,154 @@
     transition: none;
   }
 }
+
+/* ---------------------------------------------------------------------
+ * v3 sidebar: sans type, token colours, project → agent rows with the task
+ * title on top and the numbered kind underneath.
+ * ------------------------------------------------------------------- */
+.panel {
+  --navigator-bg: var(--terra-bg-panel);
+  --navigator-panel: var(--terra-bg-sidebar);
+  --navigator-border: var(--terra-border);
+  --navigator-text: var(--terra-text);
+  --navigator-muted: var(--terra-text-secondary);
+  --navigator-faint: var(--terra-text-muted);
+  border-inline-end: 0;
+  font-family: var(--terra-font-sans);
+  font-size: var(--terra-font-size-body);
+}
+
+.header {
+  gap: 10px;
+  padding: 12px 12px 10px;
+}
+
+.activityTabs {
+  padding: 0;
+}
+
+.tab {
+  min-height: 26px;
+  border-radius: var(--terra-radius-md);
+  font-size: var(--terra-font-size-label);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.tabActive {
+  color: var(--navigator-text);
+  background: var(--terra-bg-hover);
+}
+
+.row {
+  min-height: 36px;
+  gap: 8px;
+  border-radius: var(--terra-radius-md);
+  font-size: var(--terra-font-size-body);
+  transition: background-color var(--terra-duration-hover) ease;
+}
+
+.row:hover,
+.row:focus-visible {
+  border-color: transparent;
+  background: var(--terra-bg-hover);
+}
+
+.selected {
+  border-color: transparent;
+  color: var(--navigator-text);
+  background: var(--terra-bg-hover);
+}
+
+.project .nodeName,
+.group .nodeName {
+  color: var(--navigator-text);
+  font-weight: 600;
+}
+
+.agent .nodeIcon {
+  display: none;
+}
+
+.nodeSubline {
+  color: var(--navigator-muted);
+  font-size: var(--terra-font-size-micro);
+}
+
+.nodeCount {
+  color: var(--navigator-muted);
+  font-size: var(--terra-font-size-micro);
+}
+
+.statusDot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  box-shadow: none;
+}
+
+.statusworking {
+  background: var(--terra-green);
+  box-shadow: none;
+  animation: terra-pulse-green 2.4s ease-out infinite;
+}
+
+.statusattention {
+  background: var(--terra-amber);
+  box-shadow: none;
+  animation: terra-breathe 2s ease-in-out infinite;
+}
+
+.statusexited {
+  background: var(--terra-red);
+}
+
+.statussuspended {
+  border: 1.5px solid var(--terra-text-secondary);
+  background: transparent;
+}
+
+.contextValue,
+.contextBadge {
+  flex: 0 0 auto;
+  font-size: var(--terra-font-size-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.contextValue {
+  color: var(--navigator-muted);
+}
+
+.contextBadge {
+  display: inline;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  color: var(--terra-amber);
+  background: transparent;
+  text-transform: none;
+}
+
+.notificationBadge {
+  color: var(--terra-accent-contrast);
+  background: var(--terra-amber);
+}
+
+.footer {
+  border-top: 1px solid var(--navigator-border);
+}
+
+.searchRow {
+  margin: 0;
+  height: 30px;
+  border-color: var(--terra-border-strong);
+  border-radius: var(--terra-radius-lg);
+  background: var(--terra-bg-panel);
+}
+
+.footer {
+  min-height: 36px;
+  padding: 6px 12px;
+  color: var(--navigator-muted);
+  font-size: var(--terra-font-size-label);
+}

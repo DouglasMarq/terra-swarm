@@ -159,3 +159,14 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Floating voice capsule (v3): one place for voice, above the content. */
+.terra-voice-overlay {
+  position: absolute;
+  z-index: var(--terra-z-popover);
+  left: 50%;
+  bottom: 20px;
+  width: min(560px, calc(100% - 32px));
+  transform: translateX(-50%);
+  animation: terra-pop 200ms var(--terra-ease-out) both;
+}

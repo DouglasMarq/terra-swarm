@@ -80,6 +80,9 @@ export function NavigatorPanel({
   className,
   style,
   emptyState,
+  agentLabels,
+  flatten = false,
+  headerSlot,
 }: NavigatorPanelProps) {
   const [query, setQuery] = useState("");
   const [localCollapsed, setLocalCollapsed] = useState<Set<string>>(() => new Set(defaultCollapsedIds));
@@ -105,8 +108,8 @@ export function NavigatorPanel({
   const selectedActivity = enabledActivities.includes(activeActivity) ? activeActivity : "projects";
   const collapsed = useMemo(() => new Set(collapsedIds ?? localCollapsed), [collapsedIds, localCollapsed]);
   const tree = useMemo(
-    () => buildNavigatorTree(workspaces, { snapshot, groups, exited, notifications, contextUsage, statuses, branches, containerVisibility }),
-    [branches, containerVisibility, contextUsage, exited, groups, notifications, snapshot, statuses, workspaces],
+    () => buildNavigatorTree(workspaces, { snapshot, groups, exited, notifications, contextUsage, statuses, branches, containerVisibility, agentLabels, flatten }),
+    [agentLabels, branches, containerVisibility, contextUsage, exited, flatten, groups, notifications, snapshot, statuses, workspaces],
   );
   const filteredTree = useMemo(() => filterNavigatorTree(tree, query), [query, tree]);
   const expandableIds = useMemo(() => collectExpandable(filteredTree), [filteredTree]);
@@ -171,12 +174,14 @@ export function NavigatorPanel({
   return (
     <aside aria-label={title} className={classes(styles.panel, className)} style={style}>
       <header className={styles.header}>
-        <div className={styles.headerTop}>
-          <div className={styles.titleCluster}>
-            <span aria-hidden="true" className={styles.mark}><Folder size={13} /></span>
-            <h2 className={styles.title}>{title}</h2>
+        {headerSlot ?? (
+          <div className={styles.headerTop}>
+            <div className={styles.titleCluster}>
+              <span aria-hidden="true" className={styles.mark}><Folder size={13} /></span>
+              <h2 className={styles.title}>{title}</h2>
+            </div>
           </div>
-        </div>
+        )}
         <nav aria-label="Atividade" className={styles.activityTabs} role="tablist">
           {ACTIVITY_TABS.filter((tab) => enabledActivities.includes(tab.id)).map((tab) => (
             <button

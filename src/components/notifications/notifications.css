@@ -1,0 +1,287 @@
+.terra-notifications {
+  display: flex;
+  max-height: min(620px, calc(100vh - 80px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-xl);
+  background: var(--terra-bg-panel);
+  box-shadow: var(--terra-shadow-popover);
+  color: var(--terra-text);
+}
+
+.terra-notifications-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--terra-border);
+}
+
+.terra-notifications-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.terra-notifications-title strong {
+  flex: 1 1 auto;
+  font-size: var(--terra-font-size-title);
+}
+
+.terra-notifications-body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.terra-notifications-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 10px;
+  color: var(--terra-text-secondary);
+}
+
+.terra-notification-card {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--terra-radius-lg);
+  background: rgb(224 180 92 / 7%);
+}
+
+.terra-notification-card > .terra-dot {
+  margin-top: 5px;
+  animation: terra-breathe 2s ease-in-out infinite;
+}
+
+.terra-notification-main {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.terra-notification-main p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.terra-notification-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.terra-notification-meta b {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terra-notification-time {
+  flex: 0 0 auto;
+  color: var(--terra-text-secondary);
+  font-size: var(--terra-font-size-micro);
+}
+
+.terra-notification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.terra-notifications-section {
+  padding: 12px 10px 4px;
+  color: var(--terra-text-secondary);
+  font-size: var(--terra-font-size-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.terra-notification-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--terra-radius-lg);
+  color: var(--terra-text);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.terra-notification-row:hover {
+  background: var(--terra-bg-hover);
+}
+
+.terra-notification-row > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--terra-text-secondary);
+}
+
+.terra-notification-row[data-read="false"] > svg {
+  color: var(--terra-amber);
+}
+
+.terra-notification-row-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow-wrap: anywhere;
+}
+
+.terra-notification-row-meta {
+  color: var(--terra-text-secondary);
+  font-size: var(--terra-font-size-label);
+}
+
+.terra-notifications-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--terra-border);
+  background: var(--terra-bg-sidebar);
+}
+
+/* Small shared controls used by the notification center, inspector and fleet. */
+.terra-link-button {
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.terra-link-button:hover:not(:disabled) {
+  color: var(--terra-text);
+  background: var(--terra-bg-hover);
+}
+
+.terra-link-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.terra-segmented {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-lg);
+  background: var(--terra-terminal-bg);
+}
+
+.terra-segmented button {
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text-secondary);
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.terra-segmented button[data-active="true"] {
+  color: var(--terra-accent);
+  background: var(--terra-bg-hover);
+}
+
+.terra-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text);
+  background: var(--terra-bg-elevated);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color var(--terra-duration-hover) ease,
+    border-color var(--terra-duration-hover) ease,
+    transform var(--terra-duration-press) ease;
+}
+
+.terra-button:hover:not(:disabled) {
+  border-color: #40404a;
+  background: var(--terra-bg-hover);
+}
+
+.terra-button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.terra-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.terra-button-primary {
+  border-color: var(--terra-accent);
+  color: var(--terra-accent-contrast);
+  background: var(--terra-accent);
+  font-weight: 600;
+}
+
+.terra-button-primary:hover:not(:disabled) {
+  border-color: var(--terra-accent);
+  background: #e4e4e7;
+}
+
+.terra-button-attention {
+  border-color: var(--terra-amber);
+  color: var(--terra-accent-contrast);
+  background: var(--terra-amber);
+  font-weight: 600;
+}
+
+.terra-button-attention:hover:not(:disabled) {
+  border-color: var(--terra-amber-ink);
+  background: var(--terra-amber-ink);
+}
+
+.terra-button-danger {
+  border-color: rgb(229 99 111 / 40%);
+  color: var(--terra-red-ink);
+  background: transparent;
+}
+
+.terra-button-danger:hover:not(:disabled) {
+  border-color: var(--terra-red);
+  background: var(--terra-red-dim);
+}
+
+.terra-tag {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-sm);
+  color: var(--terra-text-secondary);
+  font-family: var(--terra-font-mono);
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+}

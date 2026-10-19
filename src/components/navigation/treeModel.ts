@@ -34,6 +34,10 @@ export interface BuildNavigatorTreeOptions {
   statuses?: NavigatorStatusMaps;
   branches?: readonly NavigatorBranch[];
   containerVisibility?: Readonly<Record<string, boolean>>;
+  /** Display labels per terminal id (task title, numbered kind, optional name). */
+  agentLabels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
+  /** Put agents directly under their project, skipping container and pane levels. */
+  flatten?: boolean;
 }
 
 const EMPTY_GROUPS: readonly WorkspaceGroup[] = [];
@@ -306,7 +310,8 @@ export function buildNavigatorTree(
     ): NavigatorAgentNode => ({
       id: tabId ?? terminal.id,
       kind: "agent",
-      name: terminal.command || terminal.id,
+      name: options.agentLabels?.[terminal.id]?.primary ?? (terminal.command || terminal.id),
+      tag: options.agentLabels?.[terminal.id]?.tag,
       parentId,
       depth: 2,
       children: [],
@@ -428,7 +433,9 @@ export function buildNavigatorTree(
         return makeAgent(terminal, projectId);
       })
       : structuralChildren.flatMap((container) => container.children.flatMap((pane) => pane.children.filter((child): child is NavigatorAgentNode => child.kind === "agent")));
-    const projectChildren: NavigatorNode[] = structuralChildren.length > 0 ? structuralChildren : agents;
+    const projectChildren: NavigatorNode[] = options.flatten
+      ? agents.map((agent) => ({ ...agent, parentId: projectId, depth: (groupId ? 1 : 0) + 1 }))
+      : structuralChildren.length > 0 ? structuralChildren : agents;
     const project: NavigatorProjectNode = {
       id: projectId,
       kind: "project",

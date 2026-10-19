@@ -59,10 +59,10 @@ describe("command palette model", () => {
       focusedWorkspaceId: "ws-terra",
       focusedTerminalId: "pty-1",
       hasDetachedTabs: true,
-      recentCommandIds: ["navigate:home"],
+      recentCommandIds: ["navigate:fleet"],
     });
     const grouped = groupCommands(commands);
-    expect(grouped.find((group) => group.id === "recent")?.commands.map((item) => item.recentOf)).toContain("navigate:home");
+    expect(grouped.find((group) => group.id === "recent")?.commands.map((item) => item.recentOf)).toContain("navigate:fleet");
     expect(grouped.find((group) => group.id === "navigation")?.commands.some((item) => item.id === "open-workspace:ws-terra")).toBe(true);
     expect(grouped.find((group) => group.id === "create")?.commands.some((item) => item.id === "create-agent:codex")).toBe(true);
     expect(grouped.find((group) => group.id === "agent")?.commands.some((item) => item.id === "agent:resume-focused")).toBe(true);
@@ -115,10 +115,10 @@ describe("command palette model", () => {
       onCreateGroup: createGroup,
       onOpenTerminal: openTerminal,
     };
-    expect(executeCommand(commands.find((command) => command.id === "navigate:home")!, callbacks).kind).toBe("executed");
+    expect(executeCommand(commands.find((command) => command.id === "navigate:fleet")!, callbacks).kind).toBe("executed");
     expect(executeCommand(commands.find((command) => command.id === "create:group")!, callbacks).kind).toBe("executed");
     expect(executeCommand(commands.find((command) => command.id === "open-terminal:ws-terra:pty-1")!, callbacks).kind).toBe("executed");
-    expect(navigate).toHaveBeenCalledWith("home");
+    expect(navigate).toHaveBeenCalledWith("fleet");
     expect(createGroup).toHaveBeenCalledOnce();
     expect(openTerminal).toHaveBeenCalledWith("ws-terra", "pty-1");
   });

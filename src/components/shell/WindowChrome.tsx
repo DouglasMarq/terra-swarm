@@ -1,317 +1,180 @@
-import type { ReactNode } from "react";
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  horizontalListSortingStrategy,
-  sortableKeyboardCoordinates,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import type { CSSProperties } from "react";
-import {
-  Activity,
-  ArrowLeft,
-  ArrowRight,
-  ChevronDown,
-  Cpu,
-  Mic,
-  Plus,
-  Search,
-  X,
-} from "lucide-react";
-import type { ShellSurface } from "../../stores/shellStore";
+import { useEffect, useRef, type ReactNode } from "react";
+import { Bell, Mic, PanelLeft, PanelRight, Search } from "lucide-react";
 
-export interface ChromeWorkspaceTab {
-  id: string;
-  label: string;
-  state?: "ready" | "busy" | "attention" | "paused";
-  closable?: boolean;
-}
-
-export interface ResourceTelemetry {
-  cpu?: string;
-  memory?: string;
-  active?: number;
-  queued?: number;
+export interface ChromeBreadcrumb {
+  project?: string | null;
+  agent?: string | null;
+  branch?: string | null;
 }
 
 export interface WindowChromeProps {
-  activeSurface?: ShellSurface;
-  workspaceTabs?: readonly ChromeWorkspaceTab[];
-  activeWorkspaceId?: string | null;
-  canGoBack?: boolean;
-  canGoForward?: boolean;
-  onBack?: () => void;
-  onForward?: () => void;
-  onSelectWorkspace?: (workspaceId: string) => void;
-  onCloseWorkspace?: (workspaceId: string) => void;
-  onReorderWorkspaceTabs?: (workspaceIds: string[]) => void;
-  onNewWorkspace?: () => void;
+  /** Where the user is; falls back to `title` when no project is active. */
+  breadcrumb?: ChromeBreadcrumb;
+  title?: string;
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
+  sidebarShortcut?: string;
+  onOpenLauncher?: () => void;
+  launcherShortcut?: string;
+  /** Agents that need the user; drives the amber notification button. */
+  attentionCount?: number;
+  notificationsOpen?: boolean;
+  onNotificationsOpenChange?: (open: boolean) => void;
+  notificationsPanel?: ReactNode;
   onToggleVoice?: () => void;
   voiceActive?: boolean;
   voiceLabel?: string;
-  resources?: ResourceTelemetry;
-  onOpenLauncher?: () => void;
-  actions?: ReactNode;
-  title?: string;
+  voiceShortcut?: string;
+  inspectorOpen?: boolean;
+  onToggleInspector?: () => void;
+  inspectorShortcut?: string;
 }
 
-const surfaceLabels: Record<ShellSurface, string> = {
-  home: "Início",
-  workbench: "Workbench",
-  fleet: "Frota",
-  events: "Eventos",
-  settings: "Configurações",
-};
-
-function SortableWorkspaceTab({
-  tab,
-  active,
-  onSelect,
-  onClose,
-}: {
-  tab: ChromeWorkspaceTab;
-  active: boolean;
-  onSelect?: (workspaceId: string) => void;
-  onClose?: (workspaceId: string) => void;
-}) {
-  const sortable = useSortable({
-    id: tab.id,
-    data: { type: "workspace-tab", workspaceId: tab.id },
-  });
-  const style: CSSProperties = {
-    transform: CSS.Transform.toString(sortable.transform),
-    transition: sortable.transition,
-  };
-
-  return (
-    <div
-      ref={sortable.setNodeRef}
-      className="terra-window-tab"
-      data-tauri-drag-region="true"
-      style={style}
-      data-active={active}
-      data-dragging={sortable.isDragging}
-      role="tab"
-      aria-selected={active}
-      data-workspace-tab-id={tab.id}
-    >
-      <button
-        ref={sortable.setActivatorNodeRef}
-        className="terra-window-tab-main"
-        type="button"
-        {...sortable.attributes}
-        {...sortable.listeners}
-        onClick={() => onSelect?.(tab.id)}
-        aria-label={`Abrir workspace ${tab.label}`}
-      >
-        <span
-          className="terra-window-tab-state"
-          data-state={tab.state ?? "ready"}
-          aria-hidden="true"
-        />
-        <span className="terra-window-tab-label">{tab.label}</span>
-      </button>
-      {tab.closable !== false && (
-        <button
-          className="terra-window-tab-close"
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onClose?.(tab.id);
-          }}
-          aria-label={`Fechar workspace ${tab.label}`}
-          title="Fechar aba do workspace"
-        >
-          <X size={12} aria-hidden="true" />
-        </button>
-      )}
-    </div>
-  );
+function withShortcut(label: string, shortcut?: string): string {
+  return shortcut ? `${label} (${shortcut})` : label;
 }
 
+/**
+ * Top bar: where you are, one way to search or command (⌘K), what needs you,
+ * and the voice and inspector toggles. Everything else lives in the sidebar.
+ */
 export function WindowChrome({
-  activeSurface = "home",
-  workspaceTabs = [],
-  activeWorkspaceId = null,
-  canGoBack = false,
-  canGoForward = false,
-  onBack,
-  onForward,
-  onSelectWorkspace,
-  onCloseWorkspace,
-  onReorderWorkspaceTabs,
-  onNewWorkspace,
+  breadcrumb,
+  title = "Terra Swarm",
+  sidebarCollapsed = false,
+  onToggleSidebar,
+  sidebarShortcut,
+  onOpenLauncher,
+  launcherShortcut = "⌘K",
+  attentionCount = 0,
+  notificationsOpen = false,
+  onNotificationsOpenChange,
+  notificationsPanel,
   onToggleVoice,
   voiceActive = false,
   voiceLabel = "Voz",
-  resources,
-  onOpenLauncher,
-  actions,
-  title = "Terra",
+  voiceShortcut,
+  inspectorOpen = false,
+  onToggleInspector,
+  inspectorShortcut,
 }: WindowChromeProps) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-  const hasResourceSignal = Boolean(
-    (resources?.active !== undefined && resources.active > 0) ||
-      (resources?.queued !== undefined && resources.queued > 0) ||
-      resources?.cpu?.trim() ||
-      resources?.memory?.trim(),
-  );
+  const notificationsRef = useRef<HTMLDivElement>(null);
 
-  function onWorkspaceTabDragEnd(event: DragEndEvent): void {
-    if (!onReorderWorkspaceTabs || !event.over) return;
-    const activeId = String(event.active.id);
-    const overId = String(event.over.id);
-    const ids = workspaceTabs.map((tab) => tab.id);
-    const from = ids.indexOf(activeId);
-    const to = ids.indexOf(overId);
-    if (from < 0 || to < 0 || from === to) return;
-    onReorderWorkspaceTabs(arrayMove(ids, from, to));
-  }
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    const close = (event: PointerEvent) => {
+      if (notificationsRef.current?.contains(event.target as Node)) return;
+      onNotificationsOpenChange?.(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onNotificationsOpenChange?.(false);
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [notificationsOpen, onNotificationsOpenChange]);
+
+  const sidebarLabel = withShortcut(sidebarCollapsed ? "Expandir barra lateral" : "Recolher barra lateral", sidebarShortcut);
+  const inspectorLabel = withShortcut(inspectorOpen ? "Fechar inspetor" : "Mostrar inspetor", inspectorShortcut);
+  const voiceTitle = withShortcut(voiceLabel, voiceShortcut);
+  const notificationLabel = attentionCount > 0
+    ? `${attentionCount} ${attentionCount === 1 ? "precisa" : "precisam"} de você`
+    : "Notificações";
 
   return (
     <header className="terra-window-chrome" data-tauri-drag-region="true">
-      <div
-        className="terra-window-brand"
-        data-tauri-drag-region="true"
-        aria-label={`${title} ${surfaceLabels[activeSurface]}`}
-      >
-        <span className="terra-window-brand-mark" aria-hidden="true">
-          T
-        </span>
-        <span className="terra-window-brand-word">{title}</span>
-      </div>
+      {onToggleSidebar ? (
+        <button
+          className="terra-window-icon-button"
+          type="button"
+          onClick={onToggleSidebar}
+          aria-label={sidebarLabel}
+          aria-expanded={!sidebarCollapsed}
+          title={sidebarLabel}
+        >
+          <PanelLeft size={15} aria-hidden="true" />
+        </button>
+      ) : null}
 
-      <nav
-        className="terra-window-history"
-        data-tauri-drag-region="true"
-        aria-label="Histórico de navegação"
-      >
-        <button
-          className="terra-window-icon-button"
-          type="button"
-          onClick={onBack}
-          disabled={!canGoBack}
-          aria-label="Voltar"
-          title="Voltar"
-        >
-          <ArrowLeft size={14} aria-hidden="true" />
-        </button>
-        <button
-          className="terra-window-icon-button"
-          type="button"
-          onClick={onForward}
-          disabled={!canGoForward}
-          aria-label="Avançar"
-          title="Avançar"
-        >
-          <ArrowRight size={14} aria-hidden="true" />
-        </button>
+      <nav className="terra-window-breadcrumb" aria-label="Local atual" data-tauri-drag-region="true">
+        {breadcrumb?.project ? (
+          <>
+            <span className="terra-window-breadcrumb-project" data-tauri-drag-region="true">{breadcrumb.project}</span>
+            {breadcrumb.agent ? (
+              <>
+                <span aria-hidden="true" data-tauri-drag-region="true">›</span>
+                <span className="terra-window-breadcrumb-agent" data-tauri-drag-region="true">{breadcrumb.agent}</span>
+              </>
+            ) : null}
+            {breadcrumb.branch ? (
+              <span className="terra-window-branch" data-tauri-drag-region="true">{breadcrumb.branch}</span>
+            ) : null}
+          </>
+        ) : (
+          <span className="terra-window-breadcrumb-project" data-tauri-drag-region="true">{title}</span>
+        )}
       </nav>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={onWorkspaceTabDragEnd}
-      >
-        <div
-          className="terra-window-tab-strip"
-          data-tauri-drag-region="true"
-          role="tablist"
-          aria-label="Workspaces abertos"
+      <div className="terra-window-search-slot" data-tauri-drag-region="true">
+        <button
+          className="terra-window-search"
+          type="button"
+          onClick={onOpenLauncher}
+          aria-label="Abrir ações rápidas"
+          title={withShortcut("Buscar ou comandar", launcherShortcut)}
         >
-          {workspaceTabs.length === 0 ? (
-            <span className="terra-window-tab-empty" aria-live="polite">
-              {surfaceLabels[activeSurface]}
-            </span>
-          ) : (
-            <SortableContext
-              items={workspaceTabs.map((tab) => tab.id)}
-              strategy={horizontalListSortingStrategy}
-            >
-              {workspaceTabs.map((tab) => (
-                <SortableWorkspaceTab
-                  key={tab.id}
-                  tab={tab}
-                  active={tab.id === activeWorkspaceId}
-                  onSelect={onSelectWorkspace}
-                  onClose={onCloseWorkspace}
-                />
-              ))}
-            </SortableContext>
-          )}
+          <Search size={14} aria-hidden="true" />
+          <span className="terra-window-search-label">Buscar projeto, agente ou comando</span>
+          <kbd>{launcherShortcut}</kbd>
+        </button>
+      </div>
+
+      <div className="terra-window-actions">
+        <div className="terra-window-popover-anchor" ref={notificationsRef}>
           <button
-            className="terra-window-tab-add"
+            className="terra-window-notifications"
             type="button"
-            onClick={onNewWorkspace}
-            aria-label="Abrir workspace"
-            title="Abrir workspace"
+            data-attention={attentionCount > 0}
+            aria-haspopup="dialog"
+            aria-expanded={notificationsOpen}
+            aria-label={notificationLabel}
+            title={notificationLabel}
+            onClick={() => onNotificationsOpenChange?.(!notificationsOpen)}
           >
-            <Plus size={14} aria-hidden="true" />
+            {attentionCount > 0 ? <span className="terra-window-attention-dot" aria-hidden="true" /> : <Bell size={14} aria-hidden="true" />}
+            {attentionCount > 0 ? <span>{notificationLabel}</span> : null}
           </button>
+          {notificationsOpen && notificationsPanel ? (
+            <div className="terra-window-popover terra-anim-pop">{notificationsPanel}</div>
+          ) : null}
         </div>
-      </DndContext>
-
-      {hasResourceSignal ? <div className="terra-window-meta" data-tauri-drag-region="true" aria-label="Recursos de execução">
-        {resources?.active !== undefined && resources.active > 0 && (
-          <span className="terra-window-meta-chip" data-tauri-drag-region="true" title="Sessões ativas">
-            <Activity size={12} aria-hidden="true" />
-            <span className="terra-window-meta-chip-label" data-tauri-drag-region="true">{resources.active} ativas</span>
-          </span>
-        )}
-        {resources?.queued !== undefined && resources.queued > 0 && (
-          <span className="terra-window-meta-chip" data-tauri-drag-region="true" title="Sessões na fila">
-            <ChevronDown size={12} aria-hidden="true" />
-            <span className="terra-window-meta-chip-label" data-tauri-drag-region="true">{resources.queued} na fila</span>
-          </span>
-        )}
-        {resources?.cpu?.trim() && (
-          <span className="terra-window-meta-chip" data-tauri-drag-region="true" title="Uso de CPU">
-            <Cpu size={12} aria-hidden="true" />
-            <span className="terra-window-meta-chip-label" data-tauri-drag-region="true">{resources.cpu}</span>
-          </span>
-        )}
-        {resources?.memory?.trim() && (
-          <span className="terra-window-meta-chip" data-tauri-drag-region="true" title="Uso de memória">
-            <span className="terra-window-meta-chip-label" data-tauri-drag-region="true">{resources.memory}</span>
-          </span>
-        )}
-      </div> : null}
-
-      <button
-        className="terra-window-action"
-        type="button"
-        onClick={onOpenLauncher}
-        aria-label="Abrir ações rápidas"
-        title="Ações rápidas"
-      >
-        <Search size={14} aria-hidden="true" />
-      </button>
-      <button
-        className="terra-window-voice"
-        type="button"
-        onClick={onToggleVoice}
-        data-recording={voiceActive}
-        aria-pressed={voiceActive}
-        aria-label={voiceLabel}
-        title={voiceLabel}
-      >
-        <Mic size={14} aria-hidden="true" />
-        <span className="terra-window-meta-chip-label">{voiceLabel}</span>
-      </button>
-      {actions}
+        <button
+          className="terra-window-icon-button terra-window-voice"
+          type="button"
+          onClick={onToggleVoice}
+          data-recording={voiceActive}
+          aria-pressed={voiceActive}
+          aria-label={voiceTitle}
+          title={voiceTitle}
+        >
+          <Mic size={15} aria-hidden="true" />
+        </button>
+        {onToggleInspector ? (
+          <button
+            className="terra-window-icon-button"
+            type="button"
+            onClick={onToggleInspector}
+            aria-pressed={inspectorOpen}
+            aria-label={inspectorLabel}
+            title={inspectorLabel}
+          >
+            <PanelRight size={15} aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
     </header>
   );
 }

@@ -93,24 +93,15 @@ afterEach(() => {
 });
 
 describe("VisualShellSurface smoke flow", () => {
-  it("walks Home → Workbench → Fleet → Settings and forwards fleet focus", async () => {
+  it("opens on the Workbench, switches to the Fleet and forwards fleet focus", async () => {
     const user = userEvent.setup();
     const props = shellProps({ contextUsage: { "term-codex": 72 } });
     render(<VisualShellSurface {...props} />);
 
-    expect(screen.getByRole("heading", { name: "Bom dia" })).toBeInTheDocument();
-    expect(screen.getByText("v2.0.0")).toHaveAttribute("title", "Versão do aplicativo");
-    const telemetry = document.querySelector<HTMLElement>(".terra-shell-telemetry");
-    expect(document.querySelectorAll(".terra-shell-telemetry")).toHaveLength(1);
-    expect(Array.from(telemetry?.children ?? [], (item) => item.textContent?.trim())).toEqual([
-      "v2.0.0",
-      "contexto 72%",
-      "sincronizando",
-    ]);
-
-    await user.click(screen.getByRole("button", { name: "Workbench" }));
     expect(document.querySelector('[data-shell-surface="workbench"]')).toBeInTheDocument();
     expect(await screen.findByText("Nenhum workspace carregado")).toBeInTheDocument();
+    expect(screen.getByText(/1 agente ativo · v2\.0\.0/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Bom dia" })).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Frota" }));
     expect(await screen.findByRole("heading", { name: "Fleet command center" })).toBeInTheDocument();
@@ -118,26 +109,25 @@ describe("VisualShellSurface smoke flow", () => {
     expect(props.onFocus).toHaveBeenCalledWith("term-codex");
 
     await user.click(screen.getByRole("button", { name: "Configurações" }));
-    expect(screen.getByRole("heading", { name: "Configurações" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Abrir configurações" }));
     expect(props.onOpenSettings).toHaveBeenCalled();
   });
 
-  it("shows synced telemetry after the orchestration store hydrates", () => {
-    useOrchestrationStore.getState().sync([workspace]);
-    render(<VisualShellSurface {...shellProps({ contextUsage: { "term-codex": 72 } })} />);
+  it("counts agents that need the user and lists them in the notification center", async () => {
+    const user = userEvent.setup();
+    const props = shellProps({
+      notifications: { "term-codex": 1 },
+      notificationItems: [{ key: 1, terminalId: "term-codex", workspaceId: workspace.id, message: "Posso rodar npm test?", ts: Date.now(), read: false }],
+    });
+    render(<VisualShellSurface {...props} />);
 
-    const telemetry = document.querySelector<HTMLElement>(".terra-shell-telemetry");
-    expect(document.querySelectorAll(".terra-shell-telemetry")).toHaveLength(1);
-    expect(Array.from(telemetry?.children ?? [], (item) => item.textContent?.trim())).toEqual([
-      "v2.0.0",
-      "contexto 72%",
-      "sincronizado",
-    ]);
+    await user.click(screen.getByRole("button", { name: "1 precisa de você" }));
+    const center = screen.getByRole("dialog", { name: "Notificações" });
+    expect(center).toHaveTextContent("Posso rodar npm test?");
+    await user.click(screen.getByRole("button", { name: "Ir para o pane" }));
+    expect(props.onJumpToNotification).toHaveBeenCalled();
   });
 
   it("restores the persisted route/focus shell under reduced motion", async () => {
-    const user = userEvent.setup();
     const media = vi.fn((query: string) => ({
       matches: query === "(prefers-reduced-motion: reduce)",
       media: query,
@@ -163,28 +153,13 @@ describe("VisualShellSurface smoke flow", () => {
     expect(useShellStore.getState().panelLayout).toEqual({ navigator: 28, content: 72 });
     expect(window.matchMedia("(prefers-reduced-motion: reduce)").matches).toBe(true);
 
-    await user.click(screen.getByRole("button", { name: "Início" }));
-    expect(screen.getByRole("heading", { name: "Bom dia" })).toBeInTheDocument();
   });
 
-  it("keeps a workspace closed after the topbar close action", async () => {
-    const user = userEvent.setup();
-    const onHideWorkspace = vi.fn();
-    render(<VisualShellSurface {...shellProps({ onHideWorkspace })} />);
-
-    const closeButton = await screen.findByRole("button", {
-      name: "Fechar workspace Terra API",
-    });
-    await user.click(closeButton);
-
-    expect(onHideWorkspace).toHaveBeenCalledWith(workspace.id);
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("button", { name: "Fechar workspace Terra API" }),
-      ).not.toBeInTheDocument();
-    });
-    expect(useShellStore.getState().workspaceTabs).toEqual([]);
-    expect(useShellStore.getState().recentlyClosedTabs[0]?.workspaceId).toBe(workspace.id);
+  it("collapses the sidebar into a rail with ⌘B", async () => {
+    render(<VisualShellSurface {...shellProps()} />);
+    fireEvent.keyDown(window, { key: "b", metaKey: true });
+    await waitFor(() => expect(useShellStore.getState().sidebarCollapsed).toBe(true));
+    expect(screen.getByRole("navigation", { name: "Barra lateral recolhida" })).toBeInTheDocument();
   });
 
   it("stops compact Inspector runtime polling when its drawer closes", async () => {
@@ -207,18 +182,16 @@ describe("VisualShellSurface smoke flow", () => {
     });
 
     render(<VisualShellSurface {...shellProps()} />);
-    const dockButton = screen.getByRole("button", { name: "Inspetor" });
 
-    fireEvent.click(dockButton);
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar inspetor (⌘I)" }));
     await vi.advanceTimersByTimeAsync(0);
     expect(runtimeInfo).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Inspetor" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("complementary", { name: "Inspetor do agente" })).toBeInTheDocument();
 
-    fireEvent.click(dockButton);
-    expect(screen.queryByRole("complementary", { name: "Painel contextual" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Fechar inspetor (⌘I)" }));
+    expect(screen.queryByRole("complementary", { name: "Inspetor do agente" })).not.toBeInTheDocument();
     await vi.advanceTimersByTimeAsync(1500);
     expect(runtimeInfo).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Inspetor" })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("does not let Ctrl+K escape a focused dialog into the global palette", () => {
@@ -235,11 +208,4 @@ describe("VisualShellSurface smoke flow", () => {
     expect(shouldOpenCommandPaletteShortcut(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))).toBe(true);
   });
 
-  it("disables launching an agent when Home has no workspace target", () => {
-    const props = shellProps({ workspaces: [], activeId: null, focusedId: null });
-    render(<VisualShellSurface {...props} />);
-
-    expect(screen.getByRole("button", { name: /Lançar agente/ })).toBeDisabled();
-    expect(props.onNewAgent).not.toHaveBeenCalled();
-  });
 });

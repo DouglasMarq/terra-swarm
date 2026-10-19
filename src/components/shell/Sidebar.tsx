@@ -1,0 +1,193 @@
+import type { ReactNode } from "react";
+import { ChevronsRight, LayoutGrid, List, Settings2 } from "lucide-react";
+import type { ShellSurface } from "../../stores/shellStore";
+import "./sidebar.css";
+
+type SidebarSurface = Extract<ShellSurface, "workbench" | "fleet">;
+
+interface SurfaceSwitchProps {
+  surface: ShellSurface;
+  attentionCount: number;
+  onNavigate: (surface: SidebarSurface) => void;
+}
+
+function AttentionCount({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return <span className="terra-sidebar-count" aria-label={`${count} precisam de você`}>{count}</span>;
+}
+
+/** Workbench | Frota. The two places work happens. */
+export function SurfaceSwitch({ surface, attentionCount, onNavigate }: SurfaceSwitchProps) {
+  return (
+    <div className="terra-sidebar-switch" role="group" aria-label="Superfície">
+      <button
+        type="button"
+        aria-pressed={surface === "workbench"}
+        data-active={surface === "workbench"}
+        onClick={() => onNavigate("workbench")}
+      >
+        Workbench
+      </button>
+      <button
+        type="button"
+        aria-pressed={surface === "fleet"}
+        data-active={surface === "fleet"}
+        onClick={() => onNavigate("fleet")}
+      >
+        Frota
+        <AttentionCount count={attentionCount} />
+      </button>
+    </div>
+  );
+}
+
+export interface SidebarProps extends SurfaceSwitchProps {
+  /** The project → agent navigator, rendered with the switch as its header. */
+  children: ReactNode;
+  activeAgents: number;
+  version?: string;
+  onOpenSettings: () => void;
+}
+
+export function Sidebar({ children, activeAgents, version, onOpenSettings, surface }: SidebarProps) {
+  return (
+    <div className="terra-sidebar" aria-label="Barra lateral">
+      <div className="terra-sidebar-tree">{children}</div>
+      <footer className="terra-sidebar-footer">
+        <button
+          type="button"
+          className="terra-sidebar-settings"
+          data-active={surface === "settings"}
+          onClick={onOpenSettings}
+        >
+          <Settings2 size={15} aria-hidden="true" />
+          Configurações
+        </button>
+        <span className="terra-sidebar-meta">
+          {activeAgents} {activeAgents === 1 ? "agente ativo" : "agentes ativos"}
+          {version ? ` · v${version}` : ""}
+        </span>
+      </footer>
+    </div>
+  );
+}
+
+export interface CollapsedSidebarAgent {
+  id: string;
+  label: string;
+  status: "working" | "attention" | "exited" | "suspended";
+  detail: string;
+}
+
+export interface CollapsedSidebarProject {
+  id: string;
+  name: string;
+  status: CollapsedSidebarAgent["status"] | "idle";
+  suspended: boolean;
+  agents: CollapsedSidebarAgent[];
+}
+
+export interface CollapsedSidebarProps {
+  surface: ShellSurface;
+  attentionCount: number;
+  projects: readonly CollapsedSidebarProject[];
+  activeWorkspaceId: string | null;
+  focusedAgentId: string | null;
+  onNavigate: (surface: SidebarSurface) => void;
+  onOpenWorkspace: (workspaceId: string) => void;
+  onFocusAgent: (workspaceId: string, terminalId: string) => void;
+  onOpenSettings: () => void;
+  onExpand: () => void;
+  expandShortcut?: string;
+}
+
+function initials(name: string): string {
+  const words = name.split(/[\s_.-]+/).filter(Boolean);
+  if (words.length >= 2) return `${words[0][0]}${words[1][0]}`.toLowerCase();
+  return name.slice(0, 2).toLowerCase();
+}
+
+/** 56px rail: surfaces, project initials, one dot per agent of the active project. */
+export function CollapsedSidebar({
+  surface,
+  attentionCount,
+  projects,
+  activeWorkspaceId,
+  focusedAgentId,
+  onNavigate,
+  onOpenWorkspace,
+  onFocusAgent,
+  onOpenSettings,
+  onExpand,
+  expandShortcut,
+}: CollapsedSidebarProps) {
+  const expandLabel = expandShortcut ? `Expandir barra lateral (${expandShortcut})` : "Expandir barra lateral";
+  return (
+    <nav className="terra-rail" aria-label="Barra lateral recolhida">
+      <button
+        type="button"
+        className="terra-rail-button"
+        aria-label="Workbench"
+        title="Workbench"
+        data-active={surface === "workbench"}
+        onClick={() => onNavigate("workbench")}
+      >
+        <LayoutGrid size={16} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className="terra-rail-button"
+        aria-label={attentionCount > 0 ? `Frota, ${attentionCount} precisam de você` : "Frota"}
+        title="Frota"
+        data-active={surface === "fleet"}
+        onClick={() => onNavigate("fleet")}
+      >
+        <List size={16} aria-hidden="true" />
+        {attentionCount > 0 ? <span className="terra-rail-badge" aria-hidden="true">{attentionCount}</span> : null}
+      </button>
+      <span className="terra-rail-divider" aria-hidden="true" />
+      <div className="terra-rail-projects">
+        {projects.map((project) => {
+          const active = project.id === activeWorkspaceId;
+          return (
+            <div className="terra-rail-project" key={project.id}>
+              <button
+                type="button"
+                className="terra-rail-initials"
+                data-active={active}
+                data-suspended={project.suspended}
+                aria-label={`${project.name}, ${project.agents.length} agentes`}
+                title={project.name}
+                onClick={() => onOpenWorkspace(project.id)}
+              >
+                {initials(project.name)}
+                {project.status === "attention" ? <span className="terra-rail-project-dot" aria-hidden="true" /> : null}
+              </button>
+              {active
+                ? project.agents.map((agent) => (
+                  <button
+                    type="button"
+                    key={agent.id}
+                    className="terra-rail-agent"
+                    data-active={agent.id === focusedAgentId}
+                    aria-label={`${agent.label}, ${agent.detail}`}
+                    title={`${agent.label} · ${agent.detail}`}
+                    onClick={() => onFocusAgent(project.id, agent.id)}
+                  >
+                    <span className="terra-dot" data-status={agent.status} aria-hidden="true" />
+                  </button>
+                ))
+                : null}
+            </div>
+          );
+        })}
+      </div>
+      <button type="button" className="terra-rail-button" aria-label="Configurações" title="Configurações" data-active={surface === "settings"} onClick={onOpenSettings}>
+        <Settings2 size={16} aria-hidden="true" />
+      </button>
+      <button type="button" className="terra-rail-button" aria-label={expandLabel} title={expandLabel} onClick={onExpand}>
+        <ChevronsRight size={16} aria-hidden="true" />
+      </button>
+    </nav>
+  );
+}

@@ -96,7 +96,7 @@ export const DEFAULT_FLEET_FILTERS: FleetFilters = {
 
 const EMPTY_RECORD: Readonly<Record<string, never>> = {};
 const UNGROUPED_ID = "ungrouped";
-const UNGROUPED_NAME = "Ungrouped";
+const UNGROUPED_NAME = "Sem grupo";
 
 function clean(value: string | undefined | null, fallback = ""): string {
   const result = value?.trim();
@@ -361,12 +361,12 @@ export function formatFleetRelativeTime(value: FleetValue | undefined, now = Dat
   const timestamp = value instanceof Date ? value.getTime() : value;
   if (!Number.isFinite(timestamp)) return null;
   const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
-  if (seconds < 45) return "just now";
+  if (seconds < 45) return "agora";
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return `há ${minutes} min`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return `há ${hours} h`;
+  return `há ${Math.floor(hours / 24)} d`;
 }
 
 export const FLEET_UNGROUPED_ID = UNGROUPED_ID;

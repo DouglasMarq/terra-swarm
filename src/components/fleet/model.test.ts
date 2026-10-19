@@ -104,7 +104,7 @@ describe("fleet model", () => {
   it("formats optional duration and activity telemetry", () => {
     expect(formatFleetDuration(90_000)).toBe("1m 30s");
     expect(formatFleetDuration("queued")).toBe("queued");
-    expect(formatFleetRelativeTime(Date.UTC(2026, 0, 1, 11, 0, 0), Date.UTC(2026, 0, 1, 12, 1, 0))).toBe("1h ago");
-    expect(formatFleetRelativeTime("just now")).toBe("just now");
+    expect(formatFleetRelativeTime(Date.UTC(2026, 0, 1, 11, 0, 0), Date.UTC(2026, 0, 1, 12, 1, 0))).toBe("há 1 h");
+    expect(formatFleetRelativeTime("agora")).toBe("agora");
   });
 });

@@ -174,67 +174,95 @@
   padding: 0 24px 4px;
 }
 
-.resumeList {
-  display: grid;
-  max-height: min(420px, 48vh);
-  gap: 8px;
+.resumeGroups {
+  display: flex;
+  max-height: min(440px, 52vh);
+  flex-direction: column;
   overflow-y: auto;
-  padding-right: 2px;
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-xl);
+  background: var(--terra-bg-panel);
 }
 
-.resumeItem {
-  display: grid;
-  gap: 8px;
-  border: 1px solid var(--terra-border, #26262c);
-  border-radius: var(--terra-radius-md, 6px);
-  padding: 12px;
-  background: var(--terra-bg, #111113);
+.resumeGroup + .resumeGroup {
+  border-top: 1px solid var(--terra-border);
 }
 
-.resumeItemTop,
-.resumeCommandRow,
-.resumeFooter,
-.resumeActions {
+.resumeGroupHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--terra-border);
+  background: var(--terra-bg-sidebar);
+  cursor: pointer;
+}
+
+.resumeGroupHead strong {
+  flex: 1 1 auto;
+}
+
+.resumeGroupHead span {
+  color: var(--terra-text-secondary);
+  font-family: var(--terra-font-mono);
+  font-size: var(--terra-font-size-micro);
+}
+
+.resumeRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 10px 40px;
+  cursor: pointer;
+  animation: terra-rise 260ms var(--terra-ease-out) both;
+}
+
+.resumeRow + .resumeRow {
+  border-top: 1px solid var(--terra-border);
+}
+
+.resumeRowCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.resumeRowCopy code {
+  overflow: hidden;
+  color: var(--terra-text-secondary);
+  font-family: var(--terra-font-mono);
+  font-size: var(--terra-font-size-micro);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resumeFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.resumeSpacer {
+  flex: 1 1 auto;
+}
+
+.resumeAuto {
   display: flex;
   align-items: center;
   gap: 8px;
+  color: var(--terra-text-secondary);
 }
 
-.resumeItemTop,
-.resumeFooter {
-  justify-content: space-between;
-}
-
-.resumeTime,
-.resumeCwd,
-.resumeSessions {
-  color: var(--terra-text-muted, #8e8e96);
-  font-size: 11px;
-}
-
-.resumeCwd {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.resumeCommandRow {
-  min-width: 0;
-}
-
-.resumeCommand {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  border: 1px solid var(--terra-border, #26262c);
-  border-radius: var(--terra-radius-sm, 4px);
-  padding: 6px 8px;
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-panel, #17171b);
-  font-family: var(--terra-font-mono, monospace);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.resumeHint {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-lg);
+  color: var(--terra-text-secondary);
+  background: var(--terra-bg-sidebar);
+  font-size: var(--terra-font-size-label);
 }
 
 .iconButton {
@@ -278,13 +306,4 @@
     padding-right: 16px;
   }
 
-  .resumeFooter {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .resumeActions {
-    width: 100%;
-    flex-wrap: wrap;
-  }
 }

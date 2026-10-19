@@ -51,6 +51,10 @@ export interface CommandPaletteData {
   voiceEnabled?: boolean;
   /** True only while the runtime is actively capturing audio. */
   voiceRecording?: boolean;
+  /** Task title / numbered kind per terminal id (domain/agentLabels). */
+  agentLabels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
+  /** Saved sessions waiting to be resumed. */
+  resumeCount?: number;
 }
 
 export interface CommandPaletteCallbacks {
@@ -71,6 +75,7 @@ export interface CommandPaletteCallbacks {
   /** Reattach a detached terminal; distinct from reopening a closed workspace tab. */
   onReattachTerminal?: () => void;
   onReopenTab?: () => void;
+  onOpenResume?: () => void;
   onFocusedAgentAction?: (action: FocusedAgentAction, context: FocusedAgentContext) => void;
 }
 
@@ -110,6 +115,7 @@ export type CommandIntent =
   | { kind: "import-workspace" }
   | { kind: "reattach-terminal" }
   | { kind: "reopen-tab" }
+  | { kind: "open-resume" }
   | { kind: "focused-agent-action"; action: FocusedAgentAction; context: FocusedAgentContext };
 
 export interface CommandDescriptor {
@@ -328,13 +334,16 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
     );
     for (const terminal of workspace.terminals) {
       const terminalName = terminalLabel(terminal);
+      const agentLabel = data.agentLabels?.[terminal.id];
+      const primary = agentLabel?.primary ?? terminalName;
+      const tag = agentLabel?.tag ?? terminalName;
       commands.push(
         command({
           id: `open-terminal:${safeIdPart(workspace.id)}:${safeIdPart(terminal.id)}`,
-          label: `Abrir ${terminalName} · ${name}`,
-          description: "Focar o terminal deste agente",
+          label: agentLabel ? `${primary} · ${name}` : `Abrir ${terminalName} · ${name}`,
+          description: agentLabel ? `${tag} · Focar o terminal deste agente` : "Focar o terminal deste agente",
           group: "navigation",
-          keywords: [terminalName, name, workspace.cwd, "agente", "terminal", "focar"],
+          keywords: [terminalName, primary, tag, name, workspace.cwd, "agente", "terminal", "focar"],
           icon: "terminal",
           intent: { kind: "open-terminal", workspaceId: workspace.id, terminalId: terminal.id },
         }),
@@ -594,6 +603,16 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       intent: { kind: "reattach-terminal" },
     }),
     command({
+      id: "settings:resume-sessions",
+      label: "Retomar sessões…",
+      description: `${data.resumeCount ?? 0} sessão(ões) salva(s) esperando`,
+      group: "settings",
+      keywords: ["retomar", "sessões", "resume", "continuar", "abertura"],
+      icon: "agent",
+      disabled: !data.resumeCount,
+      intent: { kind: "open-resume" },
+    }),
+    command({
       id: "settings:reopen-tab",
       label: "Reabrir workspace fechado",
       description: "Restaurar a última aba visualmente fechada",
@@ -711,6 +730,10 @@ export function executeCommand(
     case "reattach-terminal":
       if (!callbacks.onReattachTerminal) return unavailable(command.id);
       callbacks.onReattachTerminal();
+      return { kind: "executed", commandId: command.id };
+    case "open-resume":
+      if (!callbacks.onOpenResume) return unavailable(command.id);
+      callbacks.onOpenResume();
       return { kind: "executed", commandId: command.id };
     case "reopen-tab":
       if (!callbacks.onReopenTab) return unavailable(command.id);

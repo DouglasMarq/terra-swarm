@@ -51,6 +51,7 @@ import { useUiStore } from "./stores/uiStore";
 import { useShellStore } from "./stores/shellStore";
 import { useOrchestrationStore } from "./stores/orchestrationStore";
 import { planResume } from "./lib/session/resumePlanner";
+import { buildAgentLabels } from "./domain/agentLabels";
 import { createSpawnQueue } from "./lib/session/spawnQueue";
 import { createInitializationGate, type InitializationGate } from "./lib/session/initializationGate";
 import { dismissResumeItems } from "./lib/session/resumeDismiss";
@@ -157,6 +158,7 @@ function App() {
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [autoResumePending, setAutoResumePending] = useState(false);
   const [showResumeQueue, setShowResumeQueue] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const [initializationRunning, setInitializationRunning] = useState(false);
@@ -271,6 +273,7 @@ function App() {
     fontSize,
     defaultShell,
     reduceMotion,
+    autoResume,
     gridCols,
     voiceEnabled,
     voiceLang,
@@ -283,6 +286,7 @@ function App() {
     resetFontSize,
     setDefaultShell,
     setReduceMotion,
+    setAutoResume,
     setGridCols,
     setVoiceEnabled,
     setVoiceLang,
@@ -295,6 +299,7 @@ function App() {
       fontSize: state.fontSize,
       defaultShell: state.defaultShell,
       reduceMotion: state.reduceMotion,
+      autoResume: state.autoResume,
       gridCols: state.gridCols,
       voiceEnabled: state.voiceEnabled,
       voiceLang: state.voiceLang,
@@ -307,6 +312,7 @@ function App() {
       resetFontSize: state.resetFontSize,
       setDefaultShell: state.setDefaultShell,
       setReduceMotion: state.setReduceMotion,
+      setAutoResume: state.setAutoResume,
       setGridCols: state.setGridCols,
       setVoiceEnabled: state.setVoiceEnabled,
       setVoiceLang: state.setVoiceLang,
@@ -532,7 +538,8 @@ function App() {
         return next;
       });
       setResumeItems(items);
-      setShowResumeQueue(true);
+      if (usePreferencesStore.getState().autoResume) setAutoResumePending(true);
+      else setShowResumeQueue(true);
       api.storeSavedAt().then(setResumeSavedAt).catch(() => {});
     }
 
@@ -1034,6 +1041,14 @@ function App() {
     }
   };
 
+  // "Always resume without asking": run the queue once it is loaded.
+  useEffect(() => {
+    if (!autoResumePending || !resumeItems || resumeItems.length === 0) return;
+    setAutoResumePending(false);
+    void resumeAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoResumePending, resumeItems]);
+
   const dismissAll = async () => {
     const items = resumeItems ?? [];
     if (items.length === 0 || resumeQueueMutationRef.current) return;
@@ -1262,12 +1277,24 @@ function App() {
   const resolveVoiceTerminal = (target: string) => {
     const needle = normalizeVoiceLookup(target);
     if (!needle) return null;
+    const labels = buildAgentLabels(workspaces, { titles });
     for (const workspace of workspaces) {
       const terminal = workspace.terminals.find((candidate) => {
         const title = titles[candidate.id] ?? "";
         const command = candidate.command.trim();
-        return [candidate.id, title, command, command.split(/\s+/)[0] ?? ""]
-          .some((value) => normalizeVoiceLookup(value) === needle);
+        const label = labels[candidate.id];
+        // Exact: id, raw title, command, kind, numbered tag ("claude 2"),
+        // task title or given name.
+        return [candidate.id, title, command, command.split(/\s+/)[0] ?? "", label?.tag ?? "", label?.title ?? "", label?.name ?? ""]
+          .some((value) => value && normalizeVoiceLookup(value) === needle);
+      });
+      if (terminal) return { workspace, terminal };
+    }
+    // Loose: the spoken words appear in the task title ("o claude das animações").
+    for (const workspace of workspaces) {
+      const terminal = workspace.terminals.find((candidate) => {
+        const title = labels[candidate.id]?.title;
+        return title ? normalizeVoiceLookup(title).includes(needle) || needle.includes(normalizeVoiceLookup(title)) : false;
       });
       if (terminal) return { workspace, terminal };
     }
@@ -1775,7 +1802,51 @@ function App() {
   // Latest focused terminal for the voice paste target, readable from
   // listeners that are registered once.
   const voiceFocusRef = useRef<string | null>(null);
-  voiceFocusRef.current = focusedId;
+  // "Enviar para": an explicit voice target wins over the focused terminal.
+  const [voiceTargetId, setVoiceTargetId] = useState<string | null>(null);
+  voiceFocusRef.current = voiceTargetId ?? focusedId;
+  const exitedRef = useRef(exited);
+  exitedRef.current = exited;
+
+  // Writes dictated text to a terminal. An exited target is first resumed
+  // with its agent's continuation command, then receives the prompt.
+  const deliverDictation = async (id: string, text: string): Promise<void> => {
+    const meta = workspaces.flatMap((workspace) => workspace.terminals).find((candidate) => candidate.id === id);
+    if (meta && id in exitedRef.current) {
+      setVoiceFeedback("Retomando o agente para enviar o ditado…");
+      await restartTerminal(id, resolveResumeCommand(profileForCommand(meta.command), meta.command));
+      // Give the agent's CLI a moment to draw its prompt before pasting.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+    const term = getTerminal(id);
+    if (!term) {
+      setVoiceFeedback("O terminal escolhido não está disponível.");
+      return;
+    }
+    const prompt = voiceCommandsEnabledRef.current && meta
+      ? buildVoicePrompt(profileForCommand(meta.command), text)
+      : text;
+    const data = term.modes.bracketedPasteMode
+      ? `\u001b[200~${prompt}\u001b[201~`
+      : prompt;
+    try {
+      await api.writeTerminal(id, data);
+      term.focus();
+      setVoiceSubmitted(true);
+      setVoiceFeedback("Ditado enviado.");
+    } catch (error) {
+      console.error("voice dictation write failed:", error);
+      dispatchVoiceCapsule({ type: "fail", message: "Não foi possível enviar o ditado ao terminal." });
+      setVoiceFeedback("Não foi possível enviar o ditado ao terminal.");
+    }
+  };
+  const deliverDictationRef = useRef(deliverDictation);
+  deliverDictationRef.current = deliverDictation;
+
+  // A chosen target lasts for one capture; the next one starts at the focus.
+  useEffect(() => {
+    if (voiceCapsule.state === "idle") setVoiceTargetId(null);
+  }, [voiceCapsule.state]);
   const voiceEnabledRef = useRef(voiceEnabled);
   voiceEnabledRef.current = voiceEnabled;
   const voiceCommandsEnabledRef = useRef(flags.voiceCommands);
@@ -1842,29 +1913,7 @@ function App() {
         setVoiceFeedback("Transcrição pronta; selecione um terminal para enviar o ditado.");
         return;
       }
-      const term = getTerminal(id);
-      if (!term) {
-        setVoiceFeedback("O terminal em foco não está disponível.");
-        return;
-      }
-      const focusedMeta = workspaces
-        .flatMap((workspace) => workspace.terminals)
-        .find((candidate) => candidate.id === id);
-      const prompt = voiceCommandsEnabledRef.current && focusedMeta
-        ? buildVoicePrompt(profileForCommand(focusedMeta.command), text)
-        : text;
-      const data = term.modes.bracketedPasteMode
-        ? `\u001b[200~${prompt}\u001b[201~`
-        : prompt;
-      api.writeTerminal(id, data).then(() => {
-        term.focus();
-        setVoiceSubmitted(true);
-        setVoiceFeedback("Ditado enviado ao terminal em foco.");
-      }).catch((error) => {
-        console.error("voice dictation write failed:", error);
-        dispatchVoiceCapsule({ type: "fail", message: "Não foi possível enviar o ditado ao terminal." });
-        setVoiceFeedback("Não foi possível enviar o ditado ao terminal.");
-      });
+      void deliverDictationRef.current(id, text);
     });
     const unTrErr = listen<string>("voice-transcription-error", (e) => {
       setVoiceStatus("idle");
@@ -2232,30 +2281,11 @@ function App() {
     // retried from the capsule if no terminal was focused when transcription
     // completed, but is always sent as text (never interpreted here).
     const id = voiceFocusRef.current;
-    const term = id ? getTerminal(id) : null;
-    if (!id || !term) {
+    if (!id) {
       setVoiceFeedback("Selecione um terminal para enviar o ditado.");
       return;
     }
-    const focusedMeta = workspaces
-      .flatMap((workspace) => workspace.terminals)
-      .find((candidate) => candidate.id === id);
-    const prompt = voiceCommandsEnabledRef.current && focusedMeta
-      ? buildVoicePrompt(profileForCommand(focusedMeta.command), payload.transcript)
-      : payload.transcript;
-    const data = term.modes.bracketedPasteMode
-      ? `\u001b[200~${prompt}\u001b[201~`
-      : prompt;
-    try {
-      await api.writeTerminal(id, data);
-      term.focus();
-      setVoiceSubmitted(true);
-      setVoiceFeedback("Ditado enviado ao terminal em foco.");
-    } catch (error) {
-      console.error("voice dictation write failed:", error);
-      dispatchVoiceCapsule({ type: "fail", message: "Não foi possível enviar o ditado ao terminal." });
-      setVoiceFeedback("Não foi possível enviar o ditado ao terminal.");
-    }
+    await deliverDictation(id, payload.transcript);
   };
 
   return (
@@ -2299,6 +2329,8 @@ function App() {
         voiceFinalTranscript={voiceCapsule.finalTranscript}
         voiceIntent={voiceCapsule.intent}
         voiceTargetAgent={targetLabelForVoiceIntent(voiceCapsule.intent)}
+        voiceTargetId={voiceTargetId ?? focusedId}
+        onVoiceTargetChange={setVoiceTargetId}
         voiceLevel={voiceLevel}
         voiceSamples={voiceSamples}
         voiceError={voiceCapsule.error}
@@ -2407,6 +2439,8 @@ function App() {
             onResumeAll={resumeAll}
             onDismissAll={dismissAll}
             onDefer={() => setShowResumeQueue(false)}
+            autoResume={autoResume}
+            onAutoResumeChange={setAutoResume}
           />
         </Suspense>
       ) : null}

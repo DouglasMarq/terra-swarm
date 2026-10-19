@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -127,12 +127,37 @@ describe("integration dialogs", () => {
 
     await user.click(screen.getByRole("button", { name: "Descartar todas" }));
     expect(onDismissAll).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog", { name: "Descartar todas as sessões?" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Confirmar exclusão" }));
+    const confirm = screen.getByRole("dialog", { name: "Descartar todas as sessões?" });
+    expect(confirm).toBeInTheDocument();
+    await user.click(within(confirm).getByRole("button", { name: "Descartar todas" }));
     expect(onDismissAll).toHaveBeenCalledTimes(1);
 
-    await user.click(screen.getByRole("button", { name: "Agora não" }));
+    await user.click(screen.getByRole("button", { name: "Começar do zero" }));
     expect(onDefer).toHaveBeenCalledTimes(1);
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("resumes only the checked sessions, grouped by project", async () => {
+    const user = userEvent.setup();
+    const onResume = vi.fn();
+    const onResumeAll = vi.fn();
+    const second = { ...resumeItem, terminalId: "term-2", agentId: "claude", command: "claude", resumeCommand: "claude --continue" };
+    render(
+      <ResumeDialog
+        items={[resumeItem, second]}
+        onDefer={vi.fn()}
+        onDismiss={vi.fn()}
+        onDismissAll={vi.fn()}
+        onResume={onResume}
+        onResumeAll={onResumeAll}
+        savedAt={null}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Retomar 2 agentes" })).toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: /claude --continue/ }));
+    await user.click(screen.getByRole("button", { name: "Retomar 1 agente" }));
+    expect(onResume).toHaveBeenCalledTimes(1);
+    expect(onResume).toHaveBeenCalledWith(resumeItem);
+    expect(onResumeAll).not.toHaveBeenCalled();
   });
 });

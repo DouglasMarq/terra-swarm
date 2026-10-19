@@ -220,6 +220,8 @@ export type PreferencesState = {
   fontSize: number;
   defaultShell: string;
   reduceMotion: boolean;
+  /** Resume every saved session at startup without showing the opening screen. */
+  autoResume: boolean;
   gridCols: number;
   voiceEnabled: boolean;
   voiceLang: string;
@@ -235,6 +237,7 @@ export type PreferencesState = {
   resetFontSize: () => void;
   setDefaultShell: (shell: string) => void;
   setReduceMotion: (enabled: boolean) => void;
+  setAutoResume: (enabled: boolean) => void;
   setGridCols: (cols: number) => void;
   setVoiceEnabled: (enabled: boolean) => void;
   setVoiceLang: (lang: string) => void;
@@ -249,6 +252,7 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   fontSize: loadFontSize(),
   defaultShell: storageGet("defaultShell") ?? "",
   reduceMotion: storageGet("reduceMotion") === "1",
+  autoResume: storageGet("autoResume") === "1",
   gridCols: loadGridCols(),
   voiceEnabled: storageGet("voiceEnabled") === "1",
   voiceLang: storageGet("voiceLanguage") ?? "auto",
@@ -309,6 +313,11 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
     if (defaultShell) storageSet("defaultShell", defaultShell);
     else storageRemove("defaultShell");
     set({ defaultShell });
+  },
+
+  setAutoResume: (autoResume) => {
+    storageSet("autoResume", autoResume ? "1" : "0");
+    set({ autoResume });
   },
 
   setReduceMotion: (reduceMotion) => {

@@ -104,8 +104,8 @@ describe("VisualShellSurface smoke flow", () => {
     expect(screen.queryByRole("heading", { name: "Bom dia" })).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Frota" }));
-    expect(await screen.findByRole("heading", { name: "Fleet command center" })).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: "Focus Codex in Terra API" }));
+    expect(await screen.findByRole("heading", { name: "Frota" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Abrir codex em Terra API" }));
     expect(props.onFocus).toHaveBeenCalledWith("term-codex");
 
     await user.click(screen.getByRole("button", { name: "Configurações" }));

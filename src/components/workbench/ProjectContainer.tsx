@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Maximize2, Minimize2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Maximize2, Minimize2, Plus, X } from "lucide-react";
 import { useT } from "../../i18n";
 import { ContainerLayout } from "./ContainerLayout";
 import { GridSizePicker } from "./GridSizePicker";
@@ -100,6 +100,21 @@ export function ProjectContainer({
             onSelect={(dimensions) => updateGrid(dimensions)}
             onAuto={() => onLayoutChange?.({ containerId: container.id, layout: workspaceLayoutForAutoGrid(container.layout) })}
           />
+        ) : null}
+        {actions.onNewTab ? (
+          <button
+            type="button"
+            className="terra-button terra-button-primary terra-project-container__new"
+            onClick={() => actions.onNewTab?.({
+              projectId: projection.project?.id ?? container.projectId ?? null,
+              containerId: container.id,
+              paneId: null,
+            })}
+          >
+            <Plus size={13} aria-hidden="true" />
+            {t("grid.newAgent")}
+            <kbd>⌘T</kbd>
+          </button>
         ) : null}
         <div className="terra-project-container__actions">
           {onFullscreenContainer ? (

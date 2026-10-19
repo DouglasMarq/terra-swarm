@@ -119,7 +119,6 @@ export function ApplicationShell({
           <>
             {sidebarCollapsed ? <div className="terra-shell-rail-slot">{collapsedSidebar}</div> : null}
             <PanelGroup
-              key={`${showSidebarPanel ? "s" : ""}${dockEnabled ? "d" : ""}`}
               className="terra-shell-panel-group"
               id="terra-application-shell"
               orientation="horizontal"

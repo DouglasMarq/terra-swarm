@@ -277,14 +277,24 @@ describe("WorkspaceWorkbench", () => {
     expect(onKillTab).not.toHaveBeenCalled();
   });
 
+  it("hides the tab lane for a single-agent pane", () => {
+    render(<WorkspaceWorkbench renderTab={({ tab }) => <div>Terminal {tab.title}</div>} source={snapshot} />);
+    expect(document.querySelector('button[aria-label="Encerrar Luna Max"]')).toBeNull();
+  });
+
   it("keeps tab termination owned by the lane without a duplicate toolbar action", async () => {
     const user = userEvent.setup();
     const onKillTab = vi.fn();
+    const twoTabs: WorkspaceSnapshotV2 = {
+      ...snapshot,
+      panes: [{ ...snapshot.panes[0], tabIds: ["tab-1", "tab-2"], activeTabId: "tab-1" }],
+      tabs: [snapshot.tabs[0], { ...snapshot.tabs[0], id: "tab-2", ptyId: "pty-2", title: "Second" }],
+    };
     render(
       <WorkspaceWorkbench
         onKillTab={onKillTab}
         renderTab={({ tab }) => <div>Terminal {tab.title}</div>}
-        source={snapshot}
+        source={twoTabs}
       />,
     );
 

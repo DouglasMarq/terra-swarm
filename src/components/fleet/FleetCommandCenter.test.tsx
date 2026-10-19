@@ -1,99 +1,87 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { buildAgentLabels } from "../../domain/agentLabels";
 import { FleetCommandCenter } from "./FleetCommandCenter";
-import type { Workspace, WorkspaceGroup } from "../../types";
-
-const groups: WorkspaceGroup[] = [{
-  id: "group-core",
-  name: "Core",
-  collapsed: false,
-  projectIds: ["ws-api"],
-  parentGroupId: null,
-  suspended: false,
-}];
+import type { Workspace } from "../../types";
 
 const workspaces: Workspace[] = [{
   id: "ws-api",
   name: "Terra API",
   cwd: "/tmp/terra-api",
-  groupId: "group-core",
   terminals: [
+    { id: "term-claude", command: "claude", width: 100 },
     { id: "term-codex", command: "codex", width: 100 },
-    { id: "term-luna", command: "luna-max", width: 100, suspended: true },
+    { id: "term-idle", command: "opencode", width: 100, suspended: true },
   ],
 }];
 
+const labels = buildAgentLabels(workspaces, { titles: { "term-claude": "✳ Planejador de retomada" } });
+
 describe("FleetCommandCenter", () => {
-  it("renders fleet telemetry and forwards focus/voice actions", async () => {
+  it("summarizes the fleet and lists what needs the user first", async () => {
     const user = userEvent.setup();
     const onFocus = vi.fn();
-    const onVoice = vi.fn();
-    render(<FleetCommandCenter agentLabels={{ "term-luna": "Luna Max" }} groups={groups} onFocus={onFocus} onVoice={onVoice} workspaces={workspaces} />);
+    const onMarkRead = vi.fn();
+    render(
+      <FleetCommandCenter
+        workspaces={workspaces}
+        notifications={{ "term-claude": 1 }}
+        labels={labels}
+        attentionMessages={{ "term-claude": "Posso rodar npm test?" }}
+        onFocus={onFocus}
+        onMarkRead={onMarkRead}
+      />,
+    );
 
-    expect(screen.getByRole("heading", { name: "Fleet command center" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Core" })).toBeInTheDocument();
-    expect(screen.getAllByText("Codex").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Suspended").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Frota" })).toBeInTheDocument();
+    expect(screen.getByText("3 agentes em 1 projetos")).toBeInTheDocument();
+    const attention = screen.getByRole("region", { name: "Precisa de você" });
+    expect(within(attention).getByText("Posso rodar npm test?")).toBeInTheDocument();
+    expect(within(attention).getByText("Planejador de retomada")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Focus Codex in Terra API" }));
-    const voiceButtons = screen.getAllByRole("button", { name: "Send voice command to agent" });
-    await user.click(voiceButtons[0]!);
-    expect(onFocus).toHaveBeenCalledWith("term-codex", "ws-api");
-    expect(onVoice).toHaveBeenCalledWith("term-codex");
+    await user.click(within(attention).getByRole("button", { name: "Abrir no Workbench →" }));
+    expect(onFocus).toHaveBeenCalledWith("term-claude", "ws-api");
+    await user.click(within(attention).getByRole("button", { name: "Marcar como lido" }));
+    expect(onMarkRead).toHaveBeenCalledWith("term-claude");
   });
 
-  it("filters agents without losing the source fleet", async () => {
+  it("filters by state chip and by search without losing the source fleet", async () => {
     const user = userEvent.setup();
-    render(<FleetCommandCenter agentLabels={{ "term-luna": "Luna Max" }} groups={groups} workspaces={workspaces} />);
-    const search = screen.getByRole("searchbox", { name: "Search fleet" });
-    await user.type(search, "luna");
-    expect(screen.getAllByText("Luna Max").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: "Focus Codex in Terra API" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reset" })).toBeEnabled();
+    render(<FleetCommandCenter workspaces={workspaces} labels={labels} />);
+
+    await user.click(screen.getByRole("button", { name: /Suspenso · 1/ }));
+    expect(screen.getAllByRole("row")).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: /Suspenso · 1/ }));
+    expect(screen.getAllByRole("row")).toHaveLength(4);
+
+    await user.type(screen.getByRole("searchbox", { name: "Buscar na frota" }), "zzz");
+    expect(screen.getByText("Nenhum agente corresponde a esses filtros.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Limpar filtros" }));
+    expect(screen.getAllByRole("row")).toHaveLength(4);
   });
 
-  it("routes individual and batch lifecycle actions without exposing dead controls", async () => {
+  it("runs batch actions on the selected agents", async () => {
     const user = userEvent.setup();
-    const onResume = vi.fn();
-    const onStop = vi.fn();
     const onBatchAction = vi.fn();
-    render(<FleetCommandCenter groups={groups} onBatchAction={onBatchAction} onResume={onResume} onStop={onStop} workspaces={workspaces} />);
+    render(<FleetCommandCenter workspaces={workspaces} labels={labels} onBatchAction={onBatchAction} />);
 
-    await user.click(screen.getByRole("button", { name: "Resume agent" }));
-    const stopButtons = screen.getAllByRole("button", { name: "Stop agent (preserve session)" });
-    await user.click(stopButtons[0]!);
-    expect(onResume).toHaveBeenCalledWith("term-luna");
-    expect(onStop).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Parar sessão" }));
-    expect(onStop).toHaveBeenCalledWith("term-codex");
-
-    await user.click(screen.getByRole("checkbox", { name: "Select Codex in Terra API" }));
-    await user.click(screen.getByRole("button", { name: "Stop (preserve session)" }));
-    expect(onBatchAction).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Parar sessão" }));
-    expect(onBatchAction).toHaveBeenCalledWith("stop", ["term-codex"]);
+    expect(screen.queryByRole("toolbar", { name: "Ações em lote" })).toBeNull();
+    await user.click(screen.getByRole("checkbox", { name: "Selecionar codex" }));
+    await user.click(screen.getByRole("checkbox", { name: "Selecionar opencode" }));
+    const toolbar = screen.getByRole("toolbar", { name: "Ações em lote" });
+    expect(toolbar).toHaveTextContent("2 selecionados");
+    await user.click(within(toolbar).getByRole("button", { name: "Pausar" }));
+    expect(onBatchAction).toHaveBeenCalledWith("stop", ["term-codex", "term-idle"]);
   });
 
-  it("confirms the real group suspension path and never exposes terminal suspend", async () => {
+  it("opens an agent from its table row", async () => {
     const user = userEvent.setup();
-    const onSuspendGroup = vi.fn();
-    render(<FleetCommandCenter groups={groups} onSuspendGroup={onSuspendGroup} workspaces={workspaces} />);
-
-    await user.click(screen.getByRole("button", { name: "Suspend group" }));
-    expect(onSuspendGroup).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Suspender grupo" }));
-    expect(onSuspendGroup).toHaveBeenCalledWith("group-core");
-    expect(screen.queryByRole("button", { name: "Suspend agent" })).not.toBeInTheDocument();
-  });
-
-  it("does not render action affordances when the host has no callback", () => {
-    render(<FleetCommandCenter groups={groups} workspaces={workspaces} />);
-
-    expect(screen.queryByRole("button", { name: "Focus Codex in Terra API" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Suspend agent" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Stop agent (preserve session)" })).not.toBeInTheDocument();
+    const onFocus = vi.fn();
+    render(<FleetCommandCenter workspaces={workspaces} labels={labels} onFocus={onFocus} />);
+    await user.click(screen.getByRole("button", { name: "Abrir codex em Terra API" }));
+    expect(onFocus).toHaveBeenCalledWith("term-codex", "ws-api");
   });
 });

@@ -85,7 +85,7 @@ export function PaneFrame({
       data-active={active}
       aria-label={`Painel ${projection.pane.id}`}
     >
-      {hasTabs ? (
+      {hasTabs && projection.tabs.length > 1 ? (
         <SubTabLane
           tabs={laneTabs}
           onFocusTab={(tabId) => onFocusTab?.(tabId, location)}

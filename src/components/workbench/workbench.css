@@ -673,3 +673,10 @@
   color: var(--terra-text);
   background: var(--terra-bg-panel);
 }
+
+.terra-project-container__new kbd {
+  font-family: var(--terra-font-mono);
+  font-size: var(--terra-font-size-micro);
+  font-weight: 400;
+  opacity: 0.6;
+}

@@ -1,0 +1,126 @@
+import { Gauge, Power, RotateCcw, SquareArrowOutUpRight } from "lucide-react";
+import type { AgentLabel } from "../../domain/agentLabels";
+import { useT } from "../../i18n";
+import type { NotificationItem } from "../../types";
+import type { InspectorActionKind, InspectorTarget } from "../integration/inspectorModel";
+import type { InspectorRuntimeState } from "../integration/inspectorRuntime";
+import { relativeTime } from "../notifications/NotificationCenter";
+import "./inspector.css";
+
+export type InspectorStatus = "working" | "attention" | "exited" | "suspended";
+
+export interface AgentInspectorProps {
+  target: InspectorTarget | null;
+  label: AgentLabel | null;
+  status: InspectorStatus;
+  /** Latest unread message from the agent, if any. */
+  request: NotificationItem | null;
+  /** Most recent signals for this agent, newest first. */
+  activity: readonly NotificationItem[];
+  runtime: InspectorRuntimeState;
+  onAction: (action: InspectorActionKind, target: InspectorTarget) => void;
+  now?: number;
+}
+
+/**
+ * The agent first: what it is doing, how much context is left and what it
+ * asked. Container, pane, tab and PTY identifiers wait behind "Technical
+ * details".
+ */
+export function AgentInspector({ target, label, status, request, activity, runtime, onAction, now = Date.now() }: AgentInspectorProps) {
+  const t = useT();
+  if (!target) {
+    return (
+      <div className="terra-inspector-empty">
+        <Gauge size={18} aria-hidden="true" />
+        <strong>{t("inspector.emptyTitle")}</strong>
+        <span>{t("inspector.emptyBody")}</span>
+      </div>
+    );
+  }
+
+  const context = target.contextUsage;
+  const info = runtime.status === "ready" ? runtime.info : null;
+  const runtimeText = runtime.status === "loading"
+    ? t("inspector.loading")
+    : info
+      ? info.running ? t("inspector.running") : info.reaped ? t("status.exited") : t("status.idle")
+      : t("inspector.unavailable");
+
+  return (
+    <div className="terra-inspector terra-stagger">
+      <div className="terra-inspector-head">
+        <div className="terra-inspector-title">
+          <strong>{label?.primary ?? target.displayName}</strong>
+          <span>{label?.tag ?? target.profileLabel} · {target.projectName}</span>
+        </div>
+        <span className="terra-status-chip" data-status={status}>{t(`status.${status}` as const)}</span>
+      </div>
+
+      <section className="terra-inspector-block" aria-label={t("inspector.context")}>
+        <div className="terra-inspector-row">
+          <span>{t("inspector.context")}</span>
+          <b>{context === null ? "—" : `${context}%`}</b>
+        </div>
+        <span className="terra-meter" aria-hidden="true">
+          <span className="terra-meter-fill" data-high={(context ?? 0) >= 85} style={{ width: `${context ?? 0}%` }} />
+        </span>
+        <span className="terra-inspector-hint">{t("inspector.contextHint")}</span>
+      </section>
+
+      {request ? (
+        <section className="terra-inspector-request" aria-label={t("inspector.request")}>
+          <span className="terra-inspector-kicker">{t("inspector.request")}</span>
+          <p>{request.message}</p>
+          <span className="terra-inspector-hint">{relativeTime(request.ts, now)}</span>
+        </section>
+      ) : null}
+
+      <section className="terra-inspector-block" aria-label={t("inspector.activity")}>
+        <span className="terra-inspector-kicker">{t("inspector.activity")}</span>
+        {activity.length === 0 ? (
+          <span className="terra-inspector-hint">{t("inspector.noActivity")}</span>
+        ) : (
+          <ul className="terra-inspector-activity">
+            {activity.map((item) => (
+              <li key={item.key}>
+                <span className="terra-inspector-time">{relativeTime(item.ts, now)}</span>
+                <span>{item.message}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <div className="terra-inspector-actions" aria-label={t("inspector.actions")}>
+        <button type="button" className="terra-button" onClick={() => onAction("restart", target)}>
+          <RotateCcw size={13} aria-hidden="true" />
+          {t("pane.menu.restart")}
+        </button>
+        <button type="button" className="terra-button" onClick={() => onAction(target.detached ? "reattach" : "detach", target)}>
+          <SquareArrowOutUpRight size={13} aria-hidden="true" />
+          {target.detached ? t("pane.menu.reattach") : t("inspector.detach")}
+        </button>
+        <button type="button" className="terra-button terra-button-danger terra-inspector-kill" onClick={() => onAction("kill", target)}>
+          <Power size={13} aria-hidden="true" />
+          {t("pane.confirmKill.confirm")}
+        </button>
+      </div>
+
+      <details className="terra-inspector-details">
+        <summary>{t("inspector.technical")}</summary>
+        <dl>
+          <div><dt>{t("inspector.runtime")}</dt><dd>{runtimeText}</dd></div>
+          <div><dt>PID</dt><dd><code>{info?.pid ?? "—"}</code></dd></div>
+          <div><dt>{t("inspector.size")}</dt><dd><code>{info ? `${info.cols} × ${info.rows}` : "—"}</code></dd></div>
+          <div><dt>{t("inspector.command")}</dt><dd><code>{target.command}</code></dd></div>
+          <div><dt>{t("inspector.directory")}</dt><dd><code>{target.cwd || "—"}</code></dd></div>
+          <div><dt>{t("inspector.group")}</dt><dd>{target.groupName ?? "—"}</dd></div>
+          <div><dt>PTY</dt><dd><code>{target.terminalId}</code></dd></div>
+          <div><dt>Pane</dt><dd><code>{target.paneId ?? "—"}</code></dd></div>
+          <div><dt>Container</dt><dd><code>{target.containerId ?? "—"}</code></dd></div>
+        </dl>
+      </details>
+    </div>
+  );
+}

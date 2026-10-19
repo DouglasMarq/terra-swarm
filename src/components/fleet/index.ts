@@ -1,5 +1,5 @@
-export { FleetCommandCenter, BatchActionBar } from "./FleetCommandCenter";
-export type { BatchActionBarProps, FleetBatchAction, FleetCommandCenterProps } from "./FleetCommandCenter";
+export { FleetCommandCenter } from "./FleetCommandCenter";
+export type { FleetBatchAction, FleetCommandCenterProps } from "./FleetCommandCenter";
 export {
   DEFAULT_FLEET_FILTERS,
   deriveFleetModel,

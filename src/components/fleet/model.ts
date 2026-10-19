@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import type { TerminalMeta, Workspace, WorkspaceGroup } from "../../types";
 
 /** The four states exposed by the fleet command center. */
@@ -96,7 +97,7 @@ export const DEFAULT_FLEET_FILTERS: FleetFilters = {
 
 const EMPTY_RECORD: Readonly<Record<string, never>> = {};
 const UNGROUPED_ID = "ungrouped";
-const UNGROUPED_NAME = "Sem grupo";
+const UNGROUPED_NAME = "—";
 
 function clean(value: string | undefined | null, fallback = ""): string {
   const result = value?.trim();
@@ -361,12 +362,12 @@ export function formatFleetRelativeTime(value: FleetValue | undefined, now = Dat
   const timestamp = value instanceof Date ? value.getTime() : value;
   if (!Number.isFinite(timestamp)) return null;
   const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
-  if (seconds < 45) return "agora";
+  if (seconds < 45) return t("time.ago.now");
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `há ${minutes} min`;
+  if (minutes < 60) return t("time.ago.minutes", { count: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `há ${hours} h`;
-  return `há ${Math.floor(hours / 24)} d`;
+  if (hours < 24) return t("time.ago.hours", { count: hours });
+  return t("time.ago.days", { count: Math.floor(hours / 24) });
 }
 
 export const FLEET_UNGROUPED_ID = UNGROUPED_ID;

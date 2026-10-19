@@ -680,3 +680,20 @@
   font-weight: 400;
   opacity: 0.6;
 }
+
+/* Maximize (⌘Enter or the pane's ⤢): the expanded pane takes the whole
+ * project area; its siblings stay mounted (PTYs keep running) but hidden. */
+.terra-pane-grid--grid:has(.pane.expanded) {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+
+.terra-pane-grid:has(.pane.expanded) .terra-pane-grid__cell:not(:has(.pane.expanded)),
+.terra-pane-grid:has(.pane.expanded) .terra-pane-panel:not(:has(.pane.expanded)),
+.terra-pane-grid:has(.pane.expanded) .terra-pane-separator {
+  display: none !important;
+}
+
+.terra-pane-grid:has(.pane.expanded) .terra-pane-panel:has(.pane.expanded) {
+  flex: 1 1 100% !important;
+}

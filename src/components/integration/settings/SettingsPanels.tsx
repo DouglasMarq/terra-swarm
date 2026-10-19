@@ -77,6 +77,9 @@ export interface SettingsPanelsProps {
   micTesting: boolean;
   onMicTestToggle: () => void;
   voiceModels: readonly VoiceModelInfo[];
+  /** "error" when the model list could not be read; "loading" until it is. */
+  voiceModelsStatus?: "loading" | "ready" | "error";
+  onRetryVoiceModels?: () => void;
   voiceDownload: VoiceDownloadState | null;
   onVoiceModelSelect: (id: string) => void;
   onVoiceModelDownload: (id: string) => void;
@@ -542,6 +545,8 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
     micTesting,
     onMicTestToggle,
     voiceModels,
+    voiceModelsStatus = "ready",
+    onRetryVoiceModels,
     voiceDownload,
     onVoiceModelSelect,
     onVoiceModelDownload,
@@ -696,7 +701,13 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
           <div className={styles.card}>
             <span className={styles.cardTitle}>{t("settingsPanels.modelsTitle")}</span>
             <p className={styles.cardDescription}>{t("settingsPanels.modelsHint")}</p>
-            {voiceModels.length === 0 ? <div className={styles.empty}>{t("settingsPanels.modelsLoading")}</div> : null}
+            {voiceModels.length === 0 && voiceModelsStatus === "loading" ? <div className={styles.empty}>{t("settingsPanels.modelsLoading")}</div> : null}
+            {voiceModels.length === 0 && voiceModelsStatus !== "loading" ? (
+              <div className={styles.empty} role="alert">
+                <span>{t("settingsPanels.modelsFailed")}</span>
+                {onRetryVoiceModels ? <button className={styles.chip} onClick={onRetryVoiceModels}>{t("nav.retry")}</button> : null}
+              </div>
+            ) : null}
             {voiceModels.length > 0 && !voiceModels.some((model) => model.downloaded) ? <p className={styles.hint}>{t("settingsPanels.modelsNone")}</p> : null}
             <div className={styles.modelList}>
               {voiceModels.map((model) => (

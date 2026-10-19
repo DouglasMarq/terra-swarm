@@ -384,6 +384,7 @@ function App() {
   const [voiceFeedback, setVoiceFeedback] = useState<string | null>(null);
   const [voiceSubmitted, setVoiceSubmitted] = useState(false);
   const [voiceModels, setVoiceModels] = useState<VoiceModelInfo[]>([]);
+  const [voiceModelsStatus, setVoiceModelsStatus] = useState<"loading" | "ready" | "error">("loading");
   const [voiceDl, setVoiceDl] = useState<{
     id: string;
     percent: number;
@@ -1694,7 +1695,16 @@ function App() {
   };
 
   const refreshVoiceModels = useCallback(() => {
-    api.voiceListModels().then(setVoiceModels).catch(() => {});
+    api
+      .voiceListModels()
+      .then((models) => {
+        setVoiceModels(models);
+        setVoiceModelsStatus("ready");
+      })
+      .catch((error) => {
+        console.error("voice model list failed:", error);
+        setVoiceModelsStatus("error");
+      });
   }, []);
 
   const refreshVoiceInputDevices = useCallback(() => {
@@ -2021,10 +2031,10 @@ function App() {
       .voiceMicAvailable()
       .then(setMicAvailable)
       .catch(() => {});
-    if (voiceEnabled) {
-      refreshVoiceModels();
-      refreshVoiceInputDevices();
-    }
+    // The model list is just files on disk: show it even while voice is off,
+    // so the user can pick and download a model before turning voice on.
+    refreshVoiceModels();
+    if (voiceEnabled) refreshVoiceInputDevices();
     api
       .listShells()
       .then(setAvailableShells)
@@ -2386,6 +2396,8 @@ function App() {
                   micTesting={micTesting}
                   onMicTestToggle={toggleMicTest}
                   voiceModels={voiceModels}
+                  voiceModelsStatus={voiceModelsStatus}
+                  onRetryVoiceModels={refreshVoiceModels}
                   voiceDownload={voiceDl}
                   onVoiceModelSelect={selectVoiceModel}
                   onVoiceModelDownload={downloadVoiceModel}

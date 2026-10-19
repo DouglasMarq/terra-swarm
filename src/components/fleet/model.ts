@@ -1,3 +1,4 @@
+import { DEFAULT_AGENT_PROFILES } from "../../lib/features/agentProfiles";
 import { t } from "../../i18n";
 import type { TerminalMeta, Workspace, WorkspaceGroup } from "../../types";
 
@@ -113,12 +114,7 @@ function agentLabelFromCommand(command: string): string {
   const executable = token.split(/[\\/]/).pop()?.replace(/\.(?:exe|cmd|sh)$/i, "") ?? "";
   if (!executable) return "Terminal";
   const known: Record<string, string> = {
-    aider: "Aider",
-    claude: "Claude Code",
-    codex: "Codex",
-    gemini: "Gemini",
-    kimi: "Kimi",
-    opencode: "OpenCode",
+    ...Object.fromEntries(DEFAULT_AGENT_PROFILES.filter((profile) => profile.command).map((profile) => [profile.command, profile.label])),
     shell: "Shell",
     zsh: "Shell",
     bash: "Shell",

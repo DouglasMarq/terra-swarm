@@ -20,8 +20,6 @@ export interface PaneGridProps {
   mode?: WorkbenchLayoutMode;
   activePaneId?: string | null;
   renderPane: (pane: WorkbenchPaneProjection) => ReactNode;
-  /** Filler for unused slots of a fixed grid (a "+ New agent" button). */
-  renderEmptySlot?: (index: number) => ReactNode;
   onLayoutChange?: (change: ContainerLayoutChange) => void;
 }
 
@@ -98,7 +96,6 @@ export function PaneGrid({
   mode: explicitMode,
   activePaneId,
   renderPane,
-  renderEmptySlot,
   onLayoutChange,
 }: PaneGridProps) {
   const mode = resolveLayoutMode(projection.container.layout, explicitMode);
@@ -122,14 +119,22 @@ export function PaneGrid({
       ? (panes.find(({ pane }) => pane.id === activePaneId) ?? panes[0]).pane.id
       : null;
     const sideCount = panes.length - 1;
+    // A fixed grid with free slots: the last row's agents share the whole
+    // width instead of leaving empty cells. Columns are subdivided by the
+    // last row's count so both rows split evenly (4 cols, 3 in the last row
+    // → 12 tracks: full rows span 3, the last row spans 4).
+    const usedRows = Math.max(1, Math.ceil(panes.length / columns));
+    const lastRowStart = (usedRows - 1) * columns;
+    const lastRowCount = panes.length - lastRowStart;
+    const unit = lastRowCount < columns ? lastRowCount : 1;
     const gridStyle = isSpotlight
       ? {
           gridTemplateColumns: sideCount > 0 ? "minmax(0, 72fr) minmax(0, 28fr)" : "minmax(0, 1fr)",
           gridTemplateRows: `repeat(${Math.max(1, sideCount)}, minmax(0, 1fr))`,
         }
       : {
-          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-          gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+          gridTemplateColumns: `repeat(${columns * unit}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${usedRows}, minmax(0, 1fr))`,
           gridAutoRows: "minmax(0, 1fr)",
         };
     let sideIndex = 0;
@@ -141,8 +146,11 @@ export function PaneGrid({
         data-grid-rows={isSpotlight ? undefined : rows}
         style={gridStyle}
       >
-        {panes.map((paneProjection) => {
-          let placement: { gridColumn: string; gridRow: string } | undefined;
+        {panes.map((paneProjection, index) => {
+          let placement: { gridColumn: string; gridRow?: string } | undefined;
+          if (!isSpotlight && lastRowCount < columns) {
+            placement = { gridColumn: `span ${index >= lastRowStart ? columns : unit}` };
+          }
           if (isSpotlight) {
             if (paneProjection.pane.id === spotlightId) placement = { gridColumn: "1", gridRow: "1 / -1" };
             else {
@@ -160,13 +168,6 @@ export function PaneGrid({
             </div>
           );
         })}
-        {renderEmptySlot && !isSpotlight
-          ? Array.from({ length: Math.max(0, columns * rows - panes.length) }, (_, index) => (
-            <div className="terra-pane-grid__cell terra-pane-grid__cell--empty" key={`empty-${index}`}>
-              {renderEmptySlot(index)}
-            </div>
-          ))
-          : null}
       </div>
     );
   }

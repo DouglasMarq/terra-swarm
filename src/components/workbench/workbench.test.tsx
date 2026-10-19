@@ -557,7 +557,9 @@ describe("WorkspaceWorkbench", () => {
         source={source}
       />,
     );
-    expect(screen.getAllByRole("button", { name: "Novo agente" })).toHaveLength(5);
+    // No empty "+ New agent" slots: the lone pane fills the free width.
+    expect(screen.queryByRole("button", { name: "Novo agente" })).not.toBeInTheDocument();
+    expect((document.querySelector(".terra-pane-grid__cell") as HTMLElement).style.gridColumn).toBe("span 3");
     await user.click(screen.getByRole("button", { name: "Tamanho da grade" }));
     await user.click(screen.getByRole("button", { name: "Automática" }));
     const layout = onLayoutChange.mock.calls[0][0].layout;

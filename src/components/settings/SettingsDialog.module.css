@@ -107,7 +107,7 @@
   border: 1px solid var(--terra-border, #26262c);
   border-radius: 6px;
   padding: 0 9px;
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   background: var(--terra-bg-panel, #17171b);
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
@@ -129,7 +129,7 @@
 }
 
 .searchInput::placeholder {
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
 }
 
 .searchInput::-webkit-search-cancel-button {
@@ -140,7 +140,7 @@
   border: 1px solid var(--terra-border, #26262c);
   border-radius: 4px;
   padding: 2px 4px;
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   font-family: var(--terra-font-mono, monospace);
   font-size: 9px;
   line-height: 1;
@@ -149,7 +149,7 @@
 .resultCount {
   min-height: 12px;
   padding: 0 8px;
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -192,7 +192,7 @@
 
 .sectionIcon {
   flex: 0 0 auto;
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
 }
 
 .sectionTrigger[data-state="active"] .sectionIcon {
@@ -213,7 +213,7 @@
   margin-top: auto;
   border-top: 1px solid var(--terra-border, #26262c);
   padding: 14px 8px 0;
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   font-size: 10px;
 }
 
@@ -251,7 +251,7 @@
 }
 
 .mainEyebrow {
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   font-family: var(--terra-font-mono, monospace);
   font-size: 9px;
   letter-spacing: 0.08em;
@@ -276,7 +276,7 @@
 }
 
 .sectionKicker {
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   font-family: var(--terra-font-mono, monospace);
   font-size: 10px;
   letter-spacing: 0.08em;
@@ -440,5 +440,43 @@
   .searchBox {
     animation-duration: 0.01ms;
     transition-duration: 0.01ms;
+  }
+}
+
+/* Page variant: Settings as a surface of the shell (v3). */
+.page {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--terra-bg);
+}
+
+.page .tabsRoot {
+  flex: 1 1 auto;
+  grid-template-columns: 256px minmax(0, 1fr);
+}
+
+.page .sidebar {
+  padding: 16px 12px;
+  background: var(--terra-bg-sidebar);
+}
+
+.page .main {
+  display: flex;
+  justify-content: center;
+  padding: 32px 24px;
+  background: var(--terra-bg);
+}
+
+.page .sectionContent {
+  width: 100%;
+  max-width: 720px;
+  animation: terra-rise 280ms var(--terra-ease-out) both;
+}
+
+@media (max-width: 720px) {
+  .page .tabsRoot {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

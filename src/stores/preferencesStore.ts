@@ -1,3 +1,4 @@
+import { DEFAULT_NAME_LIST, NAME_SETS, type NameSetId, type NamesExhaustedStrategy } from "../domain/agentNames";
 import { create } from "zustand";
 import {
   detectShortcutPlatform,
@@ -122,6 +123,33 @@ export const DEFAULT_FONT_SIZE = 13;
 export const GRID_COL_OPTIONS = [2, 3, 4, 5, 6, 7, 8] as const;
 const DEFAULT_GRID_COLS = 2;
 
+function loadNameSet(): NameSetId {
+  const stored = storageGet("agentNameSet");
+  return stored === "rivers" || stored === "custom" ? stored : "stars";
+}
+
+function loadNameList(): string[] {
+  try {
+    const parsed = JSON.parse(storageGet("agentNameList") ?? "null");
+    if (Array.isArray(parsed)) return parsed.filter((name): name is string => typeof name === "string" && name.trim().length > 0);
+  } catch {
+    // Fall back to the default list below.
+  }
+  return [...DEFAULT_NAME_LIST];
+}
+
+function loadAgentNames(): Record<string, string> {
+  try {
+    const parsed = JSON.parse(storageGet("agentNames") ?? "{}");
+    if (parsed && typeof parsed === "object") {
+      return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+    }
+  } catch {
+    // Corrupt storage starts empty.
+  }
+  return {};
+}
+
 const storageGet = (key: string): string | null => {
   try {
     return typeof localStorage === "undefined" ? null : localStorage.getItem(key);
@@ -222,6 +250,14 @@ export type PreferencesState = {
   reduceMotion: boolean;
   /** Resume every saved session at startup without showing the opening screen. */
   autoResume: boolean;
+  /** Give each new agent a name from `agentNameList` (off by default). */
+  agentAutoNames: boolean;
+  agentNameSet: NameSetId;
+  agentNameList: string[];
+  avoidSimilarNames: boolean;
+  namesExhausted: NamesExhaustedStrategy;
+  /** Names given to agents (automatically or through Rename), by terminal id. */
+  agentNames: Record<string, string>;
   gridCols: number;
   voiceEnabled: boolean;
   voiceLang: string;
@@ -238,6 +274,12 @@ export type PreferencesState = {
   setDefaultShell: (shell: string) => void;
   setReduceMotion: (enabled: boolean) => void;
   setAutoResume: (enabled: boolean) => void;
+  setAgentAutoNames: (enabled: boolean) => void;
+  setAgentNameSet: (set: NameSetId) => void;
+  setAgentNameList: (names: string[]) => void;
+  setAvoidSimilarNames: (enabled: boolean) => void;
+  setNamesExhausted: (strategy: NamesExhaustedStrategy) => void;
+  setAgentName: (terminalId: string, name: string | null) => void;
   setGridCols: (cols: number) => void;
   setVoiceEnabled: (enabled: boolean) => void;
   setVoiceLang: (lang: string) => void;
@@ -253,6 +295,12 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   defaultShell: storageGet("defaultShell") ?? "",
   reduceMotion: storageGet("reduceMotion") === "1",
   autoResume: storageGet("autoResume") === "1",
+  agentAutoNames: storageGet("agentAutoNames") === "1",
+  agentNameSet: loadNameSet(),
+  agentNameList: loadNameList(),
+  avoidSimilarNames: storageGet("avoidSimilarNames") !== "0",
+  namesExhausted: storageGet("namesExhausted") === "repeat" ? "repeat" : "type-number",
+  agentNames: loadAgentNames(),
   gridCols: loadGridCols(),
   voiceEnabled: storageGet("voiceEnabled") === "1",
   voiceLang: storageGet("voiceLanguage") ?? "auto",
@@ -314,6 +362,44 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
     else storageRemove("defaultShell");
     set({ defaultShell });
   },
+
+  setAgentAutoNames: (agentAutoNames) => {
+    storageSet("agentAutoNames", agentAutoNames ? "1" : "0");
+    set({ agentAutoNames });
+  },
+
+  setAgentNameSet: (agentNameSet) => {
+    storageSet("agentNameSet", agentNameSet);
+    const agentNameList = agentNameSet === "custom" ? loadNameList() : [...NAME_SETS[agentNameSet]];
+    if (agentNameSet !== "custom") storageSet("agentNameList", JSON.stringify(agentNameList));
+    set({ agentNameSet, agentNameList });
+  },
+
+  setAgentNameList: (names) => {
+    const agentNameList = [...new Set(names.map((name) => name.trim()).filter(Boolean))];
+    storageSet("agentNameList", JSON.stringify(agentNameList));
+    storageSet("agentNameSet", "custom");
+    set({ agentNameList, agentNameSet: "custom" });
+  },
+
+  setAvoidSimilarNames: (avoidSimilarNames) => {
+    storageSet("avoidSimilarNames", avoidSimilarNames ? "1" : "0");
+    set({ avoidSimilarNames });
+  },
+
+  setNamesExhausted: (namesExhausted) => {
+    storageSet("namesExhausted", namesExhausted);
+    set({ namesExhausted });
+  },
+
+  setAgentName: (terminalId, name) =>
+    set((state) => {
+      const agentNames = { ...state.agentNames };
+      if (name && name.trim()) agentNames[terminalId] = name.trim();
+      else delete agentNames[terminalId];
+      storageSet("agentNames", JSON.stringify(agentNames));
+      return { agentNames };
+    }),
 
   setAutoResume: (autoResume) => {
     storageSet("autoResume", autoResume ? "1" : "0");

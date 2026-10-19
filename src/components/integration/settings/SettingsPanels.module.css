@@ -10,7 +10,7 @@
 }
 
 .eyebrow {
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   font-family: var(--terra-font-mono, monospace);
   font-size: 10px;
   letter-spacing: 0.08em;
@@ -68,7 +68,7 @@
 }
 
 .hint {
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
 }
 
 .row {
@@ -93,7 +93,7 @@
 }
 
 .rowHint {
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -290,7 +290,7 @@
 
 .path {
   overflow-wrap: anywhere;
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   font-family: var(--terra-font-mono, monospace);
   font-size: 10px;
 }
@@ -339,7 +339,7 @@
 .modelMeta,
 .shortcutMeta {
   overflow: hidden;
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   font-family: var(--terra-font-mono, monospace);
   font-size: 10px;
   text-overflow: ellipsis;
@@ -351,7 +351,7 @@
 }
 
 .unavailable {
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
 }
 
 .chip {
@@ -392,7 +392,7 @@
 }
 
 .status {
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   font-size: 10px;
 }
 
@@ -400,7 +400,7 @@
   border: 1px dashed var(--terra-border, #26262c);
   border-radius: 7px;
   padding: 14px;
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -415,4 +415,75 @@
   .select {
     width: 100%;
   }
+}
+
+/* Agent names card */
+.nameChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nameChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-pill);
+  color: var(--terra-text-secondary);
+  animation: terra-pop 200ms var(--terra-ease-out) both;
+}
+
+.nameChip[data-used="true"] {
+  border-color: var(--terra-border-strong);
+  color: var(--terra-text);
+  background: var(--terra-bg-elevated);
+}
+
+.nameChipDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #52525b;
+}
+
+.nameChip[data-used="true"] .nameChipDot {
+  background: var(--terra-green);
+}
+
+.nameChipRemove {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  color: var(--terra-text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.nameChipRemove:hover {
+  color: var(--terra-text);
+  background: var(--terra-bg-hover);
+}
+
+.nameAdd {
+  display: flex;
+  gap: 8px;
+}
+
+.input {
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text);
+  background: var(--terra-bg-elevated);
+  font: inherit;
 }

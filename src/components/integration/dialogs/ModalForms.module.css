@@ -36,7 +36,7 @@
 
 .input::placeholder,
 .folderInput::placeholder {
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
 }
 
 .input:focus,

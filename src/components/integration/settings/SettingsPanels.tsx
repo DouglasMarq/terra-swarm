@@ -29,6 +29,7 @@ import type {
 import { LOCALES, useLocaleStore, useT, type Locale, type MessageKey } from "../../../i18n";
 import { pickAgentName, type NameSetId } from "../../../domain/agentNames";
 import { usePreferencesStore } from "../../../stores/preferencesStore";
+import { DEFAULT_TERMINAL_FONT_STACK, installedTerminalFonts, terminalFontStack } from "../../../lib/terminalFonts";
 import styles from "./SettingsPanels.module.css";
 
 export type SnapshotOperation = "exporting" | "importing";
@@ -251,6 +252,76 @@ function LanguageCard() {
       </label>
       <p className={styles.hint}>{t("settings.language.hint")}</p>
     </div>
+  );
+}
+
+/** Font family row: installed monospace fonts, "Other…" for any name, and a preview. */
+function TerminalFontPicker({ fontSize }: { fontSize: number }) {
+  const t = useT();
+  const family = usePreferencesStore((state) => state.terminalFontFamily);
+  const setFamily = usePreferencesStore((state) => state.setTerminalFontFamily);
+  const installed = useMemo(() => installedTerminalFonts(), []);
+  const listed = family === "" || installed.includes(family);
+  const [custom, setCustom] = useState(!listed);
+  const [draft, setDraft] = useState(listed ? "" : family);
+  const missing = family !== "" && !installed.includes(family) && !custom;
+  const value = custom ? "__custom" : family;
+
+  return (
+    <>
+      <div className={styles.row}>
+        <div className={styles.rowLabel}>
+          <span className={styles.label}>{t("settingsPanels.fontFamily")}</span>
+          <span className={styles.rowHint}>{t("settingsPanels.fontFamilyHint", { count: installed.length })}</span>
+        </div>
+        <select
+          className={styles.select}
+          aria-label={t("settingsPanels.fontFamily")}
+          value={value}
+          onChange={(event) => {
+            const next = event.target.value;
+            if (next === "__custom") {
+              setCustom(true);
+              setDraft(family);
+              return;
+            }
+            setCustom(false);
+            setFamily(next);
+          }}
+        >
+          <option value="">{t("settingsPanels.fontDefault")}</option>
+          {installed.map((name) => (
+            <option key={name} value={name} style={{ fontFamily: terminalFontStack(name) }}>{name}</option>
+          ))}
+          {missing ? <option value={family}>{family}</option> : null}
+          <option value="__custom">{t("settingsPanels.fontOther")}</option>
+        </select>
+      </div>
+      {custom ? (
+        <div className={styles.row}>
+          <input
+            className={styles.textInput}
+            aria-label={t("settingsPanels.fontOtherLabel")}
+            placeholder={t("settingsPanels.fontOtherPlaceholder")}
+            value={draft}
+            autoFocus
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={() => setFamily(draft)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") setFamily(draft);
+            }}
+          />
+        </div>
+      ) : null}
+      <div
+        className={styles.fontPreview}
+        aria-hidden="true"
+        style={{ fontFamily: family ? terminalFontStack(family) : DEFAULT_TERMINAL_FONT_STACK, fontSize }}
+      >
+        <span>$ claude --continue</span>
+        <span>0O 1lI {"{} [] => != <= ~"}</span>
+      </div>
+    </>
   );
 }
 
@@ -504,6 +575,7 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
         <div className={styles.stack}>
           <div className={styles.card}>
             <span className={styles.cardTitle}>{t("settingsPanels.fontTitle")}</span>
+            <TerminalFontPicker fontSize={fontSize} />
             <div className={styles.row}>
               <div className={styles.rowLabel}>
                 <span className={styles.label}>{t("settingsPanels.fontSize")}</span>

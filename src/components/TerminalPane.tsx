@@ -11,6 +11,8 @@ import {
 } from "../lib/terminalFitScheduler";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { useT } from "../i18n";
+import { usePreferencesStore } from "../stores/preferencesStore";
+import { terminalFontStack } from "../lib/terminalFonts";
 import { PaneActionsMenu, type PaneMenuGroups } from "./workbench/PaneActionsMenu";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal-pane.css";
@@ -79,6 +81,8 @@ export function TerminalPane(props: Props) {
   const fitRef = useRef<(() => void) | null>(null);
   const resizeQueueRef = useRef<ReturnType<typeof createTerminalResizeQueue> | null>(null);
   const appliedFontSize = useRef(fontSize);
+  const fontFamily = terminalFontStack(usePreferencesStore((state) => state.terminalFontFamily));
+  const appliedFontFamily = useRef(fontFamily);
   // Keep the long-lived xterm effect aware of the latest backend lifecycle.
   // The component intentionally survives a PTY exit so it can show scrollback
   // and restart controls, but geometry observers must stop addressing a PTY
@@ -91,7 +95,7 @@ export function TerminalPane(props: Props) {
     if (!container) return;
 
     const term = new Terminal({
-      fontFamily: "'SF Mono', Menlo, Monaco, 'Courier New', monospace",
+      fontFamily,
       fontSize,
       cursorBlink: true,
       macOptionIsMeta: true,
@@ -323,6 +327,16 @@ export function TerminalPane(props: Props) {
     term.options.fontSize = fontSize;
     fitRef.current?.();
   }, [fontSize, id]);
+
+  useEffect(() => {
+    if (appliedFontFamily.current === fontFamily) return;
+    appliedFontFamily.current = fontFamily;
+    const term = getTerminal(id);
+    if (!term) return;
+    term.options.fontFamily = fontFamily;
+    // A new family changes the cell size: refit so cols/rows follow.
+    fitRef.current?.();
+  }, [fontFamily, id]);
 
   // A hidden workbench tab can keep the same box dimensions while its
   // `display` state changes. ResizeObserver is not guaranteed to report that

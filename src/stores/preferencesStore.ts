@@ -252,6 +252,8 @@ export type PreferencesState = {
   hotkeys: Record<string, Hotkey>;
   sidebarCollapsed: boolean;
   fontSize: number;
+  /** Terminal font family name; empty means the default stack. */
+  terminalFontFamily: string;
   defaultShell: string;
   reduceMotion: boolean;
   /** Resume every saved session at startup without showing the opening screen. */
@@ -275,6 +277,7 @@ export type PreferencesState = {
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
   setFontSize: (size: number) => void;
+  setTerminalFontFamily: (name: string) => void;
   changeFontSize: (delta: number) => void;
   resetFontSize: () => void;
   setDefaultShell: (shell: string) => void;
@@ -298,6 +301,7 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   hotkeys: loadHotkeys(),
   sidebarCollapsed: storageGet("sidebarCollapsed") === "1",
   fontSize: loadFontSize(),
+  terminalFontFamily: storageGet("termFontFamily")?.trim() ?? "",
   defaultShell: storageGet("defaultShell") ?? "",
   reduceMotion: storageGet("reduceMotion") === "1",
   autoResume: storageGet("autoResume") === "1",
@@ -357,6 +361,13 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
       storageSet("termFontSize", String(fontSize));
       return { fontSize };
     }),
+
+  setTerminalFontFamily: (name) => {
+    const terminalFontFamily = name.trim();
+    if (terminalFontFamily) storageSet("termFontFamily", terminalFontFamily);
+    else storageRemove("termFontFamily");
+    set({ terminalFontFamily });
+  },
 
   resetFontSize: () => {
     storageRemove("termFontSize");

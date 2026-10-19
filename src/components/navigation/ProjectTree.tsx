@@ -122,14 +122,14 @@ export function ProjectTree({ tree, expandedIds, onToggle, onCreateGroup, ...pro
   const hasAny = groups.length > 0 || ungrouped.length > 0;
   return (
     <div aria-label="Projetos Terra" className={styles.tree} role="tree">
-      {groups.length > 0 || onCreateGroup ? (
+      {groups.length > 0 ? (
         <div className={styles.sectionHeader}>
           <span className={styles.sectionHeaderText}><Folder aria-hidden="true" size={12} /> Grupos <span className={styles.sectionCount}>{groups.length}</span></span>
           {onCreateGroup ? <button aria-label="Criar grupo" className={`${styles.createButton} ${styles.sectionCreate}`} onClick={onCreateGroup} type="button"><Plus aria-hidden="true" size={13} /></button> : null}
         </div>
       ) : null}
       {groups.map((group) => renderNode(group, viewProps, actions))}
-      {ungrouped.length > 0 || groups.length === 0 ? (
+      {ungrouped.length > 0 && groups.length > 0 ? (
         <div className={styles.sectionHeader}>
           <span className={styles.sectionHeaderText}><Folder aria-hidden="true" size={12} /> Sem grupo <span className={styles.sectionCount}>{ungrouped.length}</span></span>
         </div>

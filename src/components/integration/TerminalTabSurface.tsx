@@ -15,7 +15,7 @@ export interface TerminalTabSurfaceProps {
   titles: Readonly<Record<string, string>>;
   branch?: string;
   detachedIds?: ReadonlySet<string>;
-  labels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
+  labels?: Readonly<Record<string, { primary: string; tag: string; title?: string | null } | undefined>>;
   attentionMessages?: Readonly<Record<string, string | undefined>>;
   buildMenu?: (ptyId: string, command: string) => PaneMenuGroups;
   onClearNotifications: (id: string) => void;
@@ -78,7 +78,7 @@ export function TerminalTabSurface({
       dragOver={false}
       notifications={notifications[ptyId] ?? 0}
       contextUsed={contextUsage[ptyId]}
-      title={titles[ptyId] || tab.title}
+      title={labels?.[ptyId] ? undefined : titles[ptyId] || tab.title}
       label={labels?.[ptyId]?.primary}
       tag={labels?.[ptyId]?.tag}
       attentionMessage={attentionMessages?.[ptyId] ?? null}

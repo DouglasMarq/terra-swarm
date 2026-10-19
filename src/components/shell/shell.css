@@ -25,7 +25,8 @@
   line-height: 18px;
 }
 
-.terra-shell button {
+/* Zero-specificity reset so component classes (.terra-button-primary…) win. */
+:where(.terra-shell) button {
   font: inherit;
   color: inherit;
 }

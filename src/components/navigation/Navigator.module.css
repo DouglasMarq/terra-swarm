@@ -906,3 +906,22 @@
   color: var(--navigator-muted);
   font-size: var(--terra-font-size-label);
 }
+
+/* Row actions take no space until the row is hovered or focused. */
+.actions {
+  display: none;
+}
+
+.row:hover .actions,
+.row:focus-within .actions {
+  display: inline-flex;
+}
+
+.row:hover .nodeCount,
+.row:focus-within .nodeCount {
+  display: none;
+}
+
+.agent .nodeName {
+  color: var(--navigator-text);
+}

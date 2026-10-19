@@ -10,7 +10,10 @@ export interface NotificationCenterProps {
   labels: Readonly<Record<string, AgentLabel | undefined>>;
   workspaceNames: Readonly<Record<string, string | undefined>>;
   muted: boolean;
+  /** Agents whose context window is nearly full (≥ 85%). */
+  contextAlerts?: readonly { terminalId: string; workspaceId: string; used: number }[];
   onJump: (item: NotificationItem) => void;
+  onFocusAgent?: (terminalId: string) => void;
   onMarkRead: (terminalId: string) => void;
   onMarkAllRead: () => void;
   onToggleMute: () => void;
@@ -46,7 +49,9 @@ export function NotificationCenter({
   labels,
   workspaceNames,
   muted,
+  contextAlerts = [],
   onJump,
+  onFocusAgent,
   onMarkRead,
   onMarkAllRead,
   onToggleMute,
@@ -55,7 +60,10 @@ export function NotificationCenter({
 }: NotificationCenterProps) {
   const t = useT();
   const pending = useMemo(() => attentionItems(items), [items]);
-  const [filter, setFilter] = useState<Filter>(pending.length > 0 ? "attention" : "all");
+  const pendingIds = new Set(pending.map((item) => item.terminalId));
+  const contextOnly = contextAlerts.filter((alert) => !pendingIds.has(alert.terminalId));
+  const attentionCount = pending.length + contextOnly.length;
+  const [filter, setFilter] = useState<Filter>(attentionCount > 0 ? "attention" : "all");
   const earlier = useMemo(
     () => [...items].filter((item) => filter === "all" || item.read || item.system).sort((a, b) => b.ts - a.ts).slice(0, 12),
     [filter, items],
@@ -73,7 +81,7 @@ export function NotificationCenter({
         </div>
         <div className="terra-segmented" role="group" aria-label={t("notifications.filter")}>
           <button type="button" aria-pressed={filter === "attention"} data-active={filter === "attention"} onClick={() => setFilter("attention")}>
-            {t("notifications.needsYou", { count: pending.length })}
+            {t("notifications.needsYou", { count: attentionCount })}
           </button>
           <button type="button" aria-pressed={filter === "all"} data-active={filter === "all"} onClick={() => setFilter("all")}>
             {t("notifications.all", { count: items.length })}
@@ -82,7 +90,7 @@ export function NotificationCenter({
       </div>
 
       <div className="terra-notifications-body">
-        {pending.length === 0 && filter === "attention" ? (
+        {attentionCount === 0 && filter === "attention" ? (
           <div className="terra-notifications-empty">
             <CheckCircle2 size={18} aria-hidden="true" />
             <span>{t("notifications.empty")}</span>
@@ -105,6 +113,28 @@ export function NotificationCenter({
                     <button type="button" className="terra-button terra-button-attention" onClick={() => onJump(item)}>{t("notifications.goToPane")}</button>
                     <button type="button" className="terra-button" onClick={() => onMarkRead(item.terminalId)}>{t("notifications.markRead")}</button>
                   </div>
+                </div>
+              </article>
+            );
+          })
+          : null}
+        {filter === "attention"
+          ? contextOnly.map((alert) => {
+            const label = labels[alert.terminalId];
+            return (
+              <article className="terra-notification-card terra-anim-rise" key={`ctx-${alert.terminalId}`}>
+                <span className="terra-dot" data-status="attention" aria-hidden="true" />
+                <div className="terra-notification-main">
+                  <div className="terra-notification-meta">
+                    <b>{label?.primary ?? t("common.agentFallback")}</b>
+                    <span className="terra-tag">{label?.tag ?? t("common.agent")}{workspaceNames[alert.workspaceId] ? ` · ${workspaceNames[alert.workspaceId]}` : ""}</span>
+                  </div>
+                  <p>{t("fleet.contextHigh", { count: alert.used })}</p>
+                  {onFocusAgent ? (
+                    <div className="terra-notification-actions">
+                      <button type="button" className="terra-button terra-button-attention" onClick={() => onFocusAgent(alert.terminalId)}>{t("notifications.goToPane")}</button>
+                    </div>
+                  ) : null}
                 </div>
               </article>
             );

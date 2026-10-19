@@ -2,18 +2,17 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
 export const SHELL_STORAGE_KEY = "terra-shell-state";
-export const SHELL_STATE_VERSION = 2;
+export const SHELL_STATE_VERSION = 3;
 
 export type ShellPanelLayout = Record<string, number>;
 
 export type ShellSurface =
-  | "home"
   | "workbench"
   | "fleet"
-  | "events"
   | "settings";
 
-export type DockTab = "inspector" | "events" | "context" | "voice";
+/** The right dock only hosts the agent inspector since the v3 shell. */
+export type DockTab = "inspector";
 
 export interface ShellWorkspaceTab {
   id: string;
@@ -49,6 +48,8 @@ export interface ShellStateData {
   panelLayout: ShellPanelLayout | null;
   /** Durable disclosure state for the hierarchical Navigator. */
   navigatorCollapsedIds: string[];
+  /** The sidebar collapses to a 56px rail of project initials and agent dots. */
+  sidebarCollapsed: boolean;
 }
 
 export interface ShellState extends ShellStateData {
@@ -66,6 +67,8 @@ export interface ShellState extends ShellStateData {
   reorderWorkspaceTabs: (workspaceIds: readonly string[]) => void;
   setPanelLayout: (layout: ShellPanelLayout) => void;
   setNavigatorCollapsedIds: (ids: readonly string[]) => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  toggleSidebar: () => void;
   reset: () => void;
 }
 
@@ -74,22 +77,21 @@ const DEFAULT_DOCK: ShellDockState = {
   activeTab: "inspector",
 };
 
-const DEFAULT_SURFACE: ShellSurface = "home";
+const DEFAULT_SURFACE: ShellSurface = "workbench";
 
 const SURFACES: readonly ShellSurface[] = [
-  "home",
   "workbench",
   "fleet",
-  "events",
   "settings",
 ];
 
-const DOCK_TABS: readonly DockTab[] = [
-  "inspector",
-  "events",
-  "context",
-  "voice",
-];
+/** v2 surfaces that v3 folded into others: Home into the Workbench, Events into the Fleet. */
+const LEGACY_SURFACES: Readonly<Record<string, ShellSurface>> = {
+  home: "workbench",
+  events: "fleet",
+};
+
+const DOCK_TABS: readonly DockTab[] = ["inspector"];
 
 const NOOP_STORAGE: Storage = {
   getItem: () => null,
@@ -106,6 +108,11 @@ function storage(): Storage {
 
 function isSurface(value: unknown): value is ShellSurface {
   return typeof value === "string" && SURFACES.includes(value as ShellSurface);
+}
+
+function toSurface(value: unknown): ShellSurface | null {
+  if (isSurface(value)) return value;
+  return typeof value === "string" ? LEGACY_SURFACES[value] ?? null : null;
 }
 
 function isDockTab(value: unknown): value is DockTab {
@@ -155,7 +162,7 @@ function normalizeTab(value: unknown): ShellWorkspaceTab | null {
 function normalizeHistoryEntry(value: unknown, index: number): ShellHistoryEntry | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<ShellHistoryEntry>;
-  const surface = isSurface(candidate.surface) ? candidate.surface : null;
+  const surface = toSurface(candidate.surface);
   if (!surface) return null;
   const id = cleanId(candidate.id) ?? `history-${index}`;
   const workspaceId = cleanId(candidate.workspaceId);
@@ -190,6 +197,7 @@ function initialData(): ShellStateData {
     historyIndex: 0,
     panelLayout: null,
     navigatorCollapsedIds: [],
+    sidebarCollapsed: false,
   };
 }
 
@@ -203,9 +211,7 @@ export function normalizeShellState(value: unknown): ShellStateData {
   const fallback = initialData();
   if (!value || typeof value !== "object") return fallback;
   const candidate = value as Partial<ShellStateData>;
-  const activeSurface = isSurface(candidate.activeSurface)
-    ? candidate.activeSurface
-    : fallback.activeSurface;
+  const activeSurface = toSurface(candidate.activeSurface) ?? fallback.activeSurface;
   const rawTabs = Array.isArray(candidate.workspaceTabs)
     ? candidate.workspaceTabs
     : [];
@@ -261,6 +267,7 @@ export function normalizeShellState(value: unknown): ShellStateData {
     historyIndex,
     panelLayout,
     navigatorCollapsedIds,
+    sidebarCollapsed: candidate.sidebarCollapsed === true,
   };
 }
 
@@ -373,7 +380,7 @@ export const useShellStore = create<ShellState>()(
             .slice(0, state.historyIndex)
             .reverse()
             .find((entry) => entry.workspaceId !== id) ??
-            newHistoryEntry("home", null);
+            newHistoryEntry("workbench", null);
           const history = [...state.history, fallbackEntry].slice(-100);
           return {
             workspaceTabs,
@@ -443,6 +450,10 @@ export const useShellStore = create<ShellState>()(
         });
       },
 
+      setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+
+      toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+
       reset: () => set(initialData()),
     }),
     {
@@ -460,6 +471,7 @@ export const useShellStore = create<ShellState>()(
         historyIndex: state.historyIndex,
         panelLayout: state.panelLayout,
         navigatorCollapsedIds: state.navigatorCollapsedIds,
+        sidebarCollapsed: state.sidebarCollapsed,
       }),
       migrate: (persistedState) => normalizeShellState(persistedState),
     },

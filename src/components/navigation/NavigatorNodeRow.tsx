@@ -181,13 +181,19 @@ export function NavigatorNodeRow({
       <span className={styles.nodeIcon}><IconForNode expanded={expanded} node={node} /></span>
       <span className={styles.nodeMain}>
         <span className={styles.nodeName}>{node.name}</span>
-      {node.kind === "agent" && (node as NavigatorAgentNode).branchIds.length > 0 ? (
+      {node.kind === "agent" && (node as NavigatorAgentNode).tag ? (
+          <span className={styles.nodeSubline}>{(node as NavigatorAgentNode).tag}</span>
+        ) : node.kind === "agent" && (node as NavigatorAgentNode).branchIds.length > 0 ? (
           <span className={styles.nodeSubline}><GitBranch aria-hidden="true" size={11} /> {(node as NavigatorAgentNode).branchIds.length} branch{(node as NavigatorAgentNode).branchIds.length === 1 ? "" : "es"}</span>
         ) : null}
       </span>
       {!visible && node.kind === "project" ? <EyeOff aria-label="Oculto" className={styles.visibilityIcon} size={12} /> : null}
       {node.kind === "agent" && (node as NavigatorAgentNode).notifications > 0 ? <span className={styles.notificationBadge}>{(node as NavigatorAgentNode).notifications}</span> : null}
-      {node.kind === "agent" && (node as NavigatorAgentNode).contextUsage !== null && ((node as NavigatorAgentNode).contextUsage ?? 0) >= 85 ? <span className={styles.contextBadge}>ctx</span> : null}
+      {node.kind === "agent" && (node as NavigatorAgentNode).contextUsage !== null ? (
+        <span className={((node as NavigatorAgentNode).contextUsage ?? 0) >= 85 ? styles.contextBadge : styles.contextValue} title="Contexto usado">
+          {(node as NavigatorAgentNode).contextUsage}%
+        </span>
+      ) : null}
       <span className={styles.nodeCount}>{countLabel(node)}</span>
       <span className={styles.actions} onClick={(event) => event.stopPropagation()}>{rowActions(node, actions)}</span>
     </div>

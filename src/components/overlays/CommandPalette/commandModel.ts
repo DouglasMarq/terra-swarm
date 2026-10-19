@@ -2,7 +2,7 @@ import type { AgentInfo, TerminalMeta, Workspace, WorkspaceGroup } from "../../.
 
 export type CommandGroupId = "recent" | "navigation" | "create" | "agent" | "settings";
 
-export type CommandRoute = "home" | "workbench" | "fleet" | "settings";
+export type CommandRoute = "workbench" | "fleet" | "settings";
 
 export type FocusedAgentAction =
   | "resume"
@@ -269,15 +269,6 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
   const hasAgentWorkspace = focusedWorkspaceId !== null;
   const context = focusedContext(data);
   const commands: CommandDescriptor[] = [
-    command({
-      id: "navigate:home",
-      label: "Ir para Início",
-      description: "Abrir o painel inicial do Terra",
-      group: "navigation",
-      keywords: ["inicio", "início", "dashboard", "home"],
-      icon: "home",
-      intent: { kind: "navigate", route: "home" },
-    }),
     command({
       id: "navigate:workbench",
       label: "Ir para Workbench",

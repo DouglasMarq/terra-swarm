@@ -130,6 +130,8 @@ export interface NavigatorAgentNode extends NavigatorBaseNode {
   branchIds: string[];
   contextUsage: number | null;
   notifications: number;
+  /** "claude 2" or "Lyra · claude"; shown under the task title. */
+  tag?: string;
 }
 
 export type NavigatorNode =
@@ -204,9 +206,15 @@ export interface NavigatorPanelProps {
   className?: string;
   style?: CSSProperties;
   emptyState?: ReactNode;
+  /** Task title / numbered kind per terminal id, see domain/agentLabels. */
+  agentLabels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
+  /** Skip container and pane levels: group → project → agent. */
+  flatten?: boolean;
+  /** Replaces the title row (the sidebar puts its surface switch there). */
+  headerSlot?: ReactNode;
 }
 
-export interface ProjectTreeProps extends Omit<NavigatorPanelProps, "className" | "style" | "title" | "emptyState" | "activeActivity" | "onActivityChange" | "onCreateGroup"> {
+export interface ProjectTreeProps extends Omit<NavigatorPanelProps, "className" | "style" | "title" | "emptyState" | "activeActivity" | "onActivityChange" | "onCreateGroup" | "agentLabels" | "flatten" | "headerSlot"> {
   tree: NavigatorTree;
   expandedIds: ReadonlySet<string>;
   searchQuery?: string;

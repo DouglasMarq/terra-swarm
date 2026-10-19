@@ -28,9 +28,9 @@ describe("shell store", () => {
     expect(useShellStore.getState().activeSurface).toBe("fleet");
 
     store.goBack();
-    store.navigate("events");
+    store.navigate("settings");
     store.goForward();
-    expect(useShellStore.getState().activeSurface).toBe("events");
+    expect(useShellStore.getState().activeSurface).toBe("settings");
     expect(useShellStore.getState().historyIndex).toBe(
       useShellStore.getState().history.length - 1,
     );
@@ -50,7 +50,7 @@ describe("shell store", () => {
       workspaceId: "workspace-a",
       label: "Alpha",
     });
-    expect(useShellStore.getState().activeSurface).toBe("home");
+    expect(useShellStore.getState().activeSurface).toBe("workbench");
 
     const historyBeforeReopen = useShellStore.getState().history.length;
     expect(store.reopenWorkspaceTab("workspace-a")).toBe(true);
@@ -114,9 +114,9 @@ describe("shell store", () => {
     });
 
     expect(normalized.version).toBe(SHELL_STATE_VERSION);
-    expect(normalized.activeSurface).toBe("home");
+    expect(normalized.activeSurface).toBe("workbench");
     expect(normalized.activeWorkspaceId).toBe("workspace-a");
-    expect(normalized.dock).toEqual({ open: true, activeTab: "voice" });
+    expect(normalized.dock).toEqual({ open: true, activeTab: "inspector" });
     expect(normalized.workspaceTabs).toHaveLength(1);
     expect(normalized.workspaceTabs[0]).toMatchObject({
       workspaceId: "workspace-a",
@@ -125,11 +125,11 @@ describe("shell store", () => {
     expect(normalized.historyIndex).toBe(1);
   });
 
-  it("opens the dock when a dock tab is selected", () => {
+  it("opens the dock when the inspector tab is selected", () => {
     const store = useShellStore.getState();
     store.setDockOpen(false);
-    store.setDockTab("context");
-    expect(useShellStore.getState().dock).toEqual({ open: true, activeTab: "context" });
+    store.setDockTab("inspector");
+    expect(useShellStore.getState().dock).toEqual({ open: true, activeTab: "inspector" });
   });
 
   it("normalizes and persists navigator disclosure and shell panel layout", () => {
@@ -148,5 +148,28 @@ describe("shell store", () => {
       navigatorCollapsedIds: ["group-a", "group-b"],
       panelLayout: { navigator: 25, content: 75, dock: 20 },
     });
+  });
+
+  it("migrates v2 Home and Events surfaces into the v3 shell", () => {
+    const normalized = normalizeShellState({
+      version: 2,
+      activeSurface: "events",
+      history: [
+        { id: "h1", surface: "home", workspaceId: null, at: 1 },
+        { id: "h2", surface: "events", workspaceId: null, at: 2 },
+      ],
+      historyIndex: 1,
+      sidebarCollapsed: true,
+    });
+    expect(normalized.activeSurface).toBe("fleet");
+    expect(normalized.history.map((entry) => entry.surface)).toEqual(["workbench", "fleet"]);
+    expect(normalized.sidebarCollapsed).toBe(true);
+  });
+
+  it("toggles the sidebar", () => {
+    const store = useShellStore.getState();
+    store.setSidebarCollapsed(false);
+    store.toggleSidebar();
+    expect(useShellStore.getState().sidebarCollapsed).toBe(true);
   });
 });

@@ -3,9 +3,10 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { DialogClose, DialogFooter, TerraDialog } from "../../overlays/Dialog";
 import { Button } from "../../ui/Button";
+import { useT } from "../../../i18n";
 import styles from "./ModalForms.module.css";
 
-export type RenameTargetKind = "workspace" | "group";
+export type RenameTargetKind = "workspace" | "group" | "terminal";
 
 export interface RenameDialogProps {
   open: boolean;
@@ -26,9 +27,10 @@ export function RenameDialog({
   open,
   value,
 }: RenameDialogProps) {
+  const t = useT();
   const [submitted, setSubmitted] = useState(false);
   const valid = value.trim().length > 0;
-  const noun = kind === "workspace" ? "workspace" : "grupo";
+  const noun = t(`rename.noun.${kind}`);
   const isCreate = mode === "create";
 
   useEffect(() => {
@@ -45,15 +47,15 @@ export function RenameDialog({
   return (
     <TerraDialog
       className={styles.dialog}
-      description={isCreate ? `Dê um nome para o novo ${noun}.` : `Escolha um novo nome para este ${noun}.`}
+      description={isCreate ? t("rename.createDescription", { noun }) : t("rename.description", { noun })}
       onOpenChange={onOpenChange}
       open={open}
-      title={`${isCreate ? "Novo" : "Renomear"} ${noun}`}
+      title={isCreate ? t("rename.createTitle", { noun }) : t("rename.title", { noun })}
     >
       <form className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.field}>
           <label className={styles.label} htmlFor="terra-rename-value">
-            Nome
+            {t("rename.name")}
           </label>
           <input
             aria-describedby={submitted && !valid ? "terra-rename-error" : undefined}
@@ -68,18 +70,18 @@ export function RenameDialog({
           />
           {submitted && !valid ? (
             <span className={styles.error} id="terra-rename-error" role="alert">
-              Informe um nome antes de salvar.
+              {t("rename.required")}
             </span>
           ) : null}
         </div>
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="ghost">
-              Cancelar
+              {t("common.cancel")}
             </Button>
           </DialogClose>
           <Button leadingIcon={<Pencil aria-hidden="true" size={14} />} type="submit" variant="primary">
-            {isCreate ? `Criar ${noun}` : "Salvar nome"}
+            {isCreate ? t("rename.create", { noun }) : t("rename.save")}
           </Button>
         </DialogFooter>
       </form>

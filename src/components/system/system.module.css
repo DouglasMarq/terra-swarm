@@ -78,7 +78,7 @@
 
 .loadingKicker {
   margin: 0;
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   font-family: var(--terra-font-mono, monospace);
   font-size: 10px;
   font-weight: 650;
@@ -287,7 +287,7 @@
 
 .emptyEyebrow {
   margin: 0;
-  color: var(--terra-text-faint, #5b5b64);
+  color: var(--terra-text-secondary);
   font-family: var(--terra-font-mono, monospace);
   font-size: 10px;
   font-weight: 650;

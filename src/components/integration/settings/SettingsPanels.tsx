@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { X } from "lucide-react";
 
 import type {
   AgentInfo,
@@ -25,6 +26,9 @@ import type {
   SettingsSectionDefinition,
   SettingsSectionId,
 } from "../../settings";
+import { LOCALES, useLocaleStore, useT, type Locale, type MessageKey } from "../../../i18n";
+import { pickAgentName, type NameSetId } from "../../../domain/agentNames";
+import { usePreferencesStore } from "../../../stores/preferencesStore";
 import styles from "./SettingsPanels.module.css";
 
 export type SnapshotOperation = "exporting" | "importing";
@@ -89,60 +93,92 @@ export interface SettingsPanelsProps {
   onInstallUpdate: () => void;
 }
 
+
+/** Voice languages are listed by their own name, so they read the same in any UI locale. */
 const VOICE_LANGUAGES = [
-  ["auto", "Detecção automática"],
+  ["auto", "Auto"],
   ["pt", "Português"],
-  ["en", "Inglês"],
-  ["es", "Espanhol"],
-  ["fr", "Francês"],
-  ["de", "Alemão"],
+  ["en", "English"],
+  ["es", "Español"],
+  ["fr", "Français"],
+  ["de", "Deutsch"],
   ["it", "Italiano"],
-  ["nl", "Holandês"],
-  ["pl", "Polonês"],
-  ["ru", "Russo"],
-  ["uk", "Ucraniano"],
-  ["tr", "Turco"],
-  ["ar", "Árabe"],
-  ["hi", "Hindi"],
-  ["zh", "Chinês"],
-  ["ja", "Japonês"],
-  ["ko", "Coreano"],
+  ["nl", "Nederlands"],
+  ["pl", "Polski"],
+  ["ru", "Русский"],
+  ["uk", "Українська"],
+  ["tr", "Türkçe"],
+  ["ar", "العربية"],
+  ["hi", "हिन्दी"],
+  ["zh", "中文"],
+  ["ja", "日本語"],
+  ["ko", "한국어"],
 ] as const;
 
-const FEATURE_FLAG_LABELS: Record<FeatureFlagId, { label: string; description: string }> = {
-  groups: {
-    label: "Grupos de workspaces",
-    description: "Organize workspaces e suspenda suas sessões em conjunto.",
-  },
-  subTabs: {
-    label: "Sub-abas",
-    description: "Mantenha várias abas de agentes dentro do mesmo painel.",
-  },
-  durableScrollback: {
-    label: "Scrollback persistente",
-    description: "Conserve a saída dos terminais entre reinicializações.",
-  },
-  fleetView: {
-    label: "Visão Fleet",
-    description: "Acompanhe vários workspaces e agentes ao mesmo tempo.",
-  },
-  voiceCommands: {
-    label: "Comandos por voz",
-    description: "Use a voz para focar, abrir e orquestrar agentes.",
-  },
-};
-
-// Groups, sub-tabs and Fleet are product foundations in the new shell. They
-// remain in persisted legacy state for migration compatibility, but exposing
-// switches that no longer govern the UI would be misleading.
+// Groups, sub-tabs and the Fleet are product foundations; only these remain optional.
 const LAB_FEATURE_FLAG_IDS = ["durableScrollback", "voiceCommands"] as const;
 
 const PROFILE_BY_ID = new Map(DEFAULT_AGENT_PROFILES.map((profile) => [profile.id, profile]));
 
+function hotkeyLabel(id: string, t: ReturnType<typeof useT>): string {
+  const workspace = /^selectWorkspace(\d)$/.exec(id);
+  if (workspace) return t("hotkeys.selectWorkspace", { n: workspace[1] });
+  const terminal = /^selectTerminal(\d)$/.exec(id);
+  if (terminal) return t("hotkeys.selectTerminal", { n: terminal[1] });
+  return t(`hotkeys.${id}` as MessageKey);
+}
+
+export interface SettingsPanelsProps {
+  section: SettingsSectionDefinition;
+  agents: readonly AgentInfo[];
+  defaultAgent: string | null;
+  onDefaultAgentChange: (agent: string | null) => void;
+  availableShells: readonly string[];
+  defaultShell: string;
+  onDefaultShellChange: (shell: string) => void;
+  fontSize: number;
+  onFontSizeChange: (delta: number) => void;
+  onFontSizeReset: () => void;
+  gridCols: number;
+  onGridLayoutChange: (columns: number) => void | Promise<void>;
+  reduceMotion: boolean;
+  onReduceMotionChange: (enabled: boolean) => void;
+  flags: FeatureFlags;
+  onFeatureFlagChange: (id: FeatureFlagId, enabled: boolean) => void;
+  voiceEnabled: boolean;
+  onVoiceEnabledChange: (enabled: boolean) => void;
+  voiceLang: string;
+  onVoiceLangChange: (lang: string) => void;
+  voiceInputDevice: string | null;
+  voiceInputDevices: readonly string[];
+  onVoiceInputDeviceChange: (device: string) => void;
+  micAvailable: boolean | null;
+  micTesting: boolean;
+  onMicTestToggle: () => void;
+  voiceModels: readonly VoiceModelInfo[];
+  voiceDownload: VoiceDownloadState | null;
+  onVoiceModelSelect: (id: string) => void;
+  onVoiceModelDownload: (id: string) => void;
+  hotkeys: Readonly<Record<string, Hotkey>>;
+  capturing: string | null;
+  onCaptureHotkey: (id: string) => void;
+  onResetHotkeys: () => void;
+  snapshotOperation: SnapshotOperation | null;
+  snapshotFeedback: SnapshotFeedback | null;
+  onExportSnapshot: () => void;
+  onImportSnapshot: () => void;
+  appVersion: string;
+  updateVersion: string | null;
+  updateInstalling: boolean;
+  updateCheckState: UpdateCheckState;
+  onManualUpdateCheck: () => void;
+  onInstallUpdate: () => void;
+}
+
 function PanelLead({ section }: { section: SettingsSectionDefinition }) {
+  useT();
   return (
     <div className={styles.lead}>
-      <span className={styles.eyebrow}>TERRA / {section.id.toUpperCase()}</span>
       <h3 className={styles.title}>{section.label}</h3>
       <p className={styles.description}>{section.description}</p>
     </div>
@@ -176,6 +212,7 @@ function Toggle({
 }
 
 export function MicLevelMeter({ active }: { active: boolean }) {
+  const t = useT();
   const fillRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -191,8 +228,122 @@ export function MicLevelMeter({ active }: { active: boolean }) {
   }, [active]);
 
   return (
-    <div className={styles.micMeter} aria-label="Nível do microfone">
+    <div className={styles.micMeter} aria-label={t("settingsPanels.micLevel")}>
       <div className={styles.micMeterFill} ref={fillRef} />
+    </div>
+  );
+}
+
+function LanguageCard() {
+  const t = useT();
+  const locale = useLocaleStore((state) => state.locale);
+  const setLocale = useLocaleStore((state) => state.setLocale);
+  return (
+    <div className={styles.card}>
+      <span className={styles.cardTitle}>{t("settings.language.title")}</span>
+      <label className={styles.fieldLabel}>
+        {t("settings.language.label")}
+        <select className={styles.select} value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
+          {LOCALES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+        </select>
+      </label>
+      <p className={styles.hint}>{t("settings.language.hint")}</p>
+    </div>
+  );
+}
+
+/** Names currently held by open agents, for "in use" and the next pick. */
+function useNamesInUse(): string[] {
+  const agentNames = usePreferencesStore((state) => state.agentNames);
+  return useMemo(() => Object.values(agentNames), [agentNames]);
+}
+
+function AgentNamesCard() {
+  const t = useT();
+  const prefs = usePreferencesStore();
+  const inUse = useNamesInUse();
+  const [draft, setDraft] = useState("");
+  const next = pickAgentName(inUse, prefs.agentNameList, { avoidSimilar: prefs.avoidSimilarNames, exhausted: prefs.namesExhausted });
+  const usedCount = prefs.agentNameList.filter((name) => inUse.includes(name)).length;
+
+  const addName = () => {
+    if (!draft.trim()) return;
+    prefs.setAgentNameList([...prefs.agentNameList, draft.trim()]);
+    setDraft("");
+  };
+
+  return (
+    <div className={styles.card}>
+      <span className={styles.cardTitle}>{t("settingsPanels.namesTitle")}</span>
+      <p className={styles.cardDescription}>{t("settingsPanels.namesHint")}</p>
+      <div className={styles.row}>
+        <div className={styles.rowLabel}>
+          <span className={styles.label}>{t("settingsPanels.autoNames")}</span>
+          <span className={styles.rowHint}>{t("settingsPanels.autoNamesHint")}</span>
+        </div>
+        <Toggle checked={prefs.agentAutoNames} label={t("settingsPanels.autoNames")} onChange={prefs.setAgentAutoNames} />
+      </div>
+      {prefs.agentAutoNames ? (
+        <div className={styles.stack}>
+          <label className={styles.fieldLabel}>
+            {t("settingsPanels.nameSet")}
+            <select className={styles.select} value={prefs.agentNameSet} onChange={(event) => prefs.setAgentNameSet(event.target.value as NameSetId)}>
+              <option value="stars">{t("settingsPanels.sets.stars")}</option>
+              <option value="rivers">{t("settingsPanels.sets.rivers")}</option>
+              <option value="custom">{t("settingsPanels.sets.custom")}</option>
+            </select>
+          </label>
+          <div className={styles.nameChips}>
+            {prefs.agentNameList.map((name) => {
+              const used = inUse.includes(name);
+              return (
+                <span className={styles.nameChip} data-used={used} key={name} title={name}>
+                  <span className={styles.nameChipDot} aria-hidden="true" />
+                  {name}
+                  <button
+                    type="button"
+                    className={styles.nameChipRemove}
+                    aria-label={t("settingsPanels.remove", { name })}
+                    onClick={() => prefs.setAgentNameList(prefs.agentNameList.filter((candidate) => candidate !== name))}
+                  >
+                    <X size={10} aria-hidden="true" />
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+          <div className={styles.nameAdd}>
+            <input
+              className={styles.input}
+              aria-label={t("settingsPanels.addName")}
+              placeholder={t("settingsPanels.addName")}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") addName();
+              }}
+            />
+            <button type="button" className={styles.button} onClick={addName}>{t("settingsPanels.add")}</button>
+          </div>
+          <p className={styles.hint}>
+            {t("settingsPanels.inUse", { count: usedCount })} · {t("settingsPanels.free", { count: prefs.agentNameList.length - usedCount })} · {t("settingsPanels.next")} <b>{next ?? "—"}</b>
+          </p>
+          <div className={styles.row}>
+            <div className={styles.rowLabel}>
+              <span className={styles.label}>{t("settingsPanels.avoidSimilar")}</span>
+              <span className={styles.rowHint}>{t("settingsPanels.avoidSimilarHint")}</span>
+            </div>
+            <Toggle checked={prefs.avoidSimilarNames} label={t("settingsPanels.avoidSimilar")} onChange={prefs.setAvoidSimilarNames} />
+          </div>
+          <label className={styles.fieldLabel}>
+            {t("settingsPanels.exhausted")}
+            <select className={styles.select} value={prefs.namesExhausted} onChange={(event) => prefs.setNamesExhausted(event.target.value === "repeat" ? "repeat" : "type-number")}>
+              <option value="type-number">{t("settingsPanels.exhaustedType")}</option>
+              <option value="repeat">{t("settingsPanels.exhaustedRepeat")}</option>
+            </select>
+          </label>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -202,6 +353,7 @@ function AgentPanel({
   defaultAgent,
   onDefaultAgentChange,
 }: Pick<SettingsPanelsProps, "agents" | "defaultAgent" | "onDefaultAgentChange">) {
+  const t = useT();
   const profiles: AgentProfile[] = agents.map((agent) =>
     PROFILE_BY_ID.get(agent.id) ?? {
       id: agent.id,
@@ -214,18 +366,16 @@ function AgentPanel({
   return (
     <div className={styles.stack}>
       <div className={styles.card}>
-        <span className={styles.cardTitle}>Agente padrão</span>
-        <p className={styles.cardDescription}>
-          O agente padrão é aberto diretamente ao criar uma nova sessão.
-        </p>
+        <span className={styles.cardTitle}>{t("settingsPanels.defaultAgentTitle")}</span>
+        <p className={styles.cardDescription}>{t("settingsPanels.defaultAgentHint")}</p>
         <label className={styles.fieldLabel}>
-          Perfil usado no quick-add
+          {t("settingsPanels.defaultAgentLabel")}
           <select
             className={styles.select}
             value={defaultAgent ?? ""}
             onChange={(event) => onDefaultAgentChange(event.target.value || null)}
           >
-            <option value="">Escolher a cada sessão</option>
+            <option value="">{t("settingsPanels.askEachTime")}</option>
             {agents.filter((agent) => agent.available).map((agent) => (
               <option key={agent.id} value={agent.id}>
                 {agent.label} ({agent.id})
@@ -235,12 +385,10 @@ function AgentPanel({
         </label>
       </div>
       <div className={styles.card}>
-        <span className={styles.cardTitle}>Perfis detectados</span>
-        <p className={styles.cardDescription}>
-          O Terra reaproveita os perfis Luna Max disponíveis nesta máquina.
-        </p>
+        <span className={styles.cardTitle}>{t("settingsPanels.detectedTitle")}</span>
+        <p className={styles.cardDescription}>{t("settingsPanels.detectedHint")}</p>
         {profiles.length === 0 ? (
-          <div className={styles.empty}>Nenhum agente foi detectado ainda.</div>
+          <div className={styles.empty}>{t("settingsPanels.detectedNone")}</div>
         ) : (
           <div className={styles.agentList}>
             {profiles.map((profile) => {
@@ -253,7 +401,7 @@ function AgentPanel({
                     <span className={styles.agentCommand}>{profile.command || "shell"}</span>
                   </div>
                   <span className={`${styles.status} ${available ? styles.available : styles.unavailable}`}>
-                    {available ? "disponível" : "não encontrado"}
+                    {available ? t("settingsPanels.available") : t("settingsPanels.notFound")}
                   </span>
                 </div>
               );
@@ -261,11 +409,13 @@ function AgentPanel({
           </div>
         )}
       </div>
+      <AgentNamesCard />
     </div>
   );
 }
 
 export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps) {
+  const t = useT();
   const {
     agents,
     defaultAgent,
@@ -316,34 +466,34 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
     <div className={styles.panel}>
       <PanelLead section={section} />
 
-      {section.id === "profile" && (
-        <div className={styles.card}>
-          <span className={styles.cardTitle}>Perfil local</span>
-          <p className={styles.cardDescription}>
-            O Terra Swarm funciona localmente neste dispositivo. Ainda não há uma conta remota vinculada a este perfil.
-          </p>
-          <div className={styles.row}>
-            <div className={styles.rowLabel}>
-              <span className={styles.label}>Ambiente</span>
-              <span className={styles.rowHint}>Preferências e sessões ficam no armazenamento local.</span>
+      {section.id === "general" && (
+        <div className={styles.stack}>
+          <LanguageCard />
+          <div className={styles.card}>
+            <span className={styles.cardTitle}>{t("settingsPanels.accessibility")}</span>
+            <p className={styles.cardDescription}>{t("settingsPanels.accessibilityHint")}</p>
+            <div className={styles.row}>
+              <div className={styles.rowLabel}>
+                <span className={styles.label}>{t("settingsPanels.reduceMotion")}</span>
+                <span className={styles.rowHint}>{t("settingsPanels.reduceMotionHint")}</span>
+              </div>
+              <Toggle checked={reduceMotion} label={t("settingsPanels.reduceMotion")} onChange={onReduceMotionChange} />
             </div>
-            <span className={styles.status}>local</span>
           </div>
-        </div>
-      )}
-
-      {section.id === "appearance" && (
-        <div className={styles.card}>
-          <span className={styles.cardTitle}>Acessibilidade</span>
-          <p className={styles.cardDescription}>
-            Ajuste o ritmo visual do workbench sem alterar a identidade Terra.
-          </p>
-          <div className={styles.row}>
-            <div className={styles.rowLabel}>
-              <span className={styles.label}>Reduzir movimento</span>
-              <span className={styles.rowHint}>Minimiza animações e transições do aplicativo.</span>
+          <div className={styles.card}>
+            <span className={styles.cardTitle}>{t("settingsPanels.labs")}</span>
+            <p className={styles.cardDescription}>{t("settingsPanels.labsHint")}</p>
+            <div className={styles.stack}>
+              {LAB_FEATURE_FLAG_IDS.map((id) => (
+                <div className={styles.row} key={id}>
+                  <div className={styles.rowLabel}>
+                    <span className={styles.label}>{t(`settingsPanels.flags.${id}.label`)}</span>
+                    <span className={styles.rowHint}>{t(`settingsPanels.flags.${id}.description`)}</span>
+                  </div>
+                  <Toggle checked={flags[id]} label={t(`settingsPanels.flags.${id}.label`)} onChange={(enabled) => onFeatureFlagChange(id, enabled)} />
+                </div>
+              ))}
             </div>
-            <Toggle checked={reduceMotion} label="Reduzir movimento" onChange={onReduceMotionChange} />
           </div>
         </div>
       )}
@@ -351,28 +501,28 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
       {section.id === "terminal" && (
         <div className={styles.stack}>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>Tipografia do terminal</span>
+            <span className={styles.cardTitle}>{t("settingsPanels.fontTitle")}</span>
             <div className={styles.row}>
               <div className={styles.rowLabel}>
-                <span className={styles.label}>Tamanho da fonte</span>
-                <span className={styles.rowHint}>{fontSize}px · limite {MIN_FONT_SIZE}–{MAX_FONT_SIZE}px</span>
+                <span className={styles.label}>{t("settingsPanels.fontSize")}</span>
+                <span className={styles.rowHint}>{t("settingsPanels.fontRange", { size: fontSize, min: MIN_FONT_SIZE, max: MAX_FONT_SIZE })}</span>
               </div>
               <div className={styles.stepper}>
-                <button className={styles.stepperButton} disabled={fontSize <= MIN_FONT_SIZE} onClick={() => onFontSizeChange(-1)} aria-label="Diminuir fonte">−</button>
+                <button className={styles.stepperButton} disabled={fontSize <= MIN_FONT_SIZE} onClick={() => onFontSizeChange(-1)} aria-label={t("settingsPanels.fontDecrease")}>−</button>
                 <span className={styles.stepperValue}>{fontSize}px</span>
-                <button className={styles.stepperButton} disabled={fontSize >= MAX_FONT_SIZE} onClick={() => onFontSizeChange(1)} aria-label="Aumentar fonte">+</button>
-                <button className={styles.chip} onClick={onFontSizeReset}>Restaurar</button>
+                <button className={styles.stepperButton} disabled={fontSize >= MAX_FONT_SIZE} onClick={() => onFontSizeChange(1)} aria-label={t("settingsPanels.fontIncrease")}>+</button>
+                <button className={styles.chip} onClick={onFontSizeReset}>{t("settingsPanels.reset")}</button>
               </div>
             </div>
           </div>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>Layout do terminal</span>
+            <span className={styles.cardTitle}>{t("settingsPanels.layoutTitle")}</span>
             <div className={styles.row}>
               <div className={styles.rowLabel}>
-                <span className={styles.label}>Terminais lado a lado</span>
-                <span className={styles.rowHint}>Escolha quantas colunas o grid pode acomodar.</span>
+                <span className={styles.label}>{t("settingsPanels.sideBySide")}</span>
+                <span className={styles.rowHint}>{t("settingsPanels.sideBySideHint")}</span>
               </div>
-              <div className={styles.gridOptions} aria-label="Colunas do grid">
+              <div className={styles.gridOptions} aria-label={t("settingsPanels.gridColumns")}>
                 {GRID_COL_OPTIONS.map((columns) => (
                   <button
                     key={columns}
@@ -387,11 +537,11 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
             </div>
           </div>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>Shell padrão</span>
+            <span className={styles.cardTitle}>{t("settingsPanels.shellTitle")}</span>
             <label className={styles.fieldLabel}>
-              Shell usada em novas sessões
+              {t("settingsPanels.shellLabel")}
               <select className={styles.select} value={defaultShell} onChange={(event) => onDefaultShellChange(event.target.value)}>
-                <option value="">Padrão do sistema</option>
+                <option value="">{t("settingsPanels.systemDefault")}</option>
                 {(defaultShell && !availableShells.includes(defaultShell) ? [defaultShell, ...availableShells] : availableShells).map((shell) => (
                   <option key={shell} value={shell}>{shell}</option>
                 ))}
@@ -404,50 +554,50 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
       {section.id === "voice" && (
         <div className={styles.stack}>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>Entrada por voz</span>
+            <span className={styles.cardTitle}>{t("settingsPanels.voiceTitle")}</span>
             <div className={styles.row}>
               <div className={styles.rowLabel}>
-                <span className={styles.label}>Ativar voz</span>
-                <span className={styles.rowHint}>Transcreve fala para o terminal em foco.</span>
+                <span className={styles.label}>{t("settingsPanels.voiceEnable")}</span>
+                <span className={styles.rowHint}>{t("settingsPanels.voiceEnableHint")}</span>
               </div>
-              <Toggle checked={voiceEnabled} label="Ativar entrada por voz" disabled={micAvailable === false && !voiceEnabled} onChange={onVoiceEnabledChange} />
+              <Toggle checked={voiceEnabled} label={t("settingsPanels.voiceEnableLabel")} disabled={micAvailable === false && !voiceEnabled} onChange={onVoiceEnabledChange} />
             </div>
-            {micAvailable === false && !voiceEnabled ? <p className={styles.hint}>Nenhum microfone detectado. Conecte um microfone para ativar a voz.</p> : null}
+            {micAvailable === false && !voiceEnabled ? <p className={styles.hint}>{t("settingsPanels.noMic")}</p> : null}
             {voiceEnabled ? (
               <>
                 <label className={styles.fieldLabel}>
-                  Idioma
+                  {t("settingsPanels.voiceLanguage")}
                   <select className={styles.select} value={voiceLang} onChange={(event) => onVoiceLangChange(event.target.value)}>
                     {VOICE_LANGUAGES.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
                   </select>
                 </label>
                 <label className={styles.fieldLabel}>
-                  Dispositivo de entrada
-                  <select className={styles.select} value={voiceInputDevice ?? ""} title={voiceInputDevice ?? "Padrão do sistema"} onChange={(event) => onVoiceInputDeviceChange(event.target.value)}>
-                    <option value="">Padrão do sistema</option>
-                    {voiceInputDevice && !voiceInputDevices.includes(voiceInputDevice) ? <option value={voiceInputDevice}>{voiceInputDevice} (desconectado)</option> : null}
+                  {t("settingsPanels.inputDevice")}
+                  <select className={styles.select} value={voiceInputDevice ?? ""} title={voiceInputDevice ?? t("settingsPanels.systemDefault")} onChange={(event) => onVoiceInputDeviceChange(event.target.value)}>
+                    <option value="">{t("settingsPanels.systemDefault")}</option>
+                    {voiceInputDevice && !voiceInputDevices.includes(voiceInputDevice) ? <option value={voiceInputDevice}>{t("settingsPanels.disconnected", { name: voiceInputDevice })}</option> : null}
                     {voiceInputDevices.map((device) => <option key={device} value={device}>{device}</option>)}
                   </select>
                 </label>
                 <div className={styles.row}>
                   <div className={styles.rowLabel}>
-                    <span className={styles.label}>Testar microfone</span>
-                    <span className={styles.rowHint}>Use fones para evitar retorno.</span>
+                    <span className={styles.label}>{t("settingsPanels.micTest")}</span>
+                    <span className={styles.rowHint}>{t("settingsPanels.micTestHint")}</span>
                   </div>
                   <div className={styles.micTest}>
                     <MicLevelMeter active={micTesting} />
-                    <button className={styles.chip} onClick={onMicTestToggle}>{micTesting ? "Parar" : "Testar"}</button>
+                    <button className={styles.chip} onClick={onMicTestToggle}>{micTesting ? t("settingsPanels.stop") : t("settingsPanels.test")}</button>
                   </div>
                 </div>
-                {micTesting ? <p className={styles.hint}>Fale no microfone. O medidor deve acompanhar sua voz.</p> : null}
+                {micTesting ? <p className={styles.hint}>{t("settingsPanels.micTestBody")}</p> : null}
               </>
             ) : null}
           </div>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>Modelos de transcrição</span>
-            <p className={styles.cardDescription}>Os modelos são baixados e usados localmente.</p>
-            {voiceModels.length === 0 ? <div className={styles.empty}>Carregando modelos…</div> : null}
-            {voiceModels.length > 0 && !voiceModels.some((model) => model.downloaded) ? <p className={styles.hint}>Baixe um modelo para começar a usar a entrada por voz.</p> : null}
+            <span className={styles.cardTitle}>{t("settingsPanels.modelsTitle")}</span>
+            <p className={styles.cardDescription}>{t("settingsPanels.modelsHint")}</p>
+            {voiceModels.length === 0 ? <div className={styles.empty}>{t("settingsPanels.modelsLoading")}</div> : null}
+            {voiceModels.length > 0 && !voiceModels.some((model) => model.downloaded) ? <p className={styles.hint}>{t("settingsPanels.modelsNone")}</p> : null}
             <div className={styles.modelList}>
               {voiceModels.map((model) => (
                 <div className={styles.modelRow} key={model.id}>
@@ -455,7 +605,7 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
                     <span className={styles.modelName} title={model.description}>{model.display_name}</span>
                     <span className={styles.modelMeta}>{model.size_label}</span>
                   </div>
-                  {voiceDownload?.id === model.id ? <span className={styles.status}>{Math.floor(voiceDownload.percent)}%</span> : model.active ? <span className={`${styles.chip} ${styles.chipActive}`}>Ativo</span> : model.downloaded ? <button className={styles.chip} onClick={() => onVoiceModelSelect(model.id)}>Usar</button> : <button className={styles.chip} disabled={voiceDownload !== null} onClick={() => onVoiceModelDownload(model.id)}>Baixar</button>}
+                  {voiceDownload?.id === model.id ? <span className={styles.status}>{Math.floor(voiceDownload.percent)}%</span> : model.active ? <span className={`${styles.chip} ${styles.chipActive}`}>{t("settingsPanels.active")}</span> : model.downloaded ? <button className={styles.chip} onClick={() => onVoiceModelSelect(model.id)}>{t("settingsPanels.use")}</button> : <button className={styles.chip} disabled={voiceDownload !== null} onClick={() => onVoiceModelDownload(model.id)}>{t("settingsPanels.download")}</button>}
                 </div>
               ))}
             </div>
@@ -465,66 +615,45 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
 
       {section.id === "agents" && <AgentPanel agents={agents} defaultAgent={defaultAgent} onDefaultAgentChange={onDefaultAgentChange} />}
 
-      {section.id === "orchestration" && (
-        <div className={styles.card}>
-          <span className={styles.cardTitle}>Terra Labs</span>
-          <p className={styles.cardDescription}>Recursos opcionais são salvos somente neste dispositivo. Grupos, sub-abas e Fleet fazem parte do produto e ficam sempre disponíveis.</p>
-          <div className={styles.stack}>
-            {LAB_FEATURE_FLAG_IDS.map((id) => {
-              const feature = FEATURE_FLAG_LABELS[id];
-              return (
-                <div className={styles.row} key={id}>
-                  <div className={styles.rowLabel}>
-                    <span className={styles.label}>{feature.label}</span>
-                    <span className={styles.rowHint}>{feature.description}</span>
-                  </div>
-                  <Toggle checked={flags[id]} label={feature.label} onChange={(enabled) => onFeatureFlagChange(id, enabled)} />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {section.id === "shortcuts" && (
         <div className={styles.card}>
-          <span className={styles.cardTitle}>Atalhos de teclado</span>
-          <p className={styles.cardDescription}>Clique em um atalho e pressione a nova combinação. Esc cancela a captura.</p>
+          <span className={styles.cardTitle}>{t("settingsPanels.shortcutsTitle")}</span>
+          <p className={styles.cardDescription}>{t("settingsPanels.shortcutsHint")}</p>
           <div className={styles.shortcutList}>
             {HOTKEY_ACTIONS.map((action) => (
               <div className={styles.shortcutRow} key={action.id}>
-                <span className={styles.shortcutIdentity}><span className={styles.shortcutName}>{action.label}</span></span>
-                {capturing === action.id ? <span className={styles.status}>Pressione o atalho…</span> : <button className={styles.chip} onClick={() => onCaptureHotkey(action.id)}>{formatHotkey(hotkeys[action.id])}</button>}
+                <span className={styles.shortcutIdentity}><span className={styles.shortcutName}>{hotkeyLabel(action.id, t)}</span></span>
+                {capturing === action.id ? <span className={styles.status}>{t("settingsPanels.pressShortcut")}</span> : <button className={styles.chip} onClick={() => onCaptureHotkey(action.id)}>{formatHotkey(hotkeys[action.id])}</button>}
               </div>
             ))}
           </div>
-          <div className={styles.actions}><button className={styles.button} onClick={onResetHotkeys}>Restaurar padrões</button></div>
+          <div className={styles.actions}><button className={styles.button} onClick={onResetHotkeys}>{t("settingsPanels.restoreDefaults")}</button></div>
         </div>
       )}
 
       {section.id === "data" && (
         <div className={styles.card}>
-          <span className={styles.cardTitle}>Portabilidade dos workspaces</span>
-          <p className={styles.cardDescription}>Exporte grupos, layouts, abas e metadados como um snapshot JSON versionado. Processos ativos e saída dos PTYs nunca são copiados.</p>
+          <span className={styles.cardTitle}>{t("settingsPanels.dataTitle")}</span>
+          <p className={styles.cardDescription}>{t("settingsPanels.dataHint")}</p>
           <div className={styles.actions}>
-            <button className={styles.primary} disabled={snapshotOperation !== null} onClick={onExportSnapshot}>{snapshotOperation === "exporting" ? "Exportando…" : "Exportar snapshot"}</button>
-            <button className={styles.button} disabled={snapshotOperation !== null} onClick={onImportSnapshot}>{snapshotOperation === "importing" ? "Importando…" : "Importar snapshot"}</button>
+            <button className={styles.primary} disabled={snapshotOperation !== null} onClick={onExportSnapshot}>{snapshotOperation === "exporting" ? t("settingsPanels.exporting") : t("settingsPanels.exportSnapshot")}</button>
+            <button className={styles.button} disabled={snapshotOperation !== null} onClick={onImportSnapshot}>{snapshotOperation === "importing" ? t("settingsPanels.importing") : t("settingsPanels.importSnapshot")}</button>
           </div>
-          <p className={styles.hint}>A importação substitui os metadados após uma confirmação explícita e cria um backup recuperável.</p>
-          {snapshotFeedback ? <div className={`${styles.feedback} ${snapshotFeedback.kind === "error" ? styles.feedbackError : styles.feedbackSuccess}`} role={snapshotFeedback.kind === "error" ? "alert" : "status"} aria-live="polite"><span>{snapshotFeedback.message}</span>{snapshotFeedback.backupPath ? <span className={styles.path}>{snapshotFeedback.message.startsWith("Snapshot importado") ? "Backup" : "Arquivo"}: {snapshotFeedback.backupPath}</span> : null}</div> : null}
+          <p className={styles.hint}>{t("settingsPanels.importHint")}</p>
+          {snapshotFeedback ? <div className={`${styles.feedback} ${snapshotFeedback.kind === "error" ? styles.feedbackError : styles.feedbackSuccess}`} role={snapshotFeedback.kind === "error" ? "alert" : "status"} aria-live="polite"><span>{snapshotFeedback.message}</span>{snapshotFeedback.backupPath ? <span className={styles.path}>{snapshotFeedback.message.startsWith("Snapshot importado") ? t("settingsPanels.backup") : t("settingsPanels.file")}: {snapshotFeedback.backupPath}</span> : null}</div> : null}
         </div>
       )}
 
-      {section.id === "updates" && (
+      {section.id === "about" && (
         <div className={styles.stack}>
           <div className={styles.card}>
             <span className={styles.cardTitle}>Terra Swarm</span>
-            <div className={styles.row}><span className={styles.label}>Versão instalada</span><span className={styles.status}>{appVersion || "desconhecida"}</span></div>
-            <p className={styles.hint}>A identidade e as preferências deste app são locais ao ambiente Terra.</p>
+            <div className={styles.row}><span className={styles.label}>{t("settingsPanels.installedVersion")}</span><span className={styles.status}>{appVersion || t("settingsPanels.unknown")}</span></div>
+            <p className={styles.hint}>{t("settingsPanels.localHint")}</p>
           </div>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>Atualizações</span>
-            {updateVersion ? <div className={styles.row}><span className={styles.label}>Versão {updateVersion} disponível</span><button className={styles.primary} disabled={updateInstalling} onClick={onInstallUpdate}>{updateInstalling ? "Instalando…" : "Atualizar agora"}</button></div> : <div className={styles.row}><span className={styles.status}>{updateCheckState === "checking" ? "Verificando atualizações…" : updateCheckState === "uptodate" ? "Você está em dia" : updateCheckState === "error" ? "Não foi possível verificar" : "Verificação automática a cada hora"}</span><button className={styles.chip} disabled={updateCheckState === "checking"} onClick={onManualUpdateCheck}>Verificar agora</button></div>}
+            <span className={styles.cardTitle}>{t("settingsPanels.updatesTitle")}</span>
+            {updateVersion ? <div className={styles.row}><span className={styles.label}>{t("settingsPanels.updateAvailable", { version: updateVersion })}</span><button className={styles.primary} disabled={updateInstalling} onClick={onInstallUpdate}>{updateInstalling ? t("settingsPanels.installing") : t("settingsPanels.updateNow")}</button></div> : <div className={styles.row}><span className={styles.status}>{updateCheckState === "checking" ? t("settingsPanels.checking") : updateCheckState === "uptodate" ? t("settingsPanels.upToDate") : updateCheckState === "error" ? t("settingsPanels.checkFailed") : t("settingsPanels.checkHourly")}</span><button className={styles.chip} disabled={updateCheckState === "checking"} onClick={onManualUpdateCheck}>{t("settingsPanels.checkNow")}</button></div>}
           </div>
         </div>
       )}

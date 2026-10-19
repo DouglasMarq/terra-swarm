@@ -1,107 +1,68 @@
 import {
   Bot,
   Database,
+  Info,
   Keyboard,
   Mic2,
-  Network,
-  Palette,
-  RefreshCw,
+  SlidersHorizontal,
   SquareTerminal,
-  UserRound,
   type LucideIcon,
 } from "lucide-react";
+import { t, type MessageKey } from "../../i18n";
 
 export const SETTINGS_SECTION_IDS = [
-  "profile",
-  "appearance",
+  "general",
   "terminal",
-  "voice",
   "agents",
-  "orchestration",
+  "voice",
   "shortcuts",
   "data",
-  "updates",
+  "about",
 ] as const;
 
 export type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number];
 
 export interface SettingsSectionDefinition {
   id: SettingsSectionId;
-  label: string;
-  description: string;
+  /** Translated on read, so the current locale always wins. */
+  readonly label: string;
+  readonly description: string;
   keywords: readonly string[];
   icon: LucideIcon;
 }
 
-/** Stable registry: ordering and labels are part of the settings navigation contract. */
+function section(
+  id: SettingsSectionId,
+  icon: LucideIcon,
+  keywords: readonly string[],
+): SettingsSectionDefinition {
+  return {
+    id,
+    icon,
+    keywords,
+    get label() {
+      return t(`settings.sections.${id}.label` as MessageKey);
+    },
+    get description() {
+      return t(`settings.sections.${id}.description` as MessageKey);
+    },
+  };
+}
+
+/** Stable registry: ordering is part of the settings navigation contract. */
 export const SETTINGS_SECTIONS: readonly SettingsSectionDefinition[] = [
-  {
-    id: "profile",
-    label: "Perfil",
-    description: "Identidade, conta local e preferências pessoais.",
-    keywords: ["conta", "identidade", "nome", "usuário", "utilizador"],
-    icon: UserRound,
-  },
-  {
-    id: "appearance",
-    label: "Aparência",
-    description: "Tema, densidade e linguagem visual do Terra.",
-    keywords: ["tema", "visual", "cor", "densidade", "interface"],
-    icon: Palette,
-  },
-  {
-    id: "terminal",
-    label: "Terminal",
-    description: "Shell, fonte, scrollback e comportamento dos terminais.",
-    keywords: ["shell", "fonte", "scrollback", "cursor", "pty", "comando"],
-    icon: SquareTerminal,
-  },
-  {
-    id: "voice",
-    label: "Voz",
-    description: "Entrada por voz, idioma e confirmação de comandos.",
-    keywords: ["microfone", "falar", "transcrição", "idioma", "áudio"],
-    icon: Mic2,
-  },
-  {
-    id: "agents",
-    label: "Agentes",
-    description: "Perfis Luna Max, prompts e regras de execução.",
-    keywords: ["luna", "modelo", "prompt", "agente", "perfil", "ia"],
-    icon: Bot,
-  },
-  {
-    id: "orchestration",
-    label: "Orquestração",
-    description: "Ondas, grupos, filas e coordenação do fleet.",
-    keywords: ["fleet", "grupo", "onda", "fila", "paralelo", "coordenação"],
-    icon: Network,
-  },
-  {
-    id: "shortcuts",
-    label: "Atalhos",
-    description: "Teclas rápidas para navegar e operar o workbench.",
-    keywords: ["teclado", "atalho", "keybind", "navegação", "comando"],
-    icon: Keyboard,
-  },
-  {
-    id: "data",
-    label: "Dados",
-    description: "Persistência local, exportação e limpeza de dados.",
-    keywords: ["backup", "exportar", "importar", "persistência", "limpar", "privacidade"],
-    icon: Database,
-  },
-  {
-    id: "updates",
-    label: "Atualizações",
-    description: "Versão instalada, canais e atualizações do aplicativo.",
-    keywords: ["versão", "atualizar", "release", "canal", "download"],
-    icon: RefreshCw,
-  },
-] as const;
+  section("general", SlidersHorizontal, ["perfil", "profile", "aparência", "appearance", "idioma", "language", "movimento", "motion", "labs", "orquestração", "fleet", "frota", "grupo"]),
+  section("terminal", SquareTerminal, ["shell", "fonte", "font", "scrollback", "grade", "grid", "colunas", "pty", "comando"]),
+  section("agents", Bot, ["agente", "agent", "perfil", "profile", "padrão", "default", "nome", "name", "claude", "codex"]),
+  section("voice", Mic2, ["microfone", "microphone", "falar", "transcrição", "transcription", "idioma", "áudio", "audio"]),
+  section("shortcuts", Keyboard, ["teclado", "keyboard", "atalho", "shortcut", "keybind", "hotkey"]),
+  section("data", Database, ["backup", "exportar", "export", "importar", "import", "snapshot", "persistência"]),
+  section("about", Info, ["versão", "version", "atualizar", "update", "release", "sobre", "about"]),
+];
 
 /** Search is accent-insensitive and locale-aware for Portuguese labels and commands. */
 export function normalizeSettingsSearch(value: string): string {
+  // Accent-insensitive so "orquestracao" finds "Orquestração".
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")

@@ -52,6 +52,7 @@ import { useShellStore } from "./stores/shellStore";
 import { useOrchestrationStore } from "./stores/orchestrationStore";
 import { planResume } from "./lib/session/resumePlanner";
 import { buildAgentLabels } from "./domain/agentLabels";
+import { pickAgentName } from "./domain/agentNames";
 import { createSpawnQueue } from "./lib/session/spawnQueue";
 import { createInitializationGate, type InitializationGate } from "./lib/session/initializationGate";
 import { dismissResumeItems } from "./lib/session/resumeDismiss";
@@ -157,14 +158,20 @@ function App() {
   const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
+  // Settings is a surface of the shell (v3), not a modal.
+  const showSettings = useShellStore((state) => state.activeSurface === "settings");
+  const setShowSettings = (open: boolean) => {
+    const shell = useShellStore.getState();
+    if (open) shell.navigate("settings", shell.activeWorkspaceId);
+    else if (shell.activeSurface === "settings") shell.navigate("workbench", shell.activeWorkspaceId);
+  };
   const [autoResumePending, setAutoResumePending] = useState(false);
   const [showResumeQueue, setShowResumeQueue] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const [initializationRunning, setInitializationRunning] = useState(false);
   const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
   const [settingsSection, setSettingsSection] =
-    useState<SettingsSectionId>("terminal");
+    useState<SettingsSectionId>("general");
   const [capturing, setCapturing] = useState<string | null>(null);
   const {
     activeId,
@@ -292,6 +299,7 @@ function App() {
     setVoiceLang,
     setVoiceModel,
     setVoiceInputDevice,
+    setAgentName,
   } = usePreferencesStore(
     useShallow((state) => ({
       defaultAgent: state.defaultAgent,
@@ -318,6 +326,7 @@ function App() {
       setVoiceLang: state.setVoiceLang,
       setVoiceModel: state.setVoiceModel,
       setVoiceInputDevice: state.setVoiceInputDevice,
+      setAgentName: state.setAgentName,
     })),
   );
 
@@ -655,7 +664,6 @@ function App() {
   const modalOpen =
     showNewWs ||
     showAgentPicker ||
-    showSettings ||
     showResume ||
     renameTarget !== null ||
     workspaceToDelete !== null ||
@@ -780,6 +788,16 @@ function App() {
     return () => cancelAnimationFrame(raf);
   }, [activeId, focusedId, modalOpen]);
 
+  // Optional automatic names: a fresh agent gets the next free name.
+  const nameNewAgent = (terminalId: string) => {
+    const prefs = usePreferencesStore.getState();
+    if (!prefs.agentAutoNames || prefs.agentNames[terminalId]) return;
+    const openIds = new Set(workspaces.flatMap((workspace) => workspace.terminals.map((terminal) => terminal.id)));
+    const inUse = Object.entries(prefs.agentNames).filter(([id]) => openIds.has(id)).map(([, name]) => name);
+    const name = pickAgentName(inUse, prefs.agentNameList, { avoidSimilar: prefs.avoidSimilarNames, exhausted: prefs.namesExhausted });
+    if (name) prefs.setAgentName(terminalId, name);
+  };
+
   const spawnTerminalInto = async (
     wsId: string,
     command: string,
@@ -801,6 +819,7 @@ function App() {
       defaultShell || undefined,
     );
     await registerSpawnedTerminal(res);
+    nameNewAgent(res.meta.id);
     if (placement?.paneId) {
       await api
         .setTerminalPlacement({
@@ -1101,7 +1120,9 @@ function App() {
     const nextName = target.value.trim();
     if (!nextName) return;
     setRenameTarget(null);
-    if (target.kind === "workspace") {
+    if (target.kind === "terminal") {
+      setAgentName(target.id, nextName);
+    } else if (target.kind === "workspace") {
       await renameWorkspace(target.id, nextName);
     } else {
       await renameGroup(target.id, nextName);
@@ -1277,7 +1298,7 @@ function App() {
   const resolveVoiceTerminal = (target: string) => {
     const needle = normalizeVoiceLookup(target);
     if (!needle) return null;
-    const labels = buildAgentLabels(workspaces, { titles });
+    const labels = buildAgentLabels(workspaces, { titles, names: usePreferencesStore.getState().agentNames });
     for (const workspace of workspaces) {
       const terminal = workspace.terminals.find((candidate) => {
         const title = titles[candidate.id] ?? "";
@@ -2288,6 +2309,81 @@ function App() {
     await deliverDictation(id, payload.transcript);
   };
 
+  const settingsPage = showSettings ? (
+        <Suspense fallback={<AppLoadingSurface label="configurações" />}>
+          <LazySettingsDialog
+            variant="page"
+            open
+            onOpenChange={(open) => {
+              setShowSettings(open);
+              if (!open) setCapturing(null);
+            }}
+            activeSection={settingsSection}
+            onActiveSectionChange={(section) => {
+              setSettingsSection(section);
+              setCapturing(null);
+            }}
+            renderSection={({ section }) => (
+              <Suspense fallback={<AppLoadingSurface label="seção" />}>
+                <LazySettingsSectionPanel
+                  section={section}
+                  agents={agents}
+                  defaultAgent={defaultAgent}
+                  onDefaultAgentChange={setDefaultAgent}
+                  availableShells={availableShells}
+                  defaultShell={defaultShell}
+                  onDefaultShellChange={setDefaultShell}
+                  fontSize={fontSize}
+                  onFontSizeChange={changeFontSize}
+                  onFontSizeReset={resetFontSize}
+                  gridCols={gridCols}
+                  onGridLayoutChange={applyGridLayout}
+                  reduceMotion={reduceMotion}
+                  onReduceMotionChange={updateReduceMotion}
+                  flags={flags}
+                  onFeatureFlagChange={setFeatureFlag}
+                  voiceEnabled={voiceEnabled}
+                  onVoiceEnabledChange={updateVoiceEnabled}
+                  voiceLang={voiceLang}
+                  onVoiceLangChange={updateVoiceLang}
+                  voiceInputDevice={voiceInputDevice}
+                  voiceInputDevices={voiceInputDevices}
+                  onVoiceInputDeviceChange={updateVoiceInputDevice}
+                  micAvailable={micAvailable}
+                  micTesting={micTesting}
+                  onMicTestToggle={toggleMicTest}
+                  voiceModels={voiceModels}
+                  voiceDownload={voiceDl}
+                  onVoiceModelSelect={selectVoiceModel}
+                  onVoiceModelDownload={downloadVoiceModel}
+                  hotkeys={hotkeys}
+                  capturing={capturing}
+                  onCaptureHotkey={setCapturing}
+                  onResetHotkeys={() => {
+                    resetHotkeys();
+                    setCapturing(null);
+                  }}
+                  snapshotOperation={snapshotOperation}
+                  snapshotFeedback={snapshotFeedback}
+                  onExportSnapshot={() => {
+                    void exportWorkspaceSnapshot();
+                  }}
+                  onImportSnapshot={() => {
+                    void importWorkspaceSnapshot();
+                  }}
+                  appVersion={appVersion}
+                  updateVersion={updateVersion}
+                  updateInstalling={updateInstalling}
+                  updateCheckState={updateCheckState}
+                  onManualUpdateCheck={manualUpdateCheck}
+                  onInstallUpdate={installUpdate}
+                />
+              </Suspense>
+            )}
+          />
+        </Suspense>
+  ) : null;
+
   return (
     <MotionConfig reducedMotion={reduceMotion ? "always" : "user"}>
       {initializationError ? (
@@ -2330,6 +2426,10 @@ function App() {
         voiceIntent={voiceCapsule.intent}
         voiceTargetAgent={targetLabelForVoiceIntent(voiceCapsule.intent)}
         voiceTargetId={voiceTargetId ?? focusedId}
+        settingsPage={settingsPage}
+        onRenameAgent={(terminalId) => {
+          setRenameTarget({ kind: "terminal", id: terminalId, value: usePreferencesStore.getState().agentNames[terminalId] ?? "" });
+        }}
         onVoiceTargetChange={setVoiceTargetId}
         voiceLevel={voiceLevel}
         voiceSamples={voiceSamples}
@@ -2399,7 +2499,6 @@ function App() {
           void resumeFleetTerminals(ids);
         }}
         onOpenSettings={() => {
-          setSettingsSection("terminal");
           setShowSettings(true);
         }}
         onOpenVoiceSettings={() => {
@@ -2533,93 +2632,6 @@ function App() {
         confirmLabel="Excluir projeto"
       />
 
-      {showSettings ? (
-        <Suspense fallback={<AppLoadingSurface label="configurações" />}>
-          <LazySettingsDialog
-            open
-            onOpenChange={(open) => {
-              setShowSettings(open);
-              if (!open) setCapturing(null);
-            }}
-            activeSection={settingsSection}
-            onActiveSectionChange={(section) => {
-              setSettingsSection(section);
-              setCapturing(null);
-            }}
-            title="Configurações"
-            description="Preferências do workbench, agentes e ambiente local."
-            renderSection={({ section }) => (
-              <Suspense fallback={<AppLoadingSurface label="seção" />}>
-                <LazySettingsSectionPanel
-                  section={section}
-                  agents={agents}
-                  defaultAgent={defaultAgent}
-                  onDefaultAgentChange={setDefaultAgent}
-                  availableShells={availableShells}
-                  defaultShell={defaultShell}
-                  onDefaultShellChange={setDefaultShell}
-                  fontSize={fontSize}
-                  onFontSizeChange={changeFontSize}
-                  onFontSizeReset={resetFontSize}
-                  gridCols={gridCols}
-                  onGridLayoutChange={applyGridLayout}
-                  reduceMotion={reduceMotion}
-                  onReduceMotionChange={updateReduceMotion}
-                  flags={flags}
-                  onFeatureFlagChange={setFeatureFlag}
-                  voiceEnabled={voiceEnabled}
-                  onVoiceEnabledChange={updateVoiceEnabled}
-                  voiceLang={voiceLang}
-                  onVoiceLangChange={updateVoiceLang}
-                  voiceInputDevice={voiceInputDevice}
-                  voiceInputDevices={voiceInputDevices}
-                  onVoiceInputDeviceChange={updateVoiceInputDevice}
-                  micAvailable={micAvailable}
-                  micTesting={micTesting}
-                  onMicTestToggle={toggleMicTest}
-                  voiceModels={voiceModels}
-                  voiceDownload={voiceDl}
-                  onVoiceModelSelect={selectVoiceModel}
-                  onVoiceModelDownload={downloadVoiceModel}
-                  hotkeys={hotkeys}
-                  capturing={capturing}
-                  onCaptureHotkey={setCapturing}
-                  onResetHotkeys={() => {
-                    resetHotkeys();
-                    setCapturing(null);
-                  }}
-                  snapshotOperation={snapshotOperation}
-                  snapshotFeedback={snapshotFeedback}
-                  onExportSnapshot={() => {
-                    void exportWorkspaceSnapshot();
-                  }}
-                  onImportSnapshot={() => {
-                    void importWorkspaceSnapshot();
-                  }}
-                  appVersion={appVersion}
-                  updateVersion={updateVersion}
-                  updateInstalling={updateInstalling}
-                  updateCheckState={updateCheckState}
-                  onManualUpdateCheck={manualUpdateCheck}
-                  onInstallUpdate={installUpdate}
-                />
-              </Suspense>
-            )}
-            footerSlot={
-              <button
-                type="button"
-                className="settings-dialog-done"
-                onClick={() => {
-                  setShowSettings(false);
-                  setCapturing(null);
-                }}
-              >
-                Concluído
-              </button>
-            }
-          />
-        </Suspense>
-      ) : null}
     </MotionConfig>
   );
 }

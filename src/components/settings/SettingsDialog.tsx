@@ -1,4 +1,5 @@
 import * as TabsPrimitive from "@radix-ui/react-tabs";
+import { useT } from "../../i18n";
 import { Search, X } from "lucide-react";
 import {
   useCallback,
@@ -69,6 +70,8 @@ export interface SettingsDialogProps {
   description?: ReactNode;
   searchPlaceholder?: string;
   className?: string;
+  /** "page" renders inline as a surface instead of a modal dialog. */
+  variant?: "dialog" | "page";
 }
 
 function renderSlot(
@@ -100,18 +103,23 @@ export function SettingsDialog({
   activeSection,
   className,
   defaultSection,
-  description = "Preferências do workbench, agentes e ambiente local.",
+  description,
   footerSlot,
   headerSlot,
   onActiveSectionChange,
   onOpenChange,
   open,
   renderSection,
-  searchPlaceholder = "Buscar em configurações…",
+  searchPlaceholder,
   sections = SETTINGS_SECTIONS,
   slots = {},
-  title = "Configurações",
+  title,
+  variant = "dialog",
 }: SettingsDialogProps) {
+  const t = useT();
+  const isPage = variant === "page";
+  const resolvedTitle = title ?? t("settings.title");
+  const resolvedDescription = description ?? t("settings.description");
   const firstSection = useMemo(
     () => getInitialSettingsSection(sections, activeSection ?? defaultSection),
     [activeSection, defaultSection, sections],
@@ -136,7 +144,7 @@ export function SettingsDialog({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || isPage) return undefined;
 
     function focusSearch(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase("en-US") === "k") {
@@ -148,7 +156,7 @@ export function SettingsDialog({
 
     window.addEventListener("keydown", focusSearch);
     return () => window.removeEventListener("keydown", focusSearch);
-  }, [open]);
+  }, [isPage, open]);
 
   const visibleSections = useMemo(() => filterSettingsSections(sections, query), [query, sections]);
   const selectedSection = activeSection ?? uncontrolledSection ?? firstSection;
@@ -199,42 +207,19 @@ export function SettingsDialog({
   const renderedHeaderSlot = renderSlot(headerSlot, headerContext);
   const renderedFooterSlot = renderSlot(footerSlot, footerContext);
 
-  return (
-    <>
-      <DialogRoot open={open} onOpenChange={onOpenChange}>
-        <DialogPortal>
-          <DialogOverlay className={styles.overlay} />
-          <DialogContent
-            aria-describedby="terra-settings-description"
-            className={cx(styles.dialogContent, className)}
-          >
-            <div className={styles.dialogHeader}>
-              <div className={styles.titleBlock}>
-                <DialogTitle className={styles.dialogTitle}>{title}</DialogTitle>
-                <DialogDescription className={styles.dialogDescription} id="terra-settings-description">
-                  {description}
-                </DialogDescription>
-              </div>
-              <div className={styles.headerActions}>
-                {renderedHeaderSlot}
-                <DialogClose className={styles.closeButton} aria-label="Fechar configurações">
-                  <X aria-hidden="true" size={17} strokeWidth={1.8} />
-                </DialogClose>
-              </div>
-            </div>
-
+  const body = (
             <TabsPrimitive.Root
               className={styles.tabsRoot}
               orientation="vertical"
               value={activeTab}
               onValueChange={selectSection}
             >
-              <aside className={styles.sidebar} aria-label="Categorias de configurações">
+              <aside className={styles.sidebar} aria-label={t("settings.categories")}>
                 <label className={styles.searchBox}>
                   <Search aria-hidden="true" size={15} strokeWidth={1.8} />
                   <input
                     ref={searchRef}
-                    aria-label="Buscar configurações"
+                    aria-label={t("settings.search")}
                     className={styles.searchInput}
                     onChange={(event) => setQuery(event.target.value)}
                     onKeyDown={(event) => {
@@ -250,16 +235,16 @@ export function SettingsDialog({
                         searchRef.current?.focus();
                       }
                     }}
-                    placeholder={searchPlaceholder}
+                    placeholder={searchPlaceholder ?? t("settings.searchPlaceholder")}
                     type="search"
                     value={query}
                   />
                   <kbd className={styles.searchShortcut}>{formatShortcut(SEARCH_HOTKEY)}</kbd>
                 </label>
                 <div className={styles.resultCount} aria-live="polite">
-                  {query ? `${visibleSections.length} ${visibleSections.length === 1 ? "resultado" : "resultados"}` : "Preferências Terra"}
+                  {query ? t("settings.results", { count: visibleSections.length }) : resolvedTitle}
                 </div>
-                <TabsPrimitive.List className={styles.sectionList} aria-label="Seções">
+                <TabsPrimitive.List className={styles.sectionList} aria-label={t("settings.sectionsLabel")}>
                   {visibleSections.map((section) => {
                     const Icon = section.icon;
                     return (
@@ -279,24 +264,17 @@ export function SettingsDialog({
                 </TabsPrimitive.List>
                 <div className={styles.sidebarHint}>
                   <span className={styles.sidebarHintKey}>↑↓</span>
-                  <span>navegar</span>
-                  <span className={styles.sidebarHintKey}>Esc</span>
-                  <span>fechar</span>
+                  <span>{t("settings.navigate")}</span>
+                  {isPage ? null : <><span className={styles.sidebarHintKey}>Esc</span><span>{t("common.close")}</span></>}
                 </div>
               </aside>
 
               <main className={styles.main}>
-                <div className={styles.mainHeader}>
-                  <span className={styles.mainEyebrow}>TERRA / PREFERÊNCIAS</span>
-                  <span className={styles.mainSectionName}>
-                    {sections.find((section) => section.id === activeTab)?.label ?? "Configurações"}
-                  </span>
-                </div>
                 {visibleSections.length === 0 ? (
                   <div className={styles.emptyState} role="status">
                     <Search aria-hidden="true" size={20} strokeWidth={1.5} />
-                    <strong>Nenhuma seção encontrada</strong>
-                    <span>Tente outro termo, como “voz”, “agente” ou “terminal”.</span>
+                    <strong>{t("settings.emptyTitle")}</strong>
+                    <span>{t("settings.emptyBody")}</span>
                   </div>
                 ) : (
                   visibleSections.map((section) => (
@@ -312,25 +290,67 @@ export function SettingsDialog({
                 {renderedFooterSlot ? <div className={styles.dialogFooter}>{renderedFooterSlot}</div> : null}
               </main>
             </TabsPrimitive.Root>
+  );
+
+  const confirmDialog = (
+    <ConfirmActionDialog
+      open={confirmation !== null}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) setConfirmation(null);
+      }}
+      title={confirmation?.title ?? t("common.confirm")}
+      description={confirmation?.description ?? ""}
+      confirmLabel={confirmation?.confirmLabel}
+      cancelLabel={confirmation?.cancelLabel}
+      intent={confirmation?.intent ?? "destructive"}
+      onConfirm={async () => {
+        await confirmation?.onConfirm();
+        setConfirmation(null);
+      }}
+    />
+  );
+
+  if (isPage) {
+    return (
+      <>
+        <section className={cx(styles.page, className)} aria-label={typeof resolvedTitle === "string" ? resolvedTitle : undefined}>
+          {body}
+        </section>
+        {confirmDialog}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <DialogRoot open={open} onOpenChange={onOpenChange}>
+        <DialogPortal>
+          <DialogOverlay className={styles.overlay} />
+          <DialogContent
+            aria-describedby="terra-settings-description"
+            className={cx(styles.dialogContent, className)}
+          >
+            <div className={styles.dialogHeader}>
+              <div className={styles.titleBlock}>
+                <DialogTitle className={styles.dialogTitle}>{resolvedTitle}</DialogTitle>
+                <DialogDescription className={styles.dialogDescription} id="terra-settings-description">
+                  {resolvedDescription}
+                </DialogDescription>
+              </div>
+              <div className={styles.headerActions}>
+                {renderedHeaderSlot}
+                <DialogClose className={styles.closeButton} aria-label={t("settings.close")}>
+                  <X aria-hidden="true" size={17} strokeWidth={1.8} />
+                </DialogClose>
+              </div>
+            </div>
+
+            {body}
           </DialogContent>
         </DialogPortal>
       </DialogRoot>
 
-      <ConfirmActionDialog
-        open={confirmation !== null}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) setConfirmation(null);
-        }}
-        title={confirmation?.title ?? "Confirmar ação"}
-        description={confirmation?.description ?? "Confirme para continuar."}
-        confirmLabel={confirmation?.confirmLabel}
-        cancelLabel={confirmation?.cancelLabel}
-        intent={confirmation?.intent ?? "destructive"}
-        onConfirm={async () => {
-          await confirmation?.onConfirm();
-          setConfirmation(null);
-        }}
-      />
+      {confirmDialog}
     </>
   );
 }

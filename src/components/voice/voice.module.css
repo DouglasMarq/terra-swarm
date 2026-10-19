@@ -204,7 +204,7 @@
 }
 
 .captureHint {
-  color: var(--terra-text-faint);
+  color: var(--terra-text-secondary);
   line-height: 1;
 }
 
@@ -227,7 +227,7 @@
 }
 
 .placeholder {
-  color: var(--terra-text-faint);
+  color: var(--terra-text-secondary);
 }
 
 .cursor {

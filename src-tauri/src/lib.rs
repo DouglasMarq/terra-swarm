@@ -1,3 +1,4 @@
+mod fonts;
 mod pty;
 mod scrollback;
 mod voice;
@@ -101,6 +102,7 @@ pub fn run() {
             pty::terminal_runtime_info,
             pty::detect_agents,
             pty::list_available_shells,
+            fonts::list_system_fonts,
             voice::voice_toggle_recording,
             voice::voice_set_language,
             voice::voice_mic_available,

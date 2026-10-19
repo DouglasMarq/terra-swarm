@@ -29,7 +29,7 @@ import type {
 import { LOCALES, useLocaleStore, useT, type Locale, type MessageKey } from "../../../i18n";
 import { pickAgentName, type NameSetId } from "../../../domain/agentNames";
 import { usePreferencesStore } from "../../../stores/preferencesStore";
-import { DEFAULT_TERMINAL_FONT_STACK, installedTerminalFonts, terminalFontStack } from "../../../lib/terminalFonts";
+import { DEFAULT_TERMINAL_FONT_STACK, filterFonts, loadSystemFonts, terminalFontStack, type SystemFont } from "../../../lib/terminalFonts";
 import styles from "./SettingsPanels.module.css";
 
 export type SnapshotOperation = "exporting" | "importing";
@@ -255,64 +255,90 @@ function LanguageCard() {
   );
 }
 
-/** Font family row: installed monospace fonts, "Other…" for any name, and a preview. */
+/** Font family picker: every installed family, a search box and a
+ * monospace-only filter; each row renders in its own font. */
 function TerminalFontPicker({ fontSize }: { fontSize: number }) {
   const t = useT();
   const family = usePreferencesStore((state) => state.terminalFontFamily);
   const setFamily = usePreferencesStore((state) => state.setTerminalFontFamily);
-  const installed = useMemo(() => installedTerminalFonts(), []);
-  const listed = family === "" || installed.includes(family);
-  const [custom, setCustom] = useState(!listed);
-  const [draft, setDraft] = useState(listed ? "" : family);
-  const missing = family !== "" && !installed.includes(family) && !custom;
-  const value = custom ? "__custom" : family;
+  const [fonts, setFonts] = useState<SystemFont[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [monospaceOnly, setMonospaceOnly] = useState(false);
+  const selectedRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void loadSystemFonts().then((list) => {
+      if (alive) setFonts(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Bring the current choice into view once the list arrives.
+  useEffect(() => {
+    if (fonts) selectedRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [fonts]);
+
+  const shown = useMemo(() => filterFonts(fonts ?? [], query, monospaceOnly), [fonts, query, monospaceOnly]);
+  const missing = fonts !== null && family !== "" && !fonts.some((font) => font.name === family);
+  const monoCount = fonts?.filter((font) => font.monospace).length ?? 0;
+
+  const row = (name: string, label: string, monospace: boolean, note?: string) => {
+    const selected = family === name;
+    return (
+      <button
+        key={name || "__default"}
+        ref={selected ? selectedRef : undefined}
+        type="button"
+        role="option"
+        aria-selected={selected}
+        className={styles.fontOption}
+        data-selected={selected}
+        onClick={() => setFamily(name)}
+      >
+        <span className={styles.fontOptionName} style={{ fontFamily: name ? terminalFontStack(name) : DEFAULT_TERMINAL_FONT_STACK }}>{label}</span>
+        {note ? <span className={styles.fontOptionTag}>{note}</span> : monospace ? <span className={styles.fontOptionTag}>{t("settingsPanels.fontMono")}</span> : null}
+      </button>
+    );
+  };
 
   return (
-    <>
-      <div className={styles.row}>
-        <div className={styles.rowLabel}>
-          <span className={styles.label}>{t("settingsPanels.fontFamily")}</span>
-          <span className={styles.rowHint}>{t("settingsPanels.fontFamilyHint", { count: installed.length })}</span>
-        </div>
-        <select
-          className={styles.select}
-          aria-label={t("settingsPanels.fontFamily")}
-          value={value}
-          onChange={(event) => {
-            const next = event.target.value;
-            if (next === "__custom") {
-              setCustom(true);
-              setDraft(family);
-              return;
-            }
-            setCustom(false);
-            setFamily(next);
-          }}
-        >
-          <option value="">{t("settingsPanels.fontDefault")}</option>
-          {installed.map((name) => (
-            <option key={name} value={name} style={{ fontFamily: terminalFontStack(name) }}>{name}</option>
-          ))}
-          {missing ? <option value={family}>{family}</option> : null}
-          <option value="__custom">{t("settingsPanels.fontOther")}</option>
-        </select>
+    <div className={styles.fontPicker}>
+      <div className={styles.rowLabel}>
+        <span className={styles.label}>{t("settingsPanels.fontFamily")}</span>
+        <span className={styles.rowHint}>
+          {fonts === null
+            ? t("settingsPanels.fontLoading")
+            : t("settingsPanels.fontFamilyHint", { count: fonts.length, mono: monoCount })}
+        </span>
       </div>
-      {custom ? (
-        <div className={styles.row}>
-          <input
-            className={styles.textInput}
-            aria-label={t("settingsPanels.fontOtherLabel")}
-            placeholder={t("settingsPanels.fontOtherPlaceholder")}
-            value={draft}
-            autoFocus
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={() => setFamily(draft)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") setFamily(draft);
-            }}
-          />
-        </div>
-      ) : null}
+      <div className={styles.fontFilters}>
+        <input
+          className={styles.textInput}
+          type="search"
+          aria-label={t("settingsPanels.fontSearch")}
+          placeholder={t("settingsPanels.fontSearch")}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <button
+          type="button"
+          className={styles.chip}
+          aria-pressed={monospaceOnly}
+          data-active={monospaceOnly}
+          onClick={() => setMonospaceOnly((value) => !value)}
+        >
+          {t("settingsPanels.fontMonoOnly")}
+        </button>
+      </div>
+      <div className={styles.fontList} role="listbox" aria-label={t("settingsPanels.fontFamily")}>
+        {!query ? row("", t("settingsPanels.fontDefault"), true) : null}
+        {missing ? row(family, family, false, t("settingsPanels.fontMissing")) : null}
+        {shown.map((font) => row(font.name, font.name, font.monospace))}
+        {fonts !== null && shown.length === 0 ? <div className={styles.fontEmpty}>{t("settingsPanels.fontNoMatch")}</div> : null}
+      </div>
       <div
         className={styles.fontPreview}
         aria-hidden="true"
@@ -321,7 +347,7 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
         <span>$ claude --continue</span>
         <span>0O 1lI {"{} [] => != <= ~"}</span>
       </div>
-    </>
+    </div>
   );
 }
 

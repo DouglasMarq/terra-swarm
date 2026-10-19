@@ -11,6 +11,11 @@ export function listShells(): Promise<string[]> {
   return invokeCommand("listShells");
 }
 
+/** Every font family installed on the system, flagged when monospaced. */
+export function listSystemFonts(): Promise<{ name: string; monospace: boolean }[]> {
+  return invokeCommand("listSystemFonts");
+}
+
 export function detectAgents(): Promise<AgentInfo[]> {
   return invokeCommand("detectAgents");
 }
@@ -26,6 +31,7 @@ export function gitStatus(workspaceId: string): Promise<WorkspaceGitStatus> {
 export const systemApi = {
   storeSavedAt,
   listShells,
+  listSystemFonts,
   detectAgents,
   gitBranch,
   gitStatus,

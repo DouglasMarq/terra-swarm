@@ -2395,7 +2395,7 @@ function App() {
             <strong>{t("system.initFailed")}</strong>
             <span>{initializationError}</span>
           </div>
-          <button type="button" onClick={startInitialization} disabled={initializationRunning}>
+          <button type="button" className="terra-button" onClick={startInitialization} disabled={initializationRunning}>
             {initializationRunning ? t("system.retrying") : t("nav.retry")}
           </button>
         </div>

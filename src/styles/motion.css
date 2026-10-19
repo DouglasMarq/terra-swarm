@@ -1,0 +1,74 @@
+/*
+ * Terra Swarm motion vocabulary.
+ *
+ * Small, quiet movements only: entrances rise 6px, overlays scale from 0.96,
+ * meters fill from the left, and status dots breathe. Every animation reads
+ * its curve and durations from tokens.css, and the reduce-motion rules in
+ * App.css collapse all of them.
+ */
+
+@keyframes terra-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes terra-pop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes terra-slide-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes terra-slide-in-left {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes terra-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes terra-pulse-green {
+  0% { box-shadow: 0 0 0 0 rgb(74 222 128 / 45%); }
+  70%, 100% { box-shadow: 0 0 0 6px rgb(74 222 128 / 0%); }
+}
+
+@keyframes terra-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@keyframes terra-glow-amber {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(224 180 92 / 0%); }
+  50% { box-shadow: 0 0 0 3px rgb(224 180 92 / 18%); }
+}
+
+@keyframes terra-wave {
+  0%, 100% { transform: scaleY(0.45); }
+  50% { transform: scaleY(1); }
+}
+
+/* Reusable classes */
+.terra-anim-rise { animation: terra-rise 320ms var(--terra-ease-out) both; }
+.terra-anim-pop { animation: terra-pop 160ms var(--terra-ease-out) both; }
+.terra-anim-slide-in { animation: terra-slide-in 280ms var(--terra-ease-out) both; }
+
+.terra-stagger > * { animation: terra-rise 320ms var(--terra-ease-out) both; }
+.terra-stagger > :nth-child(2) { animation-delay: 40ms; }
+.terra-stagger > :nth-child(3) { animation-delay: 80ms; }
+.terra-stagger > :nth-child(4) { animation-delay: 120ms; }
+.terra-stagger > :nth-child(5) { animation-delay: 160ms; }
+.terra-stagger > :nth-child(n + 6) { animation-delay: 200ms; }
+
+.terra-meter-fill {
+  transform-origin: left center;
+  animation: terra-fill 700ms var(--terra-ease-out) 120ms both;
+}
+
+/* Status dots: green pulses softly, amber (needs you) breathes. */
+.terra-dot[data-status="working"] { animation: terra-pulse-green 2.4s ease-out infinite; }
+.terra-dot[data-status="attention"] { animation: terra-breathe 2s ease-in-out infinite; }

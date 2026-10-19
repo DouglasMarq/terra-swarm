@@ -25,23 +25,31 @@
   --terra-text-faint: #5b5b64;
   --terra-accent: #fafafa;
   --terra-accent-contrast: #111113;
+  --terra-accent-soft: #d4d4d8;
+  --terra-text-secondary: #a1a1aa;
 
   /* status vocabulary: green = running, amber = attention, red = failure */
   --terra-green: #4ade80;
   --terra-green-dim: rgb(74 222 128 / 10%);
   --terra-amber: #e0b45c;
   --terra-amber-dim: rgb(224 180 92 / 14%);
+  --terra-amber-line: rgb(224 180 92 / 40%);
+  --terra-amber-ink: #eccf8e;
   --terra-red: #e5636f;
   --terra-red-dim: rgb(229 99 111 / 14%);
+  --terra-red-ink: #ef8f98;
 
   /* typography */
   --terra-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   --terra-font-mono: "SF Mono", Menlo, Monaco, "Courier New", monospace;
-  --terra-font-size-micro: 10px;
-  --terra-font-size-label: 11px;
+  --font-mono: var(--terra-font-mono);
+  /* 11 · 12 · 13 · 15 · 20 · 28 — screen titles carry the hierarchy, body stays 13 */
+  --terra-font-size-micro: 11px;
+  --terra-font-size-label: 12px;
   --terra-font-size-body: 13px;
-  --terra-font-size-title: 13px;
-  --terra-font-size-display: 16px;
+  --terra-font-size-title: 15px;
+  --terra-font-size-heading: 20px;
+  --terra-font-size-display: 28px;
 
   /* spacing */
   --terra-space-1: 4px;

@@ -10,6 +10,7 @@ import { ApplicationShell } from "../shell/ApplicationShell";
 import { CollapsedSidebar, Sidebar, SurfaceSwitch, type CollapsedSidebarProject } from "../shell/Sidebar";
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import { buildAgentLabels } from "../../domain/agentLabels";
+import { useT } from "../../i18n";
 import { NavigatorPanel } from "../navigation/NavigatorPanel";
 import type { ActivityTab, NavigatorFilesLoader, NavigatorGitLoader, NavigatorNodeRef } from "../navigation/types";
 import type { WorkbenchLocation, WorkbenchTabRenderContext } from "../workbench/types";
@@ -338,6 +339,7 @@ function inspectorContent(
 }
 
 export function VisualShellSurface(props: VisualShellSurfaceProps) {
+  const t = useT();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [muteUntil, setMuteUntil] = useState(0);
@@ -553,14 +555,14 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const voiceActive = visualVoiceState === "listening" || visualVoiceState === "transcribing";
   const voiceRecording = visualVoiceState === "listening";
   const voiceLabel = visualVoiceState === "listening"
-    ? "Ouvindo"
+    ? t("shell.voiceListening")
     : visualVoiceState === "transcribing"
-      ? "Transcrevendo"
+      ? t("shell.voiceTranscribing")
       : visualVoiceState === "preview"
-        ? "Prévia de voz"
+        ? t("shell.voicePreview")
         : visualVoiceState === "error"
-          ? "Erro de voz"
-          : "Voz";
+          ? t("shell.voiceError")
+          : t("shell.voice");
 
   const agentLabels = useMemo(() => buildAgentLabels(props.workspaces, { titles: props.titles }), [props.titles, props.workspaces]);
   const workspaceNames = useMemo(() => Object.fromEntries(props.workspaces.map((workspace) => [workspace.id, workspace.name])), [props.workspaces]);
@@ -576,7 +578,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     const agents = workspace.terminals.map((terminal) => {
       const status = agentStatus(terminal);
       const label = agentLabels[terminal.id];
-      const detail = status === "attention" ? "precisa de você" : status === "exited" ? "encerrado" : status === "suspended" ? "suspenso" : "trabalhando";
+      const detail = t(`status.${status}Lower` as const);
       return { id: terminal.id, label: label?.primary ?? terminal.command, status, detail };
     });
     const suspended = workspace.terminals.length > 0 && workspace.terminals.every((terminal) => terminal.suspended);
@@ -607,7 +609,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         onRetry={props.onVoiceRetry}
         onSend={props.onVoiceSend}
         onConfirm={props.onVoiceConfirm}
-        footer={<span role="status">{props.voiceFeedback || (props.voiceEnabled ? "Comandos e ditado estão disponíveis." : "Ative a voz em Configurações.")}</span>}
+        footer={<span role="status">{props.voiceFeedback || (props.voiceEnabled ? t("shell.voiceReady") : t("shell.voiceDisabled"))}</span>}
       />
     </div>
   );
@@ -648,11 +650,11 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
 
   const surface = shell.activeSurface;
   const branchList = Object.entries(props.branches).map(([workspaceId, name]) => ({ id: `${workspaceId}:${name}`, name, workspaceId }));
-  const navigator = <NavigatorPanel {...navigatorActivityProps} flatten agentLabels={agentLabels} headerSlot={<SurfaceSwitch surface={surface} attentionCount={attentionCount} onNavigate={(next) => navigate(next)} />} workspaces={props.workspaces} snapshot={props.snapshot} groups={wireGroups} activeWorkspaceId={props.activeId} activeContainerId={props.snapshot?.activeContainerId ?? null} activePaneId={props.snapshot?.activePaneId ?? null} activeTerminalId={props.focusedId} collapsedIds={shell.navigatorCollapsedIds} onCollapsedChange={shell.setNavigatorCollapsedIds} exited={props.exited} notifications={props.notifications} contextUsage={props.contextUsage} branches={branchList} containerVisibility={containerVisibility} onOpenWorkspace={(id) => navigate("workbench", id)} onOpenTerminal={(workspaceId, terminalId) => { props.onSelectWorkspace(workspaceId); focusTerminal(terminalId); }} onFocus={focusTerminal} onCreateGroup={props.onCreateGroup} onCreateProject={props.onCreateProject} onCreateAgent={(workspaceId) => props.onNewAgent(workspaceId)} onRenameNode={props.onRenameNode} onDeleteWorkspace={props.onDeleteWorkspace} onHideWorkspace={props.onHideWorkspace} onHideContainer={props.onHideContainer ?? props.onHideWorkspace} onSuspendGroup={props.onSuspendGroup} onResumeGroup={props.onResumeGroup} emptyState={<div className="terra-navigator-empty"><FolderKanban size={18} /><span>Crie um projeto para começar.</span></div>} />;
+  const navigator = <NavigatorPanel {...navigatorActivityProps} flatten agentLabels={agentLabels} headerSlot={<SurfaceSwitch surface={surface} attentionCount={attentionCount} onNavigate={(next) => navigate(next)} />} workspaces={props.workspaces} snapshot={props.snapshot} groups={wireGroups} activeWorkspaceId={props.activeId} activeContainerId={props.snapshot?.activeContainerId ?? null} activePaneId={props.snapshot?.activePaneId ?? null} activeTerminalId={props.focusedId} collapsedIds={shell.navigatorCollapsedIds} onCollapsedChange={shell.setNavigatorCollapsedIds} exited={props.exited} notifications={props.notifications} contextUsage={props.contextUsage} branches={branchList} containerVisibility={containerVisibility} onOpenWorkspace={(id) => navigate("workbench", id)} onOpenTerminal={(workspaceId, terminalId) => { props.onSelectWorkspace(workspaceId); focusTerminal(terminalId); }} onFocus={focusTerminal} onCreateGroup={props.onCreateGroup} onCreateProject={props.onCreateProject} onCreateAgent={(workspaceId) => props.onNewAgent(workspaceId)} onRenameNode={props.onRenameNode} onDeleteWorkspace={props.onDeleteWorkspace} onHideWorkspace={props.onHideWorkspace} onHideContainer={props.onHideContainer ?? props.onHideWorkspace} onSuspendGroup={props.onSuspendGroup} onResumeGroup={props.onResumeGroup} emptyState={<div className="terra-navigator-empty"><FolderKanban size={18} /><span>{t("shell.sidebar.emptyProjects")}</span></div>} />;
   const sidebar = <Sidebar surface={surface} attentionCount={attentionCount} onNavigate={(next) => navigate(next)} activeAgents={activeCount} version={props.appVersion?.trim() || undefined} onOpenSettings={props.onOpenSettings}>{navigator}</Sidebar>;
   const collapsedSidebar = <CollapsedSidebar surface={surface} attentionCount={attentionCount} projects={railProjects} activeWorkspaceId={props.activeId} focusedAgentId={props.focusedId} onNavigate={(next) => navigate(next)} onOpenWorkspace={(id) => navigate("workbench", id)} onFocusAgent={(_workspaceId, terminalId) => focusTerminal(terminalId)} onOpenSettings={props.onOpenSettings} onExpand={() => shell.setSidebarCollapsed(false)} expandShortcut="⌘B" />;
 
-  const content = surface === "fleet" ? <FleetCommandCenter workspaces={props.workspaces} groups={wireGroups} exited={props.exited} notifications={props.notifications} contextUsage={props.contextUsage} titles={props.titles} branches={props.branches} onFocus={(terminalId) => focusTerminal(terminalId)} onVoice={() => props.onToggleVoice()} onStop={(terminalId) => props.onBatchStop([terminalId])} onResume={(terminalId) => props.onBatchResume([terminalId])} onSuspendGroup={props.onSuspendGroup} onResumeGroup={props.onResumeGroup} onBatchAction={(action, ids) => { if (action === "stop") props.onBatchStop(ids); else if (action === "resume") props.onBatchResume(ids); else if (action === "focus" && ids[0]) focusTerminal(ids[0]); else if (action === "voice") props.onToggleVoice(); }} /> : (source ? <WorkspaceWorkbench source={source} renderTab={renderTab} onNewContainer={props.onNewWorkspace} onFocusTab={(tabId, location) => { if (location) orchestration.setContainerActivePane(location.containerId, location.paneId); const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) focusWorkbenchTab(tab.ptyId, location); else props.onFocus(tabId); }} onNewTab={(location: WorkbenchLocation) => props.onNewAgent(location.projectId ?? props.activeId ?? "", location.paneId)} onDetachTab={(tabId) => { const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) props.onDetach(tab.ptyId); }} onKillTab={(tabId) => { const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) props.onKill(tab.ptyId); }} onCollapseContainer={orchestration.setContainerCollapsed} onFullscreenContainer={orchestration.setContainerFullscreen} onLayoutChange={({ containerId, layout }) => orchestration.setContainerState(containerId, { layout })} onWorkspaceLayoutChange={orchestration.setWorkspaceLayout} onHideContainer={props.onHideContainer ?? ((containerId) => { const container = props.snapshot?.containers.find((candidate) => candidate.id === containerId); if (container?.projectId) props.onHideWorkspace(container.projectId); })} emptyState={<div className="terra-workbench__empty"><LayoutGrid size={20} /><strong>Nenhum workspace visível</strong><button type="button" onClick={props.onNewWorkspace}>Novo workspace</button></div>} /> : <div className="terra-workbench__empty"><LayoutGrid size={20} /><strong>Nenhum workspace carregado</strong></div>);
+  const content = surface === "fleet" ? <FleetCommandCenter workspaces={props.workspaces} groups={wireGroups} exited={props.exited} notifications={props.notifications} contextUsage={props.contextUsage} titles={props.titles} branches={props.branches} onFocus={(terminalId) => focusTerminal(terminalId)} onVoice={() => props.onToggleVoice()} onStop={(terminalId) => props.onBatchStop([terminalId])} onResume={(terminalId) => props.onBatchResume([terminalId])} onSuspendGroup={props.onSuspendGroup} onResumeGroup={props.onResumeGroup} onBatchAction={(action, ids) => { if (action === "stop") props.onBatchStop(ids); else if (action === "resume") props.onBatchResume(ids); else if (action === "focus" && ids[0]) focusTerminal(ids[0]); else if (action === "voice") props.onToggleVoice(); }} /> : (source ? <WorkspaceWorkbench source={source} renderTab={renderTab} onNewContainer={props.onNewWorkspace} onFocusTab={(tabId, location) => { if (location) orchestration.setContainerActivePane(location.containerId, location.paneId); const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) focusWorkbenchTab(tab.ptyId, location); else props.onFocus(tabId); }} onNewTab={(location: WorkbenchLocation) => props.onNewAgent(location.projectId ?? props.activeId ?? "", location.paneId)} onDetachTab={(tabId) => { const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) props.onDetach(tab.ptyId); }} onKillTab={(tabId) => { const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) props.onKill(tab.ptyId); }} onCollapseContainer={orchestration.setContainerCollapsed} onFullscreenContainer={orchestration.setContainerFullscreen} onLayoutChange={({ containerId, layout }) => orchestration.setContainerState(containerId, { layout })} onWorkspaceLayoutChange={orchestration.setWorkspaceLayout} onHideContainer={props.onHideContainer ?? ((containerId) => { const container = props.snapshot?.containers.find((candidate) => candidate.id === containerId); if (container?.projectId) props.onHideWorkspace(container.projectId); })} emptyState={<div className="terra-workbench__empty"><LayoutGrid size={20} /><strong>{t("shell.workbenchEmpty")}</strong><button type="button" onClick={props.onNewWorkspace}>{t("shell.newWorkspace")}</button></div>} /> : <div className="terra-workbench__empty"><LayoutGrid size={20} /><strong>{t("shell.workbenchNotLoaded")}</strong></div>);
 
 
   return <>
@@ -665,7 +667,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       sidebarCollapsed={shell.sidebarCollapsed}
       chrome={{
         breadcrumb: surface === "fleet" ? undefined : { project: activeWorkspace?.name ?? null, agent: focusedLabel?.primary ?? null, branch: props.activeId ? props.branches[props.activeId] ?? null : null },
-        title: surface === "fleet" ? "Frota" : "Terra Swarm",
+        title: surface === "fleet" ? t("common.fleet") : t("common.appName"),
         sidebarCollapsed: shell.sidebarCollapsed,
         onToggleSidebar: shell.toggleSidebar,
         sidebarShortcut: "⌘B",

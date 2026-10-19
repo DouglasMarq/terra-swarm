@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ChevronsRight, LayoutGrid, List, Settings2 } from "lucide-react";
 import type { ShellSurface } from "../../stores/shellStore";
+import { useT } from "../../i18n";
 import "./sidebar.css";
 
 type SidebarSurface = Extract<ShellSurface, "workbench" | "fleet">;
@@ -12,21 +13,23 @@ interface SurfaceSwitchProps {
 }
 
 function AttentionCount({ count }: { count: number }) {
+  const t = useT();
   if (count <= 0) return null;
-  return <span className="terra-sidebar-count" aria-label={`${count} precisam de você`}>{count}</span>;
+  return <span className="terra-sidebar-count" aria-label={t("shell.attention.button", { count })}>{count}</span>;
 }
 
 /** Workbench | Frota. The two places work happens. */
 export function SurfaceSwitch({ surface, attentionCount, onNavigate }: SurfaceSwitchProps) {
+  const t = useT();
   return (
-    <div className="terra-sidebar-switch" role="group" aria-label="Superfície">
+    <div className="terra-sidebar-switch" role="group" aria-label={t("shell.sidebar.surface")}>
       <button
         type="button"
         aria-pressed={surface === "workbench"}
         data-active={surface === "workbench"}
         onClick={() => onNavigate("workbench")}
       >
-        Workbench
+        {t("common.workbench")}
       </button>
       <button
         type="button"
@@ -34,7 +37,7 @@ export function SurfaceSwitch({ surface, attentionCount, onNavigate }: SurfaceSw
         data-active={surface === "fleet"}
         onClick={() => onNavigate("fleet")}
       >
-        Frota
+        {t("common.fleet")}
         <AttentionCount count={attentionCount} />
       </button>
     </div>
@@ -50,8 +53,9 @@ export interface SidebarProps extends SurfaceSwitchProps {
 }
 
 export function Sidebar({ children, activeAgents, version, onOpenSettings, surface }: SidebarProps) {
+  const t = useT();
   return (
-    <div className="terra-sidebar" aria-label="Barra lateral">
+    <div className="terra-sidebar" aria-label={t("shell.sidebar.label")}>
       <div className="terra-sidebar-tree">{children}</div>
       <footer className="terra-sidebar-footer">
         <button
@@ -61,10 +65,10 @@ export function Sidebar({ children, activeAgents, version, onOpenSettings, surfa
           onClick={onOpenSettings}
         >
           <Settings2 size={15} aria-hidden="true" />
-          Configurações
+          {t("common.settings")}
         </button>
         <span className="terra-sidebar-meta">
-          {activeAgents} {activeAgents === 1 ? "agente ativo" : "agentes ativos"}
+          {t("shell.sidebar.activeAgents", { count: activeAgents })}
           {version ? ` · v${version}` : ""}
         </span>
       </footer>
@@ -121,14 +125,15 @@ export function CollapsedSidebar({
   onExpand,
   expandShortcut,
 }: CollapsedSidebarProps) {
-  const expandLabel = expandShortcut ? `Expandir barra lateral (${expandShortcut})` : "Expandir barra lateral";
+  const t = useT();
+  const expandLabel = expandShortcut ? `${t("shell.sidebar.expand")} (${expandShortcut})` : t("shell.sidebar.expand");
   return (
-    <nav className="terra-rail" aria-label="Barra lateral recolhida">
+    <nav className="terra-rail" aria-label={t("shell.sidebar.collapsedLabel")}>
       <button
         type="button"
         className="terra-rail-button"
-        aria-label="Workbench"
-        title="Workbench"
+        aria-label={t("common.workbench")}
+        title={t("common.workbench")}
         data-active={surface === "workbench"}
         onClick={() => onNavigate("workbench")}
       >
@@ -137,8 +142,8 @@ export function CollapsedSidebar({
       <button
         type="button"
         className="terra-rail-button"
-        aria-label={attentionCount > 0 ? `Frota, ${attentionCount} precisam de você` : "Frota"}
-        title="Frota"
+        aria-label={attentionCount > 0 ? t("shell.sidebar.fleetAttention", { count: attentionCount }) : t("common.fleet")}
+        title={t("common.fleet")}
         data-active={surface === "fleet"}
         onClick={() => onNavigate("fleet")}
       >
@@ -156,7 +161,7 @@ export function CollapsedSidebar({
                 className="terra-rail-initials"
                 data-active={active}
                 data-suspended={project.suspended}
-                aria-label={`${project.name}, ${project.agents.length} agentes`}
+                aria-label={t("shell.sidebar.projectAgents", { name: project.name, count: project.agents.length })}
                 title={project.name}
                 onClick={() => onOpenWorkspace(project.id)}
               >
@@ -182,7 +187,7 @@ export function CollapsedSidebar({
           );
         })}
       </div>
-      <button type="button" className="terra-rail-button" aria-label="Configurações" title="Configurações" data-active={surface === "settings"} onClick={onOpenSettings}>
+      <button type="button" className="terra-rail-button" aria-label={t("common.settings")} title={t("common.settings")} data-active={surface === "settings"} onClick={onOpenSettings}>
         <Settings2 size={16} aria-hidden="true" />
       </button>
       <button type="button" className="terra-rail-button" aria-label={expandLabel} title={expandLabel} onClick={onExpand}>

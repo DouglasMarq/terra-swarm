@@ -1,5 +1,3 @@
-import { Plus } from "lucide-react";
-import { useT } from "../../i18n";
 import { EmptyPaneCell } from "./EmptyPaneCell";
 import { PaneGrid } from "./PaneGrid";
 import type { ContainerLayoutProps } from "./types";
@@ -16,12 +14,6 @@ export function ContainerLayout({
   onLayoutChange,
   ...actions
 }: ContainerLayoutProps) {
-  const t = useT();
-  const newTabLocation = {
-    projectId: projection.project?.id ?? projection.container.projectId ?? null,
-    containerId: projection.container.id,
-    paneId: null,
-  };
   const activePaneId = projection.container.activePaneId
     ?? projection.project?.activePaneId
     ?? projection.panes[0]?.pane.id
@@ -44,12 +36,6 @@ export function ContainerLayout({
       mode={mode}
       activePaneId={activePaneId}
       onLayoutChange={onLayoutChange}
-      renderEmptySlot={actions.onNewTab ? () => (
-        <button type="button" className="terra-pane-grid__new" onClick={() => actions.onNewTab?.(newTabLocation)}>
-          <Plus size={14} aria-hidden="true" />
-          {t("grid.newAgent")}
-        </button>
-      ) : undefined}
       renderPane={(paneProjection) => (
         <ContainerPaneSurface
           projection={projection}

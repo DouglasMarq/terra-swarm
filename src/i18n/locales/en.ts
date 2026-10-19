@@ -116,7 +116,7 @@ export const en = {
     size: { one: "{columns} × {rows} · {count} slot", other: "{columns} × {rows} · {count} slots" },
     hintAuto: "Grows up to 4 columns as agents open. Pick a size to fix it, up to 8 × 8.",
     hintDense: "With more than 16 slots each terminal gets narrow; Focus helps you read one at a time.",
-    hintEmpty: { one: "{count} empty slot shows “+ New agent”.", other: "{count} empty slots show “+ New agent”." },
+    hintFill: "Free slots are filled: the last row widens to use the whole width.",
     hintOverflow: "Extra agents add new rows.",
     cell: "{columns} × {rows}",
     resize: "Resize pane",

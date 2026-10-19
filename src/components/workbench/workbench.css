@@ -654,29 +654,6 @@
   line-height: 17px;
 }
 
-.terra-pane-grid__cell--empty {
-  display: grid;
-  place-items: stretch;
-}
-
-.terra-pane-grid__new {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 1px dashed var(--terra-border-strong);
-  border-radius: var(--terra-radius-xl);
-  color: var(--terra-text-secondary);
-  background: transparent;
-  cursor: pointer;
-  transition: background-color var(--terra-duration-hover) ease, color var(--terra-duration-hover) ease;
-}
-
-.terra-pane-grid__new:hover {
-  color: var(--terra-text);
-  background: var(--terra-bg-panel);
-}
-
 .terra-project-container__new kbd {
   font-family: var(--terra-font-mono);
   font-size: var(--terra-font-size-micro);

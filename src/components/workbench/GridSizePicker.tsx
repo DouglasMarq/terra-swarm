@@ -54,7 +54,7 @@ export function GridSizePicker({ dimensions, auto, paneCount, disabled, onSelect
   let hint = t("grid.hintAuto");
   if (hover || !auto) {
     if (total > 16) hint = t("grid.hintDense");
-    else if (total > paneCount) hint = t("grid.hintEmpty", { count: total - paneCount });
+    else if (total > paneCount) hint = t("grid.hintFill");
     else hint = t("grid.hintOverflow");
   }
   const buttonLabel = auto ? t("grid.label") : `${t("grid.label")} ${dimensions.columns}×${dimensions.rows}`;

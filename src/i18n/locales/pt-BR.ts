@@ -119,7 +119,7 @@ export const ptBR: Dictionary<typeof en> = {
     size: { one: "{columns} × {rows} · {count} espaço", other: "{columns} × {rows} · {count} espaços" },
     hintAuto: "Cresce até 4 colunas conforme os agentes abrem. Escolha um tamanho para fixar, até 8 × 8.",
     hintDense: "Com mais de 16 espaços cada terminal fica estreito; o modo Foco ajuda a ler um de cada vez.",
-    hintEmpty: { one: "{count} espaço vazio mostra “+ Novo agente”.", other: "{count} espaços vazios mostram “+ Novo agente”." },
+    hintFill: "Os espaços livres são preenchidos: a última linha se alarga para ocupar toda a largura.",
     hintOverflow: "Agentes a mais criam linhas novas.",
     cell: "{columns} × {rows}",
     resize: "Redimensionar painel",

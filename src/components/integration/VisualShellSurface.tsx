@@ -25,6 +25,7 @@ import type { WorkbenchLocation, WorkbenchTabRenderContext } from "../workbench/
 import type { CommandConfirmRequest, FocusedAgentAction } from "../overlays/CommandPalette";
 import { ConfirmActionDialog } from "../overlays/Dialog";
 import { VoiceCapsule } from "../voice";
+import { VoiceTargetPicker } from "../voice/VoiceTargetPicker";
 import type {
   VoiceCapsuleIntent,
   VoiceCapsuleState,
@@ -157,6 +158,9 @@ export interface VisualShellSurfaceProps {
   voiceFinalTranscript?: string;
   voiceIntent?: VoiceCapsuleIntent | null;
   voiceTargetAgent?: string | null;
+  /** Terminal that receives dictation (explicit choice or the focused one). */
+  voiceTargetId?: string | null;
+  onVoiceTargetChange?: (terminalId: string | null) => void;
   voiceLevel?: number;
   voiceSamples?: readonly number[];
   voiceError?: string | null;
@@ -540,8 +544,22 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const activeWorkspace = props.workspaces.find((workspace) => workspace.id === props.activeId) ?? null;
   const focusedLabel = props.focusedId ? agentLabels[props.focusedId] ?? null : null;
   const muted = muteUntil > Date.now();
+  const voiceTargets = railProjects.map((project) => ({
+    id: project.id,
+    name: project.name,
+    agents: project.agents.map((agent) => ({
+      id: agent.id,
+      primary: agentLabels[agent.id]?.primary ?? agent.label,
+      tag: agentLabels[agent.id]?.tag ?? agent.label,
+      status: agent.status,
+      detail: agent.detail,
+    })),
+  }));
   const voiceOverlay = visualVoiceState === "idle" ? null : (
     <div className="terra-voice-overlay">
+      {props.onVoiceTargetChange ? (
+        <VoiceTargetPicker projects={voiceTargets} targetId={props.voiceTargetId ?? props.focusedId} onChange={props.onVoiceTargetChange} />
+      ) : null}
       <VoiceCapsule
         state={visualVoiceState}
         disabled={!props.voiceEnabled}
@@ -717,6 +735,9 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       focusedWorkspaceId={props.activeId}
       focusedTerminalId={props.focusedId}
       hasDetachedTabs={props.detachedTerminalIds.length > 0}
+      hasRecentlyClosedTabs={shell.recentlyClosedTabs.length > 0}
+      agentLabels={agentLabels}
+      resumeCount={props.resumeCount ?? 0}
       dockOpen={shell.dock.open}
       voiceEnabled={props.voiceEnabled}
       voiceRecording={voiceRecording}
@@ -748,6 +769,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
           const terminalId = props.detachedTerminalIds[0];
           if (terminalId) focusTerminal(terminalId);
         },
+        onOpenResume: props.onOpenResume,
         onReopenTab: () => {
           const candidate = shell.recentlyClosedTabs[0];
           if (shell.reopenWorkspaceTab() && candidate) props.onSelectWorkspace(candidate.workspaceId);

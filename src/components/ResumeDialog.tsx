@@ -1,10 +1,10 @@
-import { Clock3, Copy, History, Play, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { History } from "lucide-react";
 
 import type { ResumeItem } from "../types";
+import { intlLocale, useT } from "../i18n";
+import { agentKind } from "../domain/agentLabels";
 import { ConfirmActionDialog, TerraDialog } from "./overlays/Dialog";
-import { Badge } from "./ui/Badge";
-import { Button } from "./ui/Button";
 import styles from "./integration/dialogs/ModalForms.module.css";
 
 interface Props {
@@ -14,50 +14,84 @@ interface Props {
   onDismiss: (item: ResumeItem) => void | Promise<void>;
   onResumeAll: () => void | Promise<void>;
   onDismissAll: () => void | Promise<void>;
-  /** Hides this queue without mutating it. It can be reopened from Home. */
+  /** Hides this queue without mutating it. It can be reopened from ⌘K. */
   onDefer: () => void;
+  /** Resume every saved session on startup without asking. */
+  autoResume?: boolean;
+  onAutoResumeChange?: (enabled: boolean) => void;
 }
 
-function formatRelativeTime(ms: number): string {
-  const seconds = Math.max(0, Math.floor((Date.now() - ms) / 1000));
-  if (seconds < 60) return "agora";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `há ${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `há ${hours} h`;
-  return `há ${Math.floor(hours / 24)} d`;
+interface ResumeGroup {
+  wsId: string;
+  wsName: string;
+  cwd: string;
+  items: ResumeItem[];
 }
 
-async function copyText(value: string) {
-  try {
-    await navigator.clipboard?.writeText(value);
-  } catch {
-    // Clipboard permissions are optional; the resume action remains usable.
+function groupByProject(items: readonly ResumeItem[]): ResumeGroup[] {
+  const groups = new Map<string, ResumeGroup>();
+  for (const item of items) {
+    const group = groups.get(item.wsId) ?? { wsId: item.wsId, wsName: item.wsName, cwd: item.cwd, items: [] };
+    group.items.push(item);
+    groups.set(item.wsId, group);
   }
+  return [...groups.values()];
 }
 
 /**
- * Startup queue for persisted sessions. Closing, Escape and “Agora não” only
- * hide the dialog: destructive queue mutations always pass through an
- * explicit confirmation dialog.
+ * Opening screen: "Continue where you left off?". Sessions are grouped by
+ * project with checkboxes; unchecked ones stay saved and can be resumed later
+ * from ⌘K. Discarding the whole queue still needs an explicit confirmation.
  */
 export function ResumeDialog({
   items,
   onDefer,
-  onDismiss,
   onDismissAll,
   onResume,
   onResumeAll,
   savedAt,
+  autoResume = false,
+  onAutoResumeChange,
 }: Props) {
-  const [pendingDismiss, setPendingDismiss] = useState<ResumeItem | null>(null);
+  const t = useT();
+  const groups = useMemo(() => groupByProject(items), [items]);
+  const [unchecked, setUnchecked] = useState<ReadonlySet<string>>(new Set());
   const [confirmDismissAll, setConfirmDismissAll] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const selected = items.filter((item) => !unchecked.has(item.terminalId));
+
+  const toggle = (ids: readonly string[], checked: boolean) => setUnchecked((current) => {
+    const next = new Set(current);
+    ids.forEach((id) => (checked ? next.delete(id) : next.add(id)));
+    return next;
+  });
+
+  const resumeSelected = async () => {
+    if (selected.length === 0) return;
+    setBusy(true);
+    try {
+      if (selected.length === items.length) {
+        await onResumeAll();
+      } else {
+        for (const item of selected) await onResume(item);
+        onDefer();
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const savedLabel = savedAt != null
+    ? new Date(savedAt).toLocaleString(intlLocale(), { weekday: "short", hour: "2-digit", minute: "2-digit" })
+    : null;
 
   return (
     <>
       <TerraDialog
         className={styles.resumeDialog}
-        description="Estas sessões estavam ativas quando o Terra foi fechado. Retome-as agora ou deixe a fila para depois."
+        description={savedLabel
+          ? t("resume.descriptionAt", { count: items.length, when: savedLabel })
+          : t("resume.description", { count: items.length })}
         onOpenChange={(open) => {
           if (!open) onDefer();
         }}
@@ -65,106 +99,82 @@ export function ResumeDialog({
         title={
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <History aria-hidden="true" size={17} strokeWidth={1.8} />
-            Retomar seus agentes
-            <Badge size="sm" shape="pill">{items.length}</Badge>
+            {t("resume.title")}
           </span>
         }
       >
         <div className={styles.resumeBody}>
-          <div aria-live="polite" className={styles.resumeList}>
-            {items.map((item) => (
-              <article className={styles.resumeItem} key={item.terminalId}>
-                <div className={styles.resumeItemTop}>
-                  <Badge size="sm" tone="agent">{item.agentId}</Badge>
-                  <span className={styles.resumeTime}>
-                    <Clock3 aria-hidden="true" size={12} /> {savedAt != null ? formatRelativeTime(savedAt) : "salva anteriormente"}
-                  </span>
-                  <button
-                    aria-label={`Descartar sessão de ${item.wsName}`}
-                    className={styles.iconButton}
-                    data-danger="true"
-                    onClick={() => setPendingDismiss(item)}
-                    title="Descartar sessão salva"
-                    type="button"
-                  >
-                    <Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />
-                  </button>
-                </div>
-                <strong>{item.wsName}</strong>
-                <span className={styles.resumeCwd} title={item.cwd}>{item.cwd || "Diretório atual"}</span>
-                <div className={styles.resumeCommandRow}>
-                  <code className={styles.resumeCommand}>{item.resumeCommand}</code>
-                  <button
-                    aria-label={`Copiar comando de ${item.wsName}`}
-                    className={styles.iconButton}
-                    onClick={() => void copyText(item.resumeCommand)}
-                    title="Copiar comando"
-                    type="button"
-                  >
-                    <Copy aria-hidden="true" size={13} strokeWidth={1.8} />
-                  </button>
-                </div>
-                <div className={styles.resumeActions}>
-                  <Button
-                    leadingIcon={<Play aria-hidden="true" size={12} fill="currentColor" />}
-                    onClick={() => void onResume(item)}
-                    size="sm"
-                    type="button"
-                    variant="primary"
-                  >
-                    Retomar
-                  </Button>
-                </div>
-              </article>
-            ))}
+          <div aria-live="polite" className={styles.resumeGroups}>
+            {groups.map((group) => {
+              const ids = group.items.map((item) => item.terminalId);
+              const checkedCount = ids.filter((id) => !unchecked.has(id)).length;
+              return (
+                <section className={styles.resumeGroup} key={group.wsId} aria-label={group.wsName}>
+                  <label className={styles.resumeGroupHead}>
+                    <input
+                      type="checkbox"
+                      checked={checkedCount === ids.length}
+                      ref={(input) => {
+                        if (input) input.indeterminate = checkedCount > 0 && checkedCount < ids.length;
+                      }}
+                      onChange={(event) => toggle(ids, event.target.checked)}
+                    />
+                    <strong>{group.wsName}</strong>
+                    <span>{t("resume.agentCount", { count: ids.length })}</span>
+                  </label>
+                  {group.items.map((item) => (
+                    <label className={styles.resumeRow} key={item.terminalId}>
+                      <input
+                        type="checkbox"
+                        checked={!unchecked.has(item.terminalId)}
+                        onChange={(event) => toggle([item.terminalId], event.target.checked)}
+                      />
+                      <span className={styles.resumeRowCopy}>
+                        <b>{agentKind(item.agentId || item.command)}</b>
+                        <code>{item.resumeCommand}</code>
+                      </span>
+                    </label>
+                  ))}
+                </section>
+              );
+            })}
           </div>
+
           <div className={styles.resumeFooter}>
-            <span className={styles.resumeSessions}>
-              {items.length} {items.length === 1 ? "sessão" : "sessões"}
-            </span>
-            <div className={styles.resumeActions}>
-              <Button onClick={onDefer} type="button" variant="ghost">
-                Agora não
-              </Button>
-              <Button onClick={() => setConfirmDismissAll(true)} type="button" variant="danger">
-                Descartar todas
-              </Button>
-              <Button
-                leadingIcon={<Play aria-hidden="true" size={12} fill="currentColor" />}
-                onClick={() => void onResumeAll()}
-                type="button"
-                variant="primary"
-              >
-                Retomar todas ({items.length})
-              </Button>
-            </div>
+            <button type="button" className="terra-button terra-button-primary" disabled={busy || selected.length === 0} onClick={() => void resumeSelected()}>
+              {t("resume.resumeSelected", { count: selected.length })}
+            </button>
+            <button type="button" className="terra-button" onClick={onDefer}>
+              {t("resume.startFresh")}
+            </button>
+            <span className={styles.resumeSpacer} />
+            <button type="button" className="terra-link-button" onClick={() => setConfirmDismissAll(true)}>
+              {t("resume.discardAll")}
+            </button>
           </div>
+          {onAutoResumeChange ? (
+            <label className={styles.resumeAuto}>
+              <input type="checkbox" checked={autoResume} onChange={(event) => onAutoResumeChange(event.target.checked)} />
+              {t("resume.always")}
+            </label>
+          ) : null}
+          <p className={styles.resumeHint}>{t("resume.laterHint")}</p>
         </div>
       </TerraDialog>
 
       <ConfirmActionDialog
-        description={
-          pendingDismiss
-            ? `A sessão de “${pendingDismiss.wsName}” será removida da fila e não poderá ser retomada por este fluxo.`
-            : "Todas as sessões salvas serão removidas da fila e não poderão ser retomadas por este fluxo."
-        }
+        intent="destructive"
+        description={t("resume.discardDescription")}
+        confirmLabel={t("resume.discardAll")}
         onConfirm={async () => {
-          if (pendingDismiss) {
-            await onDismiss(pendingDismiss);
-            setPendingDismiss(null);
-          } else {
-            await onDismissAll();
-            setConfirmDismissAll(false);
-          }
+          await onDismissAll();
+          setConfirmDismissAll(false);
         }}
         onOpenChange={(open) => {
-          if (!open) {
-            setPendingDismiss(null);
-            setConfirmDismissAll(false);
-          }
+          if (!open) setConfirmDismissAll(false);
         }}
-        open={pendingDismiss !== null || confirmDismissAll}
-        title={pendingDismiss ? "Descartar esta sessão?" : "Descartar todas as sessões?"}
+        open={confirmDismissAll}
+        title={t("resume.discardTitle")}
       />
     </>
   );

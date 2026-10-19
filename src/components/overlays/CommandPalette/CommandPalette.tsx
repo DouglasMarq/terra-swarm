@@ -90,6 +90,8 @@ export function CommandPalette({
   dockOpen,
   voiceEnabled,
   voiceRecording,
+  agentLabels,
+  resumeCount,
   callbacks = {},
   onRequestConfirm,
   onOpenChange,
@@ -111,8 +113,10 @@ export function CommandPalette({
         dockOpen,
         voiceEnabled,
         voiceRecording,
+        agentLabels,
+        resumeCount,
       }),
-    [agents, dockOpen, focusedGroupId, focusedTerminalId, focusedWorkspaceId, groups, hasDetachedTabs, hasRecentlyClosedTabs, recentCommandIds, voiceEnabled, voiceRecording, workspaces],
+    [agentLabels, resumeCount, agents, dockOpen, focusedGroupId, focusedTerminalId, focusedWorkspaceId, groups, hasDetachedTabs, hasRecentlyClosedTabs, recentCommandIds, voiceEnabled, voiceRecording, workspaces],
   );
   const visibleCommands = useMemo(() => filterCommands(commands, query), [commands, query]);
   const visibleGroups = useMemo(

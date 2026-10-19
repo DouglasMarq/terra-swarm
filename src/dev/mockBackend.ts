@@ -60,6 +60,8 @@ const backlog: Record<string, string> = {
 };
 
 export function installMockBackend(): void {
+  // ?mock=resume: nothing is running, so every agent lands in the resume queue.
+  const scenario = new URLSearchParams(window.location.search).get("mock");
   mockWindows("main");
   mockIPC((cmd, payload) => {
     const args = (payload ?? {}) as Record<string, unknown>;
@@ -67,7 +69,7 @@ export function installMockBackend(): void {
       case "list_workspaces": return workspaces;
       case "list_groups": return groups;
       case "detect_agents": return agents;
-      case "running_terminals": return workspaces.flatMap((ws) => ws.terminals.filter((t) => !t.suspended).map((t) => ({ id: t.id, seq: 1 })));
+      case "running_terminals": return scenario === "resume" ? [] : workspaces.flatMap((ws) => ws.terminals.filter((t) => !t.suspended).map((t) => ({ id: t.id, seq: 1 })));
       case "terminal_backlog": {
         const data = backlog[String(args.id)] ?? "";
         return { data, total: data.length };

@@ -2153,6 +2153,8 @@ function App() {
         await closeTerminal(terminal.id);
         return;
       case "clear-scrollback":
+        // Clear what the user sees, not only the cached runtime state.
+        getTerminal(terminal.id)?.clear();
         clearTerminal(terminal.id);
         pushSystemNotification("Histórico visual limpo para o agente em foco");
         return;

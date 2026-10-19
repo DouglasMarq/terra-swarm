@@ -19,6 +19,8 @@ export interface PaneGridProps {
   mode?: WorkbenchLayoutMode;
   activePaneId?: string | null;
   renderPane: (pane: WorkbenchPaneProjection) => ReactNode;
+  /** Filler for unused slots of a fixed grid (a "+ New agent" button). */
+  renderEmptySlot?: (index: number) => ReactNode;
   onLayoutChange?: (change: ContainerLayoutChange) => void;
 }
 
@@ -95,6 +97,7 @@ export function PaneGrid({
   mode: explicitMode,
   activePaneId,
   renderPane,
+  renderEmptySlot,
   onLayoutChange,
 }: PaneGridProps) {
   const mode = resolveLayoutMode(projection.container.layout, explicitMode);
@@ -119,13 +122,21 @@ export function PaneGrid({
         style={{
           gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
           gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+          gridAutoRows: "minmax(0, 1fr)",
         }}
       >
         {panes.map((paneProjection) => (
-          <div className="terra-pane-grid__cell" key={paneProjection.pane.id}>
+          <div className="terra-pane-grid__cell terra-anim-rise" key={paneProjection.pane.id}>
             {renderPane(paneProjection)}
           </div>
         ))}
+        {renderEmptySlot
+          ? Array.from({ length: Math.max(0, columns * rows - panes.length) }, (_, index) => (
+            <div className="terra-pane-grid__cell terra-pane-grid__cell--empty" key={`empty-${index}`}>
+              {renderEmptySlot(index)}
+            </div>
+          ))
+          : null}
       </div>
     );
   }

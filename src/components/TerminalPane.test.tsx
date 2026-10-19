@@ -297,7 +297,7 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
     window.dispatchEvent(new Event("focus"));
     await flushFrames();
     expect(view.container.querySelector(".pane-body")).toBeInTheDocument();
-    expect(view.container).toHaveTextContent("process exited");
+    expect(view.container).toHaveTextContent("Processo encerrado");
     expect(mocks.api.resizeTerminal).not.toHaveBeenCalled();
 
     rerenderPane(view, { exited: false });

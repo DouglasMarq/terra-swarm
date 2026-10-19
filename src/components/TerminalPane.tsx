@@ -9,7 +9,11 @@ import {
   createFitScheduler,
   createTerminalResizeQueue,
 } from "../lib/terminalFitScheduler";
+import { Maximize2, Minimize2 } from "lucide-react";
+import { useT } from "../i18n";
+import { PaneActionsMenu, type PaneMenuGroups } from "./workbench/PaneActionsMenu";
 import "@xterm/xterm/css/xterm.css";
+import "./terminal-pane.css";
 
 interface Props {
   id: string;
@@ -25,6 +29,14 @@ interface Props {
   contextUsed?: number;
   title?: string;
   branch?: string;
+  /** Task title (or name) shown first; falls back to the command. */
+  label?: string;
+  /** "claude 2" / "Lyra · claude" under or beside the label. */
+  tag?: string;
+  /** Latest unread message from the agent, shown in the attention strip. */
+  attentionMessage?: string | null;
+  /** Lifecycle actions for the "…" menu. */
+  menu?: PaneMenuGroups;
   onClearNotifications: () => void;
   focused: boolean;
   onFocus: () => void;
@@ -38,64 +50,6 @@ interface Props {
   onKill?: () => void;
   /** Hidden tabs remain mounted so switching tabs never kills a PTY. */
   hidden?: boolean;
-}
-
-function MaximizeIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="15 3 21 3 21 9" />
-      <polyline points="9 21 3 21 3 15" />
-      <line x1="21" y1="3" x2="14" y2="10" />
-      <line x1="3" y1="21" x2="10" y2="14" />
-    </svg>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
-  );
-}
-
-function MinimizeIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="4 14 10 14 10 20" />
-      <polyline points="20 10 14 10 14 4" />
-      <line x1="14" y1="10" x2="21" y2="3" />
-      <line x1="3" y1="21" x2="10" y2="14" />
-    </svg>
-  );
 }
 
 export function TerminalPane(props: Props) {
@@ -114,7 +68,12 @@ export function TerminalPane(props: Props) {
     title,
     focused,
     hidden = false,
+    label,
+    tag,
+    attentionMessage,
+    menu,
   } = props;
+  const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<(() => void) | null>(null);
@@ -376,6 +335,16 @@ export function TerminalPane(props: Props) {
     fitRef.current?.();
   }, [basis, exited, expanded, focused, height, hidden, id]);
 
+  const kind = command.split(" ")[0] || "shell";
+  const primary = label || kind;
+  const secondary = tag && tag !== primary ? tag : null;
+  const attention = notifications > 0 && Boolean(attentionMessage);
+  const status = exited
+    ? "exited"
+    : notifications > 0 || (contextUsed ?? 0) >= 85
+      ? "attention"
+      : "working";
+
   return (
     <div
       ref={rootRef}
@@ -383,6 +352,7 @@ export function TerminalPane(props: Props) {
       className={`pane ${expanded ? "expanded" : ""} ${entering ? "pane-enter" : ""} ${
         dragOver ? "drag-over" : ""
       } ${focused ? "focused" : ""}`}
+      data-status={status}
       style={{
         flex: `1 1 calc(${basis}% - 12px)`,
         height,
@@ -396,73 +366,60 @@ export function TerminalPane(props: Props) {
       }}
     >
       <div className="pane-header">
-        <div className="pane-header-left">
-          <span className={`pane-badge agent-${command.split(" ")[0]}`} title={command}>
-            {command.split(" ")[0]}
+        <span className="terra-dot pane-dot" data-status={status} aria-hidden="true" />
+        <span className="pane-name" title={command}>{primary}</span>
+        {secondary ? <span className="terra-tag pane-tag">{secondary}</span> : null}
+        {title && title !== primary ? (
+          <span className="pane-title" title={title}>
+            {title}
           </span>
-          {title && (
-            <span className="pane-title" title={title}>
-              {title}
+        ) : <span className="pane-title" />}
+        {contextUsed != null && !exited && (
+          <span
+            className={`pane-ctx ${contextUsed >= 85 ? "high" : contextUsed >= 60 ? "mid" : ""}`}
+            title={t("pane.contextUsed", { count: contextUsed })}
+          >
+            <span className="pane-ctx-bar">
+              <span style={{ transform: `scaleX(${contextUsed / 100})` }} />
             </span>
-          )}
-          {contextUsed != null && !exited && (
-            <span
-              className={`pane-ctx ${
-                contextUsed >= 85 ? "high" : contextUsed >= 60 ? "mid" : ""
-              }`}
-              title={`Context used: ${contextUsed}%`}
-            >
-              <span className="pane-ctx-bar">
-                <span style={{ transform: `scaleX(${contextUsed / 100})` }} />
-              </span>
-              {contextUsed}%
-            </span>
-          )}
-          {notifications > 0 && (
-            <span className="pane-bell" key={notifications} title="Notifications">
-              <BellIcon />
-              {notifications}
-            </span>
-          )}
-        </div>
+            {contextUsed}%
+          </span>
+        )}
         <div className="pane-actions">
           <button
+            type="button"
             className="pane-btn"
-            title={expanded ? "Back to grid" : "Maximize"}
+            aria-label={expanded ? t("pane.restore") : t("pane.maximize")}
+            title={expanded ? t("pane.restore") : t("pane.maximize")}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={props.onToggleExpand}
           >
-            {expanded ? <MinimizeIcon /> : <MaximizeIcon />}
+            {expanded ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
           </button>
-          <button
-            className="pane-btn pane-close"
-            title="Close terminal"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={props.onDetach ?? props.onClose}
-          >
-            ×
-          </button>
-          {props.onKill && (
-            <button
-              className="pane-btn pane-kill"
-              title="Kill PTY"
-              aria-label="Kill PTY"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={props.onKill}
-            >
-              ■
-            </button>
-          )}
+          {menu ? <PaneActionsMenu label={t("pane.moreActions")} groups={menu} /> : null}
         </div>
       </div>
       <div className="pane-body" ref={containerRef} />
+      {attention && !exited ? (
+        <div className="pane-attention" role="status">
+          <span className="pane-attention-message">{attentionMessage}</span>
+          <button
+            type="button"
+            className="terra-button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={props.onClearNotifications}
+          >
+            {t("pane.markRead")}
+          </button>
+        </div>
+      ) : null}
       {exited && (
-        <div className="pane-overlay">
-          <span>process exited</span>
+        <div className="pane-overlay" role="status">
+          <strong>{t("pane.exited")}</strong>
+          <span>{t("pane.exitedDetail")}</span>
           <div className="pane-overlay-actions">
-            <button onClick={props.onRestart}>Restart</button>
-            <button onClick={props.onDetach ?? props.onClose}>Detach</button>
-            {props.onKill && <button onClick={props.onKill}>Kill</button>}
+            <button type="button" className="terra-button" onClick={props.onRestart}>{t("pane.restart")}</button>
+            <button type="button" className="terra-button" onClick={props.onDetach ?? props.onClose}>{t("pane.closePane")}</button>
           </div>
         </div>
       )}

@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import type { WorkbenchTabRenderContext } from "../workbench/types";
 import { TerminalPane } from "../TerminalPane";
+import type { PaneMenuGroups } from "../workbench/PaneActionsMenu";
+import { useT } from "../../i18n";
 
 export interface TerminalTabSurfaceProps {
   context: WorkbenchTabRenderContext;
@@ -13,6 +15,9 @@ export interface TerminalTabSurfaceProps {
   titles: Readonly<Record<string, string>>;
   branch?: string;
   detachedIds?: ReadonlySet<string>;
+  labels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
+  attentionMessages?: Readonly<Record<string, string | undefined>>;
+  buildMenu?: (ptyId: string, command: string) => PaneMenuGroups;
   onClearNotifications: (id: string) => void;
   onFocus: (id: string) => void;
   onToggleExpand: (id: string | null) => void;
@@ -37,6 +42,9 @@ export function TerminalTabSurface({
   titles,
   branch,
   detachedIds,
+  labels,
+  attentionMessages,
+  buildMenu,
   onClearNotifications,
   onFocus,
   onToggleExpand,
@@ -44,13 +52,14 @@ export function TerminalTabSurface({
   onDetach,
   onKill,
 }: TerminalTabSurfaceProps): ReactNode {
+  const t = useT();
   const { tab } = context;
   const ptyId = tab.ptyId;
   if (!ptyId) {
     return (
       <div className="terra-orphan-tab" role="status">
-        <strong>Tab órfã</strong>
-        <span>{tab.title || tab.command || "Sessão sem PTY"}</span>
+        <strong>{t("pane.orphan")}</strong>
+        <span>{tab.title || tab.command || t("pane.noPty")}</span>
       </div>
     );
   }
@@ -70,6 +79,10 @@ export function TerminalTabSurface({
       notifications={notifications[ptyId] ?? 0}
       contextUsed={contextUsage[ptyId]}
       title={titles[ptyId] || tab.title}
+      label={labels?.[ptyId]?.primary}
+      tag={labels?.[ptyId]?.tag}
+      attentionMessage={attentionMessages?.[ptyId] ?? null}
+      menu={buildMenu?.(ptyId, tab.command)}
       branch={branch}
       onClearNotifications={() => onClearNotifications(ptyId)}
       focused={focusedId === ptyId}

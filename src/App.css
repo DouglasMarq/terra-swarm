@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  font-family: var(--terra-font-sans);
 
   --bg: #101013;
   --bg-sidebar: #131316;
@@ -155,6 +155,13 @@ button {
 
 button:disabled {
   cursor: default;
+}
+
+/* Form controls use the system UI font by default; keep them on Geist. */
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 /* ---------- top bar ---------- */

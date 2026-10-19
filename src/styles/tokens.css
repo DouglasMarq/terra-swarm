@@ -40,7 +40,8 @@
   --terra-red-ink: #ef8f98;
 
   /* typography */
-  --terra-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  /* Geist ships with the app (@fontsource-variable/geist), no network needed. */
+  --terra-font-sans: "Geist Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   --terra-font-mono: "SF Mono", Menlo, Monaco, "Courier New", monospace;
   --font-mono: var(--terra-font-mono);
   /* 11 · 12 · 13 · 15 · 20 · 28 — screen titles carry the hierarchy, body stays 13 */

@@ -51,6 +51,11 @@ describe("command palette model", () => {
     expect(filterCommands(commands, "não existe")).toHaveLength(0);
   });
 
+  it("offers resume only for an agent that has exited", () => {
+    const live = buildCommandModel({ workspaces, focusedWorkspaceId: "ws-terra", focusedTerminalId: "pty-1" });
+    expect(live.some((item) => item.id === "agent:resume-focused")).toBe(false);
+  });
+
   it("builds navigation, create, agent and settings groups from current state", () => {
     const commands = buildCommandModel({
       workspaces,
@@ -60,6 +65,7 @@ describe("command palette model", () => {
       focusedTerminalId: "pty-1",
       hasDetachedTabs: true,
       recentCommandIds: ["navigate:fleet"],
+      exitedTerminalIds: ["pty-1"],
     });
     const grouped = groupCommands(commands);
     expect(grouped.find((group) => group.id === "recent")?.commands.map((item) => item.recentOf)).toContain("navigate:fleet");

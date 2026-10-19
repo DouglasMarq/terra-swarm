@@ -37,7 +37,7 @@ describe("FleetCommandCenter", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Frota" })).toBeInTheDocument();
-    expect(screen.getByText("3 agentes em 1 projetos")).toBeInTheDocument();
+    expect(screen.getByText("3 agentes em 1 projeto")).toBeInTheDocument();
     const attention = screen.getByRole("region", { name: "Precisa de você" });
     expect(within(attention).getByText("Posso rodar npm test?")).toBeInTheDocument();
     expect(within(attention).getByText("Planejador de retomada")).toBeInTheDocument();

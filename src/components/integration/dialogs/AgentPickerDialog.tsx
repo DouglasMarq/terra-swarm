@@ -65,7 +65,7 @@ export function AgentPickerDialog({
       </div>
       {defaultAgent ? (
         <p className={styles.pickerDefaultHint}>
-          Perfil padrão atual: <strong>{defaultAgent}</strong>
+          {t("dialogs.currentDefault")} <strong>{defaultAgent}</strong>
         </p>
       ) : null}
       <label className={styles.pickerDefault}>

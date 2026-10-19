@@ -51,7 +51,7 @@ import { useUiStore } from "./stores/uiStore";
 import { useShellStore } from "./stores/shellStore";
 import { useOrchestrationStore } from "./stores/orchestrationStore";
 import { planResume } from "./lib/session/resumePlanner";
-import { buildAgentLabels } from "./domain/agentLabels";
+import { agentLabelText, buildAgentLabels } from "./domain/agentLabels";
 import { t, useLocale } from "./i18n";
 import { pickAgentName } from "./domain/agentNames";
 import { createSpawnQueue } from "./lib/session/spawnQueue";
@@ -902,6 +902,8 @@ function App() {
   const closeTerminal = async (id: string) => {
     liveIdsRef.current.delete(id);
     delete spawnSeqRef.current[id];
+    // Free its name for the next agent.
+    setAgentName(id, null);
     await api.killTerminal(id).catch(() => {});
     clearTerminal(id);
     if (expandedId === id) setExpandedId(null);
@@ -1033,6 +1035,7 @@ function App() {
       }
       liveIdsRef.current.delete(item.terminalId);
       delete spawnSeqRef.current[item.terminalId];
+      setAgentName(item.terminalId, null);
       dropResumeItem(item.terminalId);
       await refresh();
     } finally {
@@ -1090,6 +1093,7 @@ function App() {
         }
         liveIdsRef.current.delete(result.item.terminalId);
         delete spawnSeqRef.current[result.item.terminalId];
+        setAgentName(result.item.terminalId, null);
       }
       setResumeItems(failed.length > 0 ? failed : null);
       await refresh();
@@ -1121,10 +1125,11 @@ function App() {
     if (!renameTarget) return;
     const target = renameTarget;
     const nextName = target.value.trim();
-    if (!nextName) return;
+    // An empty agent name removes it (back to the task title / kind).
+    if (!nextName && target.kind !== "terminal") return;
     setRenameTarget(null);
     if (target.kind === "terminal") {
-      setAgentName(target.id, nextName);
+      setAgentName(target.id, nextName || null);
     } else if (target.kind === "workspace") {
       await renameWorkspace(target.id, nextName);
     } else {
@@ -1342,7 +1347,13 @@ function App() {
   };
 
   const targetLabelForVoiceIntent = (intent: VoiceCapsuleIntent | null): string | null => {
-    if (!intent) return focusedId ? titles[focusedId] ?? focusedId : null;
+    if (!intent) {
+      // The picker's choice, else the focused agent, as the readable label.
+      const id = voiceTargetId ?? focusedId;
+      if (!id) return null;
+      const label = buildAgentLabels(workspaces, { titles, names: usePreferencesStore.getState().agentNames })[id];
+      return label ? agentLabelText(label) : id;
+    }
     switch (intent.type) {
       case "focus":
       case "stop":
@@ -1471,10 +1482,13 @@ function App() {
     const entries = ids.flatMap((id) => {
       for (const workspace of workspaces) {
         const terminal = workspace.terminals.find((candidate) => candidate.id === id);
-        if (terminal) return [{ workspace, terminal }];
+        // Only exited or suspended agents: the backend refuses to spawn over
+        // a live process, which used to raise one error per running agent.
+        if (terminal && (terminal.id in exitedRef.current || terminal.suspended)) return [{ workspace, terminal }];
       }
       return [];
     });
+    if (entries.length === 0) return;
     const queue = createSpawnQueue<(typeof entries)[number], void>({
       concurrency: 2,
       run: async ({ workspace, terminal }) => {
@@ -1504,7 +1518,8 @@ function App() {
         result.error instanceof Error
           ? result.error.message
           : String(result.error ?? result.status);
-      pushSystemNotification(`Failed to resume fleet agent ${result.id}: ${detail}`);
+      const name = buildAgentLabels(workspaces, { titles, names: usePreferencesStore.getState().agentNames })[result.id];
+      pushSystemNotification(t("app.resumeAgentFailed", { name: name ? agentLabelText(name) : result.id, detail }));
     }
     await refresh();
   };
@@ -1549,6 +1564,7 @@ function App() {
         kind: "success",
         message: t("app.snapshotExported", { workspaces: transfer.workspaceCount, terminals: transfer.terminalCount }),
         backupPath: transfer.path,
+        pathKind: "file",
       });
     } catch (error) {
       console.error("workspace snapshot export failed:", error);
@@ -1590,6 +1606,7 @@ function App() {
         kind: "success",
         message: t("app.snapshotImported", { workspaces: transfer.workspaceCount, terminals: transfer.suspendedTerminalCount }),
         backupPath: transfer.backupPath,
+        pathKind: "backup",
       });
     } catch (error) {
       console.error("workspace snapshot import failed:", error);
@@ -1844,20 +1861,24 @@ function App() {
       // Give the agent's CLI a moment to draw its prompt before pasting.
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
+    // Outside the Workbench (Fleet, Settings) the xterm is not mounted; the
+    // PTY still is, so write straight to it. Agent CLIs take bracketed paste.
     const term = getTerminal(id);
-    if (!term) {
+    if (!term && !meta) {
       setVoiceFeedback(t("app.voice.targetUnavailable"));
       return;
     }
-    const prompt = voiceCommandsEnabledRef.current && meta
-      ? buildVoicePrompt(profileForCommand(meta.command), text)
+    const profile = meta ? profileForCommand(meta.command) : null;
+    const prompt = voiceCommandsEnabledRef.current && profile
+      ? buildVoicePrompt(profile, text)
       : text;
-    const data = term.modes.bracketedPasteMode
+    const bracketed = term ? term.modes.bracketedPasteMode : profile?.id !== "shell";
+    const data = bracketed
       ? `\u001b[200~${prompt}\u001b[201~`
       : prompt;
     try {
       await api.writeTerminal(id, data);
-      term.focus();
+      term?.focus();
       setVoiceSubmitted(true);
       setVoiceFeedback(t("app.voice.sent"));
     } catch (error) {
@@ -2016,6 +2037,13 @@ function App() {
     if (showSettings && settingsSection === "voice") return;
     if (micTesting) stopMicTest();
   }, [showSettings, settingsSection, micTesting, stopMicTest]);
+
+  // Same for shortcut capture: left on, it swallows every key in the app and
+  // saves the next ⌘-combo as a shortcut.
+  useEffect(() => {
+    if (showSettings && settingsSection === "shortcuts") return;
+    setCapturing(null);
+  }, [showSettings, settingsSection]);
 
   const applyGridLayout = async (cols: number) => {
     if (!(GRID_COL_OPTIONS as readonly number[]).includes(cols)) return;

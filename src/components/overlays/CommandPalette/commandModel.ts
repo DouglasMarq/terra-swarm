@@ -1,5 +1,6 @@
 import { t } from "../../../i18n";
 import type { AgentInfo, TerminalMeta, Workspace, WorkspaceGroup } from "../../../types";
+import { agentLabelText } from "../../../domain/agentLabels";
 
 export type CommandGroupId = "recent" | "navigation" | "create" | "agent" | "settings";
 
@@ -24,6 +25,8 @@ export interface FocusedAgentContext {
   workspaceName: string;
   terminalId: string;
   command: string;
+  /** Readable agent label ("Animações · claude 2"); falls back to the command. */
+  label?: string;
 }
 
 export interface CommandConfirmRequest {
@@ -56,6 +59,8 @@ export interface CommandPaletteData {
   agentLabels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
   /** Saved sessions waiting to be resumed. */
   resumeCount?: number;
+  /** Agents whose process has exited; only these can be resumed in place. */
+  exitedTerminalIds?: readonly string[];
 }
 
 export interface CommandPaletteCallbacks {
@@ -220,7 +225,13 @@ function focusedContext(data: CommandPaletteData): FocusedAgentContext | null {
     workspaceName: workspaceLabel(workspace),
     terminalId: terminal.id,
     command: terminalLabel(terminal),
+    label: agentLabelOf(data, terminal.id) ?? undefined,
   };
+}
+
+function agentLabelOf(data: CommandPaletteData, terminalId: string): string | null {
+  const label = data.agentLabels?.[terminalId];
+  return label ? agentLabelText(label) : null;
 }
 
 function destructiveRequest(
@@ -237,7 +248,7 @@ function destructiveRequest(
     title,
     description,
     resourceId: context.terminalId,
-    resourceLabel: `${context.command} · ${context.workspaceName}`,
+    resourceLabel: `${context.label ?? context.command} · ${context.workspaceName}`,
     workspaceId: context.workspaceId,
     terminalId: context.terminalId,
     action,
@@ -431,7 +442,7 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
   }
 
   if (context) {
-    const contextLabel = `${context.command} · ${context.workspaceName}`;
+    const contextLabel = `${context.label ?? context.command} · ${context.workspaceName}`;
     commands.push(
       command({
         id: "agent:open-focused",
@@ -442,6 +453,10 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
         icon: "terminal",
         intent: { kind: "open-terminal", workspaceId: context.workspaceId, terminalId: context.terminalId },
       }),
+    );
+    // Resuming spawns into the same id, which the backend refuses while the
+    // process is alive, so it is offered only once the agent has exited.
+    if (data.exitedTerminalIds?.includes(context.terminalId)) commands.push(
       command({
         id: "agent:resume-focused",
         label: t("palette.resume", { name: contextLabel }),

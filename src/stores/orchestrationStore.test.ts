@@ -93,11 +93,11 @@ describe("orchestration store", () => {
         suspended: false,
       },
     ]);
-    useOrchestrationStore.getState().setFeatureFlag("groups", true);
+    useOrchestrationStore.getState().setFeatureFlag("voiceCommands", true);
     useOrchestrationStore.getState().setGroupSuspended("group-a", true);
 
     const state = useOrchestrationStore.getState();
-    expect(state.flags.groups).toBe(true);
+    expect(state.flags.voiceCommands).toBe(true);
     expect(state.groups[0]?.suspended).toBe(true);
     expect(state.snapshot?.groups[0]?.suspended).toBe(true);
   });

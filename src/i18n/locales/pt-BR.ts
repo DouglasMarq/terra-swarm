@@ -20,6 +20,7 @@ export const ptBR: Dictionary<typeof en> = {
     exited: "Encerrado",
     suspended: "Suspenso",
     idle: "Ocioso",
+    idleLower: "ocioso",
     workingLower: "trabalhando",
     attentionLower: "precisa de você",
     exitedLower: "encerrado",

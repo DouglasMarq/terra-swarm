@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -7,6 +8,7 @@ import {
   type McpTasksChangedPayload,
 } from "../lib/tauri/mcp";
 import type {
+  McpAgentState,
   McpAgentStatus,
   McpServerInfo,
   McpTask,
@@ -165,6 +167,15 @@ export const useMcpStore = create<McpState>((set, get) => ({
   clearError: () => set({ error: null }),
   reset: () => set({ server: null, tasks: {}, statuses: {}, error: null }),
 }));
+
+/** Reported agent states by terminal id, for the status dots everywhere. */
+export function useReportedStates(): Record<string, McpAgentState> {
+  const statuses = useMcpStore((state) => state.statuses);
+  return useMemo(
+    () => Object.fromEntries(Object.values(statuses).map((status) => [status.terminal_id, status.state])),
+    [statuses],
+  );
+}
 
 /**
  * Keep the store in step with agent activity. A board is refetched only for

@@ -1,3 +1,5 @@
+import { deriveAgentStatus } from "../domain/agentStatus";
+import { useMcpStore } from "../stores/mcpStore";
 import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -349,15 +351,12 @@ export function TerminalPane(props: Props) {
     fitRef.current?.();
   }, [basis, exited, expanded, focused, height, hidden, id]);
 
+  const reported = useMcpStore((state) => state.statuses[id]?.state);
   const kind = command.split(" ")[0] || "shell";
   const primary = label || kind;
   const secondary = tag && tag !== primary ? tag : null;
   const attention = notifications > 0 && Boolean(attentionMessage);
-  const status = exited
-    ? "exited"
-    : notifications > 0 || (contextUsed ?? 0) >= 85
-      ? "attention"
-      : "working";
+  const status = deriveAgentStatus({ exited, notifications, contextUsed: contextUsed ?? undefined, reported });
 
   return (
     <div

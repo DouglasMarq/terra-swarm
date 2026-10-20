@@ -554,6 +554,10 @@
   background: #ca7178;
 }
 
+.statusidle {
+  background: var(--terra-text-muted, #8e8e96);
+}
+
 .statussuspended {
   background: #9d91c7;
 }
@@ -856,6 +860,10 @@
 
 .statusexited {
   background: var(--terra-red);
+}
+
+.statusidle {
+  background: var(--terra-text-muted, #8e8e96);
 }
 
 .statussuspended {

@@ -29,7 +29,7 @@ export interface FleetCommandCenterProps extends Omit<FleetDerivationInput, "age
   className?: string;
 }
 
-const STATUS_ORDER: readonly FleetStatus[] = ["attention", "working", "suspended", "exited"];
+const STATUS_ORDER: readonly FleetStatus[] = ["attention", "working", "idle", "suspended", "exited"];
 
 function statusRank(status: FleetStatus): number {
   return STATUS_ORDER.indexOf(status);

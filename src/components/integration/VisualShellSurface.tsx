@@ -30,7 +30,7 @@ import { useAgentUsage } from "../../app/useAgentUsage";
 import { useInspectorRuntime } from "../../app/useInspectorRuntime";
 import { startPreviewBridge } from "../../stores/previewStore";
 import { PreviewPanel } from "../preview/PreviewPanel";
-import { CONTEXT_ATTENTION_PERCENT, deriveAgentStatus } from "../../domain/agentStatus";
+import { deriveAgentStatus } from "../../domain/agentStatus";
 import { NavigatorPanel } from "../navigation/NavigatorPanel";
 import type { ActivityTab, NavigatorFilesLoader, NavigatorGitLoader, NavigatorNodeRef } from "../navigation/types";
 import type { WorkbenchLocation, WorkbenchTabRenderContext } from "../workbench/types";
@@ -63,6 +63,15 @@ import {
   type InspectorActionKind,
   type InspectorTarget,
 } from "../inspector/inspectorModel";
+import {
+  lastActivityByAgent,
+  latestMessageByAgent,
+  nearlyFullContexts,
+  projectStatus,
+  shellVoiceLabel,
+  shellVoiceState,
+  workbenchSnapshot,
+} from "./visualShellModel";
 import "./visual-shell.css";
 
 const LazyFleetCommandCenter = lazy(async () => {
@@ -264,36 +273,6 @@ function toWireGroup(group: Group): WorkspaceGroup {
   };
 }
 
-function visibleSnapshot(
-  snapshot: WorkspaceSnapshotV2 | null,
-  detachedTerminalIds: readonly string[],
-  focusedId: string | null,
-): WorkspaceSnapshotV2 | null {
-  if (!snapshot || (detachedTerminalIds.length === 0 && !focusedId)) return snapshot;
-  const detached = new Set(detachedTerminalIds);
-  const tabs = snapshot.tabs.filter((tab) => !tab.ptyId || !detached.has(tab.ptyId));
-  const tabIds = new Set(tabs.map((tab) => tab.id));
-  const panes = snapshot.panes.map((pane) => {
-    const nextTabIds = pane.tabIds.filter((id) => tabIds.has(id));
-    const focusedTab = focusedId
-      ? pane.tabIds
-        .map((id) => snapshot.tabs.find((tab) => tab.id === id))
-        .find((tab) => tab?.ptyId === focusedId)
-      : undefined;
-    return {
-      ...pane,
-      tabIds: nextTabIds,
-      activeTabId: focusedTab && tabIds.has(focusedTab.id)
-        ? focusedTab.id
-        : pane.activeTabId && tabIds.has(pane.activeTabId)
-          ? pane.activeTabId
-          : nextTabIds[0] ?? null,
-    };
-  });
-  const activeTabId = snapshot.activeTabId && tabIds.has(snapshot.activeTabId) ? snapshot.activeTabId : tabs[0]?.id ?? null;
-  return { ...snapshot, tabs, panes, activeTabId };
-}
-
 export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const t = useT();
   const shortcutLabels = shellShortcutLabels();
@@ -382,13 +361,10 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     });
     return [workspace.id, containerId ? props.snapshot?.containers.find((container) => container.id === containerId)?.visible !== false : true];
   })), [props.focusedId, props.snapshot, props.workspaces]);
-  const source = useMemo(() => {
-    const visible = visibleSnapshot(props.snapshot, props.detachedTerminalIds, props.focusedId);
-    // The Workbench shows one project at a time; the sidebar switches between them.
-    if (!visible || !props.activeId) return visible;
-    const containers = visible.containers.filter((container) => container.projectId === props.activeId);
-    return { ...visible, containers };
-  }, [props.activeId, props.detachedTerminalIds, props.focusedId, props.snapshot]);
+  const source = useMemo(
+    () => workbenchSnapshot(props.snapshot, props.detachedTerminalIds, props.focusedId, props.activeId),
+    [props.activeId, props.detachedTerminalIds, props.focusedId, props.snapshot],
+  );
 
   useEffect(() => {
     if (props.workspaces.length === 0 || (!props.loadFiles && !props.loadGitStatus)) {
@@ -454,18 +430,10 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   };
 
   const activeCount = props.workspaces.reduce((count, workspace) => count + workspace.terminals.filter((terminal) => !(terminal.id in props.exited) && !terminal.suspended).length, 0);
-  const visualVoiceState = props.voiceState ?? (props.voiceStatus === "recording" ? "listening" : props.voiceStatus === "transcribing" ? "transcribing" : "idle");
+  const visualVoiceState = shellVoiceState(props.voiceState, props.voiceStatus);
   const voiceActive = visualVoiceState === "listening" || visualVoiceState === "transcribing";
   const voiceRecording = visualVoiceState === "listening";
-  const voiceLabel = visualVoiceState === "listening"
-    ? t("shell.voiceListening")
-    : visualVoiceState === "transcribing"
-      ? t("shell.voiceTranscribing")
-      : visualVoiceState === "preview"
-        ? t("shell.voicePreview")
-        : visualVoiceState === "error"
-          ? t("shell.voiceError")
-          : t("shell.voice");
+  const voiceLabel = shellVoiceLabel(visualVoiceState, t);
 
   const agentNames = usePreferencesStore((state) => state.agentNames);
   const agentLabels = useMemo(() => buildAgentLabels(props.workspaces, { titles: props.titles, names: agentNames }), [agentNames, props.titles, props.workspaces]);
@@ -488,7 +456,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       return { id: terminal.id, label: label?.primary ?? terminal.command, status, detail };
     });
     const suspended = workspace.terminals.length > 0 && workspace.terminals.every((terminal) => terminal.suspended);
-    const status = agents.some((agent) => agent.status === "attention") ? "attention" as const : agents.some((agent) => agent.status === "working") ? "working" as const : "idle" as const;
+    const status = projectStatus(agents.map((agent) => agent.status));
     return { id: workspace.id, name: workspace.name, status, suspended, agents };
   }), [agentLabels, props.contextUsage, props.exited, props.notifications, props.workspaces, reported]);
   const inspectorTarget = resolveInspectorTarget({
@@ -520,9 +488,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       onAction={handleInspectorAction}
     />
   );
-  const contextAlerts = props.workspaces.flatMap((workspace) => workspace.terminals
-    .filter((terminal) => !terminal.suspended && !(terminal.id in props.exited) && (props.contextUsage[terminal.id] ?? 0) >= CONTEXT_ATTENTION_PERCENT)
-    .map((terminal) => ({ terminalId: terminal.id, workspaceId: workspace.id, used: props.contextUsage[terminal.id] ?? 0 })));
+  const contextAlerts = nearlyFullContexts(props.workspaces, props.exited, props.contextUsage);
   const activeWorkspace = props.workspaces.find((workspace) => workspace.id === props.activeId) ?? null;
   const tasksPanel = (
     <TasksPanel
@@ -629,24 +595,9 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     focusTerminal(id);
   };
 
-  const attentionMessages = useMemo(() => {
-    const latest: Record<string, { ts: number; message: string }> = {};
-    for (const item of props.notificationItems) {
-      if (item.read || item.system) continue;
-      const current = latest[item.terminalId];
-      if (!current || current.ts < item.ts) latest[item.terminalId] = { ts: item.ts, message: item.message };
-    }
-    return Object.fromEntries(Object.entries(latest).map(([id, value]) => [id, value.message]));
-  }, [props.notificationItems]);
+  const attentionMessages = useMemo(() => latestMessageByAgent(props.notificationItems), [props.notificationItems]);
 
-  const lastActivity = useMemo(() => {
-    const latest: Record<string, number> = {};
-    for (const item of props.notificationItems) {
-      if (item.system) continue;
-      latest[item.terminalId] = Math.max(latest[item.terminalId] ?? 0, item.ts);
-    }
-    return latest;
-  }, [props.notificationItems]);
+  const lastActivity = useMemo(() => lastActivityByAgent(props.notificationItems), [props.notificationItems]);
 
   const workspaceIdFor = (terminalId: string) => props.workspaces.find((workspace) => workspace.terminals.some((terminal) => terminal.id === terminalId))?.id ?? null;
 

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Bell, CheckCircle2, Info } from "lucide-react";
 import type { AgentLabel } from "../../domain/agentLabels";
 import { elapsedTime } from "../../domain/elapsedTime";
+import { latestUnreadPerAgent } from "../../domain/notifications";
 import type { NotificationItem } from "../../types";
 import { intlLocale, useT, type Translate } from "../../i18n";
 import "./notifications.css";
@@ -32,17 +33,6 @@ export function relativeTime(ts: number, t: Translate, now = Date.now()): string
   return new Date(ts).toLocaleDateString(intlLocale(), { day: "2-digit", month: "short" });
 }
 
-/** Latest unread signal per agent: one card per agent that needs you. */
-function attentionItems(items: readonly NotificationItem[]): NotificationItem[] {
-  const latest = new Map<string, NotificationItem>();
-  for (const item of items) {
-    if (item.read || item.system) continue;
-    const current = latest.get(item.terminalId);
-    if (!current || current.ts < item.ts) latest.set(item.terminalId, item);
-  }
-  return [...latest.values()].sort((a, b) => b.ts - a.ts);
-}
-
 export function NotificationCenter({
   items,
   labels,
@@ -58,7 +48,7 @@ export function NotificationCenter({
   now = Date.now(),
 }: NotificationCenterProps) {
   const t = useT();
-  const pending = useMemo(() => attentionItems(items), [items]);
+  const pending = useMemo(() => latestUnreadPerAgent(items), [items]);
   const pendingIds = new Set(pending.map((item) => item.terminalId));
   const contextOnly = contextAlerts.filter((alert) => !pendingIds.has(alert.terminalId));
   const attentionCount = pending.length + contextOnly.length;

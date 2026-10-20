@@ -2,6 +2,7 @@ import { useT, type Translate } from "../../i18n";
 import { Bot, ChevronDown, ChevronRight, Folder, FolderOpen, GitBranch, MoreHorizontal, Pause, Play, Plus, SquareTerminal, Workflow } from "../../components/icons";
 import { Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { CONTEXT_ATTENTION_PERCENT } from "../../domain/agentStatus";
 import type { NavigatorAgentNode, NavigatorGroupNode, NavigatorNode, NavigatorNodeActions, NavigatorProjectNode, NavigatorRowProps } from "./types";
 import { navigatorRef } from "./types";
 import styles from "./Navigator.module.css";
@@ -194,7 +195,7 @@ export function NavigatorNodeRow({
       {!visible && node.kind === "project" ? <EyeOff aria-label={t("nav.hidden")} className={styles.visibilityIcon} size={12} /> : null}
       {node.kind === "agent" && (node as NavigatorAgentNode).notifications > 0 ? <span className={styles.notificationBadge}>{(node as NavigatorAgentNode).notifications}</span> : null}
       {node.kind === "agent" && (node as NavigatorAgentNode).contextUsage !== null ? (
-        <span className={((node as NavigatorAgentNode).contextUsage ?? 0) >= 85 ? styles.contextBadge : styles.contextValue} title={t("inspector.context")}>
+        <span className={((node as NavigatorAgentNode).contextUsage ?? 0) >= CONTEXT_ATTENTION_PERCENT ? styles.contextBadge : styles.contextValue} title={t("inspector.context")}>
           {(node as NavigatorAgentNode).contextUsage}%
         </span>
       ) : null}

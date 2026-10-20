@@ -2,16 +2,11 @@ import { useState } from "react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import { t } from "../i18n";
+import { errorMessage } from "../lib/errors/errorMessage";
 import type { SnapshotFeedback, SnapshotOperation } from "../components/integration/settings/SettingsPanels";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
 import type { TerminalSessions } from "./useTerminalSessions";
-
-function describeSnapshotError(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === "string" && error.trim()) return error;
-  return t("app.snapshotFailed");
-}
 
 /** Export and import of the whole workspace store (Settings → Data & backup). */
 export function useSnapshotTransfer(sessions: TerminalSessions, refresh: () => Promise<void>) {
@@ -41,7 +36,7 @@ export function useSnapshotTransfer(sessions: TerminalSessions, refresh: () => P
       });
     } catch (error) {
       console.error("workspace snapshot export failed:", error);
-      setFeedback({ kind: "error", message: describeSnapshotError(error) });
+      setFeedback({ kind: "error", message: errorMessage(error, t("app.snapshotFailed")) });
     } finally {
       setOperation(null);
     }
@@ -94,7 +89,7 @@ export function useSnapshotTransfer(sessions: TerminalSessions, refresh: () => P
       });
     } catch (error) {
       console.error("workspace snapshot import failed:", error);
-      setFeedback({ kind: "error", message: describeSnapshotError(error) });
+      setFeedback({ kind: "error", message: errorMessage(error, t("app.snapshotFailed")) });
     } finally {
       setOperation(null);
     }

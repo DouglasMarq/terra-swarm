@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_AGENT_PROFILES,
   buildVoicePrompt,
+  fallbackProfile,
   freshCommand,
   normalizeAgentProfile,
   normalizeAgentProfiles,
@@ -52,5 +53,21 @@ describe("freshCommand", () => {
     expect(freshCommand("codex  resume --last")).toBe("codex");
     expect(freshCommand("claude --model opus")).toBe("claude --model opus");
     expect(freshCommand("shell")).toBe("shell");
+  });
+});
+
+describe("fallbackProfile", () => {
+  it("given a built-in agent id, returns its catalog profile", () => {
+    expect(fallbackProfile("claude")).toBe(DEFAULT_AGENT_PROFILES.find((profile) => profile.id === "claude"));
+  });
+
+  it("given an unknown id, returns a profile that runs it and resumes with the original command", () => {
+    expect(fallbackProfile("my-agent")).toEqual({
+      id: "my-agent",
+      label: "my-agent",
+      command: "my-agent",
+      resumeCommandStrategy: { kind: "original" },
+      voicePromptBehavior: { enabled: true, mode: "append", prefix: "", suffix: "" },
+    });
   });
 });

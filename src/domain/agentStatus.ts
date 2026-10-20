@@ -1,5 +1,11 @@
 import type { McpAgentState } from "../types";
 
+/** Context window use, in percent, from which an agent needs attention. */
+export const CONTEXT_ATTENTION_PERCENT = 85;
+
+/** Context window use, in percent, from which a pane shows the context as filling up. */
+export const CONTEXT_WARNING_PERCENT = 60;
+
 /** What the UI shows for an agent, everywhere: dots, chips, Fleet, panes. */
 export type AgentRunStatus = "working" | "idle" | "attention" | "suspended" | "exited";
 
@@ -24,7 +30,7 @@ export function deriveAgentStatus(signals: AgentStatusSignals): AgentRunStatus {
   if (signals.suspended) return "suspended";
   if (signals.exited) return "exited";
   if (signals.reported === "needs_input" || signals.reported === "blocked") return "attention";
-  if ((signals.notifications ?? 0) > 0 || (signals.contextUsed ?? 0) >= 85) return "attention";
+  if ((signals.notifications ?? 0) > 0 || (signals.contextUsed ?? 0) >= CONTEXT_ATTENTION_PERCENT) return "attention";
   if (signals.reported === "idle") return "idle";
   return "working";
 }

@@ -1,4 +1,5 @@
 import { useT, type MessageKey } from "../../i18n";
+import { errorMessage } from "../../lib/errors/errorMessage";
 import { AlertCircle, FileText, GitBranch, LoaderCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Workspace, WorkspaceGitStatus } from "../../types";
@@ -10,13 +11,6 @@ export interface NavigatorGitViewProps {
   activeWorkspaceId?: string | null;
   loadGitStatus: NavigatorGitLoader;
   onSelectWorkspace?: (workspaceId: string) => void;
-}
-
-/** The failure's own message, or "" when it has none (the view shows a generic one). */
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  if (typeof error === "string" && error.trim()) return error;
-  return "";
 }
 
 const sections: ReadonlyArray<{ key: keyof Pick<WorkspaceGitStatus, "conflicted" | "staged" | "modified" | "untracked">; label: MessageKey }> = [
@@ -59,7 +53,7 @@ export function NavigatorGitView({
     } catch (reason) {
       if (currentRequest !== requestId.current) return;
       setStatus(null);
-      setError(errorMessage(reason));
+      setError(errorMessage(reason, ""));
     } finally {
       if (currentRequest === requestId.current) setLoading(false);
     }

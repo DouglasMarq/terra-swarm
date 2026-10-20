@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Users } from "lucide-react";
 import { useT } from "../../i18n";
+import { errorMessage } from "../../lib/errors/errorMessage";
 import { planTeam, TEAM_TEMPLATES, type TeamTemplate } from "../../domain/teamTemplates";
 import { useLibraryStore } from "../../stores/libraryStore";
 import type { AgentInfo, AgentRole } from "../../types";
@@ -37,7 +38,7 @@ export function TeamDialog({ projectName, agents, defaultAgent, canIsolate, onSp
       for (const member of plan.members) await onSpawn(member.agent, { role: member.role, worktree: member.worktree });
       closeDialog();
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
+      setError(errorMessage(failure));
     } finally {
       setStarting(false);
     }

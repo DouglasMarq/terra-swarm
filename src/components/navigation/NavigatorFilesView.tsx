@@ -1,4 +1,5 @@
 import { useT } from "../../i18n";
+import { errorMessage } from "../../lib/errors/errorMessage";
 import { AlertCircle, ChevronDown, ChevronRight, FileText, Folder, Link2, LoaderCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Workspace, WorkspaceFileEntry, WorkspaceFileListing } from "../../types";
@@ -20,13 +21,6 @@ export interface NavigatorFilesViewProps {
   onSelectWorkspace?: (workspaceId: string) => void;
   /** Open a file in the editor; files stay static rows without it. */
   onOpenFile?: (workspaceId: string, path: string) => void;
-}
-
-/** The failure's own message, or "" when it has none (the view shows a generic one). */
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  if (typeof error === "string" && error.trim()) return error;
-  return "";
 }
 
 function FileIcon({ entry }: { entry: WorkspaceFileEntry }) {
@@ -143,7 +137,7 @@ export function NavigatorFilesView({
       setDirectories((current) => {
         const next = {
           ...current,
-          [relativePath]: { listing: current[relativePath]?.listing ?? null, loading: false, error: errorMessage(error) },
+          [relativePath]: { listing: current[relativePath]?.listing ?? null, loading: false, error: errorMessage(error, "") },
         };
         directoriesRef.current = next;
         return next;

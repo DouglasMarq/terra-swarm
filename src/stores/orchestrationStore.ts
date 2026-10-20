@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import { errorMessage } from "../lib/errors/errorMessage";
 import { create } from "zustand";
 import type {
   Group,
@@ -29,12 +30,6 @@ export interface OrchestrationPersistenceError {
   operation: string;
   message: string;
   at: number;
-}
-
-function persistenceErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  if (typeof error === "string" && error.trim()) return error;
-  return t("system.persistFailed");
 }
 
 type PersistenceTransaction = {
@@ -431,7 +426,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     set({
       persistenceError: {
         operation,
-        message: persistenceErrorMessage(error),
+        message: errorMessage(error, t("system.persistFailed")),
         at: Date.now(),
       },
     });

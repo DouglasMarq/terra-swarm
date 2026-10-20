@@ -1,7 +1,8 @@
 import { deriveAgentStatus, type AgentRunStatus } from "../../domain/agentStatus";
 import type { McpAgentState } from "../../types";
 import { DEFAULT_AGENT_PROFILES } from "../../lib/features/agentProfiles";
-import { t } from "../../i18n";
+import type { Translate } from "../../i18n";
+import { elapsedTime } from "../../domain/elapsedTime";
 import type { TerminalMeta, Workspace, WorkspaceGroup } from "../../types";
 
 /** The four states exposed by the fleet command center. */
@@ -102,6 +103,8 @@ export const DEFAULT_FLEET_FILTERS: FleetFilters = {
 };
 
 const EMPTY_RECORD: Readonly<Record<string, never>> = {};
+/** Durations below this are taken as seconds, larger ones as milliseconds. */
+const DURATION_SECONDS_LIMIT = 1000;
 const UNGROUPED_ID = "ungrouped";
 const UNGROUPED_NAME = "—";
 
@@ -114,7 +117,7 @@ function mapValue<T>(record: Readonly<Record<string, T>> | undefined, id: string
   return record?.[id];
 }
 
-function agentLabelFromCommand(command: string): string {
+function agentLabelFromCommand(command: string, t: Translate): string {
   const token = command.trim().split(/\s+/)[0] ?? "";
   const executable = token.split(/[\\/]/).pop()?.replace(/\.(?:exe|cmd|sh)$/i, "") ?? "";
   if (!executable) return t("fleet.terminalAgent");
@@ -152,11 +155,12 @@ function membershipByWorkspace(
   return result;
 }
 
-const STATUS_PRIORITY: readonly FleetStatus[] = ["attention", "working", "idle", "suspended", "exited"];
+/** Fleet statuses from the one that most needs a human to the least. */
+export const FLEET_STATUS_PRIORITY: readonly FleetStatus[] = ["attention", "working", "idle", "suspended", "exited"];
 
 export function fleetAggregateStatus(statuses: readonly FleetStatus[]): FleetStatus {
   if (statuses.length === 0) return "working";
-  return STATUS_PRIORITY.find((status) => statuses.includes(status)) ?? "working";
+  return FLEET_STATUS_PRIORITY.find((status) => statuses.includes(status)) ?? "working";
 }
 
 function groupForId(groups: readonly WorkspaceGroup[], id: string): WorkspaceGroup {
@@ -177,13 +181,14 @@ function makeAgent(
   terminal: TerminalMeta,
   group: WorkspaceGroup,
   input: FleetDerivationInput,
+  t: Translate,
 ): FleetAgentModel {
   const exited = input.exited ?? EMPTY_RECORD as Readonly<Record<string, number | null>>;
   const notifications = input.notifications ?? EMPTY_RECORD as Readonly<Record<string, number>>;
   const contextUsage = input.contextUsage ?? EMPTY_RECORD as Readonly<Record<string, number>>;
   const groupSuspended = Boolean(group.suspended || workspace.terminals.length > 0 && workspace.terminals.every((item) => item.suspended));
   const command = clean(terminal.command, "shell");
-  const label = clean(mapValue(input.agentLabels, terminal.id), agentLabelFromCommand(command));
+  const label = clean(mapValue(input.agentLabels, terminal.id), agentLabelFromCommand(command, t));
   const title = clean(mapValue(input.titles, terminal.id));
   return {
     id: terminal.id,
@@ -264,14 +269,14 @@ function groupModelFromAgents(
  * This function is deliberately pure so filters and rendering can be tested
  * without a Tauri runtime or a mounted React tree.
  */
-export function deriveFleetModel(input: FleetDerivationInput): FleetModel {
+export function deriveFleetModel(input: FleetDerivationInput, t: Translate): FleetModel {
   const workspaces = input.workspaces ?? [];
   const groups = input.groups ?? [];
   const membership = membershipByWorkspace(workspaces, groups);
   const ungrouped = groupForId(groups, UNGROUPED_ID);
   const agents = workspaces.flatMap((workspace) => {
     const group = membership.get(workspace.id) ?? ungrouped;
-    return workspace.terminals.map((terminal) => makeAgent(workspace, terminal, group, input));
+    return workspace.terminals.map((terminal) => makeAgent(workspace, terminal, group, input, t));
   });
 
   const groupModels = [
@@ -335,12 +340,12 @@ export function filterFleetModel(model: FleetModel, filters: Partial<FleetFilter
   return { agents: filteredAgents, groups, summary: summaryFor(filteredAgents) };
 }
 
-export function formatFleetDuration(value: FleetValue | undefined): string | null {
+export function formatFleetDuration(value: FleetValue | undefined, now: number, t: Translate): string | null {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value === "string") return value;
-  if (value instanceof Date) return formatFleetRelativeTime(value.getTime());
+  if (value instanceof Date) return formatFleetRelativeTime(value.getTime(), now, t);
   if (!Number.isFinite(value)) return null;
-  const milliseconds = value < 1000 ? value * 1000 : value;
+  const milliseconds = value < DURATION_SECONDS_LIMIT ? value * 1000 : value;
   const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -350,17 +355,15 @@ export function formatFleetDuration(value: FleetValue | undefined): string | nul
   return t("time.durationSeconds", { seconds });
 }
 
-export function formatFleetRelativeTime(value: FleetValue | undefined, now = Date.now()): string | null {
+export function formatFleetRelativeTime(value: FleetValue | undefined, now: number, t: Translate): string | null {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value === "string") return value;
   const timestamp = value instanceof Date ? value.getTime() : value;
   if (!Number.isFinite(timestamp)) return null;
-  const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
-  if (seconds < 45) return t("time.ago.now");
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return t("time.ago.minutes", { count: minutes });
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t("time.ago.hours", { count: hours });
-  return t("time.ago.days", { count: Math.floor(hours / 24) });
+  const elapsed = elapsedTime(timestamp, now);
+  if (elapsed.unit === "now") return t("time.ago.now");
+  if (elapsed.unit === "minutes") return t("time.ago.minutes", { count: elapsed.count });
+  if (elapsed.unit === "hours") return t("time.ago.hours", { count: elapsed.count });
+  return t("time.ago.days", { count: elapsed.count });
 }
 

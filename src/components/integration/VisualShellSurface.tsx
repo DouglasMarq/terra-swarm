@@ -19,17 +19,18 @@ import { CollapsedSidebar, Sidebar, SurfaceSwitch, type CollapsedSidebarProject 
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import { buildAgentLabels } from "../../domain/agentLabels";
 import { useT } from "../../i18n";
+import { errorMessage } from "../../lib/errors/errorMessage";
 import { AgentInspector } from "../inspector/AgentInspector";
 import { TasksPanel } from "../tasks/TasksPanel";
 import { TaskBoard } from "../tasks/TaskBoard";
-import { sendPromptToTerminal } from "../../lib/session/sendPrompt";
+import { sendPromptToTerminal } from "../../app/sendPromptToTerminal";
 import { startMcpEventBridge, useReportedStates } from "../../stores/mcpStore";
 import { useReviewStore } from "../../stores/reviewStore";
 import { useLibraryStore } from "../../stores/libraryStore";
 import { useAgentUsage } from "../../stores/usageStore";
 import { startPreviewBridge } from "../../stores/previewStore";
 import { PreviewPanel } from "../preview/PreviewPanel";
-import { deriveAgentStatus } from "../../domain/agentStatus";
+import { CONTEXT_ATTENTION_PERCENT, deriveAgentStatus } from "../../domain/agentStatus";
 import { NavigatorPanel } from "../navigation/NavigatorPanel";
 import type { ActivityTab, NavigatorFilesLoader, NavigatorGitLoader, NavigatorNodeRef } from "../navigation/types";
 import type { WorkbenchLocation, WorkbenchTabRenderContext } from "../workbench/types";
@@ -375,10 +376,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         }
       } catch (error) {
         if (!cancelled) {
-          const message = error instanceof Error && error.message.trim()
-            ? error.message
-            : t("inspector.unavailable");
-          dispatchInspectorRuntime({ type: "failure", terminalId, requestId, error: message });
+          dispatchInspectorRuntime({ type: "failure", terminalId, requestId, error: errorMessage(error, t("inspector.unavailable")) });
         }
       }
       if (!cancelled) timer = setTimeout(() => void poll(), 1500);
@@ -561,7 +559,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     />
   );
   const contextAlerts = props.workspaces.flatMap((workspace) => workspace.terminals
-    .filter((terminal) => !terminal.suspended && !(terminal.id in props.exited) && (props.contextUsage[terminal.id] ?? 0) >= 85)
+    .filter((terminal) => !terminal.suspended && !(terminal.id in props.exited) && (props.contextUsage[terminal.id] ?? 0) >= CONTEXT_ATTENTION_PERCENT)
     .map((terminal) => ({ terminalId: terminal.id, workspaceId: workspace.id, used: props.contextUsage[terminal.id] ?? 0 })));
   const activeWorkspace = props.workspaces.find((workspace) => workspace.id === props.activeId) ?? null;
   const tasksPanel = (

@@ -1,6 +1,7 @@
 import { t } from "../../../i18n";
 import type { AgentInfo, TerminalMeta, Workspace, WorkspaceGroup } from "../../../types";
 import { agentLabelText } from "../../../domain/agentLabels";
+import { normalizeSearchText } from "../../../lib/text/normalizeSearchText";
 
 export type CommandGroupId = "recent" | "navigation" | "create" | "agent" | "settings";
 
@@ -173,28 +174,13 @@ const COMMAND_GROUP_LABELS: Readonly<Record<CommandGroupId, string>> = {
   get settings() { return t("palette.groups.settings"); },
 };
 
-function normalizeText(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("pt-BR")
-    .trim();
-}
-
-/**
- * Normalize Portuguese input so `configuracoes` also finds `Configurações`.
- * Keeping this function pure makes it usable by the host's quick search too.
- */
-export function normalizeCommandQuery(value: string): string {
-  return normalizeText(value);
-}
 
 function commandSearchText(
   label: string,
   description: string,
   keywords: readonly string[],
 ): string {
-  return normalizeText([label, description, ...keywords].join(" "));
+  return normalizeSearchText([label, description, ...keywords].join(" "));
 }
 
 function command(
@@ -686,7 +672,7 @@ export function groupCommands(commands: readonly CommandDescriptor[]): CommandGr
 }
 
 function commandMatches(command: CommandDescriptor, query: string): boolean {
-  const normalized = normalizeCommandQuery(query);
+  const normalized = normalizeSearchText(query);
   if (!normalized) return true;
   return normalized
     .split(/\s+/)

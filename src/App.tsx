@@ -11,6 +11,7 @@ import { useGlobalHotkeys } from "./app/useGlobalHotkeys";
 import { useGroupActions } from "./app/useGroupActions";
 import { useResumeQueue } from "./app/useResumeQueue";
 import { useSnapshotTransfer } from "./app/useSnapshotTransfer";
+import { useSystemNotifications } from "./app/useSystemNotifications";
 import { useVoiceCapture } from "./app/useVoiceCapture";
 import { useVoiceSettings } from "./app/useVoiceSettings";
 import { useWorkspaceNavigation } from "./app/useWorkspaceNavigation";
@@ -284,6 +285,7 @@ function App() {
     snapshotTransfer.pendingImportPath !== null;
 
   useBranchPolling(workspaces);
+  useSystemNotifications(workspaces);
 
   const { forgetWorkspace } = useFocusTracking({
     workspaces,

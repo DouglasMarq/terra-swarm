@@ -195,26 +195,6 @@ export function layoutForPanelIds(
   return sizes;
 }
 
-export function modeLabel(mode: WorkbenchLayoutMode): string {
-  switch (mode) {
-    case "spotlight":
-      return "Spotlight";
-    case "sidebar":
-      return "Sidebar";
-    case "grid":
-      return "Custom grid";
-    case "horizontal":
-      return "Horizontal";
-    case "vertical":
-      return "Vertical";
-    case "stack":
-      return "Stack";
-    case "auto":
-    default:
-      return "Auto";
-  }
-}
-
 export function nextLayout(
   containerId: string,
   mode: WorkbenchLayoutMode,

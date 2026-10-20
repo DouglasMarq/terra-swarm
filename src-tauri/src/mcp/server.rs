@@ -70,9 +70,10 @@ impl ServerHandler for TerraServer {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        let mut result = ListToolsResult::default();
-        result.tools = tool_list();
-        Ok(result)
+        Ok(ListToolsResult {
+            tools: tool_list(),
+            ..Default::default()
+        })
     }
 
     fn get_tool(&self, name: &str) -> Option<Tool> {

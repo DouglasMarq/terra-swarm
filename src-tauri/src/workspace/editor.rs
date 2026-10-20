@@ -4,6 +4,7 @@
 //! (agents edit the same files).
 
 use super::{safe_relative_path, WorkspaceStore};
+use crate::ipc_error::{IpcError, IpcErrorCode};
 use crate::sync::LockExt;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -101,14 +102,20 @@ pub(crate) fn write_file(
     relative: &str,
     content: &str,
     expected_modified: Option<u64>,
-) -> Result<WorkspaceFileSaved, String> {
+) -> Result<WorkspaceFileSaved, IpcError> {
     let target = resolve_file(root, relative)?;
     if content.len() as u64 > MAX_EDIT_BYTES {
-        return Err("the text is too large to save here".into());
+        return Err(IpcError::new(
+            IpcErrorCode::Other,
+            "the text is too large to save here",
+        ));
     }
     if let Some(expected) = expected_modified {
         if modified_millis(&target)? != expected {
-            return Err("the file changed on disk since it was opened; reload it, or save again to overwrite".into());
+            return Err(IpcError::new(
+                IpcErrorCode::ChangedOnDisk,
+                "the file changed on disk since it was opened; reload it, or save again to overwrite",
+            ));
         }
     }
     std::fs::write(&target, content).map_err(|error| format!("cannot save the file: {}", error))?;
@@ -143,7 +150,7 @@ pub fn write_workspace_file(
     relative_path: String,
     content: String,
     expected_modified: Option<u64>,
-) -> Result<WorkspaceFileSaved, String> {
+) -> Result<WorkspaceFileSaved, IpcError> {
     write_file(
         Path::new(&workspace_cwd(&store, &workspace_id)?),
         &relative_path,
@@ -195,12 +202,26 @@ mod tests {
         file_time
             .set_modified(UNIX_EPOCH + std::time::Duration::from_millis(stale))
             .unwrap();
-        assert!(write_file(&root, "notes.md", "mine", Some(file.modified))
-            .unwrap_err()
-            .contains("changed on disk"));
+        assert_eq!(
+            write_file(&root, "notes.md", "mine", Some(file.modified))
+                .unwrap_err()
+                .code,
+            IpcErrorCode::ChangedOnDisk
+        );
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "agent wrote this");
         write_file(&root, "notes.md", "mine", None).unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "mine");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn given_text_over_the_size_limit_save_fails_with_the_other_code() {
+        let root = temp_root("too-large");
+        std::fs::write(root.join("big.txt"), "x").unwrap();
+        let text = "x".repeat(MAX_EDIT_BYTES as usize + 1);
+        let error = write_file(&root, "big.txt", &text, None).unwrap_err();
+        assert_eq!(error.code, IpcErrorCode::Other);
+        assert!(error.message.contains("too large"));
         let _ = std::fs::remove_dir_all(root);
     }
 

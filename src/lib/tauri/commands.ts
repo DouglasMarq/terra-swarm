@@ -27,6 +27,7 @@ import type {
   WorktreeDiff,
   WorktreeStatus,
 } from "../../types";
+import { toIpcError } from "./errors";
 
 /**
  * The frontend half of the Tauri IPC contract.
@@ -401,7 +402,15 @@ const IPC_COMMANDS = {
 type CommandArgs<K extends CommandKey> = IpcCommandContract[K]["args"];
 type CommandResult<K extends CommandKey> = IpcCommandContract[K]["result"];
 
-/** Invoke one of the commands declared in {@link IpcCommandContract}. */
+function rejectTyped(error: unknown): never {
+  throw toIpcError(error);
+}
+
+/**
+ * Invoke one of the commands declared in {@link IpcCommandContract}. A command
+ * that rejects with a coded error rejects here with an `IpcError`; plain
+ * messages are passed through.
+ */
 export function invokeCommand<K extends CommandKey>(
   key: K,
   ...args: CommandArgs<K> extends undefined ? [] : [args: CommandArgs<K>]
@@ -410,7 +419,7 @@ export function invokeCommand<K extends CommandKey>(
   const command = IPC_COMMANDS[key];
 
   if (payload === undefined) {
-    return invoke<CommandResult<K>>(command);
+    return invoke<CommandResult<K>>(command).catch(rejectTyped);
   }
 
   // Tauri's generic IPC payload is structurally a record at runtime. The
@@ -419,5 +428,5 @@ export function invokeCommand<K extends CommandKey>(
   return invoke<CommandResult<K>>(
     command,
     payload as Record<string, unknown>,
-  );
+  ).catch(rejectTyped);
 }

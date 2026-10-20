@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
+import type { DragEndEvent } from "@dnd-kit/core";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { McpServerInfo, McpTask } from "../../types";
 
@@ -12,6 +14,17 @@ const api = vi.hoisted(() => ({
   mcpUpdateTask: vi.fn(),
   mcpDeleteTask: vi.fn(),
   mcpAgentStatuses: vi.fn(),
+}));
+
+/** The board's drop handler, captured so a test can drop without a pointer. */
+const dnd = vi.hoisted(() => ({ onDragEnd: null as ((event: DragEndEvent) => void) | null }));
+
+vi.mock("@dnd-kit/core", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@dnd-kit/core")>()),
+  DndContext: ({ onDragEnd, children }: { onDragEnd?: (event: DragEndEvent) => void; children?: ReactNode }) => {
+    dnd.onDragEnd = onDragEnd ?? null;
+    return <>{children}</>;
+  },
 }));
 
 vi.mock("../../lib/tauri/mcp", async (importOriginal) => ({
@@ -81,4 +94,32 @@ describe("TaskBoard", () => {
     expect(within(rail).getByText("Vega")).toBeTruthy();
     expect(within(rail).queryByText("Lyra")).toBeNull();
   });
+
+  it("given the hand-off update fails, keeps the error and types nothing into the agent", async () => {
+    api.mcpUpdateTask.mockRejectedValue("task T-1 not found");
+    const onSendPrompt = vi.fn().mockResolvedValue(undefined);
+    render(<TaskBoard workspaceId="ws-1" agents={agents} onSendPrompt={onSendPrompt} />);
+    await screen.findByText("Task T-1");
+
+    await act(async () => dnd.onDragEnd?.(dropOnAgent("T-1", "t-1")));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("task T-1 not found");
+    expect(onSendPrompt).not.toHaveBeenCalled();
+  });
+
+  it("given the hand-off update succeeds, types the task into the agent", async () => {
+    api.mcpUpdateTask.mockResolvedValue(task("T-1", { status: "in_progress", assignee: "t-1" }));
+    const onSendPrompt = vi.fn().mockResolvedValue(undefined);
+    render(<TaskBoard workspaceId="ws-1" agents={agents} onSendPrompt={onSendPrompt} />);
+    await screen.findByText("Task T-1");
+
+    await act(async () => dnd.onDragEnd?.(dropOnAgent("T-1", "t-1")));
+
+    await vi.waitFor(() => expect(onSendPrompt).toHaveBeenCalledWith("t-1", expect.stringContaining("T-1")));
+    expect(api.mcpUpdateTask).toHaveBeenCalledWith("ws-1", "T-1", { assignee: "t-1", status: "in_progress" });
+  });
 });
+
+function dropOnAgent(taskId: string, terminalId: string): DragEndEvent {
+  return { active: { id: `task:${taskId}` }, over: { id: `agent:${terminalId}` } } as unknown as DragEndEvent;
+}

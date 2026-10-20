@@ -37,7 +37,7 @@ export function readWorkspaceFile(workspaceId: string, relativePath: string): Pr
   return invokeCommand("readWorkspaceFile", { workspaceId, relativePath });
 }
 
-/** Save the editor's text; fails when the file changed since `expectedModified` (pass null to overwrite). */
+/** Save the editor's text; fails with a `changedOnDisk` `IpcError` when the file changed since `expectedModified` (pass null to overwrite). */
 export function writeWorkspaceFile(
   workspaceId: string,
   relativePath: string,

@@ -31,6 +31,7 @@ export function spawnTerminal(
   });
 }
 
+/** Fails with a `busy` `IpcError` while the terminal's input queue is full; the write can be retried. */
 export function writeTerminal(id: string, data: string): Promise<void> {
   return invokeCommand("writeTerminal", { id, data });
 }

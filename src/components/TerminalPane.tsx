@@ -6,6 +6,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api } from "../api";
+import { isIpcError } from "../lib/tauri/errors";
 import type { OutputChunk } from "../types";
 import { registerTerminal, unregisterTerminal, getTerminal } from "../terminalRegistry";
 import {
@@ -294,7 +295,7 @@ export function TerminalPane(props: Props) {
             await api.writeTerminal(id, data);
             return;
           } catch (err) {
-            if (!String(err).includes("busy") || attempt >= MAX_WRITE_RETRIES) {
+            if (!isIpcError(err, "busy") || attempt >= MAX_WRITE_RETRIES) {
               warnThrottled("write", err);
               return;
             }

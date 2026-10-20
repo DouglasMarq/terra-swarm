@@ -64,7 +64,7 @@ describe("fleet model", () => {
       branches: { terra: "main", archive: "legacy" },
     });
 
-    expect(model.summary).toEqual({ total: 4, working: 0, attention: 2, suspended: 1, exited: 1 });
+    expect(model.summary).toEqual({ total: 4, working: 0, idle: 0, attention: 2, suspended: 1, exited: 1 });
     expect(model.groups.map((group) => group.id)).toEqual(["core", "paused", "ungrouped"]);
     expect(model.groups[0]?.projects[0]?.agents[0]).toMatchObject({
       id: "codex-1",
@@ -106,5 +106,19 @@ describe("fleet model", () => {
     expect(formatFleetDuration("queued")).toBe("queued");
     expect(formatFleetRelativeTime(Date.UTC(2026, 0, 1, 11, 0, 0), Date.UTC(2026, 0, 1, 12, 1, 0))).toBe("há 1 h");
     expect(formatFleetRelativeTime("agora")).toBe("agora");
+  });
+
+  it("uses the state agents report through their hooks", () => {
+    const model = deriveFleetModel({
+      workspaces: [{ id: "ws", name: "ws", cwd: "/", terminals: [
+        { id: "a", command: "claude", width: null },
+        { id: "b", command: "claude", width: null },
+        { id: "c", command: "claude", width: null },
+      ] }],
+      reported: { a: "idle", b: "needs_input" },
+    });
+    const byId = Object.fromEntries(model.agents.map((agent) => [agent.id, agent.status]));
+    expect(byId).toEqual({ a: "idle", b: "attention", c: "working" });
+    expect(model.summary.idle).toBe(1);
   });
 });

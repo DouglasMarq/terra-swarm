@@ -140,6 +140,7 @@
 
 .terra-dot[data-status="working"] { background: var(--terra-green); }
 .terra-dot[data-status="attention"] { background: var(--terra-amber); }
+.terra-dot[data-status="idle"] { background: var(--terra-text-muted); }
 .terra-dot[data-status="exited"] { background: var(--terra-red); }
 .terra-dot[data-status="suspended"] {
   border: 1.5px solid var(--terra-text-secondary);

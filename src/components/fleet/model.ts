@@ -1,9 +1,11 @@
+import { deriveAgentStatus, type AgentRunStatus } from "../../domain/agentStatus";
+import type { McpAgentState } from "../../types";
 import { DEFAULT_AGENT_PROFILES } from "../../lib/features/agentProfiles";
 import { t } from "../../i18n";
 import type { TerminalMeta, Workspace, WorkspaceGroup } from "../../types";
 
 /** The four states exposed by the fleet command center. */
-export type FleetStatus = "working" | "attention" | "suspended" | "exited";
+export type FleetStatus = AgentRunStatus;
 
 export type FleetStatusFilter = FleetStatus | "all";
 
@@ -32,6 +34,8 @@ export interface FleetDerivationInput {
   durations?: Readonly<Record<string, FleetValue>>;
   /** Allows a host to supply a stable display label for a terminal. */
   agentLabels?: Readonly<Record<string, string>>;
+  /** State the agents reported through their hooks, by terminal id. */
+  reported?: Readonly<Record<string, McpAgentState>>;
 }
 
 export interface FleetAgentModel {
@@ -78,6 +82,7 @@ export interface FleetGroupModel {
 export interface FleetSummary {
   total: number;
   working: number;
+  idle: number;
   attention: number;
   suspended: number;
   exited: number;
@@ -146,22 +151,7 @@ function membershipByWorkspace(
   return result;
 }
 
-function statusFor(
-  terminal: TerminalMeta,
-  groupSuspended: boolean,
-  exited: Readonly<Record<string, number | null>>,
-  notifications: Readonly<Record<string, number>>,
-  contextUsage: Readonly<Record<string, number>>,
-): FleetStatus {
-  if (groupSuspended || terminal.suspended) return "suspended";
-  if (terminal.id in exited) return "exited";
-  if ((notifications[terminal.id] ?? 0) > 0 || (contextUsage[terminal.id] ?? 0) >= 85) {
-    return "attention";
-  }
-  return "working";
-}
-
-const STATUS_PRIORITY: readonly FleetStatus[] = ["attention", "working", "suspended", "exited"];
+const STATUS_PRIORITY: readonly FleetStatus[] = ["attention", "working", "idle", "suspended", "exited"];
 
 export function fleetAggregateStatus(statuses: readonly FleetStatus[]): FleetStatus {
   if (statuses.length === 0) return "working";
@@ -208,7 +198,13 @@ function makeAgent(
     command,
     cwd: workspace.cwd,
     branch: clean(mapValue(input.branches, workspace.id)),
-    status: statusFor(terminal, groupSuspended, exited, notifications, contextUsage),
+    status: deriveAgentStatus({
+      suspended: groupSuspended || terminal.suspended,
+      exited: terminal.id in exited,
+      notifications: notifications[terminal.id],
+      contextUsed: contextUsage[terminal.id],
+      reported: input.reported?.[terminal.id],
+    }),
     contextUsage: clampContext(mapValue(contextUsage, terminal.id)),
     notificationCount: Math.max(0, mapValue(notifications, terminal.id) ?? 0),
     exitCode: mapValue(exited, terminal.id),
@@ -225,6 +221,7 @@ function summaryFor(agents: readonly FleetAgentModel[]): FleetSummary {
   return {
     total: agents.length,
     working: agents.filter((agent) => agent.status === "working").length,
+    idle: agents.filter((agent) => agent.status === "idle").length,
     attention: agents.filter((agent) => agent.status === "attention").length,
     suspended: agents.filter((agent) => agent.status === "suspended").length,
     exited: agents.filter((agent) => agent.status === "exited").length,

@@ -79,7 +79,7 @@ export function Sidebar({ children, activeAgents, version, onOpenSettings, surfa
 export interface CollapsedSidebarAgent {
   id: string;
   label: string;
-  status: "working" | "attention" | "exited" | "suspended";
+  status: "working" | "idle" | "attention" | "exited" | "suspended";
   detail: string;
 }
 

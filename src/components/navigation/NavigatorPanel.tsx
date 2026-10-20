@@ -1,3 +1,4 @@
+import { useReportedStates } from "../../stores/mcpStore";
 import { t } from "../../i18n";
 import { Folder, GitBranch, Plus, Search } from "../../components/icons";
 import { Trash2 } from "lucide-react";
@@ -109,9 +110,10 @@ export function NavigatorPanel({
   }, [availableActivities, capabilities, loadFiles, loadGitStatus, workspaces.length]);
   const selectedActivity = enabledActivities.includes(activeActivity) ? activeActivity : "projects";
   const collapsed = useMemo(() => new Set(collapsedIds ?? localCollapsed), [collapsedIds, localCollapsed]);
+  const reported = useReportedStates();
   const tree = useMemo(
-    () => buildNavigatorTree(workspaces, { snapshot, groups, exited, notifications, contextUsage, statuses, branches, containerVisibility, agentLabels, flatten }),
-    [agentLabels, branches, containerVisibility, contextUsage, exited, flatten, groups, notifications, snapshot, statuses, workspaces],
+    () => buildNavigatorTree(workspaces, { snapshot, groups, exited, notifications, contextUsage, statuses, branches, containerVisibility, agentLabels, flatten, reported }),
+    [agentLabels, branches, containerVisibility, contextUsage, exited, flatten, groups, notifications, snapshot, statuses, workspaces, reported],
   );
   const filteredTree = useMemo(() => filterNavigatorTree(tree, query), [query, tree]);
   const expandableIds = useMemo(() => collectExpandable(filteredTree), [filteredTree]);

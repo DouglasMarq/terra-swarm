@@ -17,6 +17,7 @@ export const en = {
     exited: "Exited",
     suspended: "Suspended",
     idle: "Idle",
+    idleLower: "idle",
     workingLower: "working",
     attentionLower: "needs you",
     exitedLower: "exited",

@@ -1,5 +1,6 @@
 import { Gauge, Power, RotateCcw, SquareArrowOutUpRight } from "lucide-react";
 import type { AgentLabel } from "../../domain/agentLabels";
+import type { AgentRunStatus } from "../../domain/agentStatus";
 import { useT } from "../../i18n";
 import type { NotificationItem } from "../../types";
 import type { InspectorActionKind, InspectorTarget } from "../integration/inspectorModel";
@@ -7,7 +8,7 @@ import type { InspectorRuntimeState } from "../integration/inspectorRuntime";
 import { relativeTime } from "../notifications/NotificationCenter";
 import "./inspector.css";
 
-export type InspectorStatus = "working" | "attention" | "exited" | "suspended";
+export type InspectorStatus = AgentRunStatus;
 
 export interface AgentInspectorProps {
   target: InspectorTarget | null;

@@ -14,7 +14,7 @@ import type {
 /** The three visible nesting levels in the Terra navigator. */
 export type NavigatorNodeKind = "group" | "project" | "container" | "pane" | "agent";
 
-export type NavigatorStatus = "working" | "attention" | "exited" | "suspended";
+export type NavigatorStatus = "working" | "idle" | "attention" | "exited" | "suspended";
 
 export type ActivityTab = "projects" | "files" | "git";
 

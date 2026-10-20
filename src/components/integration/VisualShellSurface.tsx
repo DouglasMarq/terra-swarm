@@ -702,7 +702,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         ...(worktreeBranches[ptyId] ? [{ id: "review", label: t("review.open"), icon: <GitCompare size={13} />, onSelect: () => openReview(ptyId) }] : []),
       ],
       [
-        { id: "copy-resume", label: t("pane.menu.copyResume"), detail: resumeCommand, icon: <Copy size={13} />, onSelect: () => { void window.navigator.clipboard?.writeText(resumeCommand); } },
+        { id: "copy-resume", label: t("pane.menu.copyResume"), detail: resumeCommand, icon: <Copy size={13} />, onSelect: () => { void window.navigator.clipboard?.writeText(resumeCommand).catch((error) => console.warn("failed to copy the resume command:", error)); } },
         ...(props.onRenameAgent ? [{ id: "rename", label: t("pane.menu.rename"), icon: <Pencil size={13} />, onSelect: () => props.onRenameAgent?.(ptyId) }] : []),
         { id: "clear-history", label: t("pane.menu.clearHistory"), icon: <Eraser size={13} />, disabled: !workspaceId || !props.onFocusedAgentAction, onSelect: () => runAction("clear-scrollback") },
       ],

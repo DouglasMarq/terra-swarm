@@ -205,6 +205,6 @@ export function startMcpEventBridge(
     }),
   ];
   return () => {
-    for (const unlisten of pending) void unlisten.then((stop) => stop()).catch(() => undefined);
+    for (const unlisten of pending) void unlisten.then((stop) => stop()).catch((error) => console.warn("failed to stop listening for MCP events:", error));
   };
 }

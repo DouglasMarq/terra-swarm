@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorktreeDiff } from "../../types";
@@ -59,5 +59,22 @@ describe("WorktreeReviewDialog", () => {
     expect((screen.getByRole("button", { name: /merge em main/i }) as HTMLButtonElement).disabled).toBe(true);
     await userEvent.click(commit);
     expect(api.worktreeCommit).toHaveBeenCalledWith("ws", "t-1", "Changes from Vega");
+  });
+
+  it("given the clipboard refuses the pull request link, warns instead of failing silently", async () => {
+    api.worktreeDiff.mockResolvedValue(diff());
+    api.worktreeOpenPr.mockResolvedValue("https://example.test/pr/1");
+    render(<WorktreeReviewDialog />);
+    act(() => useReviewStore.getState().open({ workspaceId: "ws", terminalId: "t-1", label: "Vega" }));
+
+    await userEvent.click(await screen.findByRole("button", { name: /abrir pull request/i }));
+    await userEvent.click(screen.getByRole("button", { name: /enviar e abrir pr/i }));
+    const copy = await screen.findByRole("button", { name: /copiar o link/i });
+    const failure = new Error("clipboard denied");
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: vi.fn().mockRejectedValue(failure) }, configurable: true });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    fireEvent.click(copy);
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledWith("failed to copy the pull request URL:", failure));
+    warn.mockRestore();
   });
 });

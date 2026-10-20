@@ -483,7 +483,7 @@ function App() {
   const createWorkspace = async () => {
     try {
       const ws = await api.createWorkspace(
-        newWsName.trim() || "workspace",
+        newWsName.trim() || t("app.defaultWorkspaceName"),
         newWsCwd,
       );
       if (newWsGroupId) {
@@ -499,6 +499,7 @@ function App() {
       setActiveId(ws.id);
     } catch (err) {
       console.error("failed to create workspace:", err);
+      pushSystemNotification(t("app.createWorkspaceFailed", { detail: String(err) }));
     }
   };
 

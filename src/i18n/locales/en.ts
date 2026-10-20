@@ -492,6 +492,8 @@ export const en = {
     needsConfirm: "This action needs confirmation.",
   },
   app: {
+    defaultWorkspaceName: "workspace",
+    createWorkspaceFailed: "Couldn't create the workspace: {detail}",
     resumeAgentFailed: "Couldn't resume {name}: {detail}",
     snapshotFailed: "The snapshot operation failed. Nothing was changed.",
     loadFailed: "Couldn't load the workspaces. Try again.",

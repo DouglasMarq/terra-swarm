@@ -52,17 +52,17 @@ Agents: **W0** runs first in this checkout; then **B1**, **B2**, **B3**, **F1**,
 
 **B1 — `workspace/`, `worktree/`, `cli/`, `lib.rs`, `sync.rs`, `scrollback.rs`**
 
-- [ ] 1.1 **Bug (high):** `persistence.rs:321` treats any read error as "no store", so the next save overwrites `workspaces.json`. Only `NotFound` starts empty; other errors log, back up and disable saving → verify: `given_an_unreadable_store_keeps_the_file_and_does_not_save`.
-- [ ] 1.2 `persistence.rs:371-372`: log serialization and save-channel failures (`eprintln!`).
-- [ ] 1.3 **Security:** validate `workspace_id` / `terminal_id` as plain path components before `root.join(..)` in `worktree/mod.rs:97` and check `starts_with(root)`; validate `WorktreeInfo.branch` (prefix `terra/`, no leading `-`) on load/import and pass refs safely to `push`/`merge`/`branch -D`/`merge-base`/`worktree remove` → verify: tests with `..`, absolute ids and a `--receive-pack=` branch.
-- [ ] 1.4 **Bug:** `worktree::status` hides git errors as "clean, 0/0", which lets `merge` and `open_pull_request` skip the uncommitted-changes guard. Return `Result` and refuse on error → verify: test with a broken worktree path.
-- [ ] 1.5 `review.rs:157`: report a failed `merge --abort` instead of "nothing was changed" → verify: test.
-- [ ] 1.6 `workspace/git.rs`: run git through `worktree::git` (sets `GIT_TERMINAL_PROMPT=0`).
-- [ ] 1.7 **Bug:** `cli/stdio.rs:115`: a non-JSON server reply produces no answer and hangs the client; return the `-32603` error → verify: test.
-- [ ] 1.8 `workspace/store.rs:137,157`: `rename`/`set_width` return `Result` so the commands stop reporting success for an unknown workspace → verify: tests.
-- [ ] 1.9 Locks: replace the 9 copies of `unwrap_or_else(|e| e.into_inner())`, the ~49 `lock().map_err(..)?` and the silent `if let Ok(lock)` skips (exit-time `save_now`, `lib.rs:183`) with `lock_or_recover` in these files.
-- [ ] 1.10 `groups.rs:39,51`: `expect` → `let ... else`; preserve causes in `map_err(|_| ..)` (`worktree/mod.rs:89`); named constants for magic numbers (`clamp(1,128)`, `clamp(0.0,100.0)`, 8192 sniff, 150 ms debounce, 800 ms, CLI sizes/timeouts, JSON-RPC codes); remove explanatory in-body comments listed in the audit; comment or drop the `#[allow]`s.
-- [ ] 1.11 Dead code `workspace/mod.rs:124,220-226` (`Project`, `SubTab`, `PaneMeta`, `SubtabMeta`): **only if Q4 = remove**.
+- [x] 1.1 **Bug (high):** `persistence.rs:321` treats any read error as "no store", so the next save overwrites `workspaces.json`. Only `NotFound` starts empty; other errors log, back up and disable saving → verify: `given_an_unreadable_store_keeps_the_file_and_does_not_save`.
+- [x] 1.2 `persistence.rs:371-372`: log serialization and save-channel failures (`eprintln!`).
+- [x] 1.3 **Security:** validate `workspace_id` / `terminal_id` as plain path components before `root.join(..)` in `worktree/mod.rs:97` and check `starts_with(root)`; validate `WorktreeInfo.branch` (prefix `terra/`, no leading `-`) on load/import and pass refs safely to `push`/`merge`/`branch -D`/`merge-base`/`worktree remove` → verify: tests with `..`, absolute ids and a `--receive-pack=` branch.
+- [x] 1.4 **Bug:** `worktree::status` hides git errors as "clean, 0/0", which lets `merge` and `open_pull_request` skip the uncommitted-changes guard. Return `Result` and refuse on error → verify: test with a broken worktree path.
+- [x] 1.5 `review.rs:157`: report a failed `merge --abort` instead of "nothing was changed" → verify: test.
+- [x] 1.6 `workspace/git.rs`: run git through `worktree::git` (sets `GIT_TERMINAL_PROMPT=0`).
+- [x] 1.7 **Bug:** `cli/stdio.rs:115`: a non-JSON server reply produces no answer and hangs the client; return the `-32603` error → verify: test.
+- [x] 1.8 `workspace/store.rs:137,157`: `rename`/`set_width` return `Result` so the commands stop reporting success for an unknown workspace → verify: tests.
+- [x] 1.9 Locks: replace the 9 copies of `unwrap_or_else(|e| e.into_inner())`, the ~49 `lock().map_err(..)?` and the silent `if let Ok(lock)` skips (exit-time `save_now`, `lib.rs:183`) with `lock_or_recover` in these files.
+- [x] 1.10 `groups.rs:39,51`: `expect` → `let ... else`; preserve causes in `map_err(|_| ..)` (`worktree/mod.rs:89`); named constants for magic numbers (`clamp(1,128)`, `clamp(0.0,100.0)`, 8192 sniff, 150 ms debounce, 800 ms, CLI sizes/timeouts, JSON-RPC codes); remove explanatory in-body comments listed in the audit; comment or drop the `#[allow]`s.
+- [x] 1.11 Dead code `workspace/mod.rs:124,220-226` (`Project`, `SubTab`, `PaneMeta`, `SubtabMeta`): **only if Q4 = remove**.
 
 **B2 — `mcp/`**
 
@@ -149,4 +149,5 @@ Agents: **W0** runs first in this checkout; then **B1**, **B2**, **B3**, **F1**,
 - 2026-10-20: approved by the user. Q1 = full plan (waves 0–3, App.tsx refactor stays out). Q2 = status colours outside status keep their hue through dedicated tokens (`--terra-diff-add`, `--terra-diff-del`, `--terra-priority-urgent`, `--terra-priority-high`, `--terra-danger*`) documented in `design.json`; the other misuses become neutral. Q3 = the voice blue becomes accent/neutrals. Q4 = remove the listed dead code. Q5 = typed IPC errors (step 7.5) are in. Q6 = out.
 - 2026-10-20: 0.2 — `spawn_terminal_inner` takes a `SpawnRequest`, `spawn_output_pump` a `DurableScrollback`; the `spawn_terminal` Tauri command keeps its arguments (they are the IPC contract) with a commented `#[allow(clippy::too_many_arguments)]`.
 - 2026-10-20: wave 1 merged: B3 (pty/voice), C1 (stylesheets), B2 (mcp), F1 (frontend). Deviations: B3 refuses non-catalog ids in `command_available` instead of quoting (`mcp::launch::quote` is private to `mcp/`); C1 also neutralized the idle agent chip in `inspector.css` (same green-for-non-running bug) and added `--terra-success` and `--terra-pane-focus-ring`; B2 keeps the literal defaults inside the `read_inbox`/`search_notes` descriptions (`&'static str`); F1 leaves the `Changes from {name}` commit/PR title in English and keeps `App.tsx`'s `useLocale()` workaround until App's logic moves out.
+- 2026-10-20: B1 merged. 1.1 deviation: a store that is not UTF-8 is backed up like corrupt JSON; any other read error (permissions, I/O) leaves the file in place unbacked and turns saving off, so the next launch retries instead of finding no store. Extra fix: the startup scrollback sweep is skipped when the store could not be read, so transcripts aren't deleted as orphans. Backend gate: fmt ok, clippy 0, 165 tests.
 

@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+pub mod review;
+
 pub const BRANCH_PREFIX: &str = "terra/";
 
 /// Stored with the terminal record, so a resumed agent returns to it.
@@ -202,6 +204,47 @@ pub fn worktree_remove(
 ) -> Result<(), String> {
     let info = recorded(&store, &workspace_id, &terminal_id)?;
     remove(&info, delete_branch)
+}
+
+#[tauri::command(async)]
+pub fn worktree_diff(
+    store: tauri::State<'_, std::sync::Mutex<crate::workspace::WorkspaceStore>>,
+    workspace_id: String,
+    terminal_id: String,
+) -> Result<review::WorktreeDiff, String> {
+    review::diff(&recorded(&store, &workspace_id, &terminal_id)?)
+}
+
+#[tauri::command(async)]
+pub fn worktree_commit(
+    store: tauri::State<'_, std::sync::Mutex<crate::workspace::WorkspaceStore>>,
+    workspace_id: String,
+    terminal_id: String,
+    message: String,
+) -> Result<WorktreeStatus, String> {
+    review::commit(&recorded(&store, &workspace_id, &terminal_id)?, &message)
+}
+
+#[tauri::command(async)]
+pub fn worktree_merge(
+    store: tauri::State<'_, std::sync::Mutex<crate::workspace::WorkspaceStore>>,
+    workspace_id: String,
+    terminal_id: String,
+) -> Result<WorktreeStatus, String> {
+    review::merge(&recorded(&store, &workspace_id, &terminal_id)?)
+}
+
+/// Pushes the agent's branch and opens a pull request; the user asks for
+/// this explicitly from the review dialog.
+#[tauri::command(async)]
+pub fn worktree_open_pr(
+    store: tauri::State<'_, std::sync::Mutex<crate::workspace::WorkspaceStore>>,
+    workspace_id: String,
+    terminal_id: String,
+    title: String,
+    body: String,
+) -> Result<String, String> {
+    review::open_pull_request(&recorded(&store, &workspace_id, &terminal_id)?, &title, &body)
 }
 
 #[cfg(test)]

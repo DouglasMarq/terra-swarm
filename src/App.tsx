@@ -17,6 +17,7 @@ import { useVoiceSettings } from "./app/useVoiceSettings";
 import { useWorkspaceNavigation } from "./app/useWorkspaceNavigation";
 import { useWorkspaces } from "./app/useWorkspaces";
 import { useWorktreeClose } from "./app/useWorktreeClose";
+import { WorktreeReviewDialog } from "./components/review/WorktreeReviewDialog";
 import { resumeCommandFor, useTerminalSessions } from "./app/useTerminalSessions";
 import { useUpdater } from "./app/useUpdater";
 import type { NotificationItem } from "./types";
@@ -855,6 +856,7 @@ function App() {
       />
 
       <WorktreeCloseDialog {...worktreeClose.dialog} />
+      <WorktreeReviewDialog />
 
       <RenameDialog
         kind={renameTarget?.kind ?? "workspace"}

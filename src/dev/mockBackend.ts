@@ -171,6 +171,20 @@ export function installMockBackend(): void {
           ? { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: ["src/styles/motion.css", "src/components/shell/shell.css"], ahead: 1, behind: 0, exists: true }
           : null;
       case "worktree_remove": return undefined;
+      case "worktree_diff":
+        return {
+          status: { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: ["src/styles/motion.css"], ahead: 1, behind: 0, exists: true },
+          files: [
+            { path: "src/styles/motion.css", change: "modified", additions: 2, deletions: 1 },
+            { path: "src/components/shell/shell.css", change: "untracked", additions: 3, deletions: 0 },
+          ],
+          patch: "diff --git a/src/styles/motion.css b/src/styles/motion.css\n--- a/src/styles/motion.css\n+++ b/src/styles/motion.css\n@@ -10,3 +10,4 @@\n .terra-anim-rise {\n-  animation: terra-rise 320ms;\n+  animation: terra-rise 240ms var(--terra-ease-out);\n+  will-change: transform;\n }\ndiff --git a/src/components/shell/shell.css b/src/components/shell/shell.css\nnew file mode 100644\n--- /dev/null\n+++ b/src/components/shell/shell.css\n@@ -0,0 +1,3 @@\n+.terra-shell {\n+  display: grid;\n+}\n",
+          truncated: false,
+        };
+      case "worktree_commit":
+      case "worktree_merge":
+        return { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: [], ahead: 1, behind: 0, exists: true };
+      case "worktree_open_pr": return "https://github.com/example/terra-swarm/pull/42";
       case "mcp_server_info": return mcpInfo();
       case "mcp_set_enabled": mcpEnabled = Boolean(args.enabled); return mcpInfo();
       case "mcp_list_tasks": return mcpTasks.filter((task) => task.workspace_id === args.workspaceId);

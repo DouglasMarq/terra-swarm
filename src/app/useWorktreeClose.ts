@@ -4,6 +4,7 @@ import type { Workspace, WorktreeStatus } from "../types";
 import { t } from "../i18n";
 import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { usePreferencesStore } from "../stores/preferencesStore";
+import { useReviewStore } from "../stores/reviewStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import type { TerminalSessions } from "./useTerminalSessions";
 
@@ -77,6 +78,12 @@ export function useWorktreeClose(workspaces: readonly Workspace[], sessions: Ter
       onKeep: () => void keep(),
       onDelete: (deleteBranch: boolean) => void remove(deleteBranch),
       onCancel: () => setPending(null),
+      /** Look at the work before deciding; the agent stays open. */
+      onReview: () => {
+        if (!pending) return;
+        setPending(null);
+        useReviewStore.getState().open({ workspaceId: pending.workspaceId, terminalId: pending.terminalId, label: pending.label });
+      },
     },
   };
 }

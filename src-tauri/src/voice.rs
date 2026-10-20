@@ -9,6 +9,18 @@ use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
 use transcriber::Transcriber;
 
+/// Room for a batch of `/dev/snd` inotify events.
+#[cfg(target_os = "linux")]
+const INOTIFY_BUFFER_BYTES: usize = 4096;
+/// Wait after a `/dev/snd` change so the burst of events settles first.
+#[cfg(target_os = "linux")]
+const DEVICE_SETTLE_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
+/// How often the microphone is checked where `/dev/snd` can't be watched.
+#[cfg(not(target_os = "linux"))]
+const MIC_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+/// Downloaded chunks waiting for the writer thread.
+const DOWNLOAD_QUEUE_CHUNKS: usize = 64;
+
 pub struct VoiceState {
     pub recording: Mutex<bool>,
     pub audio_buffer: Arc<Mutex<Vec<f32>>>,
@@ -257,14 +269,14 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
         }
 
         let mut last: Option<bool> = None;
-        let mut buf = [0u8; 4096];
+        let mut buf = [0u8; INOTIFY_BUFFER_BYTES];
         loop {
             let len = unsafe { libc::read(fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) };
             if len <= 0 {
                 break;
             }
 
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            std::thread::sleep(DEVICE_SETTLE_DELAY);
 
             unsafe {
                 let flags = libc::fcntl(fd, libc::F_GETFL);
@@ -286,12 +298,12 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
         let mut last: Option<bool> = None;
         loop {
             emit_if_mic_changed(&app, &mut last);
-            std::thread::sleep(std::time::Duration::from_secs(5));
+            std::thread::sleep(MIC_POLL_INTERVAL);
         }
     });
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn voice_list_models(
     app: tauri::AppHandle,
     state: tauri::State<'_, VoiceState>,
@@ -358,86 +370,169 @@ async fn download_model_impl(model_id: String, app: tauri::AppHandle) -> Result<
         .map_err(|e| format!("Failed to get app data dir: {e}"))?;
 
     let dir = models::models_dir(&data_dir);
-    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create models dir: {e}"))?;
-
     let model_path = dir.join(model.filename);
-
-    if model_path.exists() {
-        let app2 = app.clone();
-        let id = model_id.clone();
-        tauri::async_runtime::spawn_blocking(move || activate_model(&app2, &id, model_path))
-            .await
-            .map_err(|e| e.to_string())??;
-        let _ = app.emit("voice-model-download-complete", &model_id);
-        return Ok(());
-    }
-
-    let response = reqwest::get(model.url)
-        .await
-        .map_err(|e| format!("Download failed: {e}"))?;
-
-    let total = response.content_length().unwrap_or(model.size_bytes);
-    let mut downloaded: u64 = 0;
-    let mut last_percent: u64 = 0;
-
     let tmp_path = dir.join(format!("{}.tmp", model.filename));
-    let mut file =
-        std::fs::File::create(&tmp_path).map_err(|e| format!("Failed to create file: {e}"))?;
 
-    let mut stream = response.bytes_stream();
+    let is_downloaded = {
+        let model_path = model_path.clone();
+        run_blocking(move || {
+            std::fs::create_dir_all(&dir)
+                .map_err(|e| format!("Failed to create models dir: {e}"))?;
+            Ok(model_path.exists())
+        })
+        .await?
+    };
 
-    while let Some(chunk) = stream.next().await {
-        let chunk = match chunk {
-            Ok(c) => c,
-            Err(e) => {
-                let _ = std::fs::remove_file(&tmp_path);
-                return Err(format!("Download error: {e}"));
+    if !is_downloaded {
+        let response = reqwest::get(model.url)
+            .await
+            .map_err(|e| format!("Download failed: {e}"))?;
+
+        let total = response.content_length().unwrap_or(model.size_bytes);
+        let mut downloaded: u64 = 0;
+        let mut last_percent: u64 = 0;
+        let mut download_error: Option<String> = None;
+
+        let (chunk_tx, chunk_rx) = tokio::sync::mpsc::channel(DOWNLOAD_QUEUE_CHUNKS);
+        let writer = {
+            let tmp_path = tmp_path.clone();
+            tauri::async_runtime::spawn_blocking(move || write_chunks(&tmp_path, chunk_rx))
+        };
+
+        let mut stream = response.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = match chunk {
+                Ok(c) => c,
+                Err(e) => {
+                    download_error = Some(format!("Download error: {e}"));
+                    break;
+                }
+            };
+            let chunk_bytes = chunk.len() as u64;
+            if chunk_tx.send(chunk).await.is_err() {
+                break;
             }
-        };
-        use std::io::Write;
-        if let Err(e) = file.write_all(&chunk) {
-            let _ = std::fs::remove_file(&tmp_path);
-            return Err(format!("Write error: {e}"));
+
+            downloaded += chunk_bytes;
+            let percent = match total > 0 {
+                true => ((downloaded as f64 / total as f64 * 100.0).min(100.0)) as u64,
+                false => 0,
+            };
+
+            if percent > last_percent {
+                last_percent = percent;
+                let _ = app.emit(
+                    "voice-model-download-progress",
+                    DownloadProgress {
+                        model_id: model_id.clone(),
+                        downloaded,
+                        total,
+                        percent: percent as f64,
+                    },
+                );
+            }
         }
+        drop(chunk_tx);
 
-        downloaded += chunk.len() as u64;
-        let percent = match total > 0 {
-            true => ((downloaded as f64 / total as f64 * 100.0).min(100.0)) as u64,
-            false => 0,
+        let written = writer
+            .await
+            .map_err(|e| e.to_string())
+            .and_then(|result| result.map_err(|e| format!("Write error: {e}")));
+        let outcome = match (download_error, written) {
+            (Some(error), _) | (None, Err(error)) => Err(error),
+            (None, Ok(())) if downloaded < total => Err(format!(
+                "Download incomplete: got {downloaded} of {total} bytes"
+            )),
+            (None, Ok(())) => Ok(()),
         };
 
-        if percent > last_percent {
-            last_percent = percent;
-            let _ = app.emit(
-                "voice-model-download-progress",
-                DownloadProgress {
-                    model_id: model_id.clone(),
-                    downloaded,
-                    total,
-                    percent: percent as f64,
-                },
-            );
-        }
+        let model_path = model_path.clone();
+        let filename = model.filename;
+        run_blocking(move || match outcome {
+            Ok(()) => std::fs::rename(&tmp_path, &model_path)
+                .map_err(|e| format!("Failed to finalize download: {e}")),
+            Err(error) => {
+                if let Err(remove_error) = std::fs::remove_file(&tmp_path) {
+                    eprintln!(
+                        "failed to remove the partial download of {filename}: {remove_error}"
+                    );
+                }
+                Err(error)
+            }
+        })
+        .await?;
     }
-
-    drop(file);
-
-    if downloaded < total {
-        let _ = std::fs::remove_file(&tmp_path);
-        return Err(format!(
-            "Download incomplete: got {downloaded} of {total} bytes"
-        ));
-    }
-
-    std::fs::rename(&tmp_path, &model_path)
-        .map_err(|e| format!("Failed to finalize download: {e}"))?;
 
     let app2 = app.clone();
     let id = model_id.clone();
-    tauri::async_runtime::spawn_blocking(move || activate_model(&app2, &id, model_path))
-        .await
-        .map_err(|e| e.to_string())??;
+    run_blocking(move || activate_model(&app2, &id, model_path)).await?;
 
     let _ = app.emit("voice-model-download-complete", &model_id);
     Ok(())
+}
+
+/// Writes every chunk received to a new file at `path` until the sender is
+/// dropped. Blocking: runs on its own thread while the download streams.
+fn write_chunks<C: AsRef<[u8]>>(
+    path: &Path,
+    mut chunks: tokio::sync::mpsc::Receiver<C>,
+) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let mut file = std::fs::File::create(path)?;
+    while let Some(chunk) = chunks.blocking_recv() {
+        file.write_all(chunk.as_ref())?;
+    }
+    file.flush()
+}
+
+/// Runs blocking file work off the async runtime.
+async fn run_blocking<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::write_chunks;
+
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "terra-voice-{}-{}-{}",
+            name,
+            std::process::id(),
+            crate::mcp::repo::now_millis()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn given_queued_chunks_writes_them_in_order_to_the_file() {
+        let dir = temp_dir("chunks");
+        let path = dir.join("model.bin.tmp");
+        let (sender, receiver) = tokio::sync::mpsc::channel(4);
+        sender.try_send(b"whis".to_vec()).unwrap();
+        sender.try_send(b"per".to_vec()).unwrap();
+        drop(sender);
+
+        write_chunks(&path, receiver).unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"whisper");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn given_a_missing_folder_reports_the_write_error() {
+        let dir = temp_dir("missing");
+        let path = dir.join("absent").join("model.bin.tmp");
+        let (sender, receiver) = tokio::sync::mpsc::channel::<Vec<u8>>(1);
+        drop(sender);
+
+        assert!(write_chunks(&path, receiver).is_err());
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

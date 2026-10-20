@@ -2,7 +2,7 @@
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NavigatorPanel } from "./NavigatorPanel";
 import type { Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../types";
 import { useEditorStore } from "../../stores/editorStore";
@@ -25,6 +25,9 @@ const workspaces: Workspace[] = [{
 }];
 
 describe("NavigatorPanel", () => {
+  beforeEach(() => useEditorStore.setState({ target: null }));
+  afterEach(() => useEditorStore.setState({ target: null }));
+
   it("filters projects and agents by text and keeps keyboard activation available", async () => {
     const user = userEvent.setup();
     const onOpenTerminal = vi.fn();
@@ -275,7 +278,6 @@ describe("NavigatorPanel", () => {
     // A file opens in the editor; the listing itself never reads contents.
     await user.click(screen.getByRole("button", { name: /Abrir main\.ts/ }));
     expect(useEditorStore.getState().target).toEqual({ workspaceId: "ws-api", path: "src/main.ts" });
-    useEditorStore.getState().close();
   });
 
   it("renders structured Git status and exposes refresh/project selection", async () => {

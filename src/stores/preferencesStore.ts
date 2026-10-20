@@ -311,6 +311,8 @@ export type PreferencesState = {
   reduceMotion: boolean;
   /** Resume every saved session at startup without showing the opening screen. */
   autoResume: boolean;
+  /** Native notifications and the app icon badge when an agent needs you. */
+  systemNotifications: boolean;
   /** Give each new agent a name from `agentNameList` (off by default). */
   agentAutoNames: boolean;
   agentNameSet: NameSetId;
@@ -338,6 +340,7 @@ export type PreferencesState = {
   setDefaultShell: (shell: string) => void;
   setReduceMotion: (enabled: boolean) => void;
   setAutoResume: (enabled: boolean) => void;
+  setSystemNotifications: (enabled: boolean) => void;
   setAgentAutoNames: (enabled: boolean) => void;
   setAgentNameSet: (set: NameSetId) => void;
   setAgentNameList: (names: string[]) => void;
@@ -361,6 +364,7 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   defaultShell: storageGet("defaultShell") ?? "",
   reduceMotion: storageGet("reduceMotion") === "1",
   autoResume: storageGet("autoResume") === "1",
+  systemNotifications: storageGet("systemNotifications") !== "0",
   agentAutoNames: storageGet("agentAutoNames") === "1",
   agentNameSet: loadNameSet(),
   agentNameList: nameListFor(loadNameSet()),
@@ -485,6 +489,11 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   setAutoResume: (autoResume) => {
     storageSet("autoResume", autoResume ? "1" : "0");
     set({ autoResume });
+  },
+
+  setSystemNotifications: (systemNotifications) => {
+    storageSet("systemNotifications", systemNotifications ? "1" : "0");
+    set({ systemNotifications });
   },
 
   setReduceMotion: (reduceMotion) => {

@@ -245,6 +245,9 @@ export const en = {
     },
   },
   settingsPanels: {
+    notificationsTitle: "Notifications",
+    systemNotifications: "Notify me when an agent needs me",
+    systemNotificationsHint: "A system notification while Terra Swarm is in the background, and the number of waiting agents on the app icon.",
     accessibility: "Accessibility",
     accessibilityHint: "Adjust the Workbench's visual pace.",
     reduceMotion: "Reduce motion",
@@ -740,6 +743,8 @@ export const en = {
     },
   },
   notifications: {
+    needsYouTitle: "{name} needs you",
+    needsYouBody: "The agent is waiting for your answer.",
     title: "Notifications",
     markAllRead: "Mark all as read",
     filter: "Filter",

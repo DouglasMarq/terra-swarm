@@ -355,6 +355,25 @@ function useNamesInUse(): string[] {
   return useMemo(() => Object.values(agentNames), [agentNames]);
 }
 
+/** Native notifications and the app icon badge. */
+function SystemNotificationsCard() {
+  const t = useT();
+  const enabled = usePreferencesStore((state) => state.systemNotifications);
+  const setEnabled = usePreferencesStore((state) => state.setSystemNotifications);
+  return (
+    <div className={styles.card}>
+      <span className={styles.cardTitle}>{t("settingsPanels.notificationsTitle")}</span>
+      <div className={styles.row}>
+        <div className={styles.rowLabel}>
+          <span className={styles.label}>{t("settingsPanels.systemNotifications")}</span>
+          <span className={styles.rowHint}>{t("settingsPanels.systemNotificationsHint")}</span>
+        </div>
+        <Toggle checked={enabled} label={t("settingsPanels.systemNotifications")} onChange={setEnabled} />
+      </div>
+    </div>
+  );
+}
+
 /** Extra arguments and environment variables used every time an agent starts. */
 function AgentLaunchEditor({ agentId, label }: { agentId: string; label: string }) {
   const t = useT();
@@ -679,6 +698,7 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
       {section.id === "general" && (
         <div className={styles.stack}>
           <LanguageCard />
+          <SystemNotificationsCard />
           <div className={styles.card}>
             <span className={styles.cardTitle}>{t("settingsPanels.accessibility")}</span>
             <p className={styles.cardDescription}>{t("settingsPanels.accessibilityHint")}</p>

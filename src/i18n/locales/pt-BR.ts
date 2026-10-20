@@ -248,6 +248,9 @@ export const ptBR: Dictionary<typeof en> = {
     },
   },
   settingsPanels: {
+    notificationsTitle: "Notificações",
+    systemNotifications: "Avisar quando um agente precisar de mim",
+    systemNotificationsHint: "Uma notificação do sistema quando o Terra Swarm está em segundo plano, e o número de agentes esperando no ícone do app.",
     accessibility: "Acessibilidade",
     accessibilityHint: "Ajuste o ritmo visual do Workbench.",
     reduceMotion: "Reduzir movimento",
@@ -743,6 +746,8 @@ export const ptBR: Dictionary<typeof en> = {
     },
   },
   notifications: {
+    needsYouTitle: "{name} precisa de você",
+    needsYouBody: "O agente está esperando sua resposta.",
     title: "Notificações",
     markAllRead: "Marcar tudo como lido",
     filter: "Filtro",

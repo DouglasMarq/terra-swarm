@@ -235,7 +235,7 @@ export const ptBR: Dictionary<typeof en> = {
     discardTitle: "Descartar todas as sessões?",
     discardDescription: "Todas as sessões salvas saem da fila e não poderão mais ser retomadas por aqui.",
     always: "Sempre retomar sem perguntar",
-    laterHint: "Sessões não marcadas continuam salvas; retome depois pelo ⌘K → “Retomar sessões…”.",
+    laterHint: "Sessões não marcadas continuam salvas; retome depois pelo {shortcut} → “Retomar sessões…”.",
   },
   settings: {
     defaultSectionTitle: "Configure o {section}",
@@ -347,7 +347,7 @@ export const ptBR: Dictionary<typeof en> = {
     mcpUrlWithPort: "URL do servidor: {url} · Porta {port}",
     mcpNotRunning: "O servidor não iniciou. Reinicie o app para tentar de novo.",
     defaultAgentTitle: "Agente padrão",
-    defaultAgentHint: "Aberto por ⌘T e por “Novo agente”.",
+    defaultAgentHint: "Aberto por {shortcut} e por “Novo agente”.",
     defaultAgentLabel: "Perfil usado no quick-add",
     askEachTime: "Escolher a cada sessão",
     detectedTitle: "Agentes detectados",
@@ -868,7 +868,7 @@ export const ptBR: Dictionary<typeof en> = {
   },
   editor: {
     loading: "Abrindo o arquivo…",
-    meta: "{size} KB · ⌘S salva",
+    meta: "{size} KB · {shortcut} salva",
     unsaved: "Alterações não salvas",
     binary: "Este é um arquivo binário; não dá para editar aqui.",
     save: "Salvar",

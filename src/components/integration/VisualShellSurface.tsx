@@ -55,6 +55,7 @@ import { DEFAULT_HOTKEYS, formatHotkey, usePreferencesStore } from "../../stores
 import { useShallow as useOrchestrationShallow } from "zustand/react/shallow";
 import { selectWorkspaceContainerId } from "../../lib/session/workspaceContainerSelection";
 import { ptyApi } from "../../lib/tauri/pty";
+import { formatShortcut, type ShortcutDefinition, type ShortcutPlatform } from "../../lib/platform/shortcuts";
 import {
   inspectorActionRequiresConfirmation,
   resolveInspectorTarget,
@@ -131,6 +132,24 @@ function shellShortcut(event: KeyboardEvent): "sidebar" | "inspector" | null {
   if (key === "b") return "sidebar";
   if (key === "i") return "inspector";
   return null;
+}
+
+const NO_MODIFIERS = { meta: false, shift: false, ctrl: false, alt: false } as const;
+
+/** The shell's fixed shortcuts; `meta` reads as Ctrl outside macOS, as their handlers accept either. */
+const SHELL_SHORTCUTS = {
+  interrupt: { ...NO_MODIFIERS, key: "c", ctrl: true },
+  inspector: { ...NO_MODIFIERS, key: "i", meta: true },
+  sidebar: { ...NO_MODIFIERS, key: "b", meta: true },
+} satisfies Record<string, ShortcutDefinition>;
+
+/** The shell's fixed shortcuts written the way the platform shows them (⌘I on macOS, Ctrl+I elsewhere). */
+export function shellShortcutLabels(platform?: ShortcutPlatform): Record<keyof typeof SHELL_SHORTCUTS, string> {
+  return {
+    interrupt: formatShortcut(SHELL_SHORTCUTS.interrupt, platform),
+    inspector: formatShortcut(SHELL_SHORTCUTS.inspector, platform),
+    sidebar: formatShortcut(SHELL_SHORTCUTS.sidebar, platform),
+  };
 }
 
 export function shouldOpenCommandPaletteShortcut(event: KeyboardEvent): boolean {
@@ -277,6 +296,7 @@ function visibleSnapshot(
 
 export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const t = useT();
+  const shortcutLabels = shellShortcutLabels();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [muteUntil, setMuteUntil] = useState(0);
@@ -694,12 +714,12 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     const label = agentLabels[ptyId]?.primary ?? command;
     return [
       [
-        { id: "interrupt", label: t("pane.menu.interrupt"), icon: <Square size={13} />, shortcut: "⌃C", disabled: !workspaceId || !props.onFocusedAgentAction, onSelect: () => runAction("interrupt") },
+        { id: "interrupt", label: t("pane.menu.interrupt"), icon: <Square size={13} />, shortcut: shortcutLabels.interrupt, disabled: !workspaceId || !props.onFocusedAgentAction, onSelect: () => runAction("interrupt") },
         { id: "restart", label: t("pane.menu.restart"), icon: <RotateCcw size={13} />, onSelect: () => props.onRestart(ptyId, command) },
         detached
           ? { id: "reattach", label: t("pane.menu.reattach"), icon: <SquareArrowOutUpRight size={13} />, onSelect: () => props.onReattach(ptyId) }
           : { id: "detach", label: t("pane.menu.detach"), icon: <SquareArrowOutUpRight size={13} />, onSelect: () => props.onDetach(ptyId) },
-        { id: "inspector", label: t("pane.menu.inspector"), icon: <PanelRight size={13} />, shortcut: "⌘I", onSelect: () => { props.onFocus(ptyId); shell.setDockOpen(true); } },
+        { id: "inspector", label: t("pane.menu.inspector"), icon: <PanelRight size={13} />, shortcut: shortcutLabels.inspector, onSelect: () => { props.onFocus(ptyId); shell.setDockOpen(true); } },
         ...(worktreeBranches[ptyId] ? [{ id: "review", label: t("review.open"), icon: <GitCompare size={13} />, onSelect: () => openReview(ptyId) }] : []),
       ],
       [
@@ -766,7 +786,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const branchList = Object.entries(props.branches).map(([workspaceId, name]) => ({ id: `${workspaceId}:${name}`, name, workspaceId }));
   const navigator = <NavigatorPanel {...navigatorActivityProps} flatten agentLabels={agentLabels} agentMenu={buildPaneMenu} headerSlot={<SurfaceSwitch surface={surface} attentionCount={attentionCount} onNavigate={(next) => navigate(next)} />} workspaces={props.workspaces} snapshot={props.snapshot} groups={wireGroups} activeWorkspaceId={props.activeId} activeContainerId={props.snapshot?.activeContainerId ?? null} activePaneId={props.snapshot?.activePaneId ?? null} activeTerminalId={props.focusedId} collapsedIds={shell.navigatorCollapsedIds} onCollapsedChange={shell.setNavigatorCollapsedIds} exited={props.exited} notifications={props.notifications} contextUsage={props.contextUsage} branches={branchList} containerVisibility={containerVisibility} onOpenWorkspace={(id) => navigate("workbench", id)} onOpenTerminal={(workspaceId, terminalId) => { props.onSelectWorkspace(workspaceId); focusTerminal(terminalId); }} onFocus={focusTerminal} onCreateGroup={props.onCreateGroup} onCreateProject={props.onCreateProject} onCreateAgent={(workspaceId) => props.onNewAgent(workspaceId)} onRenameNode={props.onRenameNode} onDeleteWorkspace={props.onDeleteWorkspace} onHideWorkspace={props.onHideWorkspace} onHideContainer={props.onHideContainer ?? props.onHideWorkspace} onSuspendGroup={props.onSuspendGroup} onResumeGroup={props.onResumeGroup} />;
   const sidebar = <Sidebar surface={surface} attentionCount={attentionCount} onNavigate={(next) => navigate(next)} activeAgents={activeCount} version={props.appVersion?.trim() || undefined} onOpenSettings={props.onOpenSettings}>{navigator}</Sidebar>;
-  const collapsedSidebar = <CollapsedSidebar surface={surface} attentionCount={attentionCount} projects={railProjects} activeWorkspaceId={props.activeId} focusedAgentId={props.focusedId} onNavigate={(next) => navigate(next)} onOpenWorkspace={(id) => navigate("workbench", id)} onFocusAgent={(_workspaceId, terminalId) => focusTerminal(terminalId)} onOpenSettings={props.onOpenSettings} onExpand={() => shell.setSidebarCollapsed(false)} expandShortcut="⌘B" />;
+  const collapsedSidebar = <CollapsedSidebar surface={surface} attentionCount={attentionCount} projects={railProjects} activeWorkspaceId={props.activeId} focusedAgentId={props.focusedId} onNavigate={(next) => navigate(next)} onOpenWorkspace={(id) => navigate("workbench", id)} onFocusAgent={(_workspaceId, terminalId) => focusTerminal(terminalId)} onOpenSettings={props.onOpenSettings} onExpand={() => shell.setSidebarCollapsed(false)} expandShortcut={shortcutLabels.sidebar} />;
 
   const content = surface === "settings" && props.settingsPage ? props.settingsPage : surface === "board" ? taskBoard : surface === "fleet" ? <FleetCommandCenter workspaces={props.workspaces} groups={wireGroups} reported={reported} exited={props.exited} notifications={props.notifications} contextUsage={props.contextUsage} titles={props.titles} branches={props.branches} lastActivity={lastActivity} labels={agentLabels} attentionMessages={attentionMessages} onFocus={(terminalId) => focusTerminal(terminalId)} onMarkRead={props.onClearNotifications} onBatchAction={(action, ids) => { if (action === "stop") props.onBatchStop(ids); else if (action === "resume") props.onBatchResume(ids); else if (action === "focus" && ids[0]) focusTerminal(ids[0]); else if (action === "voice") { if (ids[0]) focusTerminal(ids[0]); props.onToggleVoice(); } }} /> : (source ? <WorkspaceWorkbench source={source} renderTab={renderTab} onNewContainer={props.onNewWorkspace} onFocusTab={(tabId, location) => { if (location) orchestration.setContainerActivePane(location.containerId, location.paneId); const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) focusWorkbenchTab(tab.ptyId, location); else props.onFocus(tabId); }} onNewTab={(location: WorkbenchLocation) => props.onNewAgent(location.projectId ?? props.activeId ?? "", location.paneId)} onQuickNewTab={props.onQuickNewAgent ? (location: WorkbenchLocation) => props.onQuickNewAgent?.(location.projectId ?? props.activeId ?? "") : undefined} onDetachTab={(tabId) => { const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) props.onDetach(tab.ptyId); }} onKillTab={(tabId) => { const tab = props.snapshot?.tabs.find((candidate) => candidate.id === tabId); if (tab?.ptyId) props.onKill(tab.ptyId); }} onCollapseContainer={(containerId, collapsed) => { if (collapsed) orchestration.setContainerFullscreen(containerId, false); orchestration.setContainerCollapsed(containerId, collapsed); }} onFullscreenContainer={orchestration.setContainerFullscreen} onLayoutChange={({ containerId, layout }) => orchestration.setContainerState(containerId, { layout })} onWorkspaceLayoutChange={orchestration.setWorkspaceLayout} onHideContainer={props.onHideContainer ?? ((containerId) => { const container = props.snapshot?.containers.find((candidate) => candidate.id === containerId); if (container?.projectId) props.onHideWorkspace(container.projectId); })} emptyState={<div className="terra-workbench__empty"><LayoutGrid size={20} /><strong>{t("shell.workbenchEmpty")}</strong><button type="button" className="terra-button" onClick={props.onNewWorkspace}>{t("shell.newWorkspace")}</button></div>} /> : <div className="terra-workbench__empty"><LayoutGrid size={20} /><strong>{t("shell.workbenchNotLoaded")}</strong></div>);
 
@@ -784,7 +804,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         title: surface === "fleet" ? t("common.fleet") : surface === "board" ? t("common.board") : surface === "settings" ? t("common.settings") : t("common.appName"),
         sidebarCollapsed: shell.sidebarCollapsed,
         onToggleSidebar: shell.toggleSidebar,
-        sidebarShortcut: "⌘B",
+        sidebarShortcut: shortcutLabels.sidebar,
         onOpenLauncher: () => setCommandPaletteOpen(true),
         attentionCount: muted ? 0 : attentionCount,
         notificationsOpen,
@@ -796,7 +816,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         voiceShortcut: formatHotkey(hotkeys.toggleVoice ?? DEFAULT_HOTKEYS.toggleVoice),
         inspectorOpen: shell.dock.open,
         onToggleInspector: () => shell.setDockOpen(!shell.dock.open),
-        inspectorShortcut: "⌘I",
+        inspectorShortcut: shortcutLabels.inspector,
       }}
       rightDock={{
         open: shell.dock.open,

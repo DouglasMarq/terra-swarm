@@ -232,7 +232,7 @@ export const en = {
     discardTitle: "Discard every saved session?",
     discardDescription: "Every saved session leaves the queue and can no longer be resumed from here.",
     always: "Always resume without asking",
-    laterHint: "Unchecked sessions stay saved; resume them later from ⌘K → “Resume sessions…”.",
+    laterHint: "Unchecked sessions stay saved; resume them later from {shortcut} → “Resume sessions…”.",
   },
   settings: {
     defaultSectionTitle: "Configure {section}",
@@ -344,7 +344,7 @@ export const en = {
     mcpUrlWithPort: "Server URL: {url} · Port {port}",
     mcpNotRunning: "The server did not start. Restart the app to try again.",
     defaultAgentTitle: "Default agent",
-    defaultAgentHint: "Opened by ⌘T and “New agent”.",
+    defaultAgentHint: "Opened by {shortcut} and “New agent”.",
     defaultAgentLabel: "Profile used by quick add",
     askEachTime: "Ask every time",
     detectedTitle: "Detected agents",
@@ -865,7 +865,7 @@ export const en = {
   },
   editor: {
     loading: "Opening the file…",
-    meta: "{size} KB · ⌘S saves",
+    meta: "{size} KB · {shortcut} saves",
     unsaved: "Unsaved changes",
     binary: "This is a binary file; it cannot be edited here.",
     save: "Save",

@@ -6,6 +6,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tauri::Emitter;
+use crate::sync::LockExt;
 
 const TARGET_SAMPLE_RATE: u32 = 16000;
 const RESAMPLE_CHUNK_SIZE: usize = 1024;
@@ -570,7 +571,7 @@ fn process_audio(data: &[f32], ctx: &StreamContext) {
     };
     pending.extend_from_slice(&mono);
 
-    let mut resampler = resampler_arc.lock().unwrap();
+    let mut resampler = resampler_arc.lock_or_recover();
     while pending.len() >= RESAMPLE_CHUNK_SIZE {
         let chunk: Vec<f32> = pending.drain(..RESAMPLE_CHUNK_SIZE).collect();
         let input = MonoSlice(&chunk);
@@ -736,7 +737,7 @@ fn next_loopback_sample(
 ) -> f32 {
     *acc += step;
     if *acc >= 1.0 {
-        let mut buf = ring.lock().unwrap();
+        let mut buf = ring.lock_or_recover();
         while *acc >= 1.0 {
             *acc -= 1.0;
             *carry = buf.pop_front().unwrap_or(0.0);
@@ -831,7 +832,7 @@ fn build_test_streams(
                         let mono = mono_downmix(&converted, in_channels);
                         push_loopback(&ring_in, &mono);
                         let rms_ready = {
-                            let mut c = level_in.lock().unwrap();
+                            let mut c = level_in.lock_or_recover();
                             *c += mono.len();
                             if *c >= LEVEL_EMIT_INTERVAL {
                                 *c = 0;

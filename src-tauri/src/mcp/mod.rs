@@ -21,8 +21,8 @@ use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-pub use auth::{AgentIdentity, McpLease};
 use auth::TokenRegistry;
+pub use auth::{AgentIdentity, McpLease};
 use repo::{AgentStatus, Message, Repo, StoreError, StoreResult};
 
 pub const EVENT_TASKS_CHANGED: &str = "mcp-tasks-changed";
@@ -115,7 +115,9 @@ impl McpHub {
         match &self.repo {
             Some(repo) => Ok(guard(repo)),
             None => Err(StoreError::Unavailable(
-                self.error.clone().unwrap_or_else(|| "not initialized".into()),
+                self.error
+                    .clone()
+                    .unwrap_or_else(|| "not initialized".into()),
             )),
         }
     }
@@ -129,7 +131,8 @@ impl McpHub {
     }
 
     pub fn url(&self) -> Option<String> {
-        self.port().map(|port| format!("http://127.0.0.1:{}/mcp", port))
+        self.port()
+            .map(|port| format!("http://127.0.0.1:{}/mcp", port))
     }
 
     pub fn config_dir(&self) -> Option<&PathBuf> {
@@ -264,7 +267,11 @@ pub struct TauriHost<R: tauri::Runtime> {
 }
 
 impl<R: tauri::Runtime> TauriHost<R> {
-    fn with_workspace<T>(&self, workspace_id: &str, read: impl FnOnce(&crate::workspace::Workspace) -> T) -> Option<T> {
+    fn with_workspace<T>(
+        &self,
+        workspace_id: &str,
+        read: impl FnOnce(&crate::workspace::Workspace) -> T,
+    ) -> Option<T> {
         use tauri::Manager;
         let store = self
             .app
@@ -289,7 +296,11 @@ impl<R: tauri::Runtime> McpHost for TauriHost<R> {
 
     fn terminals(&self, workspace_id: &str) -> Vec<String> {
         self.with_workspace(workspace_id, |workspace| {
-            workspace.terminals.iter().map(|terminal| terminal.id.clone()).collect()
+            workspace
+                .terminals
+                .iter()
+                .map(|terminal| terminal.id.clone())
+                .collect()
         })
         .unwrap_or_default()
     }
@@ -309,7 +320,10 @@ pub mod test_support {
 
     impl McpHost for RecordingHost {
         fn emit(&self, event: &str, payload: serde_json::Value) {
-            self.events.lock().unwrap().push((event.to_string(), payload));
+            self.events
+                .lock()
+                .unwrap()
+                .push((event.to_string(), payload));
         }
 
         fn workspace(&self, workspace_id: &str) -> Option<WorkspaceInfo> {
@@ -372,12 +386,28 @@ mod tests {
         let token = hub.issue(identity("t-1", "ws-1", "claude"));
         hub.repo()
             .unwrap()
-            .create_task("ws-1", "t-1", repo::NewTask { title: "x".into(), ..Default::default() })
+            .create_task(
+                "ws-1",
+                "t-1",
+                repo::NewTask {
+                    title: "x".into(),
+                    ..Default::default()
+                },
+            )
             .unwrap();
         hub.purge_workspace("ws-1");
         assert!(hub.identify(&token).is_none());
-        assert!(hub.repo().unwrap().list_tasks("ws-1", None, None, None).unwrap().is_empty());
-        assert!(events.lock().unwrap().iter().any(|(e, p)| e == EVENT_TASKS_CHANGED && p["workspace_id"] == "ws-1"));
+        assert!(hub
+            .repo()
+            .unwrap()
+            .list_tasks("ws-1", None, None, None)
+            .unwrap()
+            .is_empty());
+        assert!(events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(e, p)| e == EVENT_TASKS_CHANGED && p["workspace_id"] == "ws-1"));
     }
 
     #[test]
@@ -386,13 +416,20 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(db::DB_FILE);
         std::fs::write(&path, b"this is not a sqlite database, not even close").unwrap();
-        let hub = Arc::new(McpHub::open(path.clone(), None, Box::new(RecordingHost::default())));
+        let hub = Arc::new(McpHub::open(
+            path.clone(),
+            None,
+            Box::new(RecordingHost::default()),
+        ));
         hub.set_port(4100);
         let info = hub.info();
         assert!(!info.available);
         assert!(!info.enabled);
         assert!(info.error.is_some());
-        assert_eq!(info.db_path.as_deref(), Some(path.display().to_string().as_str()));
+        assert_eq!(
+            info.db_path.as_deref(),
+            Some(path.display().to_string().as_str())
+        );
         assert!(matches!(hub.repo(), Err(StoreError::Unavailable(_))));
         assert!(hub
             .launch("t-1", "ws-1", "claude", launch::Quoting::Posix)

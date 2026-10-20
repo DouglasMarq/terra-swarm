@@ -97,15 +97,19 @@ impl ServerHandler for TerraServer {
         let hub = Arc::clone(&self.hub);
         let name = request.name.to_string();
         // Tool handlers take blocking locks and run SQLite queries.
-        let outcome = tokio::task::spawn_blocking(move || tools::call(&hub, &identity, &name, args))
-            .await
-            .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
+        let outcome =
+            tokio::task::spawn_blocking(move || tools::call(&hub, &identity, &name, args))
+                .await
+                .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
         Ok(match outcome {
             Ok(value) => CallToolResult::success(vec![ContentBlock::text(
                 serde_json::to_string_pretty(&value).unwrap_or_default(),
             )]),
             Err(ToolError::UnknownTool(name)) => {
-                return Err(ErrorData::invalid_params(format!("unknown tool `{}`", name), None))
+                return Err(ErrorData::invalid_params(
+                    format!("unknown tool `{}`", name),
+                    None,
+                ))
             }
             Err(error) => CallToolResult::error(vec![ContentBlock::text(error.to_string())]),
         }
@@ -114,7 +118,11 @@ impl ServerHandler for TerraServer {
 }
 
 fn bearer(request: &Request) -> Option<&str> {
-    let value = request.headers().get(header::AUTHORIZATION)?.to_str().ok()?;
+    let value = request
+        .headers()
+        .get(header::AUTHORIZATION)?
+        .to_str()
+        .ok()?;
     let (scheme, token) = value.split_once(' ')?;
     scheme.eq_ignore_ascii_case("bearer").then(|| token.trim())
 }
@@ -130,7 +138,11 @@ fn unauthorized() -> Response {
 
 /// Resolve the token to an identity and attach it to the request; rmcp
 /// hands the request parts (with this extension) to `call_tool`.
-async fn authenticate(State(hub): State<Arc<McpHub>>, mut request: Request, next: Next) -> Response {
+async fn authenticate(
+    State(hub): State<Arc<McpHub>>,
+    mut request: Request,
+    next: Next,
+) -> Response {
     let Some(identity) = bearer(&request).and_then(|token| hub.identify(token)) else {
         return unauthorized();
     };
@@ -222,7 +234,12 @@ mod tests {
             self.post_with(token, body, &[])
         }
 
-        fn post_with(&self, token: Option<&str>, body: Value, extra: &[(&str, &str)]) -> (u16, String) {
+        fn post_with(
+            &self,
+            token: Option<&str>,
+            body: Value,
+            extra: &[(&str, &str)],
+        ) -> (u16, String) {
             self.runtime.block_on(async {
                 let mut request = self
                     .client
@@ -298,7 +315,10 @@ mod tests {
         let init = initialize(&server, &token);
         assert_eq!(init["result"]["serverInfo"]["name"], "terra-swarm");
         assert!(init["result"]["capabilities"]["tools"].is_object());
-        assert!(init["result"]["instructions"].as_str().unwrap().contains("whoami"));
+        assert!(init["result"]["instructions"]
+            .as_str()
+            .unwrap()
+            .contains("whoami"));
 
         let list = server.rpc(&token, 2, "tools/list", json!({}));
         let names: Vec<&str> = list["result"]["tools"]
@@ -320,7 +340,12 @@ mod tests {
         assert_eq!(created["result"]["isError"], false);
         assert_eq!(tool_json(&created)["id"], "T-1");
 
-        let me = server.rpc(&token, 4, "tools/call", json!({ "name": "whoami", "arguments": {} }));
+        let me = server.rpc(
+            &token,
+            4,
+            "tools/call",
+            json!({ "name": "whoami", "arguments": {} }),
+        );
         assert_eq!(tool_json(&me)["terminal_id"], "t-1");
 
         // A failing tool is a tool-level error the agent can read.

@@ -213,7 +213,13 @@ mod tests {
             "claude --continue --mcp-config '/Users/me/Library/Application Support/x/claude-mcp.json'"
         );
         assert_eq!(
-            rewrite_command("claude", "claude", URL, Some(Path::new("C:\\a b\\c.json")), Quoting::Windows),
+            rewrite_command(
+                "claude",
+                "claude",
+                URL,
+                Some(Path::new("C:\\a b\\c.json")),
+                Quoting::Windows
+            ),
             "claude --mcp-config \"C:\\a b\\c.json\""
         );
         assert_eq!(
@@ -255,13 +261,18 @@ mod tests {
         let server = &json["mcpServers"]["terra"];
         assert_eq!(server["type"], "http");
         assert_eq!(server["url"], "${TERRA_MCP_URL}");
-        assert_eq!(server["headers"]["Authorization"], "Bearer ${TERRA_MCP_TOKEN}");
+        assert_eq!(
+            server["headers"]["Authorization"],
+            "Bearer ${TERRA_MCP_TOKEN}"
+        );
     }
 
     #[test]
     fn launch_issues_a_token_and_env_only_when_enabled_and_running() {
         let (hub, _) = hub();
-        assert!(hub.launch("t-1", "ws-1", "claude", Quoting::Posix).is_none());
+        assert!(hub
+            .launch("t-1", "ws-1", "claude", Quoting::Posix)
+            .is_none());
         hub.set_port(4100);
         let launch = hub.launch("t-1", "ws-1", "shell", Quoting::Posix).unwrap();
         let env: std::collections::HashMap<_, _> = launch.env.iter().cloned().collect();
@@ -274,6 +285,8 @@ mod tests {
         assert!(hub.identify(&env[ENV_TOKEN]).is_none());
 
         hub.repo().unwrap().set_enabled(false).unwrap();
-        assert!(hub.launch("t-1", "ws-1", "claude", Quoting::Posix).is_none());
+        assert!(hub
+            .launch("t-1", "ws-1", "claude", Quoting::Posix)
+            .is_none());
     }
 }

@@ -400,6 +400,36 @@
   color: var(--terra-shell-muted);
 }
 
+.terra-right-dock-tabs {
+  display: flex;
+  gap: 2px;
+  margin-left: -8px;
+}
+
+.terra-right-dock-tab {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-shell-muted);
+  background: transparent;
+  font: inherit;
+  font-size: var(--terra-font-size-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.terra-right-dock-tab:hover {
+  color: var(--terra-shell-text);
+  background: var(--terra-bg-hover);
+}
+
+.terra-right-dock-tab[aria-selected="true"] {
+  color: var(--terra-shell-text);
+  background: var(--terra-bg-hover);
+}
+
 .terra-right-dock-close {
   display: inline-grid;
   width: 28px;

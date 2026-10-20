@@ -129,15 +129,16 @@ impl WorkspaceStore {
         self.save();
     }
 
-    pub fn rename(&mut self, id: &str, name: String) {
+    /// A blank name leaves the workspace as it is.
+    pub fn rename(&mut self, id: &str, name: String) -> Result<(), String> {
         let name = name.trim().to_string();
+        let ws = self.workspace_mut(id)?;
         if name.is_empty() {
-            return;
+            return Ok(());
         }
-        if let Ok(ws) = self.workspace_mut(id) {
-            ws.name = name;
-        }
+        ws.name = name;
         self.save();
+        Ok(())
     }
 
     pub fn reorder_workspaces(&mut self, order: &[String]) {
@@ -153,14 +154,17 @@ impl WorkspaceStore {
         self.save();
     }
 
-    pub fn set_width(&mut self, ws_id: &str, terminal_id: &str, width: f64) {
-        if let Ok(ws) = self.workspace_mut(ws_id) {
-            if let Some(t) = ws.terminals.iter_mut().find(|t| t.id == terminal_id) {
-                t.width = width
-                    .is_finite()
-                    .then_some(width.clamp(MIN_TERMINAL_WIDTH, MAX_TERMINAL_WIDTH));
-            }
-        }
+    pub fn set_width(&mut self, ws_id: &str, terminal_id: &str, width: f64) -> Result<(), String> {
+        let ws = self.workspace_mut(ws_id)?;
+        let t = ws
+            .terminals
+            .iter_mut()
+            .find(|t| t.id == terminal_id)
+            .ok_or_else(|| format!("terminal {} not found in workspace {}", terminal_id, ws_id))?;
+        t.width = width
+            .is_finite()
+            .then_some(width.clamp(MIN_TERMINAL_WIDTH, MAX_TERMINAL_WIDTH));
         self.save();
+        Ok(())
     }
 }

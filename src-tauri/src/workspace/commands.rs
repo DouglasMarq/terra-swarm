@@ -262,10 +262,12 @@ pub fn rename_workspace(
     name: String,
 ) -> Result<(), String> {
     let mut store = store.lock().map_err(|e| e.to_string())?;
-    store.rename(&id, name);
+    let result = store.rename(&id, name);
     drop(store);
-    emit_workspaces_changed(&app);
-    Ok(())
+    if result.is_ok() {
+        emit_workspaces_changed(&app);
+    }
+    result
 }
 
 #[tauri::command(async)]
@@ -290,10 +292,12 @@ pub fn set_terminal_width(
     width: f64,
 ) -> Result<(), String> {
     let mut store = store.lock().map_err(|e| e.to_string())?;
-    store.set_width(&ws_id, &terminal_id, width);
+    let result = store.set_width(&ws_id, &terminal_id, width);
     drop(store);
-    emit_workspaces_changed(&app);
-    Ok(())
+    if result.is_ok() {
+        emit_workspaces_changed(&app);
+    }
+    result
 }
 
 #[tauri::command(async)]

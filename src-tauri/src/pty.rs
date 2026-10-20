@@ -1704,9 +1704,7 @@ mod ctx_tests {
 #[cfg(test)]
 mod scrollback_flag_tests {
     use super::PtyManager;
-    use crate::mcp::launch::Quoting;
-use crate::mcp::{McpHub, McpLease};
-use crate::scrollback::ScrollbackStore;
+    use crate::scrollback::ScrollbackStore;
     use std::fs;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};

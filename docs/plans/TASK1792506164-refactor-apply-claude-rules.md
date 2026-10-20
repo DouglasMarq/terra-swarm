@@ -1,5 +1,5 @@
 ---
-status: in-progress # draft | approved | in-progress | done
+status: done # draft | approved | in-progress | done
 branch: refactor/apply-claude-rules
 ticket: n/a (audit of the codebase against .claude/rules)
 ---
@@ -111,28 +111,28 @@ Agents: **W0** runs first in this checkout; then **B1**, **B2**, **B3**, **F1**,
 
 ### Wave 2 — frontend structure (F3, after F1/F2 merge)
 
-- [ ] 7.1 IPC out of components: `WorktreeReviewDialog` → `useWorktreeReview`, `FileEditorDialog` → hook/store, `VisualShellSurface` runtime polling → `useInspectorRuntime`; `usageStore` gets a `lib/tauri` wrapper and its hook moves to `src/app/`; `api.ts` re-exports `mcpApi`/`previewApi`.
-- [ ] 7.2 Break the `inspector` ↔ `integration` cycle (move `inspectorModel.ts`/`inspectorRuntime.ts` into `components/inspector/`); `useVoiceCapture` imports `voiceModel.ts`; snapshot types out of `SettingsPanels.tsx`.
-- [ ] 7.3 Pure derivations from `VisualShellSurface.tsx` (`visibleSnapshot`, context alerts, attention messages) and `TasksPanel.tsx` (`describeEvent`, `statusLabel`) into models with tests.
-- [ ] 7.4 Explanatory in-body comments listed in the audit removed.
-- [ ] 7.5 Typed errors instead of matching message text (`"changed on disk"`, `"busy"`, `mcpStore.error` after `update`) — **only if Q5 = yes** (touches backend error shape + IPC types).
+- [x] 7.1 IPC out of components: `WorktreeReviewDialog` → `useWorktreeReview`, `FileEditorDialog` → hook/store, `VisualShellSurface` runtime polling → `useInspectorRuntime`; `usageStore` gets a `lib/tauri` wrapper and its hook moves to `src/app/`; `api.ts` re-exports `mcpApi`/`previewApi`.
+- [x] 7.2 Break the `inspector` ↔ `integration` cycle (move `inspectorModel.ts`/`inspectorRuntime.ts` into `components/inspector/`); `useVoiceCapture` imports `voiceModel.ts`; snapshot types out of `SettingsPanels.tsx`.
+- [x] 7.3 Pure derivations from `VisualShellSurface.tsx` (`visibleSnapshot`, context alerts, attention messages) and `TasksPanel.tsx` (`describeEvent`, `statusLabel`) into models with tests.
+- [x] 7.4 Explanatory in-body comments listed in the audit removed.
+- [x] 7.5 Typed errors instead of matching message text (`"changed on disk"`, `"busy"`, `mcpStore.error` after `update`) — **only if Q5 = yes** (touches backend error shape + IPC types).
 
 ### Wave 3 — integrate
 
-- [ ] 8.1 Merge each worktree branch into `refactor/apply-claude-rules` one at a time; after each merge run the full gate.
-- [ ] 8.2 README still true (no tool/env/shortcut change expected); update this plan's checkboxes and status.
+- [x] 8.1 Merge each worktree branch into `refactor/apply-claude-rules` one at a time; after each merge run the full gate.
+- [x] 8.2 README still true (no tool/env/shortcut change expected); update this plan's checkboxes and status.
 
 ## Success criteria
 
 - Tests: Given-It tests for every bug fix above (1.1, 1.3, 1.4, 1.5, 1.7, 1.8, 2.1, 2.3, 3.1, 4.1, 4.4) and for every moved pure function.
-- [ ] `npm run build` succeeds (includes `tsc`)
-- [ ] `npm test` passes with 0 unhandled errors
-- [ ] `cargo fmt -- --check` passes and `cargo clippy --all-targets` reports 0 warnings (`--manifest-path src-tauri/Cargo.toml`)
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml` passes
-- [ ] Every new or changed branch has a test
-- [ ] Tests follow Given-It naming and cover the happy path, not-found/empty cases, invalid input and authorization boundaries
-- [ ] New user-visible text exists in `en.ts` and `pt-BR.ts`
-- [ ] `grep` finds no hex/rgb literal in component stylesheets outside `tokens.css` (except documented exceptions such as the preview canvas `#fff`)
+- [x] `npm run build` succeeds (includes `tsc`)
+- [x] `npm test` passes with 0 unhandled errors
+- [x] `cargo fmt -- --check` passes and `cargo clippy --all-targets` reports 0 warnings (`--manifest-path src-tauri/Cargo.toml`)
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml` passes
+- [x] Every new or changed branch has a test
+- [x] Tests follow Given-It naming and cover the happy path, not-found/empty cases, invalid input and authorization boundaries
+- [x] New user-visible text exists in `en.ts` and `pt-BR.ts`
+- [x] `grep` finds no hex/rgb literal in component stylesheets outside `tokens.css` (except documented exceptions such as the preview canvas `#fff`)
 
 ## Open questions
 
@@ -151,4 +151,7 @@ Agents: **W0** runs first in this checkout; then **B1**, **B2**, **B3**, **F1**,
 - 2026-10-20: wave 1 merged: B3 (pty/voice), C1 (stylesheets), B2 (mcp), F1 (frontend). Deviations: B3 refuses non-catalog ids in `command_available` instead of quoting (`mcp::launch::quote` is private to `mcp/`); C1 also neutralized the idle agent chip in `inspector.css` (same green-for-non-running bug) and added `--terra-success` and `--terra-pane-focus-ring`; B2 keeps the literal defaults inside the `read_inbox`/`search_notes` descriptions (`&'static str`); F1 leaves the `Changes from {name}` commit/PR title in English and keeps `App.tsx`'s `useLocale()` workaround until App's logic moves out.
 - 2026-10-20: B1 merged. 1.1 deviation: a store that is not UTF-8 is backed up like corrupt JSON; any other read error (permissions, I/O) leaves the file in place unbacked and turns saving off, so the next launch retries instead of finding no store. Extra fix: the startup scrollback sweep is skipped when the store could not be read, so transcripts aren't deleted as orphans. Backend gate: fmt ok, clippy 0, 165 tests.
 - 2026-10-20: F2 merged (306 frontend tests). Kept apart on purpose: `profileForCommand` (raw first token picks the user's profile and its resume command), `agentLabelFromCommand` (display label), `groupTasksByStatus` vs `boardColumns` (different order and sorting); `settingsModel`/`commandModel` keep the store-backed `t` (would ripple widely). `sendPromptToTerminal` and `loadSystemFonts` moved to `src/app/`.
+- 2026-10-20: F3 merged. Typed IPC errors: `IpcError { code, message }` (`changedOnDisk`, `busy`, `other`) only on `write_workspace_file` and `write_terminal`; every other command keeps `Result<T, String>`. Follow-up fix here: `startMcpEventBridge` takes the nudge handler (`app/sendPromptToTerminal.ts` `nudgeAgent`) so `stores/` no longer imports `app/`. Remaining folder-level cycle: `components/integration/SystemRoot.tsx` ↔ `App.tsx` (entry wiring, App.tsx out of scope).
+- 2026-10-20: final gate on `refactor/apply-claude-rules`: `npm run build` ok; `npm test` 81 files / 363 tests, exit 0, no unhandled errors; `cargo fmt --check` ok; clippy 0 warnings; `cargo test` 171 passed. `?mock` preview renders Workbench, Fleet, Board, Settings and the command palette with no server errors.
+- Noticed, not removed (dead code): `createMountFocusQueue` and `formatFleetDuration` (used only by tests); unused `App.css` classes `.agent-list`, `.agent-option*`, `.picker-default`, `.settings-dialog-done`; unused `shell.css` properties `--terra-shell-*`; `modeLabel` in `workbench/layout.ts`.
 

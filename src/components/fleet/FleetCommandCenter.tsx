@@ -100,7 +100,7 @@ export function FleetCommandCenter({
               onClick={() => setStatus(status)}
             >
               <span className="terra-dot" data-status={status} aria-hidden="true" />
-              {t(`status.${status}` as const)} · {model.summary[status]}
+              {t("fleet.statusCount", { status: t(`status.${status}` as const), count: model.summary[status] })}
             </button>
           ))}
         </div>

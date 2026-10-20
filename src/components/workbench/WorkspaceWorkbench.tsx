@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { useT } from "../../i18n";
 import { useMemo } from "react";
 import { EmptyPaneCell } from "./EmptyPaneCell";
 import { projectWorkbench } from "./projection";
@@ -50,6 +50,7 @@ export function WorkspaceWorkbench({
   onNewContainer,
   ...actions
 }: WorkspaceWorkbenchProps) {
+  const t = useT();
   const projection = useMemo(() => projectWorkbench(source), [source]);
   const rootClassName = className ? `terra-workbench ${className}` : "terra-workbench";
 

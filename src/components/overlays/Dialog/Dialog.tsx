@@ -1,4 +1,4 @@
-import { t } from "../../../i18n";
+import { useT } from "../../../i18n";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import {
@@ -100,6 +100,7 @@ export function TerraDialog({
   titleClassName,
   ...rootProps
 }: TerraDialogProps) {
+  const t = useT();
   return (
     <DialogRoot {...rootProps}>
       <DialogPortal>

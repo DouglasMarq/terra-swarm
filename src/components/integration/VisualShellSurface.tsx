@@ -18,7 +18,7 @@ import { ApplicationShell } from "../shell/ApplicationShell";
 import { CollapsedSidebar, Sidebar, SurfaceSwitch, type CollapsedSidebarProject } from "../shell/Sidebar";
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import { buildAgentLabels } from "../../domain/agentLabels";
-import { t as translateNow, useT } from "../../i18n";
+import { useT } from "../../i18n";
 import { AgentInspector } from "../inspector/AgentInspector";
 import { TasksPanel } from "../tasks/TasksPanel";
 import { TaskBoard } from "../tasks/TaskBoard";
@@ -87,17 +87,18 @@ const LazyCommandPalette = lazy(async () => {
   return { default: module.CommandPalette };
 });
 
-function SurfaceLoading(_props: { label?: string }) {
+function SurfaceLoading() {
+  const t = useT();
   return (
     <div className="terra-surface-loading" role="status" aria-live="polite">
-      {translateNow("shell.loading")}
+      {t("shell.loading")}
     </div>
   );
 }
 
 function FleetCommandCenter(props: ComponentProps<typeof LazyFleetCommandCenter>) {
   return (
-    <Suspense fallback={<SurfaceLoading label="fleet" />}>
+    <Suspense fallback={<SurfaceLoading />}>
       <LazyFleetCommandCenter {...props} />
     </Suspense>
   );
@@ -105,7 +106,7 @@ function FleetCommandCenter(props: ComponentProps<typeof LazyFleetCommandCenter>
 
 function WorkspaceWorkbench(props: ComponentProps<typeof LazyWorkspaceWorkbench>) {
   return (
-    <Suspense fallback={<SurfaceLoading label="workbench" />}>
+    <Suspense fallback={<SurfaceLoading />}>
       <LazyWorkspaceWorkbench {...props} />
     </Suspense>
   );
@@ -732,7 +733,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const renderTab = (context: WorkbenchTabRenderContext) => {
     const project = context.project;
     return (
-      <Suspense fallback={<SurfaceLoading label="terminal" />}>
+      <Suspense fallback={<SurfaceLoading />}>
         <LazyTerminalTabSurface
           context={context}
           fontSize={props.fontSize}
@@ -875,7 +876,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         if (!open) setPendingCommandConfirmation(null);
       }}
       title={pendingCommandConfirmation?.title}
-      description={pendingCommandConfirmation ? `${pendingCommandConfirmation.resourceLabel}: ${pendingCommandConfirmation.description}` : ""}
+      description={pendingCommandConfirmation ? t("dialogs.resourceDescription", { resource: pendingCommandConfirmation.resourceLabel, description: pendingCommandConfirmation.description }) : ""}
       intent={pendingCommandConfirmation?.kind === "stop-agent" ? "destructive" : "default"}
       confirmLabel={pendingCommandConfirmation?.kind === "import-snapshot" ? t("system.continueImport") : pendingCommandConfirmation?.kind === "stop-agent" ? t("pane.confirmKill.confirm") : t("dialogs.confirmTitle")}
       onConfirm={() => {

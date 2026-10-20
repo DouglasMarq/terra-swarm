@@ -367,7 +367,7 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
         command({
           id: `open-terminal:${safeIdPart(workspace.id)}:${safeIdPart(terminal.id)}`,
           label: agentLabel ? `${primary} · ${name}` : t("palette.openAgent", { name: terminalName, project: name }),
-          description: agentLabel ? `${tag} · ${t("palette.openAgentDesc")}` : t("palette.openAgentDesc"),
+          description: agentLabel ? t("palette.openAgentDescTagged", { tag }) : t("palette.openAgentDesc"),
           group: "navigation",
           keywords: [terminalName, primary, tag, name, workspace.cwd, "agente", "terminal", "focar"],
           icon: "terminal",
@@ -565,7 +565,7 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
             candidate.id,
             candidate.kind,
             candidate.title,
-            `${candidate.description}. ${t("palette.needsConfirm")}`,
+            t("palette.descriptionNeedsConfirm", { description: candidate.description }),
             context,
             candidate.action,
           ),

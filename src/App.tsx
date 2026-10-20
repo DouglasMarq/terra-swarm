@@ -44,7 +44,7 @@ import { useTerminalRuntimeStore } from "./stores/terminalRuntimeStore";
 import { useUiStore } from "./stores/uiStore";
 import { useShellStore } from "./stores/shellStore";
 import { useOrchestrationStore } from "./stores/orchestrationStore";
-import { t, useLocale } from "./i18n";
+import { t, useLocale, useT } from "./i18n";
 import type { SettingsSectionId } from "./components/settings";
 import "./App.css";
 
@@ -68,7 +68,8 @@ const LazySettingsSectionPanel = lazy(async () => {
   return { default: module.SettingsSectionPanel };
 });
 
-function AppLoadingSurface(_props: { label?: string }) {
+function AppLoadingSurface() {
+  const t = useT();
   return (
     <div className="terra-app-loading" role="status" aria-live="polite">
       <span>{t("shell.loading")}</span>
@@ -606,7 +607,7 @@ function App() {
   };
 
   const settingsPage = showSettings ? (
-        <Suspense fallback={<AppLoadingSurface label={t("common.settings")} />}>
+        <Suspense fallback={<AppLoadingSurface />}>
           <LazySettingsDialog
             variant="page"
             open
@@ -620,7 +621,7 @@ function App() {
               setCapturing(null);
             }}
             renderSection={({ section }) => (
-              <Suspense fallback={<AppLoadingSurface label={t("settings.title")} />}>
+              <Suspense fallback={<AppLoadingSurface />}>
                 <LazySettingsSectionPanel
                   section={section}
                   agents={agents}
@@ -695,7 +696,7 @@ function App() {
           </button>
         </div>
       ) : null}
-      <Suspense fallback={<AppLoadingSurface label="workspace" />}>
+      <Suspense fallback={<AppLoadingSurface />}>
         <LazyVisualShellSurface
         workspaces={workspaces}
         groups={groups}
@@ -825,7 +826,7 @@ function App() {
       </Suspense>
 
       {showResume ? (
-        <Suspense fallback={<AppLoadingSurface label="fila de retomada" />}>
+        <Suspense fallback={<AppLoadingSurface />}>
           <LazyResumeDialog
             items={resumeItems ?? []}
             savedAt={resumeSavedAt}

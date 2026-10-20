@@ -13,7 +13,7 @@ import type {
   WorkbenchLayoutMode,
   WorkbenchPaneProjection,
 } from "./types";
-import { t } from "../../i18n";
+import { useT } from "../../i18n";
 
 export interface PaneGridProps {
   projection: WorkbenchContainerProjection;
@@ -98,6 +98,7 @@ export function PaneGrid({
   renderPane,
   onLayoutChange,
 }: PaneGridProps) {
+  const t = useT();
   const mode = resolveLayoutMode(projection.container.layout, explicitMode);
   const isSpotlight = mode === "spotlight";
   // Grade and Foco share one CSS grid with cells in a stable order, so

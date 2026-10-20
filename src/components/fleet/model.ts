@@ -117,13 +117,14 @@ function mapValue<T>(record: Readonly<Record<string, T>> | undefined, id: string
 function agentLabelFromCommand(command: string): string {
   const token = command.trim().split(/\s+/)[0] ?? "";
   const executable = token.split(/[\\/]/).pop()?.replace(/\.(?:exe|cmd|sh)$/i, "") ?? "";
-  if (!executable) return "Terminal";
+  if (!executable) return t("fleet.terminalAgent");
+  const shell = t("fleet.shellAgent");
   const known: Record<string, string> = {
     ...Object.fromEntries(DEFAULT_AGENT_PROFILES.filter((profile) => profile.command).map((profile) => [profile.command, profile.label])),
-    shell: "Shell",
-    zsh: "Shell",
-    bash: "Shell",
-    fish: "Shell",
+    shell,
+    zsh: shell,
+    bash: shell,
+    fish: shell,
   };
   return known[executable.toLowerCase()] ?? executable.charAt(0).toUpperCase() + executable.slice(1);
 }
@@ -344,9 +345,9 @@ export function formatFleetDuration(value: FleetValue | undefined): string | nul
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
-  if (minutes > 0) return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
-  return `${seconds}s`;
+  if (hours > 0) return t("time.durationHours", { hours, minutes: String(minutes).padStart(2, "0") });
+  if (minutes > 0) return t("time.durationMinutes", { minutes, seconds: String(seconds).padStart(2, "0") });
+  return t("time.durationSeconds", { seconds });
 }
 
 export function formatFleetRelativeTime(value: FleetValue | undefined, now = Date.now()): string | null {

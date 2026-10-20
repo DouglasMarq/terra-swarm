@@ -114,9 +114,7 @@ pub(crate) fn parse_git_status(output: &[u8]) -> Result<WorkspaceGitStatus, Stri
 }
 
 pub(crate) fn git_status_for_directory(cwd: &Path) -> Result<WorkspaceGitStatus, String> {
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(cwd)
+    let output = crate::worktree::git_command(cwd)
         .args([
             "status",
             "--porcelain=v1",
@@ -155,10 +153,8 @@ pub fn git_status(
 #[tauri::command(async)]
 pub fn git_branch(cwd: String) -> Option<String> {
     fn git(cwd: &str, args: &[&str]) -> Option<String> {
-        let mut cmd = std::process::Command::new("git");
-        cmd.arg("-C")
-            .arg(cwd)
-            .args(args)
+        let mut cmd = crate::worktree::git_command(Path::new(cwd));
+        cmd.args(args)
             .env("GIT_OPTIONAL_LOCKS", "0")
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null());

@@ -5,7 +5,7 @@ use serde::Serialize;
 use std::path::Path;
 use std::process::Command;
 
-use super::{git, status, WorktreeInfo, WorktreeStatus};
+use super::{git, git_command, status, WorktreeInfo, WorktreeStatus};
 
 /// The patch shown in the review is capped; the file list never is.
 const MAX_PATCH_BYTES: usize = 1024 * 1024;
@@ -50,9 +50,7 @@ fn change_kind(code: &str) -> &'static str {
 
 /// `git diff --no-index` exits 1 when the files differ, which is the point.
 fn diff_new_file(dir: &Path, file: &str) -> String {
-    Command::new("git")
-        .arg("-C")
-        .arg(dir)
+    git_command(dir)
         .args(["diff", "--no-index", "--", "/dev/null", file])
         .output()
         .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())

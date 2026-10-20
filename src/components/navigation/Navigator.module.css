@@ -555,7 +555,7 @@
 }
 
 .statusidle {
-  background: var(--terra-text-muted, #8e8e96);
+  background: var(--terra-text-muted);
 }
 
 .statussuspended {
@@ -863,7 +863,7 @@
 }
 
 .statusidle {
-  background: var(--terra-text-muted, #8e8e96);
+  background: var(--terra-text-muted);
 }
 
 .statussuspended {

@@ -6,10 +6,10 @@
   place-items: center;
   isolation: isolate;
   padding: clamp(24px, 7vw, 80px);
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   background:
     radial-gradient(circle at 50% 40%, rgb(113 113 122 / 10%), transparent 34%),
-    var(--terra-bg, #101013);
+    var(--terra-bg);
 }
 
 .loadingScreen::before,
@@ -56,12 +56,12 @@
   height: 62px;
   margin-inline: auto;
   place-items: center;
-  border: 1px solid var(--terra-border-strong, #34343c);
+  border: 1px solid var(--terra-border-strong);
   border-radius: 18px;
-  color: var(--terra-accent, #fafafa);
+  color: var(--terra-accent);
   background:
     linear-gradient(135deg, rgb(250 250 250 / 12%), transparent 58%),
-    var(--terra-bg-elevated, #1d1d22);
+    var(--terra-bg-elevated);
   box-shadow: 0 16px 42px rgb(0 0 0 / 30%);
 }
 
@@ -79,7 +79,7 @@
 .loadingKicker {
   margin: 0;
   color: var(--terra-text-secondary);
-  font-family: var(--terra-font-mono, monospace);
+  font-family: var(--terra-font-mono);
   font-size: 10px;
   font-weight: 650;
   letter-spacing: 0.2em;
@@ -88,7 +88,7 @@
 
 .loadingTitle {
   margin: 0;
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   font-size: clamp(21px, 4vw, 28px);
   font-weight: 650;
   letter-spacing: -0.035em;
@@ -97,7 +97,7 @@
 .loadingSubtitle {
   max-width: 340px;
   margin: 0 auto;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 13px;
   line-height: 1.55;
 }
@@ -109,18 +109,18 @@
   justify-content: center;
   gap: 8px;
   margin-inline: auto;
-  border: 1px solid var(--terra-border, #26262c);
-  border-radius: var(--terra-radius-pill, 999px);
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-pill);
   padding: 6px 12px;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   background: rgb(29 29 34 / 72%);
-  font-family: var(--terra-font-mono, monospace);
+  font-family: var(--terra-font-mono);
   font-size: 10px;
 }
 
 .loadingSpinner {
   animation: system-spin 0.9s linear infinite;
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
 }
 
 .loadingProgress {
@@ -128,15 +128,15 @@
   height: 3px;
   margin: 0 auto;
   overflow: hidden;
-  border-radius: var(--terra-radius-pill, 999px);
-  background: var(--terra-bg-elevated, #1d1d22);
+  border-radius: var(--terra-radius-pill);
+  background: var(--terra-bg-elevated);
 }
 
 .loadingProgressValue {
   height: 100%;
   border-radius: inherit;
-  background: var(--terra-accent, #fafafa);
-  transition: width var(--terra-duration-med, 200ms) var(--terra-ease-out, ease-out);
+  background: var(--terra-accent);
+  transition: width var(--terra-duration-med) var(--terra-ease-out);
 }
 
 .errorBoundary {
@@ -145,21 +145,21 @@
   place-items: center;
   overflow: auto;
   padding: clamp(24px, 8vw, 88px);
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg, #101013);
+  color: var(--terra-text);
+  background: var(--terra-bg);
 }
 
 .errorCard {
   display: grid;
   width: min(540px, 100%);
   gap: 20px;
-  border: 1px solid var(--terra-border-strong, #34343c);
-  border-radius: var(--terra-radius-modal, 14px);
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-modal);
   padding: clamp(20px, 5vw, 30px);
   background:
     linear-gradient(135deg, rgb(229 99 111 / 8%), transparent 45%),
-    var(--terra-bg-panel, #17171b);
-  box-shadow: var(--terra-shadow-modal, 0 24px 64px rgb(0 0 0 / 55%));
+    var(--terra-bg-panel);
+  box-shadow: var(--terra-shadow-modal);
 }
 
 .errorHeading {
@@ -175,14 +175,14 @@
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid rgb(229 99 111 / 28%);
-  border-radius: var(--terra-radius-lg, 8px);
-  color: var(--terra-red, #e5636f);
-  background: var(--terra-red-dim, rgb(229 99 111 / 14%));
+  border-radius: var(--terra-radius-lg);
+  color: var(--terra-red);
+  background: var(--terra-red-dim);
 }
 
 .errorTitle {
   margin: 0;
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   font-size: 16px;
   font-weight: 650;
   line-height: 1.3;
@@ -190,19 +190,19 @@
 
 .errorDescription {
   margin: 5px 0 0;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 12px;
   line-height: 1.55;
 }
 
 .errorDetails {
   margin: 0;
-  border: 1px solid var(--terra-border, #26262c);
-  border-radius: var(--terra-radius-md, 6px);
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-md);
   padding: 10px 12px;
-  color: var(--terra-text-muted, #8e8e96);
-  background: var(--terra-bg, #101013);
-  font-family: var(--terra-font-mono, monospace);
+  color: var(--terra-text-muted);
+  background: var(--terra-bg);
+  font-family: var(--terra-font-mono);
   font-size: 10px;
   line-height: 1.55;
   white-space: pre-wrap;
@@ -221,24 +221,24 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  border: 1px solid var(--terra-border-strong, #34343c);
-  border-radius: var(--terra-radius-md, 6px);
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-md);
   padding: 7px 11px;
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-elevated, #1d1d22);
+  color: var(--terra-text);
+  background: var(--terra-bg-elevated);
   font-size: 12px;
   font-weight: 550;
 }
 
 .errorButton:hover {
-  border-color: var(--terra-border-focus, #71717a);
-  background: var(--terra-bg-hover, #232329);
+  border-color: var(--terra-border-focus);
+  background: var(--terra-bg-hover);
 }
 
 .errorButtonPrimary {
-  border-color: var(--terra-accent, #fafafa);
-  color: var(--terra-accent-contrast, #111113);
-  background: var(--terra-accent, #fafafa);
+  border-color: var(--terra-accent);
+  color: var(--terra-accent-contrast);
+  background: var(--terra-accent);
   font-weight: 650;
 }
 
@@ -249,7 +249,7 @@
 
 .errorButton:focus-visible {
   outline: 0;
-  box-shadow: var(--terra-focus-ring, 0 0 0 3px rgb(113 113 122 / 18%));
+  box-shadow: var(--terra-focus-ring);
 }
 
 @keyframes system-spin {

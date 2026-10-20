@@ -12,7 +12,7 @@
   padding: 0;
   border-color: #303038;
   border-radius: 14px;
-  background: var(--terra-bg-panel, #17171b);
+  background: var(--terra-bg-panel);
 }
 
 .dialogHeader {
@@ -23,9 +23,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  border-bottom: 1px solid var(--terra-border, #26262c);
+  border-bottom: 1px solid var(--terra-border);
   padding: 18px 24px;
-  background: color-mix(in srgb, var(--terra-bg-panel, #17171b) 94%, transparent);
+  background: color-mix(in srgb, var(--terra-bg-panel) 94%, transparent);
   backdrop-filter: blur(14px);
 }
 
@@ -58,7 +58,7 @@
   place-items: center;
   border: 1px solid transparent;
   border-radius: 6px;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   background: transparent;
   cursor: pointer;
   transition:
@@ -68,16 +68,16 @@
 }
 
 .closeButton:hover {
-  border-color: var(--terra-border-strong, #34343c);
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-hover, #232329);
+  border-color: var(--terra-border-strong);
+  color: var(--terra-text);
+  background: var(--terra-bg-hover);
 }
 
 .closeButton:focus-visible,
 .sectionTrigger:focus-visible,
 .searchInput:focus-visible {
   outline: 0;
-  box-shadow: var(--terra-focus-ring, 0 0 0 3px rgb(113 113 122 / 18%));
+  box-shadow: var(--terra-focus-ring);
 }
 
 .tabsRoot {
@@ -93,10 +93,10 @@
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
-  border-right: 1px solid var(--terra-border, #26262c);
+  border-right: 1px solid var(--terra-border);
   padding: 20px 12px 14px;
-  background: color-mix(in srgb, var(--terra-bg-sidebar, #131316) 88%, transparent);
-  scrollbar-color: var(--terra-scrollbar-thumb, #2c2c33) transparent;
+  background: color-mix(in srgb, var(--terra-bg-sidebar) 88%, transparent);
+  scrollbar-color: var(--terra-scrollbar-thumb) transparent;
 }
 
 .searchBox {
@@ -104,17 +104,17 @@
   min-height: 34px;
   align-items: center;
   gap: 8px;
-  border: 1px solid var(--terra-border, #26262c);
+  border: 1px solid var(--terra-border);
   border-radius: 6px;
   padding: 0 9px;
   color: var(--terra-text-secondary);
-  background: var(--terra-bg-panel, #17171b);
+  background: var(--terra-bg-panel);
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
 .searchBox:focus-within {
-  border-color: var(--terra-border-focus, #71717a);
-  box-shadow: var(--terra-focus-ring, 0 0 0 3px rgb(113 113 122 / 18%));
+  border-color: var(--terra-border-focus);
+  box-shadow: var(--terra-focus-ring);
 }
 
 .searchInput {
@@ -122,7 +122,7 @@
   flex: 1;
   border: 0;
   outline: 0;
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   background: transparent;
   font: inherit;
   font-size: 12px;
@@ -137,11 +137,11 @@
 }
 
 .searchShortcut {
-  border: 1px solid var(--terra-border, #26262c);
+  border: 1px solid var(--terra-border);
   border-radius: 4px;
   padding: 2px 4px;
   color: var(--terra-text-secondary);
-  font-family: var(--terra-font-mono, monospace);
+  font-family: var(--terra-font-mono);
   font-size: 9px;
   line-height: 1;
 }
@@ -169,7 +169,7 @@
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 0 10px;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   background: transparent;
   cursor: pointer;
   font: inherit;
@@ -179,15 +179,15 @@
 }
 
 .sectionTrigger:hover {
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-hover, #232329);
+  color: var(--terra-text);
+  background: var(--terra-bg-hover);
 }
 
 .sectionTrigger[data-state="active"] {
-  border-color: var(--terra-border-strong, #34343c);
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-elevated, #1d1d22);
-  box-shadow: inset 2px 0 0 var(--terra-accent, #fafafa);
+  border-color: var(--terra-border-strong);
+  color: var(--terra-text);
+  background: var(--terra-bg-elevated);
+  box-shadow: inset 2px 0 0 var(--terra-accent);
 }
 
 .sectionIcon {
@@ -196,7 +196,7 @@
 }
 
 .sectionTrigger[data-state="active"] .sectionIcon {
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
 }
 
 .sectionLabel {
@@ -211,18 +211,18 @@
   align-items: center;
   gap: 5px;
   margin-top: auto;
-  border-top: 1px solid var(--terra-border, #26262c);
+  border-top: 1px solid var(--terra-border);
   padding: 14px 8px 0;
   color: var(--terra-text-secondary);
   font-size: 10px;
 }
 
 .sidebarHintKey {
-  border: 1px solid var(--terra-border-strong, #34343c);
+  border: 1px solid var(--terra-border-strong);
   border-radius: 3px;
   padding: 2px 3px;
-  color: var(--terra-text-muted, #8e8e96);
-  font-family: var(--terra-font-mono, monospace);
+  color: var(--terra-text-muted);
+  font-family: var(--terra-font-mono);
   font-size: 9px;
 }
 
@@ -231,8 +231,8 @@
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  background: var(--terra-bg-panel, #17171b);
-  scrollbar-color: var(--terra-scrollbar-thumb, #2c2c33) transparent;
+  background: var(--terra-bg-panel);
+  scrollbar-color: var(--terra-scrollbar-thumb) transparent;
 }
 
 .mainHeader {
@@ -244,21 +244,21 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border-bottom: 1px solid var(--terra-border, #26262c);
+  border-bottom: 1px solid var(--terra-border);
   padding: 0 32px;
-  background: color-mix(in srgb, var(--terra-bg-panel, #17171b) 94%, transparent);
+  background: color-mix(in srgb, var(--terra-bg-panel) 94%, transparent);
   backdrop-filter: blur(14px);
 }
 
 .mainEyebrow {
   color: var(--terra-text-secondary);
-  font-family: var(--terra-font-mono, monospace);
+  font-family: var(--terra-font-mono);
   font-size: 9px;
   letter-spacing: 0.08em;
 }
 
 .mainSectionName {
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 11px;
 }
 
@@ -277,7 +277,7 @@
 
 .sectionKicker {
   color: var(--terra-text-secondary);
-  font-family: var(--terra-font-mono, monospace);
+  font-family: var(--terra-font-mono);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -285,7 +285,7 @@
 
 .defaultTitle {
   margin: 4px 0 0;
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.025em;
@@ -294,7 +294,7 @@
 
 .defaultDescription {
   margin: 0;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -304,11 +304,11 @@
   align-items: flex-start;
   gap: 12px;
   margin-top: 18px;
-  border: 1px solid var(--terra-border, #26262c);
+  border: 1px solid var(--terra-border);
   border-radius: 8px;
   padding: 16px;
-  color: var(--terra-text-muted, #8e8e96);
-  background: var(--terra-bg-elevated, #1d1d22);
+  color: var(--terra-text-muted);
+  background: var(--terra-bg-elevated);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -320,14 +320,14 @@
 
 .placeholderCard strong {
   margin-bottom: 4px;
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   font-size: 12px;
   font-weight: 550;
 }
 
 .placeholderCard code {
-  color: var(--terra-text, #e4e4e7);
-  font-family: var(--terra-font-mono, monospace);
+  color: var(--terra-text);
+  font-family: var(--terra-font-mono);
   font-size: 11px;
 }
 
@@ -337,8 +337,8 @@
   flex: 0 0 auto;
   margin-top: 5px;
   border-radius: 50%;
-  background: var(--terra-amber, #e0b45c);
-  box-shadow: 0 0 0 4px var(--terra-amber-dim, rgb(224 180 92 / 14%));
+  background: var(--terra-amber);
+  box-shadow: 0 0 0 4px var(--terra-amber-dim);
 }
 
 .emptyState {
@@ -348,12 +348,12 @@
   justify-items: center;
   gap: 8px;
   padding: 32px;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   text-align: center;
 }
 
 .emptyState strong {
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   font-size: 14px;
   font-weight: 550;
 }
@@ -373,9 +373,9 @@
   justify-content: flex-end;
   gap: 8px;
   margin: 0 32px 22px;
-  border-top: 1px solid var(--terra-border, #26262c);
+  border-top: 1px solid var(--terra-border);
   padding-top: 16px;
-  background: var(--terra-bg-panel, #17171b);
+  background: var(--terra-bg-panel);
 }
 
 @media (max-width: 720px) {
@@ -398,7 +398,7 @@
   .sidebar {
     max-height: 174px;
     border-right: 0;
-    border-bottom: 1px solid var(--terra-border, #26262c);
+    border-bottom: 1px solid var(--terra-border);
     padding: 12px;
   }
 

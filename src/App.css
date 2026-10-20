@@ -241,11 +241,11 @@ textarea {
 /* ---------- settings ---------- */
 .settings-dialog-done {
   min-height: 30px;
-  border: 1px solid var(--terra-accent, #fafafa);
+  border: 1px solid var(--terra-accent);
   border-radius: 6px;
   padding: 0 12px;
-  color: var(--terra-bg-sidebar, #131316);
-  background: var(--terra-accent, #fafafa);
+  color: var(--terra-bg-sidebar);
+  background: var(--terra-accent);
   cursor: pointer;
   font: inherit;
   font-size: 11px;
@@ -254,13 +254,13 @@ textarea {
 }
 
 .settings-dialog-done:hover {
-  border-color: var(--terra-text, #e4e4e7);
-  background: var(--terra-text, #e4e4e7);
+  border-color: var(--terra-text);
+  background: var(--terra-text);
 }
 
 .settings-dialog-done:focus-visible {
   outline: 0;
-  box-shadow: var(--terra-focus-ring, 0 0 0 3px rgb(113 113 122 / 18%));
+  box-shadow: var(--terra-focus-ring);
 }
 
 /* ---------- voice input ---------- */

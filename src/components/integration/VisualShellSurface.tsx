@@ -3,6 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import {
   Copy,
   Eraser,
+  GitCompare,
   LayoutGrid,
   PanelRight,
   Pencil,
@@ -23,6 +24,7 @@ import { TasksPanel } from "../tasks/TasksPanel";
 import { TaskBoard } from "../tasks/TaskBoard";
 import { sendPromptToTerminal } from "../../lib/session/sendPrompt";
 import { startMcpEventBridge, useReportedStates } from "../../stores/mcpStore";
+import { useReviewStore } from "../../stores/reviewStore";
 import { deriveAgentStatus } from "../../domain/agentStatus";
 import { NavigatorPanel } from "../navigation/NavigatorPanel";
 import type { ActivityTab, NavigatorFilesLoader, NavigatorGitLoader, NavigatorNodeRef } from "../navigation/types";
@@ -658,6 +660,16 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
 
   const workspaceIdFor = (terminalId: string) => props.workspaces.find((workspace) => workspace.terminals.some((terminal) => terminal.id === terminalId))?.id ?? null;
 
+  const worktreeBranches = Object.fromEntries(
+    props.workspaces.flatMap((workspace) => workspace.terminals)
+      .filter((terminal) => terminal.worktree)
+      .map((terminal) => [terminal.id, terminal.worktree!.branch]),
+  );
+  const openReview = (terminalId: string) => {
+    const workspaceId = workspaceIdFor(terminalId);
+    if (!workspaceId) return;
+    useReviewStore.getState().open({ workspaceId, terminalId, label: agentLabels[terminalId]?.primary ?? terminalId });
+  };
   const buildPaneMenu = (ptyId: string, command: string): PaneMenuGroups => {
     const workspaceId = workspaceIdFor(ptyId);
     const detached = props.detachedTerminalIds.includes(ptyId);
@@ -674,6 +686,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
           ? { id: "reattach", label: t("pane.menu.reattach"), icon: <SquareArrowOutUpRight size={13} />, onSelect: () => props.onReattach(ptyId) }
           : { id: "detach", label: t("pane.menu.detach"), icon: <SquareArrowOutUpRight size={13} />, onSelect: () => props.onDetach(ptyId) },
         { id: "inspector", label: t("pane.menu.inspector"), icon: <PanelRight size={13} />, shortcut: "⌘I", onSelect: () => { props.onFocus(ptyId); shell.setDockOpen(true); } },
+        ...(worktreeBranches[ptyId] ? [{ id: "review", label: t("review.open"), icon: <GitCompare size={13} />, onSelect: () => openReview(ptyId) }] : []),
       ],
       [
         { id: "copy-resume", label: t("pane.menu.copyResume"), detail: resumeCommand, icon: <Copy size={13} />, onSelect: () => { void window.navigator.clipboard?.writeText(resumeCommand); } },
@@ -703,11 +716,6 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     ];
   };
 
-  const worktreeBranches = Object.fromEntries(
-    props.workspaces.flatMap((workspace) => workspace.terminals)
-      .filter((terminal) => terminal.worktree)
-      .map((terminal) => [terminal.id, terminal.worktree!.branch]),
-  );
   const renderTab = (context: WorkbenchTabRenderContext) => {
     const project = context.project;
     return (
@@ -723,6 +731,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
           titles={props.titles}
           branch={project ? props.branches[project.id] : undefined}
           worktreeBranches={worktreeBranches}
+          onOpenReview={openReview}
           detachedIds={new Set(props.detachedTerminalIds)}
           labels={agentLabels}
           attentionMessages={attentionMessages}

@@ -26,6 +26,7 @@ export interface TerminalTabSurfaceProps {
   onRestart: (id: string, command: string) => void;
   onDetach?: (id: string) => void;
   onKill: (id: string) => void;
+  onOpenReview?: (id: string) => void;
 }
 
 /**
@@ -54,6 +55,7 @@ export function TerminalTabSurface({
   onRestart,
   onDetach,
   onKill,
+  onOpenReview,
 }: TerminalTabSurfaceProps): ReactNode {
   const t = useT();
   const { tab } = context;
@@ -88,6 +90,7 @@ export function TerminalTabSurface({
       menu={buildMenu?.(ptyId, tab.command)}
       branch={branch}
       worktreeBranch={worktreeBranches?.[ptyId]}
+      onOpenReview={onOpenReview ? () => onOpenReview(ptyId) : undefined}
       onClearNotifications={() => onClearNotifications(ptyId)}
       focused={focusedId === ptyId}
       onFocus={() => onFocus(ptyId)}

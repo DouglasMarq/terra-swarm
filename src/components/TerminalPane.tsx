@@ -35,6 +35,8 @@ interface Props {
   branch?: string;
   /** Branch of the agent's own git worktree, when it is isolated. */
   worktreeBranch?: string;
+  /** Opens the review of the worktree's changes. */
+  onOpenReview?: () => void;
   /** Task title (or name) shown first; falls back to the command. */
   label?: string;
   /** "claude 2" / "Lyra · claude" under or beside the label. */
@@ -390,10 +392,19 @@ export function TerminalPane(props: Props) {
         <span className="pane-name" title={command}>{primary}</span>
         {secondary ? <span className="terra-tag pane-tag">{secondary}</span> : null}
         {props.worktreeBranch ? (
-          <span className="terra-tag pane-worktree" title={t("pane.worktree", { branch: props.worktreeBranch })}>
+          <button
+            type="button"
+            className="terra-tag pane-worktree"
+            title={`${t("pane.worktree", { branch: props.worktreeBranch })} · ${t("review.open")}`}
+            disabled={!props.onOpenReview}
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onOpenReview?.();
+            }}
+          >
             <GitBranch size={11} aria-hidden="true" />
             {props.worktreeBranch}
-          </span>
+          </button>
         ) : null}
         {title && title !== primary ? (
           <span className="pane-title" title={title}>

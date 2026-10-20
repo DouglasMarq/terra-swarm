@@ -18,6 +18,22 @@ export interface WorktreeInfo {
   repo: string;
 }
 
+export interface WorktreeChangedFile {
+  path: string;
+  change: "added" | "modified" | "deleted" | "renamed" | "untracked";
+  /** `null` for binary files. */
+  additions: number | null;
+  deletions: number | null;
+}
+
+/** What an isolated agent changed since its branch left the base. */
+export interface WorktreeDiff {
+  status: WorktreeStatus;
+  files: WorktreeChangedFile[];
+  patch: string;
+  truncated: boolean;
+}
+
 export interface WorktreeStatus {
   branch: string;
   base: string;

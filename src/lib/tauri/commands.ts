@@ -21,6 +21,7 @@ import type {
   WorkspaceLayout,
   WorkspaceFileListing,
   WorkspaceGitStatus,
+  WorktreeDiff,
   WorktreeStatus,
 } from "../../types";
 
@@ -248,6 +249,22 @@ export interface IpcCommandContract {
     args: { workspaceId: string; terminalId: string; deleteBranch: boolean };
     result: void;
   };
+  worktreeDiff: {
+    args: { workspaceId: string; terminalId: string };
+    result: WorktreeDiff;
+  };
+  worktreeCommit: {
+    args: { workspaceId: string; terminalId: string; message: string };
+    result: WorktreeStatus;
+  };
+  worktreeMerge: {
+    args: { workspaceId: string; terminalId: string };
+    result: WorktreeStatus;
+  };
+  worktreeOpenPr: {
+    args: { workspaceId: string; terminalId: string; title: string; body: string };
+    result: string;
+  };
   voiceToggleRecording: {
     args: undefined;
     result: void;
@@ -342,6 +359,10 @@ const IPC_COMMANDS = {
   mcpAgentStatuses: "mcp_agent_statuses",
   worktreeStatus: "worktree_status",
   worktreeRemove: "worktree_remove",
+  worktreeDiff: "worktree_diff",
+  worktreeCommit: "worktree_commit",
+  worktreeMerge: "worktree_merge",
+  worktreeOpenPr: "worktree_open_pr",
   voiceToggleRecording: "voice_toggle_recording",
   voiceSetLanguage: "voice_set_language",
   voiceMicAvailable: "voice_mic_available",

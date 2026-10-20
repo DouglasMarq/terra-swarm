@@ -11,10 +11,12 @@ export interface WorktreeCloseDialogProps {
   onKeep: () => void;
   onDelete: (deleteBranch: boolean) => void;
   onCancel: () => void;
+  /** Open the review of the worktree instead of closing. */
+  onReview?: () => void;
 }
 
 /** Closing an isolated agent whose work is not merged anywhere yet. */
-export function WorktreeCloseDialog({ target, onKeep, onDelete, onCancel }: WorktreeCloseDialogProps) {
+export function WorktreeCloseDialog({ target, onKeep, onDelete, onCancel, onReview }: WorktreeCloseDialogProps) {
   const [deleteBranch, setDeleteBranch] = useState(false);
   const status = target?.status;
   return (
@@ -50,6 +52,11 @@ export function WorktreeCloseDialog({ target, onKeep, onDelete, onCancel }: Work
         <Button onClick={onCancel} type="button" variant="ghost">
           {t("common.cancel")}
         </Button>
+        {onReview ? (
+          <Button onClick={onReview} type="button" variant="ghost">
+            {t("review.open")}
+          </Button>
+        ) : null}
         <Button onClick={onKeep} type="button">
           {t("dialogs.worktree.keep")}
         </Button>

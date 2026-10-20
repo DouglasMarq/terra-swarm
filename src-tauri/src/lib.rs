@@ -1,4 +1,5 @@
 mod fonts;
+mod mcp;
 mod pty;
 mod scrollback;
 mod voice;

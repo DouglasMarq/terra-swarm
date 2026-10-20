@@ -306,3 +306,146 @@
 .terra-task-log-author {
   color: var(--terra-text);
 }
+
+/* Kanban board surface */
+.terra-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.terra-board-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 520px;
+}
+
+.terra-board-notice {
+  margin: 0;
+  color: var(--terra-green);
+  font-size: var(--terra-font-size-label);
+}
+
+.terra-board-body {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+}
+
+.terra-board-columns {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(5, minmax(220px, 1fr));
+  gap: 10px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.terra-board-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-lg);
+  background: var(--terra-bg-panel);
+  transition: border-color var(--terra-duration-hover) ease;
+}
+
+.terra-board-column[data-over="true"],
+.terra-board-agent[data-over="true"] {
+  border-color: var(--terra-accent);
+  background: var(--terra-accent-soft);
+}
+
+.terra-board-column-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: 2px 4px;
+  color: var(--terra-text-secondary);
+  font-size: var(--terra-font-size-label);
+  font-weight: 600;
+}
+
+.terra-board-card {
+  list-style: none;
+  border-radius: var(--terra-radius-md);
+  cursor: grab;
+  touch-action: none;
+}
+
+.terra-board-card[data-dragging="true"] {
+  opacity: 0.35;
+}
+
+.terra-board-card[data-over="true"] {
+  box-shadow: 0 -2px 0 var(--terra-accent);
+}
+
+.terra-board-ghost {
+  cursor: grabbing;
+  box-shadow: var(--terra-shadow-dropdown);
+}
+
+.terra-board-agents {
+  display: flex;
+  flex: 0 0 200px;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.terra-board-agents h3 {
+  margin: 0;
+  color: var(--terra-text-secondary);
+  font-size: var(--terra-font-size-label);
+}
+
+.terra-board-agents ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.terra-board-agent {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  border: 1px dashed var(--terra-border-strong);
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text);
+  font-size: var(--terra-font-size-label);
+}
+
+.terra-board-agent-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .terra-board-body {
+    flex-direction: column;
+  }
+
+  .terra-board-agents {
+    flex-basis: auto;
+  }
+}

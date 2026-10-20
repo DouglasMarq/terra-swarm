@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { ChevronsRight, LayoutGrid, List, Settings2 } from "lucide-react";
+import { ChevronsRight, SquareKanban, LayoutGrid, List, Settings2 } from "lucide-react";
 import type { ShellSurface } from "../../stores/shellStore";
 import { useT } from "../../i18n";
 import "./sidebar.css";
 
-type SidebarSurface = Extract<ShellSurface, "workbench" | "fleet">;
+type SidebarSurface = Extract<ShellSurface, "workbench" | "fleet" | "board">;
 
 interface SurfaceSwitchProps {
   surface: ShellSurface;
@@ -18,7 +18,7 @@ function AttentionCount({ count }: { count: number }) {
   return <span className="terra-sidebar-count" aria-label={t("shell.attention.button", { count })}>{count}</span>;
 }
 
-/** Workbench | Frota. The two places work happens. */
+/** Workbench | Frota | Quadro. The places work happens. */
 export function SurfaceSwitch({ surface, attentionCount, onNavigate }: SurfaceSwitchProps) {
   const t = useT();
   return (
@@ -39,6 +39,14 @@ export function SurfaceSwitch({ surface, attentionCount, onNavigate }: SurfaceSw
       >
         {t("common.fleet")}
         <AttentionCount count={attentionCount} />
+      </button>
+      <button
+        type="button"
+        aria-pressed={surface === "board"}
+        data-active={surface === "board"}
+        onClick={() => onNavigate("board")}
+      >
+        {t("common.board")}
       </button>
     </div>
   );
@@ -149,6 +157,16 @@ export function CollapsedSidebar({
       >
         <List size={16} aria-hidden="true" />
         {attentionCount > 0 ? <span className="terra-rail-badge" aria-hidden="true">{attentionCount}</span> : null}
+      </button>
+      <button
+        type="button"
+        className="terra-rail-button"
+        aria-label={t("common.board")}
+        title={t("common.board")}
+        data-active={surface === "board"}
+        onClick={() => onNavigate("board")}
+      >
+        <SquareKanban size={16} aria-hidden="true" />
       </button>
       <span className="terra-rail-divider" aria-hidden="true" />
       <div className="terra-rail-projects">

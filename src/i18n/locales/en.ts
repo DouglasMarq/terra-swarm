@@ -9,6 +9,7 @@ export const en = {
     settings: "Settings",
     workbench: "Workbench",
     fleet: "Fleet",
+    board: "Board",
     appName: "Terra Swarm",
   },
   status: {
@@ -409,6 +410,8 @@ export const en = {
     goWorkbenchDesc: "Open the workspace and its terminals",
     openFleet: "Open the Fleet",
     openFleetDesc: "See every agent and its state",
+    openBoard: "Open the Board",
+    openBoardDesc: "The Kanban of the active project's tasks",
     openSettings: "Open Settings",
     openSettingsDesc: "Preferences, features and shortcuts",
     openGroup: "Open group {name}",
@@ -747,6 +750,15 @@ export const en = {
       medium: "Medium",
       high: "High",
       urgent: "Urgent",
+    },
+    board: {
+      label: "Board of {name}",
+      agents: "Agents",
+      agentsHint: "Drop a card on an agent to hand it the task.",
+      noAgents: "No running agents in this project.",
+      handedOff: "{id} sent to {agent}",
+      handoffFailed: "Could not send {id} to {agent}",
+      prompt: "Task {id} on the Terra board is yours: \"{title}\". It is already assigned to you and in progress: read it with the get_task tool, do the work, then hand it in with complete_task and a short summary.",
     },
     agentState: {
       working: "working",

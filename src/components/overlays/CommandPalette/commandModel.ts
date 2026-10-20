@@ -4,7 +4,7 @@ import { agentLabelText } from "../../../domain/agentLabels";
 
 export type CommandGroupId = "recent" | "navigation" | "create" | "agent" | "settings";
 
-export type CommandRoute = "workbench" | "fleet" | "settings";
+export type CommandRoute = "workbench" | "fleet" | "board" | "settings";
 
 export type FocusedAgentAction =
   | "resume"
@@ -89,6 +89,7 @@ export type CommandIconName =
   | "home"
   | "workbench"
   | "fleet"
+  | "board"
   | "settings"
   | "folder"
   | "group"
@@ -305,6 +306,15 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       keywords: ["fleet", "frota", "agentes", "status"],
       icon: "fleet",
       intent: { kind: "navigate", route: "fleet" },
+    }),
+    command({
+      id: "navigate:board",
+      label: t("palette.openBoard"),
+      description: t("palette.openBoardDesc"),
+      group: "navigation",
+      keywords: ["board", "kanban", "quadro", "tarefas", "tasks"],
+      icon: "board",
+      intent: { kind: "navigate", route: "board" },
     }),
     command({
       id: "navigate:settings",

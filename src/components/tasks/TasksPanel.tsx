@@ -180,7 +180,7 @@ export interface TaskCardProps {
   onDelete: () => void;
 }
 
-function TaskCard({ task, agents, agentLabel, status, onChange, onDelete }: TaskCardProps) {
+export function TaskCard({ task, agents, agentLabel, status, onChange, onDelete }: TaskCardProps) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const author = (id: string) => (id === "user" ? t("tasks.you") : agentLabel(id));

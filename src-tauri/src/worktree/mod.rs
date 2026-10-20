@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::scrollback::is_plain_path_component;
+use crate::sync::LockExt;
 
 pub mod review;
 
@@ -249,7 +250,7 @@ fn recorded(
     workspace_id: &str,
     terminal_id: &str,
 ) -> Result<WorktreeInfo, String> {
-    let store = store.lock().map_err(|error| error.to_string())?;
+    let store = store.lock_or_recover();
     store
         .workspace(workspace_id)?
         .terminals

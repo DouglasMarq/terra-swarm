@@ -36,24 +36,25 @@ export function makeTask(id: string, extra: Partial<McpTask> = {}): McpTask {
     created_by: "t-1",
     priority: "medium",
     labels: [],
+    position: 1,
     depends_on: [],
+    blocked_by: [],
     created_at: 1,
     updated_at: 1,
-    notes: [],
     ...extra,
   };
 }
 
 describe("groupTasksByStatus", () => {
-  it("buckets by status and sorts by priority, then id", () => {
+  it("buckets by status and sorts by priority, then position", () => {
     const groups = groupTasksByStatus([
-      makeTask("T-10"),
-      makeTask("T-2"),
+      makeTask("T-10", { position: 1 }),
+      makeTask("T-2", { position: 2 }),
       makeTask("T-3", { priority: "urgent" }),
       makeTask("T-4", { status: "done" }),
       makeTask("T-5", { status: "in_progress", priority: "low" }),
     ]);
-    expect(groups.todo.map((task) => task.id)).toEqual(["T-3", "T-2", "T-10"]);
+    expect(groups.todo.map((task) => task.id)).toEqual(["T-3", "T-10", "T-2"]);
     expect(groups.done.map((task) => task.id)).toEqual(["T-4"]);
     expect(groups.in_progress.map((task) => task.id)).toEqual(["T-5"]);
     expect(groups.review).toEqual([]);
@@ -118,7 +119,9 @@ describe("mcp store", () => {
   });
 
   it("toggles the server setting", async () => {
-    api.mcpSetEnabled.mockResolvedValue({ enabled: false, running: true, url: "http://127.0.0.1:1/mcp", port: 1 });
+    api.mcpSetEnabled.mockResolvedValue({
+      enabled: false, available: true, running: true, url: "http://127.0.0.1:1/mcp", port: 1, db_path: "/tmp/mcp.db", error: null,
+    });
     await useMcpStore.getState().setEnabled(false);
     expect(api.mcpSetEnabled).toHaveBeenCalledWith(false);
     expect(useMcpStore.getState().server?.enabled).toBe(false);

@@ -7,7 +7,7 @@ import {
   TASK_STATUS_ORDER,
   useMcpStore,
 } from "../../stores/mcpStore";
-import type { McpAgentStatus, McpTask, McpTaskPatch } from "../../types";
+import type { McpAgentStatus, McpTask, McpTaskEvent, McpTaskPatch, McpTaskStatus } from "../../types";
 import "./tasks.css";
 
 export interface TaskAgentOption {
@@ -74,7 +74,11 @@ export function TasksPanel({ workspaceId, workspaceName, agents }: TasksPanelPro
 
   return (
     <div className="terra-tasks" aria-label={t("tasks.label", { name: workspaceName ?? workspaceId })}>
-      {server && !server.enabled ? <p className="terra-tasks-notice">{t("tasks.serverOff")}</p> : null}
+      {server && !server.available ? (
+        <p className="terra-tasks-notice">{t("tasks.serverUnavailable")}</p>
+      ) : server && !server.enabled ? (
+        <p className="terra-tasks-notice">{t("tasks.serverOff")}</p>
+      ) : null}
       {error ? (
         <p className="terra-tasks-error" role="alert">
           {error}
@@ -134,6 +138,38 @@ export function TasksPanel({ workspaceId, workspaceName, agents }: TasksPanelPro
   );
 }
 
+function statusLabel(value: string, t: ReturnType<typeof useT>): string {
+  return (TASK_STATUS_ORDER as readonly string[]).includes(value)
+    ? t(`tasks.status.${value as McpTaskStatus}`)
+    : value;
+}
+
+/** One history line, in the reader's language. */
+export function describeEvent(
+  event: McpTaskEvent,
+  t: ReturnType<typeof useT>,
+  agentLabel: (terminalId: string) => string,
+): string {
+  switch (event.kind) {
+    case "created":
+      return t("tasks.event.created");
+    case "claimed":
+      return t("tasks.event.claimed");
+    case "status": {
+      const [from = "", to = ""] = event.body.split("→").map((part) => part.trim());
+      return t("tasks.event.status", { from: statusLabel(from, t), to: statusLabel(to, t) });
+    }
+    case "assigned":
+      return event.body
+        ? t("tasks.event.assigned", { who: event.body === "user" ? t("tasks.you") : agentLabel(event.body) })
+        : t("tasks.event.unassigned");
+    case "completed":
+      return t("tasks.event.completed", { summary: event.body });
+    default:
+      return event.body;
+  }
+}
+
 export interface TaskCardProps {
   task: McpTask;
   agents: readonly TaskAgentOption[];
@@ -166,6 +202,9 @@ export function TaskCard({ task, agents, agentLabel, status, onChange, onDelete 
             {agentLabel(task.assignee)}
             {status ? <span className="terra-task-state">· {t(`tasks.agentState.${status.state}`)}</span> : null}
           </span>
+        ) : null}
+        {task.blocked_by.length > 0 ? (
+          <span className="terra-task-chip" data-blocked="true">{t("tasks.blockedBy", { ids: task.blocked_by.join(", ") })}</span>
         ) : null}
         {task.labels.map((label) => (
           <span className="terra-task-chip" key={label}>{label}</span>
@@ -224,11 +263,12 @@ export function TaskCard({ task, agents, agentLabel, status, onChange, onDelete 
               </>
             ) : null}
           </dl>
-          {task.notes.length > 0 ? (
+          {task.events && task.events.length > 0 ? (
             <ol className="terra-task-log" aria-label={t("tasks.log")}>
-              {task.notes.slice(-8).map((note, index) => (
-                <li key={`${note.created_at}-${index}`}>
-                  <span className="terra-task-log-author">{author(note.author)}</span> {note.body}
+              {task.events.map((event, index) => (
+                <li key={`${event.created_at}-${index}`}>
+                  <span className="terra-task-log-author">{author(event.actor)}</span>{" "}
+                  {describeEvent(event, t, agentLabel)}
                 </li>
               ))}
             </ol>

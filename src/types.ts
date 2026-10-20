@@ -377,8 +377,11 @@ export type McpTaskStatus = "todo" | "in_progress" | "review" | "done" | "blocke
 export type McpTaskPriority = "low" | "medium" | "high" | "urgent";
 export type McpAgentState = "working" | "idle" | "needs_input" | "blocked";
 
-export interface McpTaskNote {
-  author: string;
+export type McpTaskEventKind = "created" | "claimed" | "status" | "assigned" | "note" | "completed";
+
+export interface McpTaskEvent {
+  actor: string;
+  kind: McpTaskEventKind;
   body: string;
   created_at: number;
 }
@@ -395,10 +398,15 @@ export interface McpTask {
   created_by: string;
   priority: McpTaskPriority;
   labels: string[];
+  /** Order inside its status column. */
+  position: number;
   depends_on: string[];
+  /** Dependencies that are not done yet. */
+  blocked_by: string[];
   created_at: number;
   updated_at: number;
-  notes: McpTaskNote[];
+  /** Latest history entries, oldest first. */
+  events?: McpTaskEvent[];
 }
 
 export interface McpTaskPatch {
@@ -408,11 +416,12 @@ export interface McpTaskPatch {
   priority?: McpTaskPriority;
   /** `null` unassigns the task. */
   assignee?: string | null;
+  position?: number;
   note?: string;
 }
 
 export interface McpMessage {
-  id: string;
+  id: number;
   workspace_id: string;
   from: string;
   to: string;
@@ -430,8 +439,13 @@ export interface McpAgentStatus {
 }
 
 export interface McpServerInfo {
+  /** The "Expose Terra MCP to agents" preference. */
   enabled: boolean;
+  /** False when mcp.db could not be opened or migrated. */
+  available: boolean;
   running: boolean;
   url: string | null;
   port: number | null;
+  db_path: string | null;
+  error: string | null;
 }

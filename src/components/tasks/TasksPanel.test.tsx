@@ -3,7 +3,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { McpTask } from "../../types";
+import type { McpServerInfo, McpTask } from "../../types";
 
 const api = vi.hoisted(() => ({
   mcpServerInfo: vi.fn(),
@@ -34,12 +34,17 @@ function task(id: string, extra: Partial<McpTask> = {}): McpTask {
     created_by: "t-1",
     priority: "medium",
     labels: [],
+    position: 1,
     depends_on: [],
+    blocked_by: [],
     created_at: 1,
     updated_at: 1,
-    notes: [],
     ...extra,
   };
+}
+
+function info(extra: Partial<McpServerInfo> = {}): McpServerInfo {
+  return { enabled: true, available: true, running: true, url: "http://127.0.0.1:9/mcp", port: 9, db_path: "/tmp/mcp.db", error: null, ...extra };
 }
 
 const agents = [
@@ -50,7 +55,7 @@ const agents = [
 describe("TasksPanel", () => {
   beforeEach(() => {
     for (const fn of Object.values(api)) fn.mockReset();
-    api.mcpServerInfo.mockResolvedValue({ enabled: true, running: true, url: "http://127.0.0.1:9/mcp", port: 9 });
+    api.mcpServerInfo.mockResolvedValue(info());
     api.mcpAgentStatuses.mockResolvedValue([
       { terminal_id: "t-2", workspace_id: "ws-1", state: "working", summary: "on it", updated_at: 1 },
     ]);
@@ -112,23 +117,46 @@ describe("TasksPanel", () => {
       task("T-1", {
         description: "Parse the config",
         depends_on: ["T-0"],
-        notes: [{ author: "t-2", body: "claimed the task", created_at: 2 }],
+        blocked_by: ["T-0"],
+        events: [
+          { actor: "user", kind: "created", body: "", created_at: 1 },
+          { actor: "t-2", kind: "status", body: "todo → blocked", created_at: 2 },
+          { actor: "user", kind: "assigned", body: "t-1", created_at: 3 },
+          { actor: "t-2", kind: "note", body: "waiting on the lexer", created_at: 4 },
+          { actor: "t-2", kind: "completed", body: "parser done", created_at: 5 },
+        ],
       }),
     ]);
     render(<TasksPanel workspaceId="ws-1" agents={agents} />);
     await user.click(await screen.findByRole("button", { name: /Task T-1/ }));
     expect(screen.getByText("Parse the config")).toBeInTheDocument();
     expect(screen.getByText("T-0")).toBeInTheDocument();
-    expect(screen.getByRole("list", { name: "Progresso" })).toHaveTextContent("Lyra claimed the task");
+    expect(screen.getByText("Aguardando T-0")).toBeInTheDocument();
+    const history = within(screen.getByRole("list", { name: "Histórico" })).getAllByRole("listitem");
+    expect(history.map((item) => item.textContent)).toEqual([
+      "você criou a tarefa",
+      "Lyra moveu de A fazer para Bloqueada",
+      "você atribuiu a Vega",
+      "Lyra waiting on the lexer",
+      "Lyra entregou: parser done",
+    ]);
   });
 
   it("warns when the server is off and handles no project", async () => {
-    api.mcpServerInfo.mockResolvedValue({ enabled: false, running: true, url: null, port: null });
+    api.mcpServerInfo.mockResolvedValue(info({ enabled: false }));
     api.mcpListTasks.mockResolvedValue([]);
     const { rerender } = render(<TasksPanel workspaceId="ws-1" agents={[]} />);
     expect(await screen.findByText(/coordenação de agentes está desligada/)).toBeInTheDocument();
     expect(await screen.findByText(/Nenhuma tarefa ainda/)).toBeInTheDocument();
     rerender(<TasksPanel workspaceId={null} agents={[]} />);
     expect(screen.getByText("Abra um projeto para ver as tarefas dele.")).toBeInTheDocument();
+  });
+
+  it("explains when the database could not be opened", async () => {
+    api.mcpServerInfo.mockResolvedValue(info({ available: false, enabled: false, error: "migration 1 failed" }));
+    api.mcpListTasks.mockRejectedValue("the Terra MCP database is unavailable: migration 1 failed");
+    render(<TasksPanel workspaceId="ws-1" agents={[]} />);
+    expect(await screen.findByText(/banco da coordenação/)).toBeInTheDocument();
+    expect(screen.queryByText(/está desligada/)).not.toBeInTheDocument();
   });
 });

@@ -353,7 +353,6 @@ export function TerminalPane(props: Props) {
     const term = getTerminal(id);
     if (!term) return;
     term.options.fontFamily = fontFamily;
-    // A new family changes the cell size: refit so cols/rows follow.
     fitRef.current?.();
   }, [fontFamily, id]);
 

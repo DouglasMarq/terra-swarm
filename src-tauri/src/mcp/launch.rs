@@ -273,7 +273,7 @@ mod tests {
         drop(launch);
         assert!(hub.identify(&env[ENV_TOKEN]).is_none());
 
-        hub.store().set_enabled(false).unwrap();
+        hub.repo().unwrap().set_enabled(false).unwrap();
         assert!(hub.launch("t-1", "ws-1", "claude", Quoting::Posix).is_none());
     }
 }

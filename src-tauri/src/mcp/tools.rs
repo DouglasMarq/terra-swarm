@@ -4,7 +4,7 @@
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use super::store::{
+use super::repo::{
     AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus,
 };
 use super::{AgentIdentity, McpHub};
@@ -68,9 +68,11 @@ pub fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "list_tasks",
             title: "List tasks",
-            description: "Lists the tasks on this project's shared board, oldest first. Filter by \
-                `status` and/or `assignee` (a terminal id, or \"me\" for your own tasks). Each \
-                entry is a summary; use `get_task` for the description and progress log.",
+            description: "Lists the tasks on this project's shared board: active work first, then by \
+                priority and board position. Filter by `status` and/or `assignee` (a terminal id, \
+                or \"me\" for your own tasks). `blocked_by` lists unfinished dependencies: such a \
+                task can't be claimed yet. Each entry is a summary; use `get_task` for the \
+                description and history.",
             read_only: true,
             schema: json!({
                 "type": "object",
@@ -83,8 +85,8 @@ pub fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "get_task",
             title: "Get task",
-            description: "Returns one task with its full description, dependencies and progress \
-                log (`notes`).",
+            description: "Returns one task with its full description, dependencies and its latest \
+                history `events` (created, claimed, status, assigned, note, completed).",
             read_only: true,
             schema: json!({
                 "type": "object",
@@ -114,9 +116,10 @@ pub fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "claim_task",
             title: "Claim task",
-            description: "Assigns a task to you and moves it to `in_progress`. Claim before you \
-                start working on a task. Atomic: if another agent already claimed it, or a \
-                dependency is not done yet, this fails and you should pick something else.",
+            description: "Assigns a `todo` task to you and moves it to `in_progress`. Claim before \
+                you start working on a task. Atomic: if another agent already claimed it, it is \
+                not in `todo`, or a dependency is not done yet, this fails and you should pick \
+                something else.",
             read_only: false,
             schema: json!({
                 "type": "object",
@@ -127,7 +130,7 @@ pub fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "update_task",
             title: "Update task",
-            description: "Changes a task's status and/or appends a line to its progress log. Use \
+            description: "Changes a task's status and/or adds a note to its history. Use \
                 `status: \"blocked\"` with a `note` explaining what you are waiting for. To hand \
                 work in, prefer `complete_task`.",
             read_only: false,
@@ -176,13 +179,16 @@ pub fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "read_inbox",
             title: "Read inbox",
-            description: "Returns messages sent to you or to \"all\", oldest first, and marks them \
-                as read. By default only unread messages are returned; pass `unread_only: false` \
-                to see the history too.",
+            description: "Returns messages sent to you or to \"all\", oldest first (at most \
+                `limit`, default 50), and marks them as read. By default only unread messages \
+                are returned; pass `unread_only: false` to see the history too.",
             read_only: false,
             schema: json!({
                 "type": "object",
-                "properties": { "unread_only": { "type": "boolean", "default": true } }
+                "properties": {
+                    "unread_only": { "type": "boolean", "default": true },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }
+                }
             }),
         },
         ToolDef {
@@ -205,13 +211,16 @@ pub fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "search_notes",
             title: "Search notes",
-            description: "Searches the project's shared notes by key and text (case-insensitive; \
-                every word must match), newest first, at most 50. An empty query lists the most \
-                recent notes.",
+            description: "Full-text search over the project's shared notes (key and text). Every \
+                word must match, as a prefix, ignoring case and accents; best matches first, at \
+                most `limit` (default 20). An empty query lists the most recently updated notes.",
             read_only: true,
             schema: json!({
                 "type": "object",
-                "properties": { "query": { "type": "string" } },
+                "properties": {
+                    "query": { "type": "string" },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 200, "default": 20 }
+                },
                 "required": ["query"]
             }),
         },
@@ -260,9 +269,10 @@ fn task_summary(task: &Task) -> Value {
         "assignee": task.assignee,
         "priority": task.priority,
         "labels": task.labels,
+        "position": task.position,
         "depends_on": task.depends_on,
+        "blocked_by": task.blocked_by,
         "updated_at": task.updated_at,
-        "notes_count": task.notes.len(),
     })
 }
 
@@ -310,6 +320,7 @@ struct SendMessageArgs {
 #[derive(Deserialize)]
 struct ReadInboxArgs {
     unread_only: Option<bool>,
+    limit: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -322,6 +333,7 @@ struct AddNoteArgs {
 struct SearchNotesArgs {
     #[serde(default)]
     query: String,
+    limit: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -339,13 +351,13 @@ pub fn call(hub: &McpHub, who: &AgentIdentity, name: &str, args: Value) -> Resul
     match name {
         "whoami" => {
             let workspace = hub.workspace(ws);
-            let store = hub.store();
+            let repo = hub.repo()?;
             let peers: Vec<Value> = hub
                 .peers(ws)
                 .into_iter()
                 .filter(|peer| peer.terminal_id != me)
                 .map(|peer| {
-                    let status = store.status_of(&peer.terminal_id);
+                    let status = repo.status_of(&peer.terminal_id);
                     json!({
                         "terminal_id": peer.terminal_id,
                         "agent": peer.agent,
@@ -355,14 +367,14 @@ pub fn call(hub: &McpHub, who: &AgentIdentity, name: &str, args: Value) -> Resul
                     })
                 })
                 .collect();
-            let mine = store.list_tasks(ws, None, Some(me))?;
+            let mine = repo.list_tasks(ws, None, Some(me), None)?;
             Ok(json!({
                 "terminal_id": me,
                 "agent": who.agent,
                 "workspace_id": ws,
                 "workspace_name": workspace.as_ref().map(|info| info.name.clone()),
                 "workspace_cwd": workspace.as_ref().map(|info| info.cwd.clone()),
-                "unread_messages": store.unread_count(ws, me)?,
+                "unread_messages": repo.unread_count(ws, me)?,
                 "my_open_tasks": mine
                     .iter()
                     .filter(|task| task.status != TaskStatus::Done)
@@ -379,14 +391,14 @@ pub fn call(hub: &McpHub, who: &AgentIdentity, name: &str, args: Value) -> Resul
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
                 .map(|value| if value == "me" { me.to_string() } else { value });
-            let tasks = hub.store().list_tasks(ws, status, assignee.as_deref())?;
+            let tasks = hub.repo()?.list_tasks(ws, status, assignee.as_deref(), None)?;
             Ok(json!({
                 "tasks": tasks.iter().map(task_summary).collect::<Vec<_>>(),
             }))
         }
         "get_task" => {
             let args: IdArgs = parse(args)?;
-            Ok(json!(hub.store().get_task(ws, &args.id)?))
+            Ok(json!(hub.repo()?.get_task(ws, &args.id)?))
         }
         "create_task" => {
             let args: CreateTaskArgs = parse(args)?;
@@ -401,7 +413,7 @@ pub fn call(hub: &McpHub, who: &AgentIdentity, name: &str, args: Value) -> Resul
                     })
                 })
                 .transpose()?;
-            let task = hub.store().create_task(
+            let task = hub.repo()?.create_task(
                 ws,
                 me,
                 NewTask {
@@ -418,7 +430,7 @@ pub fn call(hub: &McpHub, who: &AgentIdentity, name: &str, args: Value) -> Resul
         }
         "claim_task" => {
             let args: IdArgs = parse(args)?;
-            let task = hub.store().claim_task(ws, &args.id, me)?;
+            let task = hub.repo()?.claim_task(ws, &args.id, me)?;
             hub.emit_tasks_changed(ws);
             Ok(json!(task))
         }
@@ -430,7 +442,7 @@ pub fn call(hub: &McpHub, who: &AgentIdentity, name: &str, args: Value) -> Resul
                     "pass a status, a note, or both".into(),
                 ));
             }
-            let task = hub.store().update_task(
+            let task = hub.repo()?.update_task(
                 ws,
                 &args.id,
                 me,
@@ -445,7 +457,7 @@ pub fn call(hub: &McpHub, who: &AgentIdentity, name: &str, args: Value) -> Resul
         }
         "complete_task" => {
             let args: CompleteTaskArgs = parse(args)?;
-            let task = hub.store().complete_task(ws, &args.id, me, &args.summary)?;
+            let task = hub.repo()?.complete_task(ws, &args.id, me, &args.summary)?;
             hub.emit_tasks_changed(ws);
             Ok(json!(task))
         }
@@ -457,32 +469,35 @@ pub fn call(hub: &McpHub, who: &AgentIdentity, name: &str, args: Value) -> Resul
                     "you cannot send a message to yourself".into(),
                 ));
             }
-            if to != "all" && !hub.peers(ws).iter().any(|peer| peer.terminal_id == to) {
+            let known = to == "all"
+                || hub.peers(ws).iter().any(|peer| peer.terminal_id == to)
+                || hub.workspace_terminals(ws).iter().any(|id| id == to);
+            if !known {
                 return Err(ToolError::InvalidArguments(format!(
-                    "`{}` is not a connected agent in this project; use a terminal id from \
-                     `whoami` or \"all\"",
+                    "`{}` is not a terminal of this project; use a terminal id from `whoami` \
+                     or \"all\"",
                     to
                 )));
             }
-            let message = hub.store().send_message(ws, me, to, &args.body)?;
+            let message = hub.repo()?.send_message(ws, me, to, &args.body)?;
             hub.emit_message(&message);
             Ok(json!(message))
         }
         "read_inbox" => {
             let args: ReadInboxArgs = parse(args)?;
             let messages = hub
-                .store()
-                .read_inbox(ws, me, args.unread_only.unwrap_or(true))?;
+                .repo()?
+                .read_inbox(ws, me, args.unread_only.unwrap_or(true), args.limit)?;
             Ok(json!({ "messages": messages }))
         }
         "add_note" => {
             let args: AddNoteArgs = parse(args)?;
-            let note = hub.store().add_note(ws, me, &args.body, args.key.as_deref())?;
+            let note = hub.repo()?.add_note(ws, me, &args.body, args.key.as_deref())?;
             Ok(json!(note))
         }
         "search_notes" => {
             let args: SearchNotesArgs = parse(args)?;
-            Ok(json!({ "notes": hub.store().search_notes(ws, &args.query)? }))
+            Ok(json!({ "notes": hub.repo()?.search_notes(ws, &args.query, args.limit)? }))
         }
         "report_status" => {
             let args: ReportStatusArgs = parse(args)?;
@@ -492,7 +507,7 @@ pub fn call(hub: &McpHub, who: &AgentIdentity, name: &str, args: Value) -> Resul
                     STATE_VALUES.join(", ")
                 ))
             })?;
-            let status = hub.store().report_status(ws, me, state, &args.summary)?;
+            let status = hub.repo()?.report_status(ws, me, state, &args.summary)?;
             hub.emit_agent_status(&status);
             Ok(json!(status))
         }
@@ -561,6 +576,17 @@ mod tests {
         let done = call(&hub, &helper, "complete_task", json!({ "id": "T-1", "summary": "form + tests" })).unwrap();
         assert_eq!(done["status"], "review");
 
+        let full = call(&hub, &lead, "get_task", json!({ "id": "1" })).unwrap();
+        let kinds: Vec<&str> = full["events"].as_array().unwrap().iter().map(|e| e["kind"].as_str().unwrap()).collect();
+        assert_eq!(kinds, vec!["created", "claimed", "completed"]);
+
+        // A dependent task shows what it waits on and can't be claimed yet.
+        call(&hub, &lead, "create_task", json!({ "title": "Ship", "depends_on": ["T-1"] })).unwrap();
+        let listed = call(&hub, &lead, "list_tasks", json!({ "status": "todo" })).unwrap();
+        assert_eq!(listed["tasks"][0]["blocked_by"], json!(["T-1"]));
+        assert!(listed["tasks"][0].get("events").is_none());
+        assert!(call(&hub, &helper, "claim_task", json!({ "id": "T-2" })).is_err());
+
         let events = events.lock().unwrap();
         assert!(events.iter().filter(|(e, _)| e == EVENT_TASKS_CHANGED).count() >= 3);
         assert!(events.iter().any(|(e, p)| e == EVENT_MESSAGE && p["to"] == "t-2"));
@@ -627,5 +653,8 @@ mod tests {
         call(&hub, &one, "add_note", json!({ "body": "use sqlite", "key": "db" })).unwrap();
         let found = call(&hub, &two, "search_notes", json!({ "query": "db" })).unwrap();
         assert_eq!(found["notes"][0]["body"], "use sqlite");
+        call(&hub, &one, "add_note", json!({ "body": "second" })).unwrap();
+        let limited = call(&hub, &two, "search_notes", json!({ "query": "", "limit": 1 })).unwrap();
+        assert_eq!(limited["notes"].as_array().unwrap().len(), 1);
     }
 }

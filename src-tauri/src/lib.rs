@@ -38,28 +38,35 @@ pub fn run() {
             if let Err(error) = scrollback_store.cleanup_orphans(&known_terminals) {
                 eprintln!("failed to clean orphaned scrollback: {}", error);
             }
-            let mut mcp_store = mcp::store::McpStore::open(dir.join("mcp.sqlite"));
-            let known_workspaces = store
-                .workspaces
-                .iter()
-                .map(|workspace| workspace.id.clone())
-                .collect::<std::collections::HashSet<_>>();
-            // An empty list may mean the workspace store failed to load; keep
-            // the board rather than wiping it in that case.
-            if !known_workspaces.is_empty() {
-                if let Err(error) = mcp_store.retain_workspaces(&known_workspaces) {
-                    eprintln!("failed to clean orphaned MCP data: {}", error);
-                }
-            }
-            let hub = Arc::new(mcp::McpHub::new(
-                mcp_store,
+            let hub = Arc::new(mcp::McpHub::open(
+                dir.join(mcp::db::DB_FILE),
                 Some(dir.join("mcp")),
                 Box::new(mcp::TauriHost {
                     app: app.handle().clone(),
                 }),
             ));
-            if let Err(error) = mcp::server::start(Arc::clone(&hub)) {
-                eprintln!("failed to start the MCP server: {}", error);
+            let known_workspaces = store
+                .workspaces
+                .iter()
+                .map(|workspace| workspace.id.clone())
+                .collect::<std::collections::HashSet<_>>();
+            // Workspaces closed by an older build left their data behind. An
+            // empty list may mean the workspace store failed to load; keep
+            // the board rather than wiping it in that case.
+            if !known_workspaces.is_empty() {
+                if let Err(error) = hub
+                    .repo()
+                    .and_then(|mut repo| repo.retain_workspaces(&known_workspaces))
+                {
+                    eprintln!("failed to clean orphaned MCP data: {}", error);
+                }
+            }
+            // Without a database there is nothing to serve: the server stays
+            // off and Settings explains why.
+            if hub.available() {
+                if let Err(error) = mcp::server::start(Arc::clone(&hub)) {
+                    eprintln!("failed to start the MCP server: {}", error);
+                }
             }
             app.manage(hub);
             app.manage(Mutex::new(store));

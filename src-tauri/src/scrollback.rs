@@ -203,7 +203,7 @@ impl ScrollbackStore {
                 .modified()
                 .ok()
                 .and_then(|modified| now.duration_since(modified).ok())
-                .map_or(false, |elapsed| elapsed >= age);
+                .is_some_and(|elapsed| elapsed >= age);
             if old_enough && fs::remove_file(path).is_ok() {
                 removed += 1;
             }

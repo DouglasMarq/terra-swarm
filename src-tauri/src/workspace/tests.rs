@@ -442,6 +442,46 @@ fn corrupt_json_is_backed_up_without_being_overwritten() {
     cleanup(&path);
 }
 
+#[cfg(unix)]
+#[test]
+fn given_an_unreadable_store_keeps_the_file_and_does_not_save() {
+    use std::os::unix::fs::PermissionsExt;
+    let path = test_path("unreadable");
+    let original = serde_json::to_string(&vec![workspace("ws-kept")]).expect("store JSON");
+    fs::write(&path, &original).expect("store");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).expect("chmod");
+    if fs::read(&path).is_ok() {
+        // Permission bits do not stop a privileged user (root) from reading.
+        cleanup(&path);
+        return;
+    }
+
+    let mut store = WorkspaceStore::load(path.clone());
+    store.create("New".to_string(), "/Users/me/project".to_string());
+    store.save_now();
+
+    assert!(store.save_path.is_none());
+    assert!(!path.with_extension("json.bak").exists());
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).expect("chmod");
+    assert_eq!(fs::read_to_string(&path).expect("store"), original);
+    cleanup(&path);
+}
+
+#[test]
+fn given_a_store_that_is_not_utf8_backs_it_up_before_starting_fresh() {
+    let path = test_path("not-utf8");
+    fs::write(&path, [0xff, 0xfe, 0x00]).expect("store");
+
+    let store = WorkspaceStore::load(path.clone());
+
+    assert!(store.workspaces.is_empty());
+    assert_eq!(
+        fs::read(path.with_extension("json.bak")).expect("backup"),
+        vec![0xff, 0xfe, 0x00]
+    );
+    cleanup(&path);
+}
+
 #[test]
 fn reorder_workspaces_is_stable_and_ignores_unknown_or_duplicate_ids() {
     let first = workspace("ws-one");

@@ -291,10 +291,22 @@ pub(crate) fn save_channel() -> &'static Sender<SaveRequest> {
     })
 }
 
+/// Never silently wipe the user's data: keep an unusable store around for
+/// inspection instead of overwriting it.
+fn back_up_unusable_store(path: &Path) {
+    if let Err(error) = backup_store(path) {
+        eprintln!("failed to back up unusable workspaces store: {}", error);
+    }
+}
+
 impl WorkspaceStore {
+    /// Load the store at `path`. A missing file starts empty; a file that
+    /// cannot be decoded is backed up and replaced; a file that cannot be
+    /// read at all is left untouched and this session never saves over it.
     pub fn load(path: PathBuf) -> Self {
         let mut needs_migration = false;
         let mut needs_backup = false;
+        let mut save_path = Some(path.clone());
         let (workspaces, groups) = match std::fs::read_to_string(&path) {
             Ok(s) => match decode_workspace_file(&s) {
                 Ok(decoded) => {
@@ -303,27 +315,37 @@ impl WorkspaceStore {
                     (decoded.workspaces, decoded.groups)
                 }
                 Err(e) => {
-                    // Never silently wipe the user's data: keep the corrupt
-                    // file around for inspection instead of overwriting it.
                     eprintln!(
                         "workspaces store is corrupt ({}); backing up to .bak and starting fresh",
                         e
                     );
-                    if let Err(backup_error) = backup_store(&path) {
-                        eprintln!(
-                            "failed to back up corrupt workspaces store: {}",
-                            backup_error
-                        );
-                    }
+                    back_up_unusable_store(&path);
                     (Vec::new(), Vec::new())
                 }
             },
-            Err(_) => (Vec::new(), Vec::new()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (Vec::new(), Vec::new()),
+            Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {
+                eprintln!(
+                    "workspaces store is not UTF-8 ({}); backing up to .bak and starting fresh",
+                    error
+                );
+                back_up_unusable_store(&path);
+                (Vec::new(), Vec::new())
+            }
+            Err(error) => {
+                eprintln!(
+                    "cannot read the workspaces store {} ({}); leaving it untouched and not saving this session",
+                    path.display(),
+                    error
+                );
+                save_path = None;
+                (Vec::new(), Vec::new())
+            }
         };
         let mut store = Self {
             workspaces,
             groups,
-            save_path: Some(path),
+            save_path,
         };
 
         // Normalize loaded data before it can reach the UI or PTY layer.  If
@@ -368,12 +390,20 @@ impl WorkspaceStore {
 
     pub fn save(&self) {
         let Some(path) = &self.save_path else { return };
-        if let Ok(json) = self.serialized_snapshot() {
-            let _ = save_channel().send(SaveRequest {
-                path: path.clone(),
-                json,
-                seq: SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1,
-            });
+        let json = match self.serialized_snapshot() {
+            Ok(json) => json,
+            Err(error) => {
+                eprintln!("failed to serialize workspaces: {}", error);
+                return;
+            }
+        };
+        let request = SaveRequest {
+            path: path.clone(),
+            json,
+            seq: SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1,
+        };
+        if let Err(error) = save_channel().send(request) {
+            eprintln!("failed to queue a workspaces save: {}", error);
         }
     }
 

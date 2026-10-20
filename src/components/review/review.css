@@ -90,16 +90,16 @@
 
 .terra-review-change[data-change="added"],
 .terra-review-change[data-change="untracked"] {
-  color: var(--terra-green);
+  color: var(--terra-diff-add);
 }
 
 .terra-review-change[data-change="deleted"] {
-  color: var(--terra-red-ink);
+  color: var(--terra-diff-del);
 }
 
 .terra-review-change[data-change="modified"],
 .terra-review-change[data-change="renamed"] {
-  color: var(--terra-amber-ink);
+  color: var(--terra-diff-change);
 }
 
 .terra-review-path {
@@ -120,11 +120,11 @@
 }
 
 .terra-review-counts [data-kind="add"] {
-  color: var(--terra-green);
+  color: var(--terra-diff-add);
 }
 
 .terra-review-counts [data-kind="del"] {
-  color: var(--terra-red-ink);
+  color: var(--terra-diff-del);
 }
 
 .terra-review-diff table {
@@ -160,11 +160,11 @@
 }
 
 .terra-review-diff tr[data-kind="add"] {
-  background: var(--terra-green-dim);
+  background: var(--terra-diff-add-dim);
 }
 
 .terra-review-diff tr[data-kind="del"] {
-  background: var(--terra-red-dim);
+  background: var(--terra-diff-del-dim);
 }
 
 .terra-review-diff tr[data-kind="hunk"] .terra-review-code,
@@ -194,7 +194,7 @@
 }
 
 .terra-review-notice {
-  color: var(--terra-green);
+  color: var(--terra-success);
 }
 
 .terra-review-commit,

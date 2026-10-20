@@ -87,7 +87,7 @@
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  border: 1px solid rgb(224 180 92 / 35%);
+  border: 1px solid color-mix(in srgb, var(--terra-amber) 35%, transparent);
   border-radius: var(--terra-radius-xl);
   background: var(--terra-bg-panel);
   animation: terra-glow-amber 2.4s ease-in-out infinite;

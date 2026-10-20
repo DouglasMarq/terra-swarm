@@ -14,7 +14,7 @@
 }
 
 .label {
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   font-size: 12px;
   font-weight: 600;
 }
@@ -23,12 +23,12 @@
 .folderInput {
   width: 100%;
   min-height: 36px;
-  border: 1px solid var(--terra-border-strong, #34343c);
-  border-radius: var(--terra-radius-md, 6px);
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-md);
   padding: 8px 10px;
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   outline: 0;
-  background: var(--terra-bg, #111113);
+  background: var(--terra-bg);
   font: inherit;
   font-size: 13px;
   transition: border-color 140ms ease, box-shadow 140ms ease;
@@ -41,24 +41,24 @@
 
 .input:focus,
 .folderInput:focus {
-  border-color: var(--terra-border-focus, #71717a);
-  box-shadow: var(--terra-focus-ring, 0 0 0 3px rgb(113 113 122 / 18%));
+  border-color: var(--terra-border-focus);
+  box-shadow: var(--terra-focus-ring);
 }
 
 .input[data-invalid="true"] {
-  border-color: var(--terra-red, #e5636f);
+  border-color: var(--terra-red);
 }
 
 .hint,
 .error,
 .context {
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 11px;
   line-height: 1.5;
 }
 
 .error {
-  color: var(--terra-red, #e5636f);
+  color: var(--terra-red);
 }
 
 .folderRow {
@@ -75,10 +75,10 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid var(--terra-border, #26262c);
-  border-radius: var(--terra-radius-md, 6px);
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-md);
   padding: 9px 10px;
-  background: var(--terra-bg-elevated, #1d1d22);
+  background: var(--terra-bg-elevated);
 }
 
 .agentList {
@@ -95,11 +95,11 @@
   min-height: 52px;
   align-items: center;
   gap: 10px;
-  border: 1px solid var(--terra-border, #26262c);
-  border-radius: var(--terra-radius-md, 6px);
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-md);
   padding: 8px 10px;
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg, #111113);
+  color: var(--terra-text);
+  background: var(--terra-bg);
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -108,10 +108,10 @@
 
 .agentOption:hover:not(:disabled),
 .agentOption:focus-visible {
-  border-color: var(--terra-border-focus, #71717a);
-  background: var(--terra-bg-hover, #232329);
+  border-color: var(--terra-border-focus);
+  background: var(--terra-bg-hover);
   outline: 0;
-  box-shadow: var(--terra-focus-ring, 0 0 0 3px rgb(113 113 122 / 18%));
+  box-shadow: var(--terra-focus-ring);
 }
 
 .agentOption:active:not(:disabled) {
@@ -130,7 +130,7 @@
 }
 
 .agentMissing {
-  color: var(--terra-amber, #e0b45c);
+  color: var(--terra-amber);
   font-size: 10px;
 }
 
@@ -139,29 +139,29 @@
   align-items: flex-start;
   gap: 9px;
   padding: 14px 24px 2px;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 11px;
   line-height: 1.45;
 }
 
 .pickerDefaultHint {
   margin: 12px 24px 0;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 10px;
 }
 
 .pickerDefaultHint strong {
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   font-weight: 600;
 }
 
 .pickerDefault input {
   margin-top: 1px;
-  accent-color: var(--terra-accent, #fafafa);
+  accent-color: var(--terra-accent);
 }
 
 .renameIcon {
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
 }
 
 .resumeDialog {
@@ -272,28 +272,28 @@
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid transparent;
-  border-radius: var(--terra-radius-md, 6px);
-  color: var(--terra-text-muted, #8e8e96);
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text-muted);
   background: transparent;
   cursor: pointer;
 }
 
 .iconButton:hover,
 .iconButton:focus-visible {
-  border-color: var(--terra-border-strong, #34343c);
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-hover, #232329);
+  border-color: var(--terra-border-strong);
+  color: var(--terra-text);
+  background: var(--terra-bg-hover);
   outline: 0;
-  box-shadow: var(--terra-focus-ring, 0 0 0 3px rgb(113 113 122 / 18%));
+  box-shadow: var(--terra-focus-ring);
 }
 
 .iconButton[data-danger="true"] {
-  color: var(--terra-red, #e5636f);
+  color: var(--terra-danger);
 }
 
 .emptyAgents {
   padding: 8px 24px 2px;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 12px;
 }
 
@@ -311,7 +311,7 @@
 .pickerHint {
   display: block;
   margin-top: 2px;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 10.5px;
 }
 

@@ -33,8 +33,8 @@
 }
 
 @keyframes terra-pulse-green {
-  0% { box-shadow: 0 0 0 0 rgb(74 222 128 / 45%); }
-  70%, 100% { box-shadow: 0 0 0 6px rgb(74 222 128 / 0%); }
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--terra-green) 45%, transparent); }
+  70%, 100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--terra-green) 0%, transparent); }
 }
 
 @keyframes terra-breathe {
@@ -43,8 +43,8 @@
 }
 
 @keyframes terra-glow-amber {
-  0%, 100% { box-shadow: 0 0 0 0 rgb(224 180 92 / 0%); }
-  50% { box-shadow: 0 0 0 3px rgb(224 180 92 / 18%); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--terra-amber) 0%, transparent); }
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--terra-amber) 18%, transparent); }
 }
 
 @keyframes terra-wave {

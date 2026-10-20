@@ -23,7 +23,7 @@
 }
 
 .button:hover:not(:disabled) {
-  border-color: #40404a;
+  border-color: var(--terra-border-hover);
   background: var(--terra-bg-hover);
 }
 
@@ -49,8 +49,8 @@
 }
 
 .button[data-variant="primary"]:hover:not(:disabled) {
-  border-color: #d4d4d8;
-  background: #d4d4d8;
+  border-color: var(--terra-accent-soft);
+  background: var(--terra-accent-soft);
 }
 
 .button[data-variant="ghost"] {
@@ -66,14 +66,14 @@
 }
 
 .button[data-variant="danger"] {
-  border-color: rgb(229 99 111 / 35%);
-  color: var(--terra-red);
-  background: var(--terra-red-dim);
+  border-color: color-mix(in srgb, var(--terra-danger) 35%, transparent);
+  color: var(--terra-danger);
+  background: var(--terra-danger-dim);
 }
 
 .button[data-variant="danger"]:hover:not(:disabled) {
-  border-color: rgb(229 99 111 / 55%);
-  background: rgb(229 99 111 / 22%);
+  border-color: var(--terra-danger-line-strong);
+  background: color-mix(in srgb, var(--terra-danger) 22%, transparent);
 }
 
 .button[data-size="sm"] {

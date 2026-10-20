@@ -335,3 +335,13 @@
   font-size: 11px;
   list-style: none;
 }
+
+.pickerRole {
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text);
+  background: var(--terra-bg-elevated);
+  font-size: 12px;
+}

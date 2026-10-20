@@ -352,3 +352,8 @@ button.pane-worktree:hover:not(:disabled) {
 button.pane-worktree:disabled {
   cursor: default;
 }
+
+.pane-role {
+  flex: 0 0 auto;
+  color: var(--terra-accent);
+}

@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
 import type {
   AgentLaunchExtras,
+  AgentRole,
   ContextPayload,
   ExitPayload,
   NotificationPayload,
@@ -186,7 +187,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     workspaceId: string,
     command: string,
     placement?: { paneId: string; tabId?: string },
-    options: { worktree?: boolean } = {},
+    options: { worktree?: boolean; role?: AgentRole | null } = {},
   ) => {
     // Spawn at an existing pane's size when possible: otherwise the PTY starts
     // at 80x24 and the child draws its first frame at the wrong size (worst
@@ -195,7 +196,11 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
       .find((workspace) => workspace.id === workspaceId)
       ?.terminals.map((terminal) => getTerminal(terminal.id))
       .find((terminal) => terminal && terminal.cols > 0 && terminal.rows > 0);
-    const extras = { ...launchExtras(command), ...(options.worktree ? { worktree: true } : {}) };
+    const extras = {
+      ...launchExtras(command),
+      ...(options.worktree ? { worktree: true } : {}),
+      ...(options.role ? { role: options.role } : {}),
+    };
     const result = await api.spawnTerminal(workspaceId, command, undefined, sibling?.cols, sibling?.rows, defaultShell(), extras);
     await registerSpawned(result);
     nameNewAgent(result.meta.id);

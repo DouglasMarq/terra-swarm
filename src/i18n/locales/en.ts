@@ -677,6 +677,8 @@ export const en = {
       saveDefault: "Make this the default profile for future agents.",
       isolate: "Isolate in a git worktree",
       isolateHint: "The agent works on its own branch in a separate checkout, so it never edits the same files as other agents.",
+      role: "Team role",
+      roleHint: "Agents with a role get matching instructions from the Terra MCP server; the orchestrator plans the work and hands tasks to the others.",
     },
     worktree: {
       title: "Close {name}?",
@@ -806,6 +808,14 @@ export const en = {
     copyUrl: "Copy the link",
     working: "Working…",
     open: "Review changes",
+  },
+  roles: {
+    none: "No role",
+    orchestrator: "Orchestrator",
+    planner: "Planner",
+    executor: "Executor",
+    reviewer: "Reviewer",
+    tester: "Tester",
   },
   notifications: {
     needsYouTitle: "{name} needs you",

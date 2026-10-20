@@ -118,6 +118,17 @@ describe("mcp store", () => {
     stop();
   });
 
+  it("hands nudges from the orchestrator to the terminal writer", async () => {
+    const onNudge = vi.fn();
+    const stop = startMcpEventBridge(onNudge);
+    await Promise.resolve();
+    listeners.get("mcp-nudge")?.({ payload: { workspace_id: "ws-1", terminal_id: "t-2", prompt: "Do T-1" } });
+    listeners.get("mcp-nudge")?.({ payload: { workspace_id: "ws-1", terminal_id: "t-2", prompt: "" } });
+    expect(onNudge).toHaveBeenCalledTimes(1);
+    expect(onNudge).toHaveBeenCalledWith({ workspace_id: "ws-1", terminal_id: "t-2", prompt: "Do T-1" });
+    stop();
+  });
+
   it("toggles the server setting", async () => {
     api.mcpSetEnabled.mockResolvedValue({
       enabled: false, available: true, running: true, url: "http://127.0.0.1:1/mcp", port: 1, db_path: "/tmp/mcp.db", error: null,

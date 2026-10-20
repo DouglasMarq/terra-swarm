@@ -8,7 +8,12 @@ export interface TerminalMeta {
   suspended?: boolean;
   /** The git worktree the agent is isolated in, if any. */
   worktree?: WorktreeInfo | null;
+  /** The agent's team role, if it was started with one. */
+  role?: AgentRole | null;
 }
+
+/** Team roles agents can be started with (see the MCP `whoami` tool). */
+export type AgentRole = "orchestrator" | "planner" | "executor" | "reviewer" | "tester";
 
 export interface WorktreeInfo {
   path: string;
@@ -494,4 +499,6 @@ export interface AgentLaunchExtras {
   env?: Record<string, string>;
   /** Isolate a new agent in its own git worktree. */
   worktree?: boolean;
+  /** Team role for a new agent. */
+  role?: AgentRole;
 }

@@ -15,6 +15,7 @@ pub mod db;
 pub mod hooks;
 pub mod launch;
 pub mod repo;
+pub mod roles;
 pub mod server;
 pub mod tools;
 
@@ -29,6 +30,8 @@ use repo::{AgentStatus, Message, Repo, StoreError, StoreResult};
 pub const EVENT_TASKS_CHANGED: &str = "mcp-tasks-changed";
 pub const EVENT_MESSAGE: &str = "mcp-message";
 pub const EVENT_AGENT_STATUS: &str = "mcp-agent-status";
+/// Ask the UI to type a prompt into an idle agent's terminal.
+pub const EVENT_NUDGE: &str = "mcp-nudge";
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct WorkspaceInfo {
@@ -246,6 +249,13 @@ impl McpHub {
         );
     }
 
+    pub fn emit_nudge(&self, workspace_id: &str, terminal_id: &str, prompt: &str) {
+        self.host.emit(
+            EVENT_NUDGE,
+            serde_json::json!({ "workspace_id": workspace_id, "terminal_id": terminal_id, "prompt": prompt }),
+        );
+    }
+
     pub fn emit_message(&self, message: &Message) {
         self.host.emit(
             EVENT_MESSAGE,
@@ -379,6 +389,7 @@ pub mod test_support {
             terminal_id: terminal_id.into(),
             workspace_id: workspace_id.into(),
             agent: agent.into(),
+            role: None,
         }
     }
 }
@@ -459,7 +470,7 @@ mod tests {
         );
         assert!(matches!(hub.repo(), Err(StoreError::Unavailable(_))));
         assert!(hub
-            .launch("t-1", "ws-1", "claude", launch::Quoting::Posix)
+            .launch("t-1", "ws-1", "claude", None, launch::Quoting::Posix)
             .is_none());
         let _ = std::fs::remove_dir_all(dir);
     }

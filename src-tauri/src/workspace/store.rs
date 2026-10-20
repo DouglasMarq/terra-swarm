@@ -100,6 +100,9 @@ impl WorkspaceStore {
             if meta.worktree.is_some() {
                 existing.worktree = meta.worktree.clone();
             }
+            if meta.role.is_some() {
+                existing.role = meta.role;
+            }
         } else {
             ws.terminals.push(meta);
         }
@@ -131,7 +134,7 @@ impl WorkspaceStore {
         if name.is_empty() {
             return;
         }
-        if let Some(ws) = self.workspace_mut(id).ok() {
+        if let Ok(ws) = self.workspace_mut(id) {
             ws.name = name;
         }
         self.save();
@@ -151,7 +154,7 @@ impl WorkspaceStore {
     }
 
     pub fn set_width(&mut self, ws_id: &str, terminal_id: &str, width: f64) {
-        if let Some(ws) = self.workspace_mut(ws_id).ok() {
+        if let Ok(ws) = self.workspace_mut(ws_id) {
             if let Some(t) = ws.terminals.iter_mut().find(|t| t.id == terminal_id) {
                 t.width = width
                     .is_finite()

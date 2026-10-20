@@ -332,7 +332,7 @@ mod tests {
             .collect();
         assert!(names.contains(&"whoami"));
         assert!(names.contains(&"claim_task"));
-        assert_eq!(names.len(), 12);
+        assert_eq!(names.len(), 13);
 
         let created = server.rpc(
             &token,

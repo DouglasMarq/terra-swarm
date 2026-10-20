@@ -225,6 +225,21 @@ pub fn definitions() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
+            name: "assign_task",
+            title: "Assign task",
+            description: "Orchestrator only. Hands a task to a teammate: makes them the assignee,                 moves a `todo` task to `in_progress`, puts the task (and your optional `note`) in                 their inbox, and, when they are idle, types a prompt into their terminal so they                 start right away. A task with unfinished dependencies cannot be assigned yet.",
+            read_only: false,
+            schema: json!({
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Task id, e.g. \"T-4\"." },
+                    "to": { "type": "string", "description": "Teammate's terminal id (see `whoami`)." },
+                    "note": { "type": "string", "description": "Extra guidance for the teammate." }
+                },
+                "required": ["id", "to"]
+            }),
+        },
+        ToolDef {
             name: "report_status",
             title: "Report status",
             description: "Tells your teammates and the humans watching what you are doing: \
@@ -312,6 +327,14 @@ struct CompleteTaskArgs {
 }
 
 #[derive(Deserialize)]
+struct AssignTaskArgs {
+    id: String,
+    to: String,
+    #[serde(default)]
+    note: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct SendMessageArgs {
     to: String,
     body: String,
@@ -366,6 +389,7 @@ pub fn call(
                     json!({
                         "terminal_id": peer.terminal_id,
                         "agent": peer.agent,
+                        "role": peer.role,
                         "state": status.map(|status| status.state),
                         "summary": status.map(|status| status.summary.clone()),
                         "updated_at": status.map(|status| status.updated_at),
@@ -376,6 +400,8 @@ pub fn call(
             Ok(json!({
                 "terminal_id": me,
                 "agent": who.agent,
+                "role": who.role,
+                "role_instructions": who.role.map(|role| role.instructions()),
                 "workspace_id": ws,
                 "workspace_name": workspace.as_ref().map(|info| info.name.clone()),
                 "workspace_cwd": workspace.as_ref().map(|info| info.cwd.clone()),
@@ -448,7 +474,7 @@ pub fn call(
                 && args
                     .note
                     .as_deref()
-                    .map_or(true, |note| note.trim().is_empty())
+                    .is_none_or(|note| note.trim().is_empty())
             {
                 return Err(ToolError::InvalidArguments(
                     "pass a status, a note, or both".into(),
@@ -495,6 +521,68 @@ pub fn call(
             hub.emit_message(&message);
             Ok(json!(message))
         }
+        "assign_task" => {
+            let args: AssignTaskArgs = parse(args)?;
+            if !who.role.is_some_and(|role| role.can_assign()) {
+                return Err(ToolError::InvalidArguments(
+                    "only the team's orchestrator can assign tasks; claim one with `claim_task` \
+                     or message the orchestrator"
+                        .into(),
+                ));
+            }
+            let to = args.to.trim();
+            if to == me {
+                return Err(ToolError::InvalidArguments("assign tasks to teammates, not to yourself".into()));
+            }
+            if !hub.peers(ws).iter().any(|peer| peer.terminal_id == to) {
+                return Err(ToolError::InvalidArguments(format!(
+                    "`{}` is not a running teammate in this project; see `whoami`",
+                    to
+                )));
+            }
+            let mut repo = hub.repo()?;
+            let current = repo.get_task(ws, &args.id)?;
+            if !current.blocked_by.is_empty() {
+                return Err(ToolError::Store(StoreError::Conflict(format!(
+                    "task {} depends on unfinished tasks: {}",
+                    current.id,
+                    current.blocked_by.join(", ")
+                ))));
+            }
+            if current.status == TaskStatus::Done {
+                return Err(ToolError::Store(StoreError::Conflict(format!("task {} is already done", current.id))));
+            }
+            let task = repo.update_task(
+                ws,
+                &current.id,
+                me,
+                TaskPatch {
+                    assignee: Some(Some(to.to_string())),
+                    status: (current.status == TaskStatus::Todo).then_some(TaskStatus::InProgress),
+                    ..TaskPatch::default()
+                },
+            )?;
+            let note = args.note.as_deref().map(str::trim).filter(|note| !note.is_empty());
+            let body = match note {
+                Some(note) => format!("I assigned you {}: {}. {}", task.id, task.title, note),
+                None => format!("I assigned you {}: {}.", task.id, task.title),
+            };
+            let message = repo.send_message(ws, me, to, &body)?;
+            // Typing into a terminal that is busy or waiting on a human could
+            // answer a prompt by accident, so only idle agents are woken.
+            let idle = repo.status_of(to).is_some_and(|status| status.state == AgentState::Idle);
+            drop(repo);
+            hub.emit_tasks_changed(ws);
+            hub.emit_message(&message);
+            if idle {
+                let prompt = format!(
+                    "Task {} on the Terra board was assigned to you by {}: \"{}\". Read it with the get_task tool and your inbox with read_inbox, do the work, then hand it in with complete_task.",
+                    task.id, me, task.title
+                );
+                hub.emit_nudge(ws, to, &prompt);
+            }
+            Ok(json!({ "task": task, "woken": idle }))
+        }
         "read_inbox" => {
             let args: ReadInboxArgs = parse(args)?;
             let messages =
@@ -532,7 +620,8 @@ pub fn call(
 #[cfg(test)]
 mod tests {
     use super::super::test_support::{hub, identity};
-    use super::super::{EVENT_AGENT_STATUS, EVENT_MESSAGE, EVENT_TASKS_CHANGED};
+    use super::super::roles::Role;
+    use super::super::{EVENT_AGENT_STATUS, EVENT_MESSAGE, EVENT_NUDGE, EVENT_TASKS_CHANGED};
     use super::*;
 
     #[test]
@@ -540,7 +629,7 @@ mod tests {
         let (hub, _) = hub();
         let who = identity("t-1", "ws-1", "claude");
         let defs = definitions();
-        assert_eq!(defs.len(), 12);
+        assert_eq!(defs.len(), 13);
         for def in &defs {
             assert_eq!(def.schema["type"], "object", "{}", def.name);
             assert!(def.description.len() > 40, "{}", def.name);
@@ -757,5 +846,50 @@ mod tests {
         )
         .unwrap();
         assert_eq!(limited["notes"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn the_orchestrator_assigns_and_wakes_idle_teammates() {
+        let (hub, events) = hub();
+        let lead = AgentIdentity { role: Some(Role::Orchestrator), ..identity("t-1", "ws-1", "claude") };
+        let dev = AgentIdentity { role: Some(Role::Executor), ..identity("t-2", "ws-1", "claude") };
+        hub.issue(lead.clone());
+        hub.issue(dev.clone());
+        hub.issue(identity("t-3", "ws-1", "codex"));
+
+        let me = call(&hub, &dev, "whoami", json!({})).unwrap();
+        assert_eq!(me["role"], "executor");
+        assert!(me["role_instructions"].as_str().unwrap().contains("implement"));
+        let peers = me["peers"].as_array().unwrap();
+        assert!(peers.iter().any(|peer| peer["terminal_id"] == "t-1" && peer["role"] == "orchestrator"));
+
+        let first = call(&hub, &lead, "create_task", json!({ "title": "Build the API" })).unwrap();
+        let second = call(&hub, &lead, "create_task", json!({ "title": "Test the API", "depends_on": [first["id"]] })).unwrap();
+
+        // Only the orchestrator assigns.
+        let refused = call(&hub, &dev, "assign_task", json!({ "id": first["id"], "to": "t-3" }));
+        assert!(matches!(refused, Err(ToolError::InvalidArguments(message)) if message.contains("orchestrator")));
+        // Dependencies come first, and the target must be a running teammate.
+        assert!(matches!(call(&hub, &lead, "assign_task", json!({ "id": second["id"], "to": "t-2" })), Err(ToolError::Store(StoreError::Conflict(_)))));
+        assert!(call(&hub, &lead, "assign_task", json!({ "id": first["id"], "to": "t-9" })).is_err());
+
+        // A busy agent gets the task and a message, but nothing typed.
+        call(&hub, &dev, "report_status", json!({ "state": "working", "summary": "other work" })).unwrap();
+        let busy = call(&hub, &lead, "assign_task", json!({ "id": first["id"], "to": "t-2", "note": "Use axum." })).unwrap();
+        assert_eq!(busy["woken"], false);
+        assert_eq!(busy["task"]["assignee"], "t-2");
+        assert_eq!(busy["task"]["status"], "in_progress");
+        let inbox = call(&hub, &dev, "read_inbox", json!({})).unwrap();
+        assert!(inbox["messages"][0]["body"].as_str().unwrap().ends_with("Use axum."));
+        assert!(!events.lock().unwrap().iter().any(|(event, _)| event == EVENT_NUDGE));
+
+        // An idle one is woken with a prompt.
+        call(&hub, &dev, "report_status", json!({ "state": "idle", "summary": "" })).unwrap();
+        let idle = call(&hub, &lead, "assign_task", json!({ "id": first["id"], "to": "t-2" })).unwrap();
+        assert_eq!(idle["woken"], true);
+        let events = events.lock().unwrap();
+        let nudge = events.iter().find(|(event, _)| event == EVENT_NUDGE).expect("nudge sent");
+        assert_eq!(nudge.1["terminal_id"], "t-2");
+        assert!(nudge.1["prompt"].as_str().unwrap().contains("get_task"));
     }
 }

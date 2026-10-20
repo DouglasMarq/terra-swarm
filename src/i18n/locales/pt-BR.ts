@@ -680,6 +680,8 @@ export const ptBR: Dictionary<typeof en> = {
       saveDefault: "Definir a escolha como perfil padrão para os próximos agentes.",
       isolate: "Isolar numa worktree git",
       isolateHint: "O agente trabalha numa branch própria, numa cópia separada, e nunca edita os mesmos arquivos que os outros agentes.",
+      role: "Papel no time",
+      roleHint: "Agentes com papel recebem instruções do servidor MCP do Terra; o orquestrador planeja o trabalho e entrega tarefas aos outros.",
     },
     worktree: {
       title: "Fechar {name}?",
@@ -809,6 +811,14 @@ export const ptBR: Dictionary<typeof en> = {
     copyUrl: "Copiar o link",
     working: "Trabalhando…",
     open: "Revisar mudanças",
+  },
+  roles: {
+    none: "Sem papel",
+    orchestrator: "Orquestrador",
+    planner: "Planejador",
+    executor: "Executor",
+    reviewer: "Revisor",
+    tester: "Testador",
   },
   notifications: {
     needsYouTitle: "{name} precisa de você",

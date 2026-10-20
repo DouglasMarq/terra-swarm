@@ -173,6 +173,8 @@ pub struct SpawnOptions {
     pub worktree: bool,
     /// Where worktrees go; the app data directory when unset.
     pub worktree_root: Option<std::path::PathBuf>,
+    /// Team role for a new agent; a respawned one keeps its recorded role.
+    pub role: Option<crate::mcp::roles::Role>,
 }
 
 impl SpawnOptions {
@@ -197,6 +199,8 @@ pub struct LaunchExtras {
     pub env: HashMap<String, String>,
     #[serde(default)]
     pub worktree: bool,
+    #[serde(default)]
+    pub role: Option<crate::mcp::roles::Role>,
 }
 
 #[derive(Serialize, Clone)]
@@ -317,13 +321,14 @@ pub fn spawn_terminal_inner<R: Runtime>(
         }
     }
 
-    // A respawned agent returns to its worktree; a new one may get one.
-    let existing_worktree = store
+    // A respawned agent returns to its worktree and role; a new one may get them.
+    let (existing_worktree, existing_role) = store
         .lock()
         .map_err(|e| e.to_string())?
         .get(&workspace_id)
         .and_then(|ws| ws.terminals.iter().find(|terminal| terminal.id == id))
-        .and_then(|terminal| terminal.worktree.clone());
+        .map_or((None, None), |terminal| (terminal.worktree.clone(), terminal.role));
+    let role = existing_role.or(options.role);
     let mut created_worktree = CreatedWorktree(None);
     let worktree = match existing_worktree {
         Some(existing) => {
@@ -365,7 +370,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
     // that is already running would log the live terminal out.
     let mut mcp_launch = app
         .try_state::<Arc<McpHub>>()
-        .and_then(|hub| hub.launch(&id, &workspace_id, &launch_command, quoting));
+        .and_then(|hub| hub.launch(&id, &workspace_id, &launch_command, role, quoting));
     // Only the spawned process sees the MCP flags; `command` (persisted in
     // the workspace store) stays as the user typed it.
     let run_command = mcp_launch
@@ -517,7 +522,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
                     let is_current = manager
                         .terminals
                         .get(&exit_id)
-                        .map_or(false, |e| Arc::ptr_eq(&e.killer, &entry_killer));
+                        .is_some_and(|e| Arc::ptr_eq(&e.killer, &entry_killer));
                     if is_current {
                         manager.terminals.remove(&exit_id);
                     }
@@ -558,6 +563,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
         group_id: None,
         suspended: false,
         worktree: worktree.clone(),
+        role,
     };
     let added = store
         .lock()
@@ -625,6 +631,7 @@ pub fn spawn_terminal(
             env: launch.env,
             worktree: launch.worktree,
             worktree_root: None,
+            role: launch.role,
         },
     )
 }
@@ -1002,12 +1009,11 @@ mod spawn_lifecycle_tests {
         }
 
         assert!(
-            manager
+            !manager
                 .lock()
                 .expect("pty manager")
                 .terminals
-                .get(&spawned.meta.id)
-                .is_none(),
+                .contains_key(&spawned.meta.id),
             "reaped child left a phantom manager entry"
         );
     }

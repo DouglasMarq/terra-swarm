@@ -16,6 +16,8 @@ export interface TerminalTabSurfaceProps {
   branch?: string;
   /** Worktree branch per terminal id, for isolated agents. */
   worktreeBranches?: Readonly<Record<string, string>>;
+  /** Translated team role per terminal id. */
+  roleLabels?: Readonly<Record<string, string>>;
   detachedIds?: ReadonlySet<string>;
   labels?: Readonly<Record<string, { primary: string; tag: string; title?: string | null } | undefined>>;
   attentionMessages?: Readonly<Record<string, string | undefined>>;
@@ -45,6 +47,7 @@ export function TerminalTabSurface({
   titles,
   branch,
   worktreeBranches,
+  roleLabels,
   detachedIds,
   labels,
   attentionMessages,
@@ -90,6 +93,7 @@ export function TerminalTabSurface({
       menu={buildMenu?.(ptyId, tab.command)}
       branch={branch}
       worktreeBranch={worktreeBranches?.[ptyId]}
+      roleLabel={roleLabels?.[ptyId]}
       onOpenReview={onOpenReview ? () => onOpenReview(ptyId) : undefined}
       onClearNotifications={() => onClearNotifications(ptyId)}
       focused={focusedId === ptyId}

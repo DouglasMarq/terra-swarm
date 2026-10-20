@@ -9,7 +9,7 @@ import {
   reduceVoiceCapsuleModel,
   type VoiceCapsuleIntent,
   type VoiceSendPayload,
-} from "../components/voice";
+} from "../components/voice/voiceModel";
 import { getTerminal } from "../terminalRegistry";
 import { t } from "../i18n";
 import { agentKind, agentLabelText, buildAgentLabels } from "../domain/agentLabels";

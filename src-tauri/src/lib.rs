@@ -81,7 +81,9 @@ pub fn run() {
             // Auto-stop voice recording when the user finishes talking
             let handle = app.handle().clone();
             app.listen("voice-silence-detected", move |_| {
-                let _ = voice::stop_recording_impl(&handle);
+                if let Err(error) = voice::stop_recording_impl(&handle) {
+                    eprintln!("failed to stop recording after silence: {}", error);
+                }
             });
 
             // Watch for microphone plug/unplug so the UI can react

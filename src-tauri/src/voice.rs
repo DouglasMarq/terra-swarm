@@ -224,7 +224,9 @@ fn emit_if_mic_changed(app: &tauri::AppHandle, last: &mut Option<bool>) {
     *last = Some(available);
     let _ = app.emit("voice-mic-changed", available);
     if !available && *app.state::<VoiceState>().recording.lock_or_recover() {
-        let _ = stop_recording_impl(app);
+        if let Err(error) = stop_recording_impl(app) {
+            eprintln!("failed to stop recording after the mic disappeared: {}", error);
+        }
     }
 }
 

@@ -360,7 +360,10 @@ function App() {
   };
 
   const renameWorkspace = async (id: string, name: string) => {
-    await api.renameWorkspace(id, name).catch(() => {});
+    await api.renameWorkspace(id, name).catch((error) => {
+      console.error(`failed to rename workspace ${id}:`, error);
+      pushSystemNotification(t("app.renameFailed", { detail: String(error) }));
+    });
     await refresh();
   };
 
@@ -520,7 +523,7 @@ function App() {
     );
     await Promise.all(
       targets.map(({ wsId, id }) =>
-        api.setTerminalWidth(wsId, id, basis).catch(() => {}),
+        api.setTerminalWidth(wsId, id, basis).catch((error) => console.warn(`failed to resize terminal ${id}:`, error)),
       ),
     );
     await refresh();
@@ -553,7 +556,7 @@ function App() {
     if (!workspace || !terminal) return;
     switch (action) {
       case "interrupt":
-        await api.writeTerminal(terminal.id, "\u0003").catch(() => {});
+        await api.writeTerminal(terminal.id, "\u0003").catch((error) => console.warn(`failed to interrupt ${terminal.id}:`, error));
         return;
       case "restart":
         await sessions.restart(terminal.id, terminal.command);

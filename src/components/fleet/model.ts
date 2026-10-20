@@ -366,4 +366,3 @@ export function formatFleetRelativeTime(value: FleetValue | undefined, now = Dat
   return t("time.ago.days", { count: Math.floor(hours / 24) });
 }
 
-export const FLEET_UNGROUPED_ID = UNGROUPED_ID;

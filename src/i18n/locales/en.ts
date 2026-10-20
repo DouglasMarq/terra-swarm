@@ -49,7 +49,6 @@ export const en = {
       activeAgents: { one: "{count} active agent", other: "{count} active agents" },
       projectAgents: { one: "{name}, {count} agent", other: "{name}, {count} agents" },
       fleetAttention: "Fleet, {count} need you",
-      emptyProjects: "Create a project to get started.",
       resize: "Resize sidebar",
     },
     attention: {
@@ -108,7 +107,6 @@ export const en = {
       description: "The process stops and the pane closes. Saved sessions can still be resumed.",
       confirm: "End session",
     },
-    copied: "Resume command copied",
   },
   grid: {
     label: "Grid",
@@ -653,7 +651,6 @@ export const en = {
     reportType: "Type",
     reportMessage: "Message",
     reportTree: "Component tree",
-    dismiss: "Dismiss: {name}",
     loadingSurface: "loading the workspace surface",
     initFailed: "Terra Swarm failed to load",
     retrying: "Trying again…",

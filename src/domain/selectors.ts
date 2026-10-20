@@ -1,5 +1,4 @@
 import type {
-  Group,
   Pane,
   Project,
   TerminalTab,
@@ -12,43 +11,32 @@ function byId<T extends { id: string }>(items: readonly T[], id: string | null |
   return items.find((item) => item.id === id) ?? null;
 }
 
-export function selectProject(
+function selectProject(
   snapshot: WorkspaceSnapshotV2,
   projectId: string | null | undefined,
 ): Project | null {
   return byId(snapshot.projects, projectId);
 }
 
-export function selectGroup(
-  snapshot: WorkspaceSnapshotV2,
-  groupId: string | null | undefined,
-): Group | null {
-  return byId(snapshot.groups, groupId);
-}
-
-export function selectContainer(
+function selectContainer(
   snapshot: WorkspaceSnapshotV2,
   containerId: string | null | undefined,
 ): WorkspaceContainer | null {
   return byId(snapshot.containers, containerId);
 }
 
-export function selectPane(
+function selectPane(
   snapshot: WorkspaceSnapshotV2,
   paneId: string | null | undefined,
 ): Pane | null {
   return byId(snapshot.panes, paneId);
 }
 
-export function selectTab(
+function selectTab(
   snapshot: WorkspaceSnapshotV2,
   tabId: string | null | undefined,
 ): TerminalTab | null {
   return byId(snapshot.tabs, tabId);
-}
-
-function projectForPane(snapshot: WorkspaceSnapshotV2, pane: Pane | null): Project | null {
-  return pane?.projectId ? selectProject(snapshot, pane.projectId) : null;
 }
 
 function resolvePaneScope(
@@ -119,10 +107,8 @@ export function selectPaneTabs(snapshot: WorkspaceSnapshotV2, paneId: string): T
     .filter((tab): tab is TerminalTab => tab !== null);
 }
 
-export const getPaneTabs = selectPaneTabs;
-
 /** Returns the active tab in a pane, or the first recoverable tab. */
-export function selectActiveTab(
+function selectActiveTab(
   snapshot: WorkspaceSnapshotV2,
   paneId?: string | null,
 ): TerminalTab | null {
@@ -139,7 +125,6 @@ export function selectActiveTab(
 }
 
 export const getActiveTab = selectActiveTab;
-export const getActiveTerminalTab = selectActiveTab;
 
 function descendantGroupIds(snapshot: WorkspaceSnapshotV2, groupId: string): Set<string> {
   const result = new Set<string>([groupId]);
@@ -190,10 +175,8 @@ export function selectProjectPtyIds(snapshot: WorkspaceSnapshotV2, projectId: st
   return result;
 }
 
-export const getProjectPtyIds = selectProjectPtyIds;
-
 /** PTYs are selected from project membership, never from container visibility. */
-export function selectGroupPtyIds(snapshot: WorkspaceSnapshotV2, groupId: string): string[] {
+function selectGroupPtyIds(snapshot: WorkspaceSnapshotV2, groupId: string): string[] {
   const result: string[] = [];
   const seen = new Set<string>();
   for (const projectId of selectGroupProjectIds(snapshot, groupId)) {
@@ -208,12 +191,7 @@ export function selectGroupPtyIds(snapshot: WorkspaceSnapshotV2, groupId: string
 }
 
 export const getGroupPtyIds = selectGroupPtyIds;
-export const getGroupTerminalIds = selectGroupPtyIds;
-export const selectGroupTerminalIds = selectGroupPtyIds;
-export const getPtyIdsForGroup = selectGroupPtyIds;
-export const selectPtyIdsForGroup = selectGroupPtyIds;
-
-export function selectOrphanedTabs(snapshot: WorkspaceSnapshotV2): TerminalTab[] {
+function selectOrphanedTabs(snapshot: WorkspaceSnapshotV2): TerminalTab[] {
   const orphanIds = new Set(snapshot.orphanedTabIds);
   return snapshot.tabs.filter((tab) => tab.orphaned || orphanIds.has(tab.id));
 }
@@ -229,7 +207,7 @@ export function shouldTerminatePtyWhenContainerCloses(): false {
   return false;
 }
 
-export function getActiveProject(snapshot: WorkspaceSnapshotV2): Project | null {
+function getActiveProject(snapshot: WorkspaceSnapshotV2): Project | null {
   return selectProject(snapshot, snapshot.activeProjectId) ?? snapshot.projects[0] ?? null;
 }
 
@@ -242,12 +220,3 @@ export function getActiveContainer(snapshot: WorkspaceSnapshotV2): WorkspaceCont
   );
 }
 
-export function getActiveTabForProject(
-  snapshot: WorkspaceSnapshotV2,
-  projectId: string,
-): TerminalTab | null {
-  const pane = selectActivePane(snapshot, projectId);
-  return pane ? selectActiveTab(snapshot, pane.id) : null;
-}
-
-export { projectForPane };

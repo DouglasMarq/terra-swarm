@@ -18,7 +18,6 @@ const cx = (...classes: Array<string | undefined | false>) => classes.filter(Boo
  * visual language and a small, composable API.
  */
 export const DialogRoot = DialogPrimitive.Root;
-export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogPortal = DialogPrimitive.Portal;
 export const DialogClose = DialogPrimitive.Close;
 
@@ -65,7 +64,7 @@ export interface DialogHeaderProps {
   className?: string;
 }
 
-export function DialogHeader({ children, className }: DialogHeaderProps) {
+function DialogHeader({ children, className }: DialogHeaderProps) {
   return <header className={cx(styles.header, className)}>{children}</header>;
 }
 

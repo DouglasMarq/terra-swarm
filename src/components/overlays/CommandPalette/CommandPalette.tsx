@@ -224,7 +224,6 @@ export function CommandPalette({
   );
 }
 
-export { COMMAND_GROUP_LABELS, COMMAND_GROUP_ORDER } from "./commandModel";
 export type {
   CommandConfirmRequest,
   CommandDescriptor,

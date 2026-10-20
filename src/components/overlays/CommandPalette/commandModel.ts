@@ -152,7 +152,7 @@ export type CommandRunResult =
   | { kind: "requestConfirm"; commandId: string; request: CommandConfirmRequest }
   | { kind: "unavailable"; commandId: string };
 
-export const COMMAND_GROUP_ORDER: readonly CommandGroupId[] = [
+const COMMAND_GROUP_ORDER: readonly CommandGroupId[] = [
   "recent",
   "navigation",
   "create",
@@ -161,7 +161,7 @@ export const COMMAND_GROUP_ORDER: readonly CommandGroupId[] = [
 ];
 
 /** Group headings, translated on read so the palette follows the locale. */
-export const COMMAND_GROUP_LABELS: Readonly<Record<CommandGroupId, string>> = {
+const COMMAND_GROUP_LABELS: Readonly<Record<CommandGroupId, string>> = {
   get recent() { return t("palette.groups.recent"); },
   get navigation() { return t("palette.groups.navigation"); },
   get create() { return t("palette.groups.create"); },
@@ -653,7 +653,7 @@ export function groupCommands(commands: readonly CommandDescriptor[]): CommandGr
   }));
 }
 
-export function commandMatches(command: CommandDescriptor, query: string): boolean {
+function commandMatches(command: CommandDescriptor, query: string): boolean {
   const normalized = normalizeCommandQuery(query);
   if (!normalized) return true;
   return normalized

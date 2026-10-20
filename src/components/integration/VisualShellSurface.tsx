@@ -112,7 +112,7 @@ function CommandPalette(props: ComponentProps<typeof LazyCommandPalette>) {
 }
 
 /** ⌘B toggles the sidebar and ⌘I the inspector, outside dialogs and terminals' own input. */
-export function shellShortcut(event: KeyboardEvent): "sidebar" | "inspector" | null {
+function shellShortcut(event: KeyboardEvent): "sidebar" | "inspector" | null {
   if (event.defaultPrevented || event.shiftKey || event.altKey) return null;
   if (!(event.metaKey || event.ctrlKey)) return null;
   const target = event.target;

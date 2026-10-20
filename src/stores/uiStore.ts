@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-export const UI_STORAGE_KEY = "terra-ui-selection";
+const UI_STORAGE_KEY = "terra-ui-selection";
 
 /**
  * Lightweight selection continuity. Domain/layout data remains authoritative

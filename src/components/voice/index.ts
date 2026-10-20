@@ -1,4 +1,3 @@
-export { VoiceButton, type VoiceButtonProps } from "./VoiceButton";
 export {
   VoiceCapsule,
   type VoiceCapsuleProps,
@@ -9,9 +8,6 @@ export {
   canExecuteVoiceIntent,
   isDestructiveVoiceIntent,
   reduceVoiceCapsuleModel,
-  requiresVoiceConfirmation,
-  voiceIntentLabel,
-  voiceStateLabel,
   type VoiceCapsuleEvent,
   type VoiceCapsuleIntent,
   type VoiceCapsuleModel,

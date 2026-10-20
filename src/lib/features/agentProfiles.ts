@@ -180,22 +180,6 @@ function voiceFrom(raw: unknown, fallback: AgentVoicePromptBehavior): AgentVoice
   };
 }
 
-/** Public normalizer for integrations that store strategy separately. */
-export function normalizeResumeCommandStrategy(
-  raw: unknown,
-  fallback: AgentResumeCommandStrategy = { kind: "original" },
-): AgentResumeCommandStrategy {
-  return strategyFrom(raw, fallback);
-}
-
-/** Public normalizer for integrations that store voice behavior separately. */
-export function normalizeVoicePromptBehavior(
-  raw: unknown,
-  fallback: AgentVoicePromptBehavior = DEFAULT_VOICE_BEHAVIOR,
-): AgentVoicePromptBehavior {
-  return voiceFrom(raw, fallback);
-}
-
 function fallbackProfile(id: string): AgentProfile {
   return (
     DEFAULT_AGENT_PROFILES.find((profile) => profile.id === id) ?? {

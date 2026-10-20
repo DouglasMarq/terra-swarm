@@ -218,7 +218,7 @@ function Toggle({
   );
 }
 
-export function MicLevelMeter({ active }: { active: boolean }) {
+function MicLevelMeter({ active }: { active: boolean }) {
   const t = useT();
   const fillRef = useRef<HTMLDivElement>(null);
 

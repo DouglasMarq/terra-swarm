@@ -112,7 +112,7 @@ export function resumeCandidateKey(candidate: ResumeCandidate): string {
   ].join("\u001f");
 }
 
-export function normalizeResumeCandidate(
+function normalizeResumeCandidate(
   candidate: ResumeCandidate,
   options: ResumePlannerOptions = {},
 ): NormalizedResumeCandidate {
@@ -230,5 +230,3 @@ export function planResume(
   };
 }
 
-export const createResumePlan = planResume;
-export const buildResumePlan = planResume;

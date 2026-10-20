@@ -107,4 +107,3 @@ export function parseVoiceCommand(input: unknown): VoiceIntent | null {
   return null;
 }
 
-export const parseVoiceIntent = parseVoiceCommand;

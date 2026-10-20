@@ -11,7 +11,7 @@ import type {
   WorkspaceSnapshotV2,
 } from "../types";
 
-export const DOMAIN_SNAPSHOT_VERSION = 2 as const;
+const DOMAIN_SNAPSHOT_VERSION = 2 as const;
 
 export const DEFAULT_WORKSPACE_LAYOUT: WorkspaceLayout = {
   mode: "auto",
@@ -448,9 +448,6 @@ export function migrateLegacyWorkspaces(
 
 /** Portuguese-friendly alias used by callers that describe this as a migration. */
 export const migrateWorkspacesToSnapshotV2 = migrateLegacyWorkspaces;
-
-/** English alias for code that treats the result as the domain snapshot. */
-export const migrateWorkspaceSnapshot = migrateLegacyWorkspaces;
 
 export interface SnapshotMergeOptions extends LegacyMigrationOptions {
   /** Visibility is UI state and therefore survives a backend refresh. */
@@ -1180,4 +1177,3 @@ export function normalizeSnapshotV2(value: unknown): WorkspaceSnapshotV2 {
   return normalizeSnapshotObject(asRecord(value));
 }
 
-export const normalizeOrchestrationSnapshot = normalizeSnapshotV2;

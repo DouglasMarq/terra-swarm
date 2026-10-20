@@ -16,9 +16,9 @@ const workspaces: Workspace[] = [
     name: "terra-swarm",
     cwd: "~/Documents/projects/terra-swarm",
     terminals: [
-      { id: "pty-claude-1", command: "claude", width: null },
-      { id: "pty-claude-2", command: "claude", width: null, worktree: { path: "/tmp/wt/pty-claude-2", cwd: "/tmp/wt/pty-claude-2", branch: "terra/pty-claude-2", base: "main", repo: "~/Documents/projects/terra-swarm" } },
-      { id: "pty-codex", command: "codex", width: null },
+      { id: "pty-claude-1", command: "claude", width: null, role: "orchestrator" },
+      { id: "pty-claude-2", command: "claude", width: null, role: "executor", worktree: { path: "/tmp/wt/pty-claude-2", cwd: "/tmp/wt/pty-claude-2", branch: "terra/pty-claude-2", base: "main", repo: "~/Documents/projects/terra-swarm" } },
+      { id: "pty-codex", command: "codex", width: null, role: "reviewer" },
       { id: "pty-shell", command: "zsh", width: null },
     ],
   },
@@ -177,13 +177,13 @@ export function installMockBackend(): void {
           ? { path: String(args.relativePath), entries: [{ name: "main.ts", path: `${String(args.relativePath)}/main.ts`, kind: "file", size: 40 }], truncated: false, limit: 200 }
           : { path: "", entries: [{ name: "src", path: "src", kind: "directory", size: null }, { name: "README.md", path: "README.md", kind: "file", size: 120 }], truncated: false, limit: 200 };
       case "read_workspace_file":
-        return { path: String(args.relativePath), content: mockFiles[String(args.relativePath)] ?? `// ${String(args.relativePath)}\nexport const answer = 42;\n`, binary: false, size: 40, modified: 1 };
+        return { path: String(args.relativePath), content: mockFiles[String(args.relativePath)] ?? (String(args.relativePath).endsWith(".md") ? "# terra-swarm\n\nMission control for AI coding agents.\n\n## Getting started\n\n```sh\nnpm install\nnpm run tauri dev\n```\n" : `// ${String(args.relativePath)}\nexport const answer = 42;\n`), binary: false, size: 40, modified: 1 };
       case "write_workspace_file":
         mockFiles[String(args.relativePath)] = String(args.content);
         return { size: String(args.content).length, modified: 2 };
       case "agent_usage":
         return [{ terminal_id: "pty-claude-2", agent: "claude", input_tokens: 1260, output_tokens: 62_150, cache_read_tokens: 2_947_189, cache_write_tokens: 152_904, turns: 63, model: "claude-opus-5-5" }];
-      case "probe_dev_servers": return (args.ports as number[]).filter((port) => port === 5174);
+      case "probe_dev_servers": return (args.ports as number[]).filter((port) => port === 8000);
       case "worktree_diff":
         return {
           status: { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: ["src/styles/motion.css"], ahead: 1, behind: 0, exists: true },

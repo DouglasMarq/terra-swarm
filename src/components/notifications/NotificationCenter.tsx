@@ -34,7 +34,7 @@ export function relativeTime(ts: number, now = Date.now()): string {
 }
 
 /** Latest unread signal per agent: one card per agent that needs you. */
-export function attentionItems(items: readonly NotificationItem[]): NotificationItem[] {
+function attentionItems(items: readonly NotificationItem[]): NotificationItem[] {
   const latest = new Map<string, NotificationItem>();
   for (const item of items) {
     if (item.read || item.system) continue;

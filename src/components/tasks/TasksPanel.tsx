@@ -145,7 +145,7 @@ function statusLabel(value: string, t: ReturnType<typeof useT>): string {
 }
 
 /** One history line, in the reader's language. */
-export function describeEvent(
+function describeEvent(
   event: McpTaskEvent,
   t: ReturnType<typeof useT>,
   agentLabel: (terminalId: string) => string,
@@ -180,7 +180,7 @@ export interface TaskCardProps {
   onDelete: () => void;
 }
 
-export function TaskCard({ task, agents, agentLabel, status, onChange, onDelete }: TaskCardProps) {
+function TaskCard({ task, agents, agentLabel, status, onChange, onDelete }: TaskCardProps) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const author = (id: string) => (id === "user" ? t("tasks.you") : agentLabel(id));

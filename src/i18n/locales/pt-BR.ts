@@ -52,7 +52,6 @@ export const ptBR: Dictionary<typeof en> = {
       activeAgents: { one: "{count} agente ativo", other: "{count} agentes ativos" },
       projectAgents: { one: "{name}, {count} agente", other: "{name}, {count} agentes" },
       fleetAttention: "Frota, {count} precisam de você",
-      emptyProjects: "Crie um projeto para começar.",
       resize: "Redimensionar barra lateral",
     },
     attention: {
@@ -111,7 +110,6 @@ export const ptBR: Dictionary<typeof en> = {
       description: "O processo para e o painel fecha. Sessões salvas ainda podem ser retomadas.",
       confirm: "Encerrar sessão",
     },
-    copied: "Comando de retomada copiado",
   },
   grid: {
     label: "Grade",
@@ -656,7 +654,6 @@ export const ptBR: Dictionary<typeof en> = {
     reportType: "Tipo",
     reportMessage: "Mensagem",
     reportTree: "Árvore de componentes",
-    dismiss: "Dispensar: {name}",
     loadingSurface: "carregando a superfície do workspace",
     initFailed: "Falha ao carregar o Terra Swarm",
     retrying: "Tentando novamente…",

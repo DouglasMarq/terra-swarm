@@ -13,7 +13,7 @@ export interface SystemFont {
 /** Used when no font is chosen, and as the fallback after a chosen one. */
 export const DEFAULT_TERMINAL_FONT_STACK = "'SF Mono', Menlo, Monaco, 'Courier New', monospace";
 
-export const KNOWN_TERMINAL_FONTS: readonly string[] = [
+const KNOWN_TERMINAL_FONTS: readonly string[] = [
   "SF Mono",
   "Menlo",
   "Monaco",
@@ -54,7 +54,7 @@ let probe: CanvasRenderingContext2D | null | undefined;
  * True when `name` renders differently from both generic fallbacks, i.e. the
  * font exists. Wide and narrow glyphs make most fonts measurably distinct.
  */
-export function isFontInstalled(name: string): boolean {
+function isFontInstalled(name: string): boolean {
   if (typeof document === "undefined") return false;
   if (probe === undefined) {
     try {
@@ -73,7 +73,7 @@ export function isFontInstalled(name: string): boolean {
   });
 }
 
-export function installedTerminalFonts(candidates: readonly string[] = KNOWN_TERMINAL_FONTS): string[] {
+function installedTerminalFonts(candidates: readonly string[] = KNOWN_TERMINAL_FONTS): string[] {
   return candidates.filter(isFontInstalled);
 }
 

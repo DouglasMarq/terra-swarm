@@ -176,6 +176,3 @@ export function ApplicationShell({
     </div>
   );
 }
-
-export { RightDock } from "./RightDock";
-export { WindowChrome } from "./WindowChrome";

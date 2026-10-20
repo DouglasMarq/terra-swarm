@@ -93,10 +93,3 @@ export function getInitialSettingsSection(
   return sections.some((section) => section.id === requested) ? requested : sections[0]?.id;
 }
 
-export function getSettingsSection(
-  sections: readonly SettingsSectionDefinition[],
-  id: string | undefined,
-): SettingsSectionDefinition | undefined {
-  return sections.find((section) => section.id === id);
-}
-

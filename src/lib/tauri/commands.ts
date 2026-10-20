@@ -282,7 +282,7 @@ export interface IpcCommandContract {
 type CommandKey = keyof IpcCommandContract;
 
 /** Command identifiers are declared once and checked against the contract. */
-export const IPC_COMMANDS = {
+const IPC_COMMANDS = {
   listWorkspaces: "list_workspaces",
   storeSavedAt: "store_saved_at",
   exportWorkspaceSnapshot: "export_workspace_snapshot",

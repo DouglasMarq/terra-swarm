@@ -2,7 +2,6 @@ import { t } from "../i18n";
 import { create } from "zustand";
 import type {
   Group,
-  Project,
   Workspace,
   WorkspaceContainerPatch,
   WorkspaceContainer,
@@ -980,15 +979,3 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
   };
 });
 
-export const getOrchestrationSnapshot = (): WorkspaceSnapshotV2 | null =>
-  useOrchestrationStore.getState().snapshot;
-
-export const getProjectFromSnapshot = (
-  projectId: string,
-): Project | null =>
-  getOrchestrationSnapshot()?.projects.find((project) => project.id === projectId) ?? null;
-
-export const getContainerFromSnapshot = (
-  containerId: string,
-): WorkspaceContainer | null =>
-  getOrchestrationSnapshot()?.containers.find((container) => container.id === containerId) ?? null;

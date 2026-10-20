@@ -17,7 +17,6 @@ import {
   type NavigatorContainerNode,
   type NavigatorGroupNode,
   type NavigatorNode,
-  type NavigatorNodeKind,
   type NavigatorPaneNode,
   type NavigatorProjectNode,
   type NavigatorStatus,
@@ -537,9 +536,4 @@ export function flattenNavigatorTree(
   };
   roots.forEach(visit);
   return result;
-}
-
-export function nodeRefFromId(tree: NavigatorTree, id: string): { id: string; kind: NavigatorNodeKind } | null {
-  const node = tree.byId[id];
-  return node ? { id: node.id, kind: node.kind } : null;
 }

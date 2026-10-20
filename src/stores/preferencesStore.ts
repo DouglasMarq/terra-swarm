@@ -119,7 +119,7 @@ export function normalizeHotkeyForPlatform(
 
 export const MIN_FONT_SIZE = 8;
 export const MAX_FONT_SIZE = 32;
-export const DEFAULT_FONT_SIZE = 13;
+const DEFAULT_FONT_SIZE = 13;
 export const GRID_COL_OPTIONS = [2, 3, 4, 5, 6, 7, 8] as const;
 const DEFAULT_GRID_COLS = 2;
 
@@ -180,7 +180,7 @@ const storageRemove = (key: string): void => {
   }
 };
 
-export function loadHotkeys(): Record<string, Hotkey> {
+function loadHotkeys(): Record<string, Hotkey> {
   try {
     const raw = storageGet("hotkeys");
     if (raw) {

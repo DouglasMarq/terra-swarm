@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AgentInfo,
+  AgentLaunchExtras,
   ActivePaneSelection,
   BacklogSnapshot,
   McpAgentStatus,
@@ -136,6 +137,7 @@ export interface IpcCommandContract {
       rows: number;
       terminalId: string | null;
       shell: string | null;
+      launch: AgentLaunchExtras | null;
     };
     result: SpawnedTerminal;
   };

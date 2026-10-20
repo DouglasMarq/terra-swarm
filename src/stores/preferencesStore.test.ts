@@ -4,6 +4,7 @@ import {
   formatHotkey,
   matchHotkey,
   normalizeHotkeyForPlatform,
+  parseEnvLines,
   usePreferencesStore,
 } from "./preferencesStore";
 
@@ -54,5 +55,21 @@ describe("preferences store", () => {
       ctrlKey: true,
       altKey: false,
     } as KeyboardEvent, linuxHotkey)).toBe(true);
+  });
+});
+
+describe("per-agent launch settings", () => {
+  it("parses KEY=VALUE lines and reports the rest", () => {
+    const { env, invalid } = parseEnvLines("# comment\nANTHROPIC_MODEL = opus\n\nFOO=a=b\nnot valid\nTERRA_PANE_ID=x\n1BAD=y");
+    expect(env).toEqual({ ANTHROPIC_MODEL: "opus", FOO: "a=b" });
+    expect(invalid).toEqual(["not valid", "TERRA_PANE_ID=x", "1BAD=y"]);
+  });
+
+  it("stores settings per agent and drops empty ones", () => {
+    const store = usePreferencesStore.getState();
+    store.setAgentLaunch("claude", { args: "--model opus", env: "FOO=1" });
+    expect(usePreferencesStore.getState().agentLaunch.claude).toEqual({ args: "--model opus", env: "FOO=1" });
+    store.setAgentLaunch("claude", { args: " ", env: "" });
+    expect(usePreferencesStore.getState().agentLaunch.claude).toBeUndefined();
   });
 });

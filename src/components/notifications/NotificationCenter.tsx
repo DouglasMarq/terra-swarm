@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Bell, CheckCircle2, Info } from "lucide-react";
 import type { AgentLabel } from "../../domain/agentLabels";
+import { elapsedTime } from "../../domain/elapsedTime";
 import type { NotificationItem } from "../../types";
 import { intlLocale, useT, type Translate } from "../../i18n";
 import "./notifications.css";
@@ -10,7 +11,7 @@ export interface NotificationCenterProps {
   labels: Readonly<Record<string, AgentLabel | undefined>>;
   workspaceNames: Readonly<Record<string, string | undefined>>;
   muted: boolean;
-  /** Agents whose context window is nearly full (≥ 85%). */
+  /** Agents whose context window is nearly full (≥ `CONTEXT_ATTENTION_PERCENT`). */
   contextAlerts?: readonly { terminalId: string; workspaceId: string; used: number }[];
   onJump: (item: NotificationItem) => void;
   onFocusAgent?: (terminalId: string) => void;
@@ -24,12 +25,10 @@ export interface NotificationCenterProps {
 type Filter = "attention" | "all";
 
 export function relativeTime(ts: number, t: Translate, now = Date.now()): string {
-  const seconds = Math.max(0, Math.floor((now - ts) / 1000));
-  if (seconds < 45) return t("time.now");
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return t("time.minutes", { count: minutes });
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t("time.hours", { count: hours });
+  const elapsed = elapsedTime(ts, now);
+  if (elapsed.unit === "now") return t("time.now");
+  if (elapsed.unit === "minutes") return t("time.minutes", { count: elapsed.count });
+  if (elapsed.unit === "hours") return t("time.hours", { count: elapsed.count });
   return new Date(ts).toLocaleDateString(intlLocale(), { day: "2-digit", month: "short" });
 }
 

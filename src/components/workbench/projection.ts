@@ -1,4 +1,5 @@
 import { migrateLegacyWorkspaces } from "../../domain/migration";
+import { byId } from "../../domain/selectors";
 import type {
   Group,
   Pane,
@@ -13,11 +14,6 @@ import type {
   WorkbenchProjection,
   WorkbenchSource,
 } from "./types";
-
-function byId<T extends { id: string }>(items: readonly T[], id: string | null | undefined): T | null {
-  if (!id) return null;
-  return items.find((item) => item.id === id) ?? null;
-}
 
 function uniqueIds(ids: readonly string[]): string[] {
   const seen = new Set<string>();

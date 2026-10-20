@@ -36,6 +36,9 @@ interface AppErrorBoundaryState {
 
 const INITIAL_STATE: AppErrorBoundaryState = { copied: false, error: null, info: null };
 
+/** How long the "copied" confirmation stays on the copy button. */
+const COPIED_FEEDBACK_MS = 2_400;
+
 export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorBoundaryState> {
   private copyTimer: ReturnType<typeof setTimeout> | undefined;
   private previousResetKeys: readonly unknown[] | undefined;
@@ -78,13 +81,13 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   };
 
   private copyDetails = async () => {
-    const details = getSafeErrorDetails(this.state.error, this.state.info);
+    const details = getSafeErrorDetails(this.state.error, this.state.info, t);
     try {
       if (!navigator.clipboard?.writeText) throw new Error("clipboard-unavailable");
       await navigator.clipboard.writeText(details.text);
       this.setState({ copied: true });
       if (this.copyTimer !== undefined) clearTimeout(this.copyTimer);
-      this.copyTimer = setTimeout(() => this.setState({ copied: false }), 2_400);
+      this.copyTimer = setTimeout(() => this.setState({ copied: false }), COPIED_FEEDBACK_MS);
     } catch {
       // Clipboard permissions are optional; do not expose the raw report or
       // turn a recoverable error surface into a second error.
@@ -95,7 +98,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   public render() {
     if (this.state.error === null) return this.props.children;
 
-    const details = getSafeErrorDetails(this.state.error, this.state.info);
+    const details = getSafeErrorDetails(this.state.error, this.state.info, t);
     const fallback = this.props.fallback;
     if (typeof fallback === "function") {
       return fallback({

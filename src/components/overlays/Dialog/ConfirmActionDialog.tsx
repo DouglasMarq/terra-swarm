@@ -40,7 +40,7 @@ export function ConfirmActionDialog({
 }: ConfirmActionDialogProps) {
   const t = useT();
   const [submitting, setSubmitting] = useState(false);
-  const copy = getConfirmationCopy(intent);
+  const copy = getConfirmationCopy(intent, t);
   const isBusy = busy || submitting;
 
   async function handleConfirm() {

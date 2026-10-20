@@ -5,6 +5,9 @@ import { getTerminal } from "../terminalRegistry";
 import { useUiStore } from "../stores/uiStore";
 import { useOrchestrationStore } from "../stores/orchestrationStore";
 
+/** Delay before the focused pane/tab is persisted, so quick focus changes save once. */
+const PERSIST_FOCUS_DELAY_MS = 100;
+
 interface FocusTrackingInput {
   workspaces: readonly Workspace[];
   activeId: string | null;
@@ -78,7 +81,7 @@ export function useFocusTracking({ workspaces, activeId, focusedId, snapshot, mo
         .catch((error) => {
           console.warn("failed to persist active pane/tab:", error);
         });
-    }, 100);
+    }, PERSIST_FOCUS_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [activeId, focusedId, workspaces, snapshot]);
 

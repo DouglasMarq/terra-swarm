@@ -1,12 +1,8 @@
 import type { McpTask, McpTaskPatch, McpTaskStatus } from "../../types";
+import { taskNumber } from "../../domain/tasks";
 
 /** Columns of the Kanban board, in workflow order. */
 export const BOARD_COLUMNS: readonly McpTaskStatus[] = ["todo", "in_progress", "blocked", "review", "done"];
-
-function taskNumber(id: string): number {
-  const value = Number(id.replace(/^T-/i, ""));
-  return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
-}
 
 /** Tasks per column in manual (drag) order. */
 export function boardColumns(tasks: readonly McpTask[]): Record<McpTaskStatus, McpTask[]> {

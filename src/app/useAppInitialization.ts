@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { ResumeItem } from "../types";
 import { t } from "../i18n";
+import { errorMessage } from "../lib/errors/errorMessage";
 import { createInitializationGate, type InitializationGate } from "../lib/session/initializationGate";
 import { isTerminalSuspended, suspendedGroupIds } from "../lib/session/resumeSelection";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
@@ -10,12 +11,6 @@ import type { useResumeQueue } from "./useResumeQueue";
 import type { useVoiceSettings } from "./useVoiceSettings";
 import type { useWorkspaces } from "./useWorkspaces";
 import { resumeItemFor, type TerminalSessions } from "./useTerminalSessions";
-
-function describeInitializationError(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  if (typeof error === "string" && error.trim()) return error;
-  return t("app.loadFailed");
-}
 
 interface InitializationInput {
   workspaces: ReturnType<typeof useWorkspaces>;
@@ -87,7 +82,7 @@ export function useAppInitialization({ workspaces, sessions, resumeQueue, agentC
       (failure) => {
         console.error("initialization failed:", failure);
         started.current = false;
-        setError(describeInitializationError(failure));
+        setError(errorMessage(failure, t("app.loadFailed")));
         setRunning(false);
       },
     );

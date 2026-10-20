@@ -11,6 +11,7 @@ export const en = {
     fleet: "Fleet",
     board: "Board",
     appName: "Terra Swarm",
+    withShortcut: "{label} ({shortcut})",
   },
   status: {
     working: "Working",
@@ -382,8 +383,8 @@ export const en = {
     importing: "Importing…",
     importSnapshot: "Import snapshot",
     importHint: "Importing replaces the metadata after an explicit confirmation and keeps a recoverable backup.",
-    backup: "Backup",
-    file: "File",
+    backupPath: "Backup: {path}",
+    filePath: "File: {path}",
     installedVersion: "Installed version",
     unknown: "unknown",
     localHint: "Preferences and sessions stay on this computer.",

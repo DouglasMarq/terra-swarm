@@ -16,7 +16,7 @@ import type {
 } from "../types";
 import { getTerminal } from "../terminalRegistry";
 import { t } from "../i18n";
-import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
+import { agentKind, agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { pickAgentName } from "../domain/agentNames";
 import { createDebouncedTask } from "../lib/async/debounce";
 import { createSpawnQueue } from "../lib/session/spawnQueue";
@@ -26,6 +26,13 @@ import { freshCommand, profileForCommand, resolveResumeCommand } from "../lib/fe
 import { parseEnvLines, usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
+import { errorMessage } from "../lib/errors/errorMessage";
+
+/** Sessions respawned at the same time when resuming. */
+const RESUME_CONCURRENCY = 2;
+
+/** Debounce for `workspaces-changed` bursts (layout drags, group updates). */
+const WORKSPACES_REFRESH_DEBOUNCE_MS = 75;
 
 export function resumeCommandFor(command: string): string {
   return resolveResumeCommand(profileForCommand(command), command);
@@ -38,14 +45,9 @@ export function resumeItemFor(workspace: Workspace, terminal: Workspace["termina
     wsName: workspace.name,
     cwd: workspace.cwd,
     command: terminal.command,
-    agentId: terminal.command.trim().split(/\s+/)[0] || "shell",
+    agentId: agentKind(terminal.command),
     resumeCommand: resumeCommandFor(terminal.command),
   };
-}
-
-function errorDetail(error: unknown, fallback = ""): string {
-  if (error instanceof Error) return error.message;
-  return String(error ?? fallback);
 }
 
 interface TerminalSessionsInput {
@@ -105,7 +107,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     // short debounce keeps other windows current without a request per frame.
     const refreshWorkspaces = createDebouncedTask(() => {
       void refresh();
-    }, 75);
+    }, WORKSPACES_REFRESH_DEBOUNCE_MS);
     const unlistenWorkspaces = listen("workspaces-changed", () => refreshWorkspaces.schedule());
     return () => {
       refreshWorkspaces.cancel();
@@ -289,7 +291,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
 
   /** Resume several sessions, two at a time; returns one result per item. */
   const resumeItems = async (items: readonly ResumeItem[]) => {
-    const queue = createSpawnQueue<ResumeItem, void>({ concurrency: 2, run: (item) => resumeItem(item) });
+    const queue = createSpawnQueue<ResumeItem, void>({ concurrency: RESUME_CONCURRENCY, run: (item) => resumeItem(item), now: Date.now });
     const pending = items.map((item) => queue.enqueue({ id: item.terminalId, input: item }));
     await queue.whenIdle();
     return Promise.all(pending);
@@ -301,7 +303,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     for (const result of results) {
       if (result.status === "succeeded") continue;
       const label = labels.get(result.id) ?? result.id;
-      runtime().pushSystemNotification(t("app.resumeFailed", { name: label, detail: errorDetail(result.error, result.status) }));
+      runtime().pushSystemNotification(t("app.resumeFailed", { name: label, detail: errorMessage(result.error, result.status) }));
     }
   };
 
@@ -326,7 +328,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
       if (result.status === "succeeded") continue;
       const label = labels[result.id];
       runtime().pushSystemNotification(
-        t("app.resumeAgentFailed", { name: label ? agentLabelText(label) : result.id, detail: errorDetail(result.error, result.status) }),
+        t("app.resumeAgentFailed", { name: label ? agentLabelText(label) : result.id, detail: errorMessage(result.error, result.status) }),
       );
     }
     await refresh();

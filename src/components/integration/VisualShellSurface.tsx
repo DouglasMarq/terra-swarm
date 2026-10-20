@@ -19,17 +19,18 @@ import { CollapsedSidebar, Sidebar, SurfaceSwitch, type CollapsedSidebarProject 
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import { buildAgentLabels } from "../../domain/agentLabels";
 import { useT } from "../../i18n";
+import { errorMessage } from "../../lib/errors/errorMessage";
 import { AgentInspector } from "../inspector/AgentInspector";
 import { TasksPanel } from "../tasks/TasksPanel";
 import { TaskBoard } from "../tasks/TaskBoard";
-import { sendPromptToTerminal } from "../../lib/session/sendPrompt";
+import { sendPromptToTerminal } from "../../app/sendPromptToTerminal";
 import { startMcpEventBridge, useReportedStates } from "../../stores/mcpStore";
 import { useReviewStore } from "../../stores/reviewStore";
 import { useLibraryStore } from "../../stores/libraryStore";
 import { useAgentUsage } from "../../stores/usageStore";
 import { startPreviewBridge } from "../../stores/previewStore";
 import { PreviewPanel } from "../preview/PreviewPanel";
-import { deriveAgentStatus } from "../../domain/agentStatus";
+import { CONTEXT_ATTENTION_PERCENT, deriveAgentStatus } from "../../domain/agentStatus";
 import { NavigatorPanel } from "../navigation/NavigatorPanel";
 import type { ActivityTab, NavigatorFilesLoader, NavigatorGitLoader, NavigatorNodeRef } from "../navigation/types";
 import type { WorkbenchLocation, WorkbenchTabRenderContext } from "../workbench/types";
@@ -136,6 +137,12 @@ function shellShortcut(event: KeyboardEvent): "sidebar" | "inspector" | null {
 }
 
 const NO_MODIFIERS = { meta: false, shift: false, ctrl: false, alt: false } as const;
+
+/** How often the inspector refreshes the focused agent's runtime info. */
+const INSPECTOR_RUNTIME_POLL_MS = 1500;
+
+/** How long "mute notifications" lasts. */
+const NOTIFICATIONS_MUTE_MS = 60 * 60 * 1000;
 
 /** The shell's fixed shortcuts; `meta` reads as Ctrl outside macOS, as their handlers accept either. */
 const SHELL_SHORTCUTS = {
@@ -375,13 +382,10 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         }
       } catch (error) {
         if (!cancelled) {
-          const message = error instanceof Error && error.message.trim()
-            ? error.message
-            : t("inspector.unavailable");
-          dispatchInspectorRuntime({ type: "failure", terminalId, requestId, error: message });
+          dispatchInspectorRuntime({ type: "failure", terminalId, requestId, error: errorMessage(error, t("inspector.unavailable")) });
         }
       }
-      if (!cancelled) timer = setTimeout(() => void poll(), 1500);
+      if (!cancelled) timer = setTimeout(() => void poll(), INSPECTOR_RUNTIME_POLL_MS);
     };
 
     void poll();
@@ -561,7 +565,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     />
   );
   const contextAlerts = props.workspaces.flatMap((workspace) => workspace.terminals
-    .filter((terminal) => !terminal.suspended && !(terminal.id in props.exited) && (props.contextUsage[terminal.id] ?? 0) >= 85)
+    .filter((terminal) => !terminal.suspended && !(terminal.id in props.exited) && (props.contextUsage[terminal.id] ?? 0) >= CONTEXT_ATTENTION_PERCENT)
     .map((terminal) => ({ terminalId: terminal.id, workspaceId: workspace.id, used: props.contextUsage[terminal.id] ?? 0 })));
   const activeWorkspace = props.workspaces.find((workspace) => workspace.id === props.activeId) ?? null;
   const tasksPanel = (
@@ -810,7 +814,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         attentionCount: muted ? 0 : attentionCount,
         notificationsOpen,
         onNotificationsOpenChange: setNotificationsOpen,
-        notificationsPanel: <NotificationCenter items={props.notificationItems} contextAlerts={contextAlerts} onFocusAgent={(terminalId) => { setNotificationsOpen(false); focusTerminal(terminalId); }} labels={agentLabels} workspaceNames={workspaceNames} muted={muted} onJump={(item) => { setNotificationsOpen(false); props.onJumpToNotification(item); }} onMarkRead={props.onClearNotifications} onMarkAllRead={props.onMarkAllRead} onToggleMute={() => setMuteUntil(muted ? 0 : Date.now() + 60 * 60 * 1000)} onOpenFleet={() => { setNotificationsOpen(false); navigate("fleet"); }} />,
+        notificationsPanel: <NotificationCenter items={props.notificationItems} contextAlerts={contextAlerts} onFocusAgent={(terminalId) => { setNotificationsOpen(false); focusTerminal(terminalId); }} labels={agentLabels} workspaceNames={workspaceNames} muted={muted} onJump={(item) => { setNotificationsOpen(false); props.onJumpToNotification(item); }} onMarkRead={props.onClearNotifications} onMarkAllRead={props.onMarkAllRead} onToggleMute={() => setMuteUntil(muted ? 0 : Date.now() + NOTIFICATIONS_MUTE_MS)} onOpenFleet={() => { setNotificationsOpen(false); navigate("fleet"); }} />,
         onToggleVoice: props.onToggleVoice,
         voiceActive,
         voiceLabel,

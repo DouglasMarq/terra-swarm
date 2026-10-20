@@ -12,9 +12,10 @@ import {
 } from "../components/voice";
 import { getTerminal } from "../terminalRegistry";
 import { t } from "../i18n";
-import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
+import { agentKind, agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { orchestratorOf } from "../domain/agentRoles";
-import { parseVoiceCommand } from "../lib/voiceCommands";
+import { normalizeVoiceText, parseVoiceCommand } from "../lib/voiceCommands";
+import { promptPayload } from "../lib/session/sendPrompt";
 import { buildVoicePrompt, profileForCommand, resolveResumeCommand } from "../lib/features/agentProfiles";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useOrchestrationStore } from "../stores/orchestrationStore";
@@ -23,17 +24,11 @@ import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
 import type { TerminalSessions } from "./useTerminalSessions";
 
-/** Compare spoken labels without making callers know about locale accents. */
-function normalizeVoiceLookup(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[!?.,:]+$/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLocaleLowerCase("pt-BR");
-}
+/** Time a resumed agent's CLI gets to draw its prompt before dictation is pasted. */
+const RESUMED_AGENT_PROMPT_DELAY_MS = 1500;
 
+/** Audio levels kept for the capsule's waveform. */
+const VOICE_WAVEFORM_SAMPLES = 32;
 
 interface VoiceCaptureInput {
   workspaces: Workspace[];
@@ -86,7 +81,7 @@ export function useVoiceCapture({
   const [voiceSubmitted, setVoiceSubmitted] = useState(false);
 
   const resolveVoiceTerminal = (target: string) => {
-    const needle = normalizeVoiceLookup(target);
+    const needle = normalizeVoiceText(target);
     if (!needle) return null;
     const labels = buildAgentLabels(workspaces, { titles, names: usePreferencesStore.getState().agentNames });
     for (const workspace of workspaces) {
@@ -96,8 +91,8 @@ export function useVoiceCapture({
         const label = labels[candidate.id];
         // Exact: id, raw title, command, kind, numbered tag ("claude 2"),
         // task title or given name.
-        return [candidate.id, title, command, command.split(/\s+/)[0] ?? "", label?.tag ?? "", label?.title ?? "", label?.name ?? ""]
-          .some((value) => value && normalizeVoiceLookup(value) === needle);
+        return [candidate.id, title, command, agentKind(command), label?.tag ?? "", label?.title ?? "", label?.name ?? ""]
+          .some((value) => value && normalizeVoiceText(value) === needle);
       });
       if (terminal) return { workspace, terminal };
     }
@@ -105,14 +100,14 @@ export function useVoiceCapture({
     for (const workspace of workspaces) {
       const terminal = workspace.terminals.find((candidate) => {
         const title = labels[candidate.id]?.title;
-        return title ? normalizeVoiceLookup(title).includes(needle) || needle.includes(normalizeVoiceLookup(title)) : false;
+        return title ? normalizeVoiceText(title).includes(needle) || needle.includes(normalizeVoiceText(title)) : false;
       });
       if (terminal) return { workspace, terminal };
     }
     const workspace = workspaces.find(
       (candidate) =>
-        normalizeVoiceLookup(candidate.id) === needle ||
-        normalizeVoiceLookup(candidate.name) === needle,
+        normalizeVoiceText(candidate.id) === needle ||
+        normalizeVoiceText(candidate.name) === needle,
     );
     const terminal = workspace?.terminals[0];
     return workspace && terminal ? { workspace, terminal } : null;
@@ -150,11 +145,11 @@ export function useVoiceCapture({
   };
 
   const resolveVoiceGroup = (target: string): string | null => {
-    const needle = normalizeVoiceLookup(target);
+    const needle = normalizeVoiceText(target);
     return groups.find(
       (group) =>
-        normalizeVoiceLookup(group.id) === needle ||
-        normalizeVoiceLookup(group.name) === needle,
+        normalizeVoiceText(group.id) === needle ||
+        normalizeVoiceText(group.name) === needle,
     )?.id ?? null;
   };
 
@@ -167,12 +162,12 @@ export function useVoiceCapture({
       await actions.quickNewTerminal(activeWorkspace.id);
       return;
     }
-    const needle = normalizeVoiceLookup(agentTarget);
+    const needle = normalizeVoiceText(agentTarget);
     const agent = agents.find(
       (candidate) =>
         candidate.available &&
-        (normalizeVoiceLookup(candidate.id) === needle ||
-          normalizeVoiceLookup(candidate.label) === needle),
+        (normalizeVoiceText(candidate.id) === needle ||
+          normalizeVoiceText(candidate.label) === needle),
     );
     if (!agent) {
       notify(t("app.agentUnavailable", { name: agentTarget }));
@@ -279,7 +274,7 @@ export function useVoiceCapture({
       setVoiceFeedback(t("app.voice.resuming"));
       await sessions.restart(id, resolveResumeCommand(profileForCommand(meta.command), meta.command));
       // Give the agent's CLI a moment to draw its prompt before pasting.
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, RESUMED_AGENT_PROMPT_DELAY_MS));
     }
     // Outside the Workbench (Fleet, Settings) the xterm is not mounted; the
     // PTY still is, so write straight to it. Agent CLIs take bracketed paste.
@@ -293,11 +288,8 @@ export function useVoiceCapture({
       ? buildVoicePrompt(profile, text)
       : text;
     const bracketed = term ? term.modes.bracketedPasteMode : profile?.id !== "shell";
-    const data = bracketed
-      ? `\u001b[200~${prompt}\u001b[201~`
-      : prompt;
     try {
-      await api.writeTerminal(id, data);
+      await api.writeTerminal(id, promptPayload(prompt, bracketed));
       term?.focus();
       setVoiceSubmitted(true);
       setVoiceFeedback(t("app.voice.sent"));
@@ -342,7 +334,7 @@ export function useVoiceCapture({
     const unAudioLevel = listen<number>("voice-audio-level", (e) => {
       const level = Math.max(0, Math.min(1, Number(e.payload) || 0));
       setVoiceLevel(level);
-      setVoiceSamples((previous) => [...previous.slice(-31), level]);
+      setVoiceSamples((previous) => [...previous.slice(-(VOICE_WAVEFORM_SAMPLES - 1)), level]);
     });
     const unTrStart = listen("voice-transcription-started", () => {
       setVoiceStatus("transcribing");

@@ -1,4 +1,5 @@
-import { deriveAgentStatus } from "../domain/agentStatus";
+import { agentKind } from "../domain/agentLabels";
+import { CONTEXT_ATTENTION_PERCENT, CONTEXT_WARNING_PERCENT, deriveAgentStatus } from "../domain/agentStatus";
 import { useMcpStore } from "../stores/mcpStore";
 import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
@@ -18,6 +19,15 @@ import { terminalFontStack } from "../lib/terminalFonts";
 import { PaneActionsMenu, type PaneMenuGroups } from "./workbench/PaneActionsMenu";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal-pane.css";
+
+const SCROLLBACK_LINES = 10_000;
+/** Minimum gap between console warnings for one terminal's failed IPC calls. */
+const WARN_THROTTLE_MS = 2000;
+/** Retries of a keystroke write while the backend input channel is busy. */
+const MAX_WRITE_RETRIES = 30;
+/** Delay between write retries: one step per attempt so far, capped at `MAX_WRITE_RETRY_STEPS` steps. */
+const WRITE_RETRY_STEP_MS = 25;
+const MAX_WRITE_RETRY_STEPS = 10;
 
 interface Props {
   id: string;
@@ -107,7 +117,7 @@ export function TerminalPane(props: Props) {
       fontSize,
       cursorBlink: true,
       macOptionIsMeta: true,
-      scrollback: 10000,
+      scrollback: SCROLLBACK_LINES,
       theme: {
         background: "#0c0c0e",
         foreground: "#d4d4d8",
@@ -127,7 +137,7 @@ export function TerminalPane(props: Props) {
     let lastWarnAt = 0;
     const warnThrottled = (what: string, err: unknown) => {
       const now = Date.now();
-      if (now - lastWarnAt < 2000) return;
+      if (now - lastWarnAt < WARN_THROTTLE_MS) return;
       lastWarnAt = now;
       console.warn(`[terminal ${id}] ${what} failed:`, err);
     };
@@ -284,12 +294,12 @@ export function TerminalPane(props: Props) {
             await api.writeTerminal(id, data);
             return;
           } catch (err) {
-            if (!String(err).includes("busy") || attempt >= 30) {
+            if (!String(err).includes("busy") || attempt >= MAX_WRITE_RETRIES) {
               warnThrottled("write", err);
               return;
             }
             await new Promise((r) =>
-              setTimeout(r, 25 * Math.min(attempt + 1, 10)),
+              setTimeout(r, WRITE_RETRY_STEP_MS * Math.min(attempt + 1, MAX_WRITE_RETRY_STEPS)),
             );
           }
         }
@@ -358,7 +368,7 @@ export function TerminalPane(props: Props) {
   }, [basis, exited, expanded, focused, height, hidden, id]);
 
   const reported = useMcpStore((state) => state.statuses[id]?.state);
-  const kind = command.split(" ")[0] || "shell";
+  const kind = agentKind(command);
   const primary = label || kind;
   const secondary = tag && tag !== primary ? tag : null;
   const attention = notifications > 0 && Boolean(attentionMessage);
@@ -416,7 +426,7 @@ export function TerminalPane(props: Props) {
         ) : <span className="pane-title" />}
         {contextUsed != null && !exited && (
           <span
-            className={`pane-ctx ${contextUsed >= 85 ? "high" : contextUsed >= 60 ? "mid" : ""}`}
+            className={`pane-ctx ${contextUsed >= CONTEXT_ATTENTION_PERCENT ? "high" : contextUsed >= CONTEXT_WARNING_PERCENT ? "mid" : ""}`}
             title={t("pane.contextUsed", { count: contextUsed })}
           >
             <span className="pane-ctx-bar">

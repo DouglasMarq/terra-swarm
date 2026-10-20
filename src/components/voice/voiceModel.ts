@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import type { Translate } from "../../i18n";
 import type { VoiceIntent } from "../../lib/voiceCommands";
 
 /**
@@ -148,7 +148,7 @@ export function reduceVoiceCapsuleModel(
   }
 }
 
-export function voiceIntentLabel(intent: VoiceCapsuleIntent): string {
+export function voiceIntentLabel(intent: VoiceCapsuleIntent, t: Translate): string {
   switch (intent.type) {
     case "focus":
       return t("voiceIntent.focus", { name: intent.target });
@@ -165,7 +165,7 @@ export function voiceIntentLabel(intent: VoiceCapsuleIntent): string {
   }
 }
 
-export function voiceStateLabel(state: VoiceCapsuleState): string {
+export function voiceStateLabel(state: VoiceCapsuleState, t: Translate): string {
   switch (state) {
     case "idle":
       return t("voiceState.idle");

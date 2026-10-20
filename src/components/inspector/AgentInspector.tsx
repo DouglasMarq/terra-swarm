@@ -1,6 +1,6 @@
 import { Gauge, Power, RotateCcw, SquareArrowOutUpRight } from "lucide-react";
 import type { AgentLabel } from "../../domain/agentLabels";
-import type { AgentRunStatus } from "../../domain/agentStatus";
+import { CONTEXT_ATTENTION_PERCENT, type AgentRunStatus } from "../../domain/agentStatus";
 import { useT } from "../../i18n";
 import { formatTokens } from "../../domain/formatTokens";
 import type { AgentTokenUsage, NotificationItem } from "../../types";
@@ -67,7 +67,7 @@ export function AgentInspector({ target, label, status, request, activity, runti
           <b>{context === null ? "—" : `${context}%`}</b>
         </div>
         <span className="terra-meter" aria-hidden="true">
-          <span className="terra-meter-fill" data-high={(context ?? 0) >= 85} style={{ width: `${context ?? 0}%` }} />
+          <span className="terra-meter-fill" data-high={(context ?? 0) >= CONTEXT_ATTENTION_PERCENT} style={{ width: `${context ?? 0}%` }} />
         </span>
         <span className="terra-inspector-hint">{t("inspector.contextHint")}</span>
       </section>

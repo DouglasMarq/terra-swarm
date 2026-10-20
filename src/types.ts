@@ -12,6 +12,18 @@ export interface TerminalMeta {
   role?: AgentRole | null;
 }
 
+/** Tokens an agent used, from its CLI's own session log. */
+export interface AgentTokenUsage {
+  terminal_id: string;
+  agent: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  turns: number;
+  model: string | null;
+}
+
 /** Team roles agents can be started with (see the MCP `whoami` tool). */
 export type AgentRole = "orchestrator" | "planner" | "executor" | "reviewer" | "tester";
 

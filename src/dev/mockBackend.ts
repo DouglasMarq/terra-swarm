@@ -181,6 +181,8 @@ export function installMockBackend(): void {
       case "write_workspace_file":
         mockFiles[String(args.relativePath)] = String(args.content);
         return { size: String(args.content).length, modified: 2 };
+      case "agent_usage":
+        return [{ terminal_id: "pty-claude-2", agent: "claude", input_tokens: 1260, output_tokens: 62_150, cache_read_tokens: 2_947_189, cache_write_tokens: 152_904, turns: 63, model: "claude-opus-5-5" }];
       case "probe_dev_servers": return (args.ports as number[]).filter((port) => port === 5174);
       case "worktree_diff":
         return {

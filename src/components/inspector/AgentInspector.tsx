@@ -2,7 +2,8 @@ import { Gauge, Power, RotateCcw, SquareArrowOutUpRight } from "lucide-react";
 import type { AgentLabel } from "../../domain/agentLabels";
 import type { AgentRunStatus } from "../../domain/agentStatus";
 import { useT } from "../../i18n";
-import type { NotificationItem } from "../../types";
+import { formatTokens } from "../../domain/formatTokens";
+import type { AgentTokenUsage, NotificationItem } from "../../types";
 import type { InspectorActionKind, InspectorTarget } from "../integration/inspectorModel";
 import type { InspectorRuntimeState } from "../integration/inspectorRuntime";
 import { relativeTime } from "../notifications/NotificationCenter";
@@ -19,6 +20,8 @@ export interface AgentInspectorProps {
   /** Most recent signals for this agent, newest first. */
   activity: readonly NotificationItem[];
   runtime: InspectorRuntimeState;
+  /** Tokens from the agent's own session log, when its hooks reported one. */
+  usage?: AgentTokenUsage | null;
   onAction: (action: InspectorActionKind, target: InspectorTarget) => void;
   now?: number;
 }
@@ -28,7 +31,7 @@ export interface AgentInspectorProps {
  * asked. Container, pane, tab and PTY identifiers wait behind "Technical
  * details".
  */
-export function AgentInspector({ target, label, status, request, activity, runtime, onAction, now = Date.now() }: AgentInspectorProps) {
+export function AgentInspector({ target, label, status, request, activity, runtime, usage = null, onAction, now = Date.now() }: AgentInspectorProps) {
   const t = useT();
   if (!target) {
     return (
@@ -68,6 +71,24 @@ export function AgentInspector({ target, label, status, request, activity, runti
         </span>
         <span className="terra-inspector-hint">{t("inspector.contextHint")}</span>
       </section>
+
+      {usage ? (
+        <section className="terra-inspector-block" aria-label={t("inspector.tokens")}>
+          <div className="terra-inspector-row">
+            <span>{t("inspector.tokens")}</span>
+            <b>{formatTokens(usage.input_tokens + usage.output_tokens + usage.cache_read_tokens + usage.cache_write_tokens)}</b>
+          </div>
+          <span className="terra-inspector-hint">
+            {t("inspector.tokensDetail", {
+              input: formatTokens(usage.input_tokens + usage.cache_write_tokens),
+              output: formatTokens(usage.output_tokens),
+              cached: formatTokens(usage.cache_read_tokens),
+              turns: usage.turns,
+            })}
+            {usage.model ? ` · ${usage.model}` : ""}
+          </span>
+        </section>
+      ) : null}
 
       {request ? (
         <section className="terra-inspector-request" aria-label={t("inspector.request")}>

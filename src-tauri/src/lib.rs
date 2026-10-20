@@ -4,6 +4,7 @@ mod mcp;
 mod pty;
 mod scrollback;
 mod sync;
+mod usage;
 mod voice;
 mod workspace;
 mod worktree;
@@ -160,6 +161,7 @@ pub fn run() {
             mcp::commands::mcp_update_task,
             mcp::commands::mcp_delete_task,
             mcp::commands::mcp_agent_statuses,
+            mcp::commands::agent_usage,
             voice::voice_toggle_recording,
             voice::voice_set_language,
             voice::voice_mic_available,

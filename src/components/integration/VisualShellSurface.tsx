@@ -26,6 +26,7 @@ import { sendPromptToTerminal } from "../../lib/session/sendPrompt";
 import { startMcpEventBridge, useReportedStates } from "../../stores/mcpStore";
 import { useReviewStore } from "../../stores/reviewStore";
 import { useLibraryStore } from "../../stores/libraryStore";
+import { useAgentUsage } from "../../stores/usageStore";
 import { startPreviewBridge } from "../../stores/previewStore";
 import { PreviewPanel } from "../preview/PreviewPanel";
 import { deriveAgentStatus } from "../../domain/agentStatus";
@@ -524,6 +525,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const inspectorSignals = inspectorTarget
     ? props.notificationItems.filter((item) => item.terminalId === inspectorTarget.terminalId).sort((a, b) => b.ts - a.ts)
     : [];
+  const inspectorUsage = useAgentUsage(inspectorTarget?.workspaceId ?? null, inspectorTarget?.terminalId ?? null, inspectorActive);
   const inspectorPanel = (
     <AgentInspector
       target={inspectorTarget}
@@ -532,6 +534,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       request={inspectorSignals.find((item) => !item.read && !item.system) ?? null}
       activity={inspectorSignals.slice(0, 4)}
       runtime={inspectorRuntime}
+      usage={inspectorUsage}
       onAction={handleInspectorAction}
     />
   );

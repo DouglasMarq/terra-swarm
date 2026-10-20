@@ -71,6 +71,8 @@ pub struct McpHub {
     hook_program: Mutex<Option<PathBuf>>,
     /// Where generated client config files (Claude's `--mcp-config`) live.
     config_dir: Option<PathBuf>,
+    /// Each terminal's session log, as its hooks reported it.
+    session_logs: Mutex<std::collections::HashMap<String, crate::usage::SessionLog>>,
     host: Box<dyn McpHost>,
 }
 
@@ -96,6 +98,7 @@ impl McpHub {
             tokens: Mutex::new(TokenRegistry::default()),
             port: Mutex::new(None),
             hook_program: Mutex::new(None),
+            session_logs: Mutex::new(std::collections::HashMap::new()),
             config_dir,
             host,
         }
@@ -110,6 +113,7 @@ impl McpHub {
             tokens: Mutex::new(TokenRegistry::default()),
             port: Mutex::new(None),
             hook_program: Mutex::new(None),
+            session_logs: Mutex::new(std::collections::HashMap::new()),
             config_dir,
             host,
         }
@@ -247,6 +251,14 @@ impl McpHub {
             EVENT_TASKS_CHANGED,
             serde_json::json!({ "workspace_id": workspace_id }),
         );
+    }
+
+    pub fn set_session_log(&self, terminal_id: &str, log: crate::usage::SessionLog) {
+        guard(&self.session_logs).insert(terminal_id.to_string(), log);
+    }
+
+    pub fn session_log(&self, terminal_id: &str) -> Option<crate::usage::SessionLog> {
+        guard(&self.session_logs).get(terminal_id).cloned()
     }
 
     pub fn emit_nudge(&self, workspace_id: &str, terminal_id: &str, prompt: &str) {

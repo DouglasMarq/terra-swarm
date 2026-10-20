@@ -152,6 +152,8 @@ export const ptBR: Dictionary<typeof en> = {
     pane: "Painel {name}",
   },
   inspector: {
+    tokens: "Tokens",
+    tokensDetail: "{input} de entrada · {output} de saída · {cached} do cache · {turns} respostas",
     emptyTitle: "Nada em foco",
     emptyBody: "Escolha um agente na barra lateral ou no Workbench.",
     context: "Contexto",

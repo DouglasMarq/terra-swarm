@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AgentInfo,
+  AgentTokenUsage,
   AgentLaunchExtras,
   ActivePaneSelection,
   BacklogSnapshot,
@@ -251,6 +252,10 @@ export interface IpcCommandContract {
     args: { workspaceId: string; id: string };
     result: void;
   };
+  agentUsage: {
+    args: { workspaceId: string };
+    result: AgentTokenUsage[];
+  };
   mcpAgentStatuses: {
     args: { workspaceId: string };
     result: McpAgentStatus[];
@@ -368,6 +373,7 @@ const IPC_COMMANDS = {
   writeWorkspaceFile: "write_workspace_file",
   gitStatus: "git_status",
   mcpServerInfo: "mcp_server_info",
+  agentUsage: "agent_usage",
   mcpSetEnabled: "mcp_set_enabled",
   mcpListTasks: "mcp_list_tasks",
   mcpCreateTask: "mcp_create_task",

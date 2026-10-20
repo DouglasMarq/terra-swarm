@@ -133,6 +133,24 @@ pub fn mcp_agent_statuses(hub: Hub<'_>, workspace_id: String) -> Vec<AgentStatus
         .unwrap_or_default()
 }
 
+/// Tokens used by each agent of the workspace whose session log is known
+/// (reported by its hooks), read from the agent CLI's own log files.
+#[tauri::command(async)]
+pub fn agent_usage(hub: Hub<'_>, workspace_id: String) -> Vec<crate::usage::AgentUsage> {
+    hub.workspace_terminals(&workspace_id)
+        .into_iter()
+        .filter_map(|terminal_id| {
+            let log = hub.session_log(&terminal_id)?;
+            let agent = match log {
+                crate::usage::SessionLog::Claude(_) => "claude",
+                crate::usage::SessionLog::Codex(_) => "codex",
+            };
+            let usage = crate::usage::usage_of(&log)?;
+            Some(crate::usage::AgentUsage { terminal_id, agent: agent.into(), usage })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -149,6 +149,8 @@ export const en = {
     pane: "Pane {name}",
   },
   inspector: {
+    tokens: "Tokens",
+    tokensDetail: "{input} in · {output} out · {cached} from cache · {turns} replies",
     emptyTitle: "Nothing in focus",
     emptyBody: "Pick an agent in the sidebar or the Workbench.",
     context: "Context",

@@ -115,7 +115,7 @@ describe("mcp store", () => {
   it("refetches open boards and tracks agent statuses from events", async () => {
     api.mcpListTasks.mockResolvedValue([]);
     await useMcpStore.getState().loadTasks("ws-1");
-    const stop = startMcpEventBridge();
+    const stop = startMcpEventBridge(vi.fn());
     await Promise.resolve();
 
     api.mcpListTasks.mockResolvedValue([makeTask("T-1")]);
@@ -157,7 +157,7 @@ describe("startMcpEventBridge", () => {
   it("given a listener fails to register, warns when stopped instead of swallowing it", async () => {
     vi.mocked(listen).mockRejectedValueOnce(new Error("no event bus"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const stop = startMcpEventBridge();
+    const stop = startMcpEventBridge(vi.fn());
     stop();
     await vi.waitFor(() => expect(warn).toHaveBeenCalledWith("failed to stop listening for MCP events:", expect.any(Error)));
     warn.mockRestore();

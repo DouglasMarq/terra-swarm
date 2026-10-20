@@ -1,5 +1,6 @@
-import type { McpTask, McpTaskPatch, McpTaskStatus } from "../../types";
+import type { McpTask, McpTaskEvent, McpTaskPatch, McpTaskStatus } from "../../types";
 import { taskNumber } from "../../domain/tasks";
+import type { Translate } from "../../i18n";
 
 /** Columns of the Kanban board, in workflow order. */
 export const BOARD_COLUMNS: readonly McpTaskStatus[] = ["todo", "in_progress", "blocked", "review", "done"];
@@ -73,4 +74,40 @@ export function planDrop(
     return position === task.position ? null : { kind: "update", patch: { position } };
   }
   return { kind: "update", patch: { status: target.status, position } };
+}
+
+/** A task status in the reader's language; text that is not a status is kept as is. */
+export function taskStatusLabel(value: string, t: Translate): string {
+  return (BOARD_COLUMNS as readonly string[]).includes(value)
+    ? t(`tasks.status.${value as McpTaskStatus}`)
+    : value;
+}
+
+/**
+ * One history line, in the reader's language. A `status` event's body is the
+ * backend's `"from → to"`.
+ */
+export function describeTaskEvent(
+  event: McpTaskEvent,
+  t: Translate,
+  agentLabel: (terminalId: string) => string,
+): string {
+  switch (event.kind) {
+    case "created":
+      return t("tasks.event.created");
+    case "claimed":
+      return t("tasks.event.claimed");
+    case "status": {
+      const [from = "", to = ""] = event.body.split("→").map((part) => part.trim());
+      return t("tasks.event.status", { from: taskStatusLabel(from, t), to: taskStatusLabel(to, t) });
+    }
+    case "assigned":
+      return event.body
+        ? t("tasks.event.assigned", { who: event.body === "user" ? t("tasks.you") : agentLabel(event.body) })
+        : t("tasks.event.unassigned");
+    case "completed":
+      return t("tasks.event.completed", { summary: event.body });
+    default:
+      return event.body;
+  }
 }

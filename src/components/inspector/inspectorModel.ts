@@ -1,4 +1,5 @@
 import type {
+  AgentTokenUsage,
   Group,
   Workspace,
   WorkspaceSnapshotV2,
@@ -115,4 +116,9 @@ export function resolveInspectorTarget(
     contextUsage: typeof usage === "number" && Number.isFinite(usage) ? usage : null,
     detached: detachedTerminalIds.includes(terminal.id),
   };
+}
+
+/** Every token the agent's session spent: input, output and both cache directions. */
+export function totalTokens(usage: AgentTokenUsage): number {
+  return usage.input_tokens + usage.output_tokens + usage.cache_read_tokens + usage.cache_write_tokens;
 }

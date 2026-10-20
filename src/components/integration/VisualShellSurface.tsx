@@ -519,7 +519,6 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   ] as const;
   const focusedLabel = props.focusedId ? agentLabels[props.focusedId] ?? null : null;
   const muted = muteUntil > Date.now();
-  // Re-render when the hour is up so the badge comes back on its own.
   useEffect(() => {
     if (muteUntil <= Date.now()) return;
     const timer = window.setTimeout(() => setMuteUntil(0), muteUntil - Date.now());
@@ -752,7 +751,6 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       focusedWorkspaceId={props.activeId}
       focusedTerminalId={props.focusedId}
       hasDetachedTabs={props.detachedTerminalIds.length > 0}
-      // Workspace tabs are gone from the chrome; nothing to reopen.
       hasRecentlyClosedTabs={false}
       agentLabels={agentLabels}
       resumeCount={props.resumeCount ?? 0}

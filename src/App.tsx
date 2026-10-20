@@ -107,7 +107,6 @@ function App() {
   const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
-  // Settings is a surface of the shell (v3), not a modal.
   const showSettings = useShellStore((state) => state.activeSurface === "settings");
   const setShowSettings = (open: boolean) => {
     const shell = useShellStore.getState();
@@ -288,7 +287,6 @@ function App() {
 
   const active = workspaces.find((w) => w.id === activeId) ?? null;
   const agentNames = usePreferencesStore((state) => state.agentNames);
-  // Running agents of the active project, for the prompt library.
   const promptTargets = useMemo(() => {
     if (!active) return [];
     const labels = buildAgentLabels([active], { titles, names: agentNames });
@@ -400,7 +398,6 @@ function App() {
     if (!renameTarget) return;
     const target = renameTarget;
     const nextName = target.value.trim();
-    // An empty agent name removes it (back to the task title / kind).
     if (!nextName && target.kind !== "terminal") return;
     setRenameTarget(null);
     if (target.kind === "terminal") {
@@ -539,8 +536,6 @@ function App() {
   const applyGridLayout = async (cols: number) => {
     if (!(GRID_COL_OPTIONS as readonly number[]).includes(cols)) return;
     setGridCols(cols);
-    // Even out every pane to an equal share of the row, then reload the
-    // workspaces so all grids re-layout on the new column count.
     const basis = Math.floor(100 / cols);
     const targets = workspaces.flatMap((w) =>
       w.terminals.map((t) => ({ wsId: w.id, id: t.id })),
@@ -595,7 +590,6 @@ function App() {
         await worktreeClose.request(terminal.id);
         return;
       case "clear-scrollback":
-        // Clear what the user sees, not only the cached runtime state.
         getTerminal(terminal.id)?.clear();
         clearTerminal(terminal.id);
         pushSystemNotification(t("app.historyCleared"));

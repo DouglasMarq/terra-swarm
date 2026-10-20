@@ -46,8 +46,6 @@ export function useAppInitialization({ workspaces, sessions, resumeQueue, agentC
     sessions.track(list.flatMap((workspace) => workspace.terminals.map((terminal) => terminal.id)), live);
     const suspendedGroups = suspendedGroupIds(groups);
     const suspendedProjects = new Set(groups.filter((group) => group.suspended === true).flatMap((group) => group.projectIds));
-    // Persisted terminals that are no longer alive were running when the app
-    // last closed: offer to resume them instead of silently respawning.
     const items: ResumeItem[] = [];
     for (const workspace of list) {
       for (const terminal of workspace.terminals) {
@@ -58,7 +56,6 @@ export function useAppInitialization({ workspaces, sessions, resumeQueue, agentC
       }
     }
     if (items.length > 0) {
-      // Show the exited overlay right away instead of a blank pane.
       useTerminalRuntimeStore.getState().setExited((previous) => {
         const next = { ...previous };
         for (const item of items) next[item.terminalId] = null;

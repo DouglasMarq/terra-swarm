@@ -252,7 +252,6 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
     };
   }, []);
 
-  // Bring the current choice into view once the list arrives.
   useEffect(() => {
     if (fonts) selectedRef.current?.scrollIntoView?.({ block: "nearest" });
   }, [fonts]);

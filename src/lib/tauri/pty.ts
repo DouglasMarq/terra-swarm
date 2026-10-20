@@ -1,4 +1,5 @@
 import type {
+  AgentLaunchExtras,
   BacklogSnapshot,
   RunningTerminal,
   SpawnedTerminal,
@@ -13,6 +14,7 @@ export function spawnTerminal(
   cols = 80,
   rows = 24,
   shell?: string,
+  launch?: AgentLaunchExtras,
 ): Promise<SpawnedTerminal> {
   return invokeCommand("spawnTerminal", {
     workspaceId,
@@ -21,6 +23,7 @@ export function spawnTerminal(
     rows,
     terminalId: terminalId ?? null,
     shell: shell ?? null,
+    launch: launch ?? null,
   });
 }
 

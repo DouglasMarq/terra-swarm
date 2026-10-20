@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
 import type {
+  AgentLaunchExtras,
   ContextPayload,
   ExitPayload,
   NotificationPayload,
@@ -21,7 +22,7 @@ import { createSpawnQueue } from "../lib/session/spawnQueue";
 import { isCurrentSpawnedTerminalRunning } from "../lib/session/terminalLifecycle";
 import { workspaceIdForTerminal } from "../lib/session/terminalOwnership";
 import { profileForCommand, resolveResumeCommand } from "../lib/features/agentProfiles";
-import { usePreferencesStore } from "../stores/preferencesStore";
+import { parseEnvLines, usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
 
@@ -65,6 +66,12 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
   const spawnSeq = useRef<Record<string, number>>({});
   const runtime = () => useTerminalRuntimeStore.getState();
   const defaultShell = () => usePreferencesStore.getState().defaultShell || undefined;
+  /** The user's extra arguments and variables for the command's agent. */
+  const launchExtras = (command: string): AgentLaunchExtras | undefined => {
+    const settings = usePreferencesStore.getState().agentLaunch[profileForCommand(command).id];
+    if (!settings) return undefined;
+    return { args: settings.args.trim() || undefined, env: parseEnvLines(settings.env).env };
+  };
 
   // Backend events. Registered without a one-time guard so StrictMode's
   // unmount/remount cycle registers them again.
@@ -183,7 +190,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
       .find((workspace) => workspace.id === workspaceId)
       ?.terminals.map((terminal) => getTerminal(terminal.id))
       .find((terminal) => terminal && terminal.cols > 0 && terminal.rows > 0);
-    const result = await api.spawnTerminal(workspaceId, command, undefined, sibling?.cols, sibling?.rows, defaultShell());
+    const result = await api.spawnTerminal(workspaceId, command, undefined, sibling?.cols, sibling?.rows, defaultShell(), launchExtras(command));
     await registerSpawned(result);
     nameNewAgent(result.meta.id);
     if (placement?.paneId) {
@@ -232,7 +239,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
    */
   const respawn = async (workspaceId: string, terminalId: string, command: string) => {
     const term = getTerminal(terminalId);
-    const result = await api.spawnTerminal(workspaceId, command, terminalId, term?.cols, term?.rows, defaultShell());
+    const result = await api.spawnTerminal(workspaceId, command, terminalId, term?.cols, term?.rows, defaultShell(), launchExtras(command));
     await registerSpawned(result);
   };
 

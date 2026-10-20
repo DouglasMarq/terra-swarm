@@ -154,6 +154,49 @@ function nameListFor(set: NameSetId): string[] {
   return set === "custom" ? loadCustomNameList() : [...NAME_SETS[set]];
 }
 
+/** User launch settings of one agent: extra arguments and `KEY=VALUE` lines. */
+export interface AgentLaunchSettings {
+  args: string;
+  env: string;
+}
+
+function loadAgentLaunch(): Record<string, AgentLaunchSettings> {
+  try {
+    const parsed: unknown = JSON.parse(storageGet("agentLaunch") ?? "{}");
+    if (!parsed || typeof parsed !== "object") return {};
+    const clean: Record<string, AgentLaunchSettings> = {};
+    for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!value || typeof value !== "object") continue;
+      const entry = value as Record<string, unknown>;
+      clean[id] = {
+        args: typeof entry.args === "string" ? entry.args : "",
+        env: typeof entry.env === "string" ? entry.env : "",
+      };
+    }
+    return clean;
+  } catch {
+    return {};
+  }
+}
+
+/** Parse `KEY=VALUE` lines; blank lines and `#` comments are skipped. */
+export function parseEnvLines(text: string): { env: Record<string, string>; invalid: string[] } {
+  const env: Record<string, string> = {};
+  const invalid: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const separator = line.indexOf("=");
+    const key = separator > 0 ? line.slice(0, separator).trim() : "";
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || key.startsWith("TERRA_")) {
+      invalid.push(line);
+      continue;
+    }
+    env[key] = line.slice(separator + 1).trim();
+  }
+  return { env, invalid };
+}
+
 function loadAgentNames(): Record<string, string> {
   try {
     const parsed = JSON.parse(storageGet("agentNames") ?? "{}");
@@ -276,6 +319,8 @@ export type PreferencesState = {
   namesExhausted: NamesExhaustedStrategy;
   /** Names given to agents (automatically or through Rename), by terminal id. */
   agentNames: Record<string, string>;
+  /** Extra arguments and environment per agent id. */
+  agentLaunch: Record<string, AgentLaunchSettings>;
   gridCols: number;
   voiceEnabled: boolean;
   voiceLang: string;
@@ -299,6 +344,7 @@ export type PreferencesState = {
   setAvoidSimilarNames: (enabled: boolean) => void;
   setNamesExhausted: (strategy: NamesExhaustedStrategy) => void;
   setAgentName: (terminalId: string, name: string | null) => void;
+  setAgentLaunch: (agentId: string, settings: AgentLaunchSettings) => void;
   setGridCols: (cols: number) => void;
   setVoiceEnabled: (enabled: boolean) => void;
   setVoiceLang: (lang: string) => void;
@@ -321,6 +367,7 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   avoidSimilarNames: storageGet("avoidSimilarNames") !== "0",
   namesExhausted: storageGet("namesExhausted") === "repeat" ? "repeat" : "type-number",
   agentNames: loadAgentNames(),
+  agentLaunch: loadAgentLaunch(),
   gridCols: loadGridCols(),
   voiceEnabled: storageGet("voiceEnabled") === "1",
   voiceLang: storageGet("voiceLanguage") ?? "auto",
@@ -416,6 +463,15 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
     storageSet("namesExhausted", namesExhausted);
     set({ namesExhausted });
   },
+
+  setAgentLaunch: (agentId, settings) =>
+    set((state) => {
+      const agentLaunch = { ...state.agentLaunch };
+      if (settings.args.trim() || settings.env.trim()) agentLaunch[agentId] = { args: settings.args, env: settings.env };
+      else delete agentLaunch[agentId];
+      storageSet("agentLaunch", JSON.stringify(agentLaunch));
+      return { agentLaunch };
+    }),
 
   setAgentName: (terminalId, name) =>
     set((state) => {

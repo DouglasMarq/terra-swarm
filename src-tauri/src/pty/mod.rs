@@ -1,5 +1,5 @@
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -161,6 +161,38 @@ pub struct ExitPayload {
     pub seq: u64,
 }
 
+/// Per-launch settings that are not part of the stored terminal record.
+#[derive(Default, Debug, Clone)]
+pub struct SpawnOptions {
+    pub shell: Option<String>,
+    /// Extra arguments appended to the command (per-agent setting).
+    pub args: Option<String>,
+    /// Extra environment variables (per-agent setting).
+    pub env: HashMap<String, String>,
+}
+
+impl SpawnOptions {
+    /// Variables safe to set: a real name, no NUL, and never one of the
+    /// variables Terra uses to identify the terminal.
+    fn valid_env(&self) -> impl Iterator<Item = (&String, &String)> {
+        self.env.iter().filter(|(key, value)| {
+            !key.is_empty()
+                && !key.contains('=')
+                && !key.contains('\0')
+                && !value.contains('\0')
+                && !key.starts_with("TERRA_")
+        })
+    }
+}
+
+#[derive(Deserialize, Default, Debug, Clone)]
+pub struct LaunchExtras {
+    #[serde(default)]
+    pub args: Option<String>,
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+}
+
 #[derive(Serialize, Clone)]
 pub struct SpawnedTerminal {
     pub meta: TerminalMeta,
@@ -238,8 +270,9 @@ pub fn spawn_terminal_inner<R: Runtime>(
     cols: u16,
     rows: u16,
     force_id: Option<&str>,
-    preferred_shell: Option<&str>,
+    options: &SpawnOptions,
 ) -> Result<SpawnedTerminal, String> {
+    let preferred_shell = options.shell.as_deref();
     let workspace_id = workspace_id.to_string();
     let cwd = {
         let store = store.lock().map_err(|e| e.to_string())?;
@@ -288,16 +321,22 @@ pub fn spawn_terminal_inner<R: Runtime>(
         ShellFlavor::Posix => Quoting::Posix,
         _ => Quoting::Windows,
     };
+    // The user's per-agent arguments, appended only to the process that
+    // runs: the stored command stays as typed so resume can rebuild it.
+    let launch_command = match options.args.as_deref().map(str::trim) {
+        Some(args) if !args.is_empty() && !interactive => format!("{} {}", command, args),
+        _ => command.clone(),
+    };
     // Issued only after the duplicate checks above: a fresh token for an id
     // that is already running would log the live terminal out.
     let mut mcp_launch = app
         .try_state::<Arc<McpHub>>()
-        .and_then(|hub| hub.launch(&id, &workspace_id, &command, quoting));
+        .and_then(|hub| hub.launch(&id, &workspace_id, &launch_command, quoting));
     // Only the spawned process sees the MCP flags; `command` (persisted in
     // the workspace store) stays as the user typed it.
     let run_command = mcp_launch
         .as_ref()
-        .map_or_else(|| command.clone(), |launch| launch.command.clone());
+        .map_or_else(|| launch_command.clone(), |launch| launch.command.clone());
     #[cfg(unix)]
     {
         if interactive {
@@ -332,6 +371,11 @@ pub fn spawn_terminal_inner<R: Runtime>(
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "terra-swarm");
+    for (key, value) in options.valid_env() {
+        cmd.env(key, value);
+    }
+    // Set after the user's variables so they cannot point an agent at
+    // another terminal's identity.
     if let Some(launch) = &mcp_launch {
         for (key, value) in &launch.env {
             cmd.env(key, value);
@@ -508,7 +552,9 @@ pub fn spawn_terminal(
     rows: u16,
     terminal_id: Option<String>,
     shell: Option<String>,
+    launch: Option<LaunchExtras>,
 ) -> Result<SpawnedTerminal, String> {
+    let launch = launch.unwrap_or_default();
     spawn_terminal_inner(
         &app,
         &manager,
@@ -518,7 +564,11 @@ pub fn spawn_terminal(
         cols,
         rows,
         terminal_id.as_deref(),
-        shell.as_deref(),
+        &SpawnOptions {
+            shell,
+            args: launch.args,
+            env: launch.env,
+        },
     )
 }
 
@@ -539,7 +589,7 @@ pub fn demo_seed(app: &AppHandle) {
         .map(|mut s| s.create("agents".into(), String::new()));
     if let Ok(ws1) = ws1 {
         for c in picked {
-            let _ = spawn_terminal_inner(app, &manager, &store, &ws1.id, c, 100, 30, None, None);
+            let _ = spawn_terminal_inner(app, &manager, &store, &ws1.id, c, 100, 30, None, &SpawnOptions::default());
         }
     }
     let ws2 = store
@@ -547,8 +597,8 @@ pub fn demo_seed(app: &AppHandle) {
         .map(|mut s| s.create("scratch".into(), String::new()));
     if let Ok(ws2) = ws2 {
         #[cfg(unix)]
-        let _ = spawn_terminal_inner(app, &manager, &store, &ws2.id, "top", 100, 30, None, None);
-        let _ = spawn_terminal_inner(app, &manager, &store, &ws2.id, "shell", 100, 30, None, None);
+        let _ = spawn_terminal_inner(app, &manager, &store, &ws2.id, "top", 100, 30, None, &SpawnOptions::default());
+        let _ = spawn_terminal_inner(app, &manager, &store, &ws2.id, "shell", 100, 30, None, &SpawnOptions::default());
     }
     let _ = app.emit("workspaces-changed", ());
 }
@@ -841,7 +891,7 @@ mod runtime_info_tests {
 
 #[cfg(test)]
 mod spawn_lifecycle_tests {
-    use super::{spawn_terminal_inner, PtyManager};
+    use super::{spawn_terminal_inner, PtyManager, SpawnOptions};
     use crate::workspace::WorkspaceStore;
     use std::sync::Mutex;
     use std::time::{Duration, Instant};
@@ -868,7 +918,7 @@ mod spawn_lifecycle_tests {
             80,
             24,
             None,
-            None,
+            &SpawnOptions::default(),
         )
         .expect("spawn immediate command");
 
@@ -903,5 +953,65 @@ mod spawn_lifecycle_tests {
                 .is_none(),
             "reaped child left a phantom manager entry"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn per_agent_args_and_env_reach_the_process_but_not_terra_variables() {
+        let app = tauri::test::mock_app();
+        assert!(app.manage(Mutex::new(PtyManager::default())));
+        assert!(app.manage(Mutex::new(WorkspaceStore::default())));
+        let dir = std::env::temp_dir().join(format!("terra-spawn-env-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = app.state::<Mutex<WorkspaceStore>>();
+        let workspace = store
+            .lock()
+            .unwrap()
+            .create("env".into(), dir.to_string_lossy().into_owned());
+        let manager = app.state::<Mutex<PtyManager>>();
+        let run = |args: &str, out: &str| {
+            let options = SpawnOptions {
+                shell: Some("/bin/sh".into()),
+                args: Some(format!("{} > {}", args, dir.join(out).display())),
+                env: [
+                    ("AGENT_TEST_VAR".to_string(), "hello".to_string()),
+                    ("TERRA_PANE_ID".to_string(), "spoofed".to_string()),
+                ]
+                .into_iter()
+                .collect(),
+            };
+            let spawned = spawn_terminal_inner(
+                app.handle(),
+                manager.inner(),
+                store.inner(),
+                &workspace.id,
+                "printenv",
+                80,
+                24,
+                None,
+                &options,
+            )
+            .expect("spawn printenv");
+            // The stored command stays as typed.
+            assert_eq!(spawned.meta.command, "printenv");
+        };
+        run("AGENT_TEST_VAR", "agent.txt");
+        run("TERRA_PANE_ID", "terra.txt");
+        let read = |name: &str| {
+            let deadline = Instant::now() + Duration::from_secs(3);
+            loop {
+                if let Ok(text) = std::fs::read_to_string(dir.join(name)) {
+                    if !text.is_empty() || Instant::now() > deadline {
+                        return text;
+                    }
+                }
+                assert!(Instant::now() < deadline, "{} was never written", name);
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        };
+        assert_eq!(read("agent.txt").trim(), "hello");
+        std::thread::sleep(Duration::from_millis(300));
+        assert_eq!(read("terra.txt").trim(), "");
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

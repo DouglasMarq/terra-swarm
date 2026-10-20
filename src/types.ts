@@ -449,3 +449,9 @@ export interface McpServerInfo {
   db_path: string | null;
   error: string | null;
 }
+
+/** Per-agent launch settings applied on every spawn, never stored with the terminal. */
+export interface AgentLaunchExtras {
+  args?: string;
+  env?: Record<string, string>;
+}

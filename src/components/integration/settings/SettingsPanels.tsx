@@ -21,6 +21,7 @@ import {
   MAX_FONT_SIZE,
   MIN_FONT_SIZE,
   formatHotkey,
+  parseEnvLines,
   type Hotkey,
 } from "../../../stores/preferencesStore";
 import type {
@@ -354,6 +355,65 @@ function useNamesInUse(): string[] {
   return useMemo(() => Object.values(agentNames), [agentNames]);
 }
 
+/** Extra arguments and environment variables used every time an agent starts. */
+function AgentLaunchEditor({ agentId, label }: { agentId: string; label: string }) {
+  const t = useT();
+  const saved = usePreferencesStore((state) => state.agentLaunch[agentId]);
+  const setAgentLaunch = usePreferencesStore((state) => state.setAgentLaunch);
+  const [open, setOpen] = useState(false);
+  const [args, setArgs] = useState(saved?.args ?? "");
+  const [env, setEnv] = useState(saved?.env ?? "");
+  const invalid = parseEnvLines(env).invalid;
+  const configured = Boolean(saved?.args.trim() || saved?.env.trim());
+  const save = () => setAgentLaunch(agentId, { args, env });
+  return (
+    <div className={styles.agentLaunch}>
+      <button
+        type="button"
+        className={styles.agentLaunchToggle}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        {t("settingsPanels.launchOptions")}
+        {configured ? <span className={styles.agentLaunchBadge}>{t("settingsPanels.launchConfigured")}</span> : null}
+      </button>
+      {open ? (
+        <div className={styles.stack}>
+          <label className={styles.fieldLabel}>
+            {t("settingsPanels.launchArgs")}
+            <input
+              className={styles.input}
+              value={args}
+              placeholder={t("settingsPanels.launchArgsPlaceholder")}
+              aria-label={t("settingsPanels.launchArgsFor", { name: label })}
+              onChange={(event) => setArgs(event.target.value)}
+              onBlur={save}
+            />
+          </label>
+          <label className={styles.fieldLabel}>
+            {t("settingsPanels.launchEnv")}
+            <textarea
+              className={styles.textarea}
+              value={env}
+              rows={3}
+              spellCheck={false}
+              placeholder="ANTHROPIC_MODEL=claude-sonnet-5-5"
+              aria-label={t("settingsPanels.launchEnvFor", { name: label })}
+              onChange={(event) => setEnv(event.target.value)}
+              onBlur={save}
+            />
+          </label>
+          {invalid.length > 0 ? (
+            <p className={styles.hint} role="alert">{t("settingsPanels.launchEnvInvalid", { lines: invalid.join(", ") })}</p>
+          ) : (
+            <p className={styles.hint}>{t("settingsPanels.launchHint")}</p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** The embedded MCP server: the on/off switch and where it listens. */
 function McpCard() {
   const t = useT();
@@ -540,14 +600,17 @@ function AgentPanel({
               const detected = agents.find((agent) => agent.id === profile.id);
               const available = detected?.available ?? true;
               return (
-                <div className={styles.agentRow} key={profile.id}>
-                  <div className={styles.agentIdentity}>
-                    <span className={styles.agentName}>{profile.label}</span>
-                    <span className={styles.agentCommand}>{profile.command || "shell"}</span>
+                <div className={styles.agentEntry} key={profile.id}>
+                  <div className={styles.agentRow}>
+                    <div className={styles.agentIdentity}>
+                      <span className={styles.agentName}>{profile.label}</span>
+                      <span className={styles.agentCommand}>{profile.command || "shell"}</span>
+                    </div>
+                    <span className={`${styles.status} ${available ? styles.available : styles.unavailable}`}>
+                      {available ? t("settingsPanels.available") : t("settingsPanels.notFound")}
+                    </span>
                   </div>
-                  <span className={`${styles.status} ${available ? styles.available : styles.unavailable}`}>
-                    {available ? t("settingsPanels.available") : t("settingsPanels.notFound")}
-                  </span>
+                  {profile.id !== "shell" && available ? <AgentLaunchEditor agentId={profile.id} label={profile.label} /> : null}
                 </div>
               );
             })}

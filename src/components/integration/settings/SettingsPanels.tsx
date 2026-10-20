@@ -380,13 +380,17 @@ function McpCard() {
           <span className={styles.rowHint}>{t("settingsPanels.mcpExposeHint")}</span>
         </div>
         <Toggle
-          checked={server?.enabled ?? true}
-          disabled={!server}
+          checked={server ? server.available && server.enabled : true}
+          disabled={!server || !server.available}
           label={t("settingsPanels.mcpExpose")}
           onChange={(enabled) => void setEnabled(enabled)}
         />
       </div>
-      {server ? (
+      {server && !server.available ? (
+        <p className={styles.hint} role="alert">
+          {t("settingsPanels.mcpUnavailable", { error: server.error ?? "" })}
+        </p>
+      ) : server ? (
         server.running && server.url ? (
           <p className={styles.hint}>
             {t("settingsPanels.mcpUrl")}: <code className={styles.agentCommand}>{server.url}</code>
@@ -395,6 +399,11 @@ function McpCard() {
         ) : (
           <p className={styles.hint}>{t("settingsPanels.mcpNotRunning")}</p>
         )
+      ) : null}
+      {server?.db_path ? (
+        <p className={styles.hint}>
+          {t("settingsPanels.mcpDbPath")}: <code className={styles.agentCommand}>{server.db_path}</code>
+        </p>
       ) : null}
     </div>
   );

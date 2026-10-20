@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Send, Trash2 } from "lucide-react";
 import { useT } from "../../i18n";
-import { sendPromptToTerminal } from "../../lib/session/sendPrompt";
+import { sendPromptToTerminal } from "../../app/sendPromptToTerminal";
 import { fillPrompt, useLibraryStore } from "../../stores/libraryStore";
 import { DialogFooter, TerraDialog } from "../overlays/Dialog";
 import { Button } from "../ui/Button";

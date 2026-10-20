@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { api } from "../api";
 import type { ResumeItem, Workspace, WorkspaceGroup } from "../types";
 import { t } from "../i18n";
+import { agentKind } from "../domain/agentLabels";
 import { planResume } from "../lib/session/resumePlanner";
 import { useOrchestrationStore } from "../stores/orchestrationStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
@@ -88,7 +89,7 @@ export function useGroupActions({ workspaces, groups, sessions, refresh, setWork
       wsName: candidate.projectName,
       cwd: candidate.cwd ?? "",
       command: candidate.command ?? "shell",
-      agentId: candidate.agentId ?? candidate.command?.trim().split(/\s+/)[0] ?? "shell",
+      agentId: candidate.agentId ?? agentKind(candidate.command),
       resumeCommand: candidate.resumeCommand ?? candidate.command ?? "shell",
     }));
     const results = await sessions.resumeItems(resumeItems);

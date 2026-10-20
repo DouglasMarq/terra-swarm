@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Copy, GitBranch, GitMerge, GitPullRequest, RefreshCw } from "lucide-react";
 import { api } from "../../api";
 import { useT } from "../../i18n";
+import { errorMessage } from "../../lib/errors/errorMessage";
 import { useMcpStore } from "../../stores/mcpStore";
 import { useReviewStore } from "../../stores/reviewStore";
 import type { WorktreeDiff } from "../../types";
@@ -11,10 +12,6 @@ import { parsePatch, suggestTitle, type DiffFileSection } from "./diffModel";
 import "./review.css";
 
 type Busy = "load" | "commit" | "merge" | "pr" | null;
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /**
  * Review what an isolated agent changed on its branch, then commit it, merge
@@ -48,7 +45,7 @@ export function WorktreeReviewDialog() {
       setDiff(next);
       setSelected((current) => (current && next.files.some((file) => file.path === current) ? current : next.files[0]?.path ?? null));
     } catch (failure) {
-      setError(describe(failure));
+      setError(errorMessage(failure));
     } finally {
       setBusy(null);
     }
@@ -87,7 +84,7 @@ export function WorktreeReviewDialog() {
       if (done) setNotice(done);
       await load();
     } catch (failure) {
-      setError(describe(failure));
+      setError(errorMessage(failure));
     } finally {
       setBusy(null);
     }

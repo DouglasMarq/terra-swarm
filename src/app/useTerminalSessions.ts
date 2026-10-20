@@ -16,7 +16,7 @@ import type {
 } from "../types";
 import { getTerminal } from "../terminalRegistry";
 import { t } from "../i18n";
-import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
+import { agentKind, agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { pickAgentName } from "../domain/agentNames";
 import { createDebouncedTask } from "../lib/async/debounce";
 import { createSpawnQueue } from "../lib/session/spawnQueue";
@@ -26,6 +26,7 @@ import { freshCommand, profileForCommand, resolveResumeCommand } from "../lib/fe
 import { parseEnvLines, usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
+import { errorMessage } from "../lib/errors/errorMessage";
 
 export function resumeCommandFor(command: string): string {
   return resolveResumeCommand(profileForCommand(command), command);
@@ -38,14 +39,9 @@ export function resumeItemFor(workspace: Workspace, terminal: Workspace["termina
     wsName: workspace.name,
     cwd: workspace.cwd,
     command: terminal.command,
-    agentId: terminal.command.trim().split(/\s+/)[0] || "shell",
+    agentId: agentKind(terminal.command),
     resumeCommand: resumeCommandFor(terminal.command),
   };
-}
-
-function errorDetail(error: unknown, fallback = ""): string {
-  if (error instanceof Error) return error.message;
-  return String(error ?? fallback);
 }
 
 interface TerminalSessionsInput {
@@ -301,7 +297,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     for (const result of results) {
       if (result.status === "succeeded") continue;
       const label = labels.get(result.id) ?? result.id;
-      runtime().pushSystemNotification(t("app.resumeFailed", { name: label, detail: errorDetail(result.error, result.status) }));
+      runtime().pushSystemNotification(t("app.resumeFailed", { name: label, detail: errorMessage(result.error, result.status) }));
     }
   };
 
@@ -326,7 +322,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
       if (result.status === "succeeded") continue;
       const label = labels[result.id];
       runtime().pushSystemNotification(
-        t("app.resumeAgentFailed", { name: label ? agentLabelText(label) : result.id, detail: errorDetail(result.error, result.status) }),
+        t("app.resumeAgentFailed", { name: label ? agentLabelText(label) : result.id, detail: errorMessage(result.error, result.status) }),
       );
     }
     await refresh();

@@ -6,7 +6,8 @@ import type {
   WorkspaceSnapshotV2,
 } from "../types";
 
-function byId<T extends { id: string }>(items: readonly T[], id: string | null | undefined): T | null {
+/** The item with `id`, or null when `id` is empty or not in `items`. */
+export function byId<T extends { id: string }>(items: readonly T[], id: string | null | undefined): T | null {
   if (!id) return null;
   return items.find((item) => item.id === id) ?? null;
 }

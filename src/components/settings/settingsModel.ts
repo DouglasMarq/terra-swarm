@@ -9,6 +9,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { t } from "../../i18n";
+import { normalizeSearchText } from "../../lib/text/normalizeSearchText";
 
 export const SETTINGS_SECTION_IDS = [
   "general",
@@ -60,26 +61,16 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDefinition[] = [
   section("about", Info, ["versão", "version", "atualizar", "update", "release", "sobre", "about"]),
 ];
 
-/** Search is accent-insensitive and locale-aware for Portuguese labels and commands. */
-export function normalizeSettingsSearch(value: string): string {
-  // Accent-insensitive so "orquestracao" finds "Orquestração".
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("pt-BR")
-    .trim();
-}
-
 export function filterSettingsSections(
   sections: readonly SettingsSectionDefinition[],
   query: string,
 ): SettingsSectionDefinition[] {
-  const normalizedQuery = normalizeSettingsSearch(query);
+  const normalizedQuery = normalizeSearchText(query);
   if (!normalizedQuery) return [...sections];
 
   return sections.filter((section) => {
     const searchable = [section.label, section.description, ...section.keywords]
-      .map(normalizeSettingsSearch)
+      .map(normalizeSearchText)
       .join(" ");
     return searchable.includes(normalizedQuery);
   });

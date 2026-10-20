@@ -142,7 +142,8 @@ function voiceFrom(raw: unknown, fallback: AgentVoicePromptBehavior): AgentVoice
   };
 }
 
-function fallbackProfile(id: string): AgentProfile {
+/** The built-in profile for `id`, or a plain one that runs `id` and resumes with the original command. */
+export function fallbackProfile(id: string): AgentProfile {
   return (
     DEFAULT_AGENT_PROFILES.find((profile) => profile.id === id) ?? {
       id,

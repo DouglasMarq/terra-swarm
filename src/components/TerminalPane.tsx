@@ -1,4 +1,5 @@
-import { deriveAgentStatus } from "../domain/agentStatus";
+import { agentKind } from "../domain/agentLabels";
+import { CONTEXT_ATTENTION_PERCENT, CONTEXT_WARNING_PERCENT, deriveAgentStatus } from "../domain/agentStatus";
 import { useMcpStore } from "../stores/mcpStore";
 import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
@@ -358,7 +359,7 @@ export function TerminalPane(props: Props) {
   }, [basis, exited, expanded, focused, height, hidden, id]);
 
   const reported = useMcpStore((state) => state.statuses[id]?.state);
-  const kind = command.split(" ")[0] || "shell";
+  const kind = agentKind(command);
   const primary = label || kind;
   const secondary = tag && tag !== primary ? tag : null;
   const attention = notifications > 0 && Boolean(attentionMessage);
@@ -416,7 +417,7 @@ export function TerminalPane(props: Props) {
         ) : <span className="pane-title" />}
         {contextUsed != null && !exited && (
           <span
-            className={`pane-ctx ${contextUsed >= 85 ? "high" : contextUsed >= 60 ? "mid" : ""}`}
+            className={`pane-ctx ${contextUsed >= CONTEXT_ATTENTION_PERCENT ? "high" : contextUsed >= CONTEXT_WARNING_PERCENT ? "mid" : ""}`}
             title={t("pane.contextUsed", { count: contextUsed })}
           >
             <span className="pane-ctx-bar">

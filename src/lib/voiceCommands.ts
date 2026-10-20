@@ -1,3 +1,5 @@
+import { normalizeSearchText } from "./text/normalizeSearchText";
+
 /**
  * Commands understood by the voice orchestration layer.  This module only
  * classifies text: it never invokes a shell, evaluates an expression, or
@@ -12,14 +14,9 @@ export type VoiceIntent =
 
 const UNSAFE_TARGET = /[\u0000-\u001f\u007f;&|`$<>]/;
 
-function normalize(raw: string): string {
-  return raw
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[!?.,:]+$/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLocaleLowerCase("en-US");
+/** Folds spoken text for matching: search folding, no trailing punctuation, single spaces. */
+export function normalizeVoiceText(raw: string): string {
+  return normalizeSearchText(raw.replace(/[!?.,:]+$/g, "").replace(/\s+/g, " "));
 }
 
 function safeTarget(raw: string | undefined): string | null {
@@ -53,7 +50,7 @@ function matchTarget(
  */
 export function parseVoiceCommand(input: unknown): VoiceIntent | null {
   if (typeof input !== "string" || input.length > 512) return null;
-  let source = normalize(input);
+  let source = normalizeVoiceText(input);
   source = source.replace(/^(?:por favor|please)[,\s]+/, "");
   if (!source) return null;
 

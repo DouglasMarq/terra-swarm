@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../types";
-import { buildNavigatorTree, filterNavigatorTree, flattenNavigatorTree, normalizeSearchText } from "./treeModel";
+import { buildNavigatorTree, filterNavigatorTree, flattenNavigatorTree } from "./treeModel";
+import { normalizeSearchText } from "../../lib/text/normalizeSearchText";
 
 function workspace(id: string, name: string, terminalIds: string[] = [], groupId: string | null = null): Workspace {
   return {

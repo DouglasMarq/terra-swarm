@@ -8,7 +8,9 @@ import {
   type McpNudgePayload,
   type McpTasksChangedPayload,
 } from "../lib/tauri/mcp";
-import { sendPromptToTerminal } from "../lib/session/sendPrompt";
+import { sendPromptToTerminal } from "../app/sendPromptToTerminal";
+import { taskNumber } from "../domain/taskNumber";
+import { errorMessage } from "../lib/errors/errorMessage";
 import type {
   McpAgentState,
   McpAgentStatus,
@@ -24,11 +26,6 @@ export const TASK_STATUS_ORDER: readonly McpTaskStatus[] = ["in_progress", "todo
 export const TASK_PRIORITIES: readonly McpTaskPriority[] = ["urgent", "high", "medium", "low"];
 
 const PRIORITY_RANK: Record<McpTaskPriority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
-
-function taskNumber(id: string): number {
-  const value = Number(id.replace(/^T-/i, ""));
-  return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
-}
 
 /** Tasks bucketed by status, each bucket sorted by priority, then board position. */
 export function groupTasksByStatus(tasks: readonly McpTask[]): Record<McpTaskStatus, McpTask[]> {
@@ -46,12 +43,6 @@ export function groupTasksByStatus(tasks: readonly McpTask[]): Record<McpTaskSta
     );
   }
   return groups;
-}
-
-function describe(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === "string" && error) return error;
-  return String(error);
 }
 
 export interface McpState {
@@ -92,7 +83,7 @@ export const useMcpStore = create<McpState>((set, get) => ({
     try {
       set({ server: await mcpApi.mcpServerInfo() });
     } catch (error) {
-      set({ error: describe(error) });
+      set({ error: errorMessage(error) });
     }
   },
 
@@ -100,7 +91,7 @@ export const useMcpStore = create<McpState>((set, get) => ({
     try {
       set({ server: await mcpApi.mcpSetEnabled(enabled) });
     } catch (error) {
-      set({ error: describe(error) });
+      set({ error: errorMessage(error) });
     }
   },
 
@@ -109,7 +100,7 @@ export const useMcpStore = create<McpState>((set, get) => ({
       const list = await mcpApi.mcpListTasks(workspaceId);
       set((state) => ({ tasks: { ...state.tasks, [workspaceId]: list } }));
     } catch (error) {
-      set({ error: describe(error) });
+      set({ error: errorMessage(error) });
     }
   },
 
@@ -124,7 +115,7 @@ export const useMcpStore = create<McpState>((set, get) => ({
         return { statuses };
       });
     } catch (error) {
-      set({ error: describe(error) });
+      set({ error: errorMessage(error) });
     }
   },
 
@@ -134,7 +125,7 @@ export const useMcpStore = create<McpState>((set, get) => ({
       set((state) => ({ tasks: { ...state.tasks, [workspaceId]: upsert(state.tasks[workspaceId], task) } }));
       return task;
     } catch (error) {
-      set({ error: describe(error) });
+      set({ error: errorMessage(error) });
       return null;
     }
   },
@@ -144,7 +135,7 @@ export const useMcpStore = create<McpState>((set, get) => ({
       const task = await mcpApi.mcpUpdateTask(workspaceId, id, patch);
       set((state) => ({ tasks: { ...state.tasks, [workspaceId]: upsert(state.tasks[workspaceId], task) } }));
     } catch (error) {
-      set({ error: describe(error) });
+      set({ error: errorMessage(error) });
     }
   },
 
@@ -155,7 +146,7 @@ export const useMcpStore = create<McpState>((set, get) => ({
         tasks: { ...state.tasks, [workspaceId]: (state.tasks[workspaceId] ?? []).filter((task) => task.id !== id) },
       }));
     } catch (error) {
-      set({ error: describe(error) });
+      set({ error: errorMessage(error) });
     }
   },
 

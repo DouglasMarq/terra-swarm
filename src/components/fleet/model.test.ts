@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Workspace, WorkspaceGroup } from "../../types";
+import { t } from "../../i18n";
 import {
   deriveFleetModel,
   filterFleetModel,
@@ -62,7 +63,7 @@ describe("fleet model", () => {
       contextUsage: { "aider-1": 91 },
       titles: { "codex-1": "Planning" },
       branches: { terra: "main", archive: "legacy" },
-    });
+    }, t);
 
     expect(model.summary).toEqual({ total: 4, working: 0, idle: 0, attention: 2, suspended: 1, exited: 1 });
     expect(model.groups.map((group) => group.id)).toEqual(["core", "paused", "ungrouped"]);
@@ -79,9 +80,9 @@ describe("fleet model", () => {
   });
 
   it("supports status, group, agent, and text filters without mutating the source", () => {
-    const source = deriveFleetModel({ workspaces, groups });
+    const source = deriveFleetModel({ workspaces, groups }, t);
     const filtered = filterFleetModel(
-      deriveFleetModel({ workspaces, groups, notifications: { "codex-1": 1 }, titles: { "codex-1": "Planning" } }),
+      deriveFleetModel({ workspaces, groups, notifications: { "codex-1": 1 }, titles: { "codex-1": "Planning" } }, t),
       { groupId: "core", status: "attention", query: "planning" },
     );
 
@@ -102,10 +103,11 @@ describe("fleet model", () => {
   });
 
   it("formats optional duration and activity telemetry", () => {
-    expect(formatFleetDuration(90_000)).toBe("1m 30s");
-    expect(formatFleetDuration("queued")).toBe("queued");
-    expect(formatFleetRelativeTime(Date.UTC(2026, 0, 1, 11, 0, 0), Date.UTC(2026, 0, 1, 12, 1, 0))).toBe("há 1 h");
-    expect(formatFleetRelativeTime("agora")).toBe("agora");
+    const now = Date.UTC(2026, 0, 1, 12, 1, 0);
+    expect(formatFleetDuration(90_000, now, t)).toBe("1m 30s");
+    expect(formatFleetDuration("queued", now, t)).toBe("queued");
+    expect(formatFleetRelativeTime(Date.UTC(2026, 0, 1, 11, 0, 0), now, t)).toBe("há 1 h");
+    expect(formatFleetRelativeTime("agora", now, t)).toBe("agora");
   });
 
   it("uses the state agents report through their hooks", () => {
@@ -116,7 +118,7 @@ describe("fleet model", () => {
         { id: "c", command: "claude", width: null },
       ] }],
       reported: { a: "idle", b: "needs_input" },
-    });
+    }, t);
     const byId = Object.fromEntries(model.agents.map((agent) => [agent.id, agent.status]));
     expect(byId).toEqual({ a: "idle", b: "attention", c: "working" });
     expect(model.summary.idle).toBe(1);

@@ -2,14 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { ResumeItem } from "../types";
 import { t } from "../i18n";
+import { errorMessage } from "../lib/errors/errorMessage";
 import { dismissResumeItems } from "../lib/session/resumeDismiss";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import type { TerminalSessions } from "./useTerminalSessions";
-
-function errorDetail(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /**
  * Sessions that were running when the app last closed: offered on the
@@ -43,7 +40,7 @@ export function useResumeQueue(sessions: TerminalSessions, refresh: () => Promis
       await sessions.resumeItem(item);
       runtime().dropResumeItem(item.terminalId);
     } catch (error) {
-      runtime().pushSystemNotification(t("app.resumeFailed", { name: item.wsName, detail: errorDetail(error) }));
+      runtime().pushSystemNotification(t("app.resumeFailed", { name: item.wsName, detail: errorMessage(error) }));
     } finally {
       resuming.current.delete(item.terminalId);
       mutating.current = false;
@@ -66,7 +63,7 @@ export function useResumeQueue(sessions: TerminalSessions, refresh: () => Promis
       const [result] = await dismissResumeItems([item], (candidate) => api.killTerminal(candidate.terminalId));
       if (result?.status === "failed") {
         console.error(`failed to dismiss resume item ${item.terminalId}:`, result.error);
-        runtime().pushSystemNotification(t("app.dismissFailed", { name: item.wsName, detail: errorDetail(result.error) }));
+        runtime().pushSystemNotification(t("app.dismissFailed", { name: item.wsName, detail: errorMessage(result.error) }));
         return;
       }
       forgetDismissed(item);
@@ -106,7 +103,7 @@ export function useResumeQueue(sessions: TerminalSessions, refresh: () => Promis
         if (result.status === "failed") {
           failed.push(result.item);
           console.error(`failed to dismiss resume item ${result.item.terminalId}:`, result.error);
-          runtime().pushSystemNotification(t("app.dismissFailed", { name: result.item.wsName, detail: errorDetail(result.error) }));
+          runtime().pushSystemNotification(t("app.dismissFailed", { name: result.item.wsName, detail: errorMessage(result.error) }));
           continue;
         }
         forgetDismissed(result.item);

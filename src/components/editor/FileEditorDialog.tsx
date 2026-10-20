@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { FileText, RotateCw, Save } from "lucide-react";
 import { api } from "../../api";
 import { useT } from "../../i18n";
+import { errorMessage } from "../../lib/errors/errorMessage";
 import { formatShortcut, type ShortcutDefinition } from "../../lib/platform/shortcuts";
 import { useEditorStore } from "../../stores/editorStore";
 import type { WorkspaceFileContent } from "../../types";
@@ -13,10 +14,6 @@ import "./editor.css";
 const SAVE_SHORTCUT: ShortcutDefinition = { key: "s", meta: true, shift: false, ctrl: false, alt: false };
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /**
  * A light editor for one project file, opened from the Files view. Saving
@@ -49,7 +46,7 @@ export function FileEditorDialog() {
       setText(next.content);
       setGeneration((value) => value + 1);
     } catch (error) {
-      setLoadError(describe(error));
+      setLoadError(errorMessage(error));
     }
   }, [target]);
 
@@ -68,7 +65,7 @@ export function FileEditorDialog() {
       // Nothing is left to lose, so the close warning no longer applies.
       setConfirmDiscard(false);
     } catch (error) {
-      const message = describe(error);
+      const message = errorMessage(error);
       setConflict(message.includes("changed on disk"));
       setSaveError(message);
     } finally {

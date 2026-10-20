@@ -1,3 +1,5 @@
+import { normalizeSearchText } from "../lib/text/normalizeSearchText";
+
 /**
  * Optional automatic agent names ("Vega", "Lyra"…). Off by default: agents
  * are identified by their task title and numbered kind. When on, every new
@@ -21,14 +23,10 @@ export interface PickAgentNameOptions {
   exhausted?: NamesExhaustedStrategy;
 }
 
-function normalize(name: string): string {
-  return name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
-}
-
 /** Rough "sounds alike" check: same first letter and same consonant skeleton, or edit distance ≤ 1. */
 export function namesSimilar(a: string, b: string): boolean {
-  const x = normalize(a);
-  const y = normalize(b);
+  const x = normalizeSearchText(a);
+  const y = normalizeSearchText(b);
   if (!x || !y) return false;
   if (x === y) return true;
   if (x[0] !== y[0]) return false;
@@ -71,17 +69,17 @@ export function pickAgentName(
   options: PickAgentNameOptions = {},
 ): string | null {
   const { avoidSimilar = true, exhausted = "type-number" } = options;
-  const taken = new Set(inUse.map(normalize));
-  const free = list.filter((name) => name.trim() && !taken.has(normalize(name)));
+  const taken = new Set(inUse.map(normalizeSearchText));
+  const free = list.filter((name) => name.trim() && !taken.has(normalizeSearchText(name)));
   const distinct = avoidSimilar
-    ? free.filter((name) => !inUse.some((used) => normalize(used)[0] === normalize(name)[0] || namesSimilar(used, name)))
+    ? free.filter((name) => !inUse.some((used) => normalizeSearchText(used)[0] === normalizeSearchText(name)[0] || namesSimilar(used, name)))
     : free;
   if (distinct.length > 0) return distinct[0];
   if (free.length > 0) return free[0];
   if (exhausted === "type-number" || list.length === 0) return null;
   // "repeat": reuse the list with a number, Vega 2, Lyra 2, …
   for (let round = 2; round < 100; round += 1) {
-    const candidate = list.map((name) => `${name} ${round}`).find((name) => !taken.has(normalize(name)));
+    const candidate = list.map((name) => `${name} ${round}`).find((name) => !taken.has(normalizeSearchText(name)));
     if (candidate) return candidate;
   }
   return null;

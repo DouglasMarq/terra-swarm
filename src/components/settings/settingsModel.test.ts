@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   filterSettingsSections,
   getInitialSettingsSection,
-  normalizeSettingsSearch,
   SETTINGS_SECTIONS,
 } from "./settingsModel";
+import { normalizeSearchText } from "../../lib/text/normalizeSearchText";
 
 describe("settings registry", () => {
   it("keeps the seven settings categories in a stable order", () => {
@@ -21,7 +21,7 @@ describe("settings registry", () => {
   });
 
   it("normalizes accents and case for Brazilian Portuguese search", () => {
-    expect(normalizeSettingsSearch("  Orquestração  ")).toBe("orquestracao");
+    expect(normalizeSearchText("  Orquestração  ")).toBe("orquestracao");
     expect(filterSettingsSections(SETTINGS_SECTIONS, "orquestracao").map((section) => section.id)).toEqual([
       "general",
     ]);

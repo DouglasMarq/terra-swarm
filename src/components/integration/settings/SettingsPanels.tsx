@@ -8,6 +8,7 @@ import type {
 } from "../../../types";
 import {
   DEFAULT_AGENT_PROFILES,
+  fallbackProfile,
   type AgentProfile,
 } from "../../../lib/features/agentProfiles";
 import {
@@ -35,7 +36,8 @@ import { pickAgentName, type NameSetId } from "../../../domain/agentNames";
 import { isVoiceLanguage, VOICE_LANGUAGE_ENDONYMS, VOICE_LANGUAGES, type VoiceLanguage } from "../../../domain/voiceLanguages";
 import { useMcpStore } from "../../../stores/mcpStore";
 import { usePreferencesStore } from "../../../stores/preferencesStore";
-import { DEFAULT_TERMINAL_FONT_STACK, filterFonts, loadSystemFonts, terminalFontStack, type SystemFont } from "../../../lib/terminalFonts";
+import { DEFAULT_TERMINAL_FONT_STACK, filterFonts, terminalFontStack, type SystemFont } from "../../../lib/terminalFonts";
+import { loadSystemFonts } from "../../../app/systemFonts";
 import styles from "./SettingsPanels.module.css";
 
 export type SnapshotOperation = "exporting" | "importing";
@@ -576,13 +578,7 @@ function AgentPanel({
   const t = useT();
   const newAgentHotkey = usePreferencesStore((state) => state.hotkeys.newTerminal ?? DEFAULT_HOTKEYS.newTerminal);
   const profiles: AgentProfile[] = agents.map((agent) =>
-    PROFILE_BY_ID.get(agent.id) ?? {
-      id: agent.id,
-      label: agent.label,
-      command: agent.id,
-      resumeCommandStrategy: { kind: "original" },
-      voicePromptBehavior: { enabled: true, mode: "append", prefix: "", suffix: "" },
-    },
+    PROFILE_BY_ID.get(agent.id) ?? { ...fallbackProfile(agent.id), label: agent.label },
   );
   return (
     <div className={styles.stack}>

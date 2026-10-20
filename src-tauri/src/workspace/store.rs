@@ -97,6 +97,9 @@ impl WorkspaceStore {
         if let Some(existing) = ws.terminals.iter_mut().find(|t| t.id == meta.id) {
             existing.command = meta.command.clone();
             existing.suspended = false;
+            if meta.worktree.is_some() {
+                existing.worktree = meta.worktree.clone();
+            }
         } else {
             ws.terminals.push(meta);
         }

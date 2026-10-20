@@ -69,6 +69,7 @@ fn workspace(id: &str) -> Workspace {
             tab_id: None,
             group_id: None,
             suspended: false,
+            worktree: None,
         }],
         group_id: None,
         panes: Vec::new(),
@@ -336,6 +337,7 @@ fn recovers_valid_entries_and_preserves_a_backup_for_invalid_data() {
         tab_id: None,
         group_id: None,
         suspended: false,
+        worktree: None,
     });
     let mut duplicate_workspace = workspace("ws-one");
     duplicate_workspace.name = "duplicate workspace".to_string();
@@ -474,6 +476,7 @@ fn visual_layout_operations_are_durable_and_never_remove_ptys() {
         tab_id: None,
         group_id: None,
         suspended: false,
+        worktree: None,
     });
     let mut store = WorkspaceStore {
         workspaces: vec![first],

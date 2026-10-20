@@ -3,10 +3,7 @@
 export const FEATURE_FLAGS_VERSION = 1 as const;
 
 export const FEATURE_FLAG_IDS = [
-  "groups",
-  "subTabs",
   "durableScrollback",
-  "fleetView",
   "voiceCommands",
 ] as const;
 
@@ -19,10 +16,7 @@ export type FeatureFlagsDocument = {
 };
 
 export const DEFAULT_FEATURE_FLAGS: Readonly<FeatureFlags> = Object.freeze({
-  groups: false,
-  subTabs: false,
   durableScrollback: false,
-  fleetView: false,
   voiceCommands: false,
 });
 
@@ -54,10 +48,7 @@ function flagValues(raw: unknown): Partial<FeatureFlags> {
 
 function withDefaults(flags: Partial<FeatureFlags>): FeatureFlags {
   return {
-    groups: flags.groups ?? DEFAULT_FEATURE_FLAGS.groups,
-    subTabs: flags.subTabs ?? DEFAULT_FEATURE_FLAGS.subTabs,
     durableScrollback: flags.durableScrollback ?? DEFAULT_FEATURE_FLAGS.durableScrollback,
-    fleetView: flags.fleetView ?? DEFAULT_FEATURE_FLAGS.fleetView,
     voiceCommands: flags.voiceCommands ?? DEFAULT_FEATURE_FLAGS.voiceCommands,
   };
 }
@@ -95,20 +86,4 @@ export function createFeatureFlagsDocument(
 export function serializeFeatureFlags(flags?: Partial<FeatureFlags> | unknown): string {
   return JSON.stringify(createFeatureFlagsDocument(flags));
 }
-
-export function isFeatureEnabled(id: FeatureFlagId, flags: Partial<FeatureFlags> | unknown): boolean {
-  return normalizeFeatureFlags(flags)[id];
-}
-
-export function setFeatureFlag(
-  flags: Partial<FeatureFlags> | unknown,
-  id: FeatureFlagId,
-  enabled: boolean,
-): FeatureFlags {
-  return { ...normalizeFeatureFlags(flags), [id]: enabled };
-}
-
-export const parseFeatureFlags = normalizeFeatureFlags;
-export const readFeatureFlags = normalizeFeatureFlags;
-export const getDefaultFeatureFlags = (): FeatureFlags => ({ ...DEFAULT_FEATURE_FLAGS });
 

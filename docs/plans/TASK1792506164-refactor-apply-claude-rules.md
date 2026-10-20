@@ -44,9 +44,9 @@ Agents: **W0** runs first in this checkout; then **B1**, **B2**, **B3**, **F1**,
 
 ### Wave 0 — green gate (W0, sequential, here)
 
-- [ ] 0.1 `cargo fmt` the backend → verify: `cargo fmt -- --check` passes. Commit `style(backend): apply cargo fmt`.
-- [ ] 0.2 Fix the 3 clippy warnings: `OutputPump`-style params struct for `pty/output.rs:47` (drops its `#[allow]`) and `spawn_terminal_inner`/`pty/mod.rs:612`; struct-init at `mcp/server.rs:74` → verify: clippy reports 0 warnings, `cargo test` passes.
-- [ ] 0.3 Mock `@tauri-apps/api/event` (or `startMcpEventBridge`) in `visual-shell.smoke.test.tsx` → verify: `npm test` exits 0 with 0 unhandled errors.
+- [x] 0.1 `cargo fmt` the backend → verify: `cargo fmt -- --check` passes. Commit `style(backend): apply cargo fmt`.
+- [x] 0.2 Fix the 3 clippy warnings: `OutputPump`-style params struct for `pty/output.rs:47` (drops its `#[allow]`) and `spawn_terminal_inner`/`pty/mod.rs:612`; struct-init at `mcp/server.rs:74` → verify: clippy reports 0 warnings, `cargo test` passes.
+- [x] 0.3 Mock `@tauri-apps/api/event` (or `startMcpEventBridge`) in `visual-shell.smoke.test.tsx` → verify: `npm test` exits 0 with 0 unhandled errors.
 
 ### Wave 1 — backend (parallel)
 
@@ -147,3 +147,4 @@ Agents: **W0** runs first in this checkout; then **B1**, **B2**, **B3**, **F1**,
 
 - 2026-10-20: plan drafted from the audit.
 - 2026-10-20: approved by the user. Q1 = full plan (waves 0–3, App.tsx refactor stays out). Q2 = status colours outside status keep their hue through dedicated tokens (`--terra-diff-add`, `--terra-diff-del`, `--terra-priority-urgent`, `--terra-priority-high`, `--terra-danger*`) documented in `design.json`; the other misuses become neutral. Q3 = the voice blue becomes accent/neutrals. Q4 = remove the listed dead code. Q5 = typed IPC errors (step 7.5) are in. Q6 = out.
+- 2026-10-20: 0.2 — `spawn_terminal_inner` takes a `SpawnRequest`, `spawn_output_pump` a `DurableScrollback`; the `spawn_terminal` Tauri command keeps its arguments (they are the IPC contract) with a commented `#[allow(clippy::too_many_arguments)]`.

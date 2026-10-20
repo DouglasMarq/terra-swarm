@@ -13,6 +13,10 @@ import {
   type VisualShellSurfaceProps,
 } from "./VisualShellSurface";
 
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async () => vi.fn()),
+}));
+
 const workspace: Workspace = {
   id: "ws-api",
   name: "Terra API",

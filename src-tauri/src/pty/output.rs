@@ -44,16 +44,21 @@ pub struct TitlePayload {
     pub title: String,
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Where a terminal's output is persisted, and the two switches (this
+/// terminal's and the app-wide one) that must both be on for it to be.
+pub(super) struct DurableScrollback {
+    pub store: Arc<ScrollbackStore>,
+    pub is_terminal_enabled: Arc<AtomicBool>,
+    pub is_app_enabled: Arc<AtomicBool>,
+}
+
 pub(super) fn spawn_output_pump<R: Runtime>(
     app: &AppHandle<R>,
     id: &str,
     workspace_id: &str,
     mut reader: Box<dyn Read + Send>,
     backlog: Arc<Mutex<Backlog>>,
-    scrollback: Arc<ScrollbackStore>,
-    scrollback_enabled: Arc<AtomicBool>,
-    durable_scrollback_enabled: Arc<AtomicBool>,
+    scrollback: DurableScrollback,
 ) {
     // Reader thread: drains the PTY as fast as the child produces data so
     // the kernel buffer never fills and the child never blocks on write().
@@ -170,10 +175,10 @@ pub(super) fn spawn_output_pump<R: Runtime>(
                 b.push(&s);
                 b.total
             };
-            if scrollback_enabled.load(Ordering::SeqCst)
-                && durable_scrollback_enabled.load(Ordering::SeqCst)
+            if scrollback.is_terminal_enabled.load(Ordering::SeqCst)
+                && scrollback.is_app_enabled.load(Ordering::SeqCst)
             {
-                if let Err(error) = scrollback.append(&notif_id, s.as_bytes()) {
+                if let Err(error) = scrollback.store.append(&notif_id, s.as_bytes()) {
                     eprintln!("failed to persist scrollback for {}: {}", notif_id, error);
                 }
             }

@@ -272,17 +272,31 @@ pub struct BacklogSnapshot {
     pub total: u64,
 }
 
+/// What to run and where: the terminal's workspace, its command as typed, its
+/// initial size and, for a respawn, the id it keeps.
+#[derive(Clone, Copy)]
+pub struct SpawnRequest<'a> {
+    pub workspace_id: &'a str,
+    pub command: &'a str,
+    pub cols: u16,
+    pub rows: u16,
+    pub terminal_id: Option<&'a str>,
+}
+
 pub fn spawn_terminal_inner<R: Runtime>(
     app: &AppHandle<R>,
     manager: &Mutex<PtyManager>,
     store: &Mutex<WorkspaceStore>,
-    workspace_id: &str,
-    command: &str,
-    cols: u16,
-    rows: u16,
-    force_id: Option<&str>,
+    request: SpawnRequest<'_>,
     options: &SpawnOptions,
 ) -> Result<SpawnedTerminal, String> {
+    let SpawnRequest {
+        workspace_id,
+        command,
+        cols,
+        rows,
+        terminal_id: force_id,
+    } = request;
     let preferred_shell = options.shell.as_deref();
     let workspace_id = workspace_id.to_string();
     let cwd = {
@@ -490,9 +504,11 @@ pub fn spawn_terminal_inner<R: Runtime>(
         &workspace_id,
         reader,
         Arc::clone(&backlog),
-        Arc::clone(&scrollback),
-        Arc::clone(&scrollback_enabled),
-        Arc::clone(&durable_scrollback_enabled),
+        output::DurableScrollback {
+            store: Arc::clone(&scrollback),
+            is_terminal_enabled: Arc::clone(&scrollback_enabled),
+            is_app_enabled: Arc::clone(&durable_scrollback_enabled),
+        },
     );
 
     let entry_killer = Arc::clone(&killer);
@@ -624,6 +640,8 @@ impl Drop for CreatedWorktree {
     }
 }
 
+// Each argument is a field of the `spawn_terminal` IPC contract (`src/lib/tauri/commands.ts`).
+#[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub fn spawn_terminal(
     app: AppHandle,
@@ -642,11 +660,13 @@ pub fn spawn_terminal(
         &app,
         &manager,
         &store,
-        &workspace_id,
-        &command,
-        cols,
-        rows,
-        terminal_id.as_deref(),
+        SpawnRequest {
+            workspace_id: &workspace_id,
+            command: &command,
+            cols,
+            rows,
+            terminal_id: terminal_id.as_deref(),
+        },
         &SpawnOptions {
             shell,
             args: launch.args,
@@ -679,11 +699,13 @@ pub fn demo_seed(app: &AppHandle) {
                 app,
                 &manager,
                 &store,
-                &ws1.id,
-                c,
-                100,
-                30,
-                None,
+                SpawnRequest {
+                    workspace_id: &ws1.id,
+                    command: c,
+                    cols: 100,
+                    rows: 30,
+                    terminal_id: None,
+                },
                 &SpawnOptions::default(),
             );
         }
@@ -697,22 +719,26 @@ pub fn demo_seed(app: &AppHandle) {
             app,
             &manager,
             &store,
-            &ws2.id,
-            "top",
-            100,
-            30,
-            None,
+            SpawnRequest {
+                workspace_id: &ws2.id,
+                command: "top",
+                cols: 100,
+                rows: 30,
+                terminal_id: None,
+            },
             &SpawnOptions::default(),
         );
         let _ = spawn_terminal_inner(
             app,
             &manager,
             &store,
-            &ws2.id,
-            "shell",
-            100,
-            30,
-            None,
+            SpawnRequest {
+                workspace_id: &ws2.id,
+                command: "shell",
+                cols: 100,
+                rows: 30,
+                terminal_id: None,
+            },
             &SpawnOptions::default(),
         );
     }
@@ -1007,7 +1033,7 @@ mod runtime_info_tests {
 
 #[cfg(test)]
 mod spawn_lifecycle_tests {
-    use super::{spawn_terminal_inner, PtyManager, SpawnOptions};
+    use super::{spawn_terminal_inner, PtyManager, SpawnOptions, SpawnRequest};
     use crate::workspace::WorkspaceStore;
     use std::sync::Mutex;
     use std::time::{Duration, Instant};
@@ -1029,11 +1055,13 @@ mod spawn_lifecycle_tests {
             app.handle(),
             manager.inner(),
             store.inner(),
-            &workspace.id,
-            "exit 0",
-            80,
-            24,
-            None,
+            SpawnRequest {
+                workspace_id: &workspace.id,
+                command: "exit 0",
+                cols: 80,
+                rows: 24,
+                terminal_id: None,
+            },
             &SpawnOptions::default(),
         )
         .expect("spawn immediate command");
@@ -1100,11 +1128,13 @@ mod spawn_lifecycle_tests {
                 app.handle(),
                 manager.inner(),
                 store.inner(),
-                &workspace.id,
-                "printenv",
-                80,
-                24,
-                None,
+                SpawnRequest {
+                    workspace_id: &workspace.id,
+                    command: "printenv",
+                    cols: 80,
+                    rows: 24,
+                    terminal_id: None,
+                },
                 &options,
             )
             .expect("spawn printenv");
@@ -1155,11 +1185,13 @@ mod spawn_lifecycle_tests {
             app.handle(),
             manager.inner(),
             store.inner(),
-            &workspace.id,
-            "pwd > where.txt",
-            80,
-            24,
-            None,
+            SpawnRequest {
+                workspace_id: &workspace.id,
+                command: "pwd > where.txt",
+                cols: 80,
+                rows: 24,
+                terminal_id: None,
+            },
             &options,
         )
         .expect("spawn isolated agent");
@@ -1185,11 +1217,13 @@ mod spawn_lifecycle_tests {
             app.handle(),
             manager.inner(),
             store.inner(),
-            &workspace.id,
-            "true",
-            80,
-            24,
-            Some(&first.meta.id),
+            SpawnRequest {
+                workspace_id: &workspace.id,
+                command: "true",
+                cols: 80,
+                rows: 24,
+                terminal_id: Some(&first.meta.id),
+            },
             &plain,
         )
         .expect("respawn isolated agent");

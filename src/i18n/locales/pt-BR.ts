@@ -252,6 +252,8 @@ export const ptBR: Dictionary<typeof en> = {
   settingsPanels: {
     notificationsTitle: "Notificações",
     systemNotifications: "Avisar quando um agente precisar de mim",
+    voiceToOrchestrator: "Falar com o orquestrador",
+    voiceToOrchestratorHint: "Quando o projeto tem um agente com o papel Orquestrador, o ditado vai para ele em vez do agente focado. Escolha outro alvo na cápsula para mudar.",
     systemNotificationsHint: "Uma notificação do sistema quando o Terra Swarm está em segundo plano, e o número de agentes esperando no ícone do app.",
     accessibility: "Acessibilidade",
     accessibilityHint: "Ajuste o ritmo visual do Workbench.",

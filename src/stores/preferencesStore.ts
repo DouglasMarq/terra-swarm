@@ -313,6 +313,8 @@ export type PreferencesState = {
   autoResume: boolean;
   /** Native notifications and the app icon badge when an agent needs you. */
   systemNotifications: boolean;
+  /** Dictation goes to the project's orchestrator when one is running. */
+  voiceToOrchestrator: boolean;
   /** Give each new agent a name from `agentNameList` (off by default). */
   agentAutoNames: boolean;
   agentNameSet: NameSetId;
@@ -341,6 +343,7 @@ export type PreferencesState = {
   setReduceMotion: (enabled: boolean) => void;
   setAutoResume: (enabled: boolean) => void;
   setSystemNotifications: (enabled: boolean) => void;
+  setVoiceToOrchestrator: (enabled: boolean) => void;
   setAgentAutoNames: (enabled: boolean) => void;
   setAgentNameSet: (set: NameSetId) => void;
   setAgentNameList: (names: string[]) => void;
@@ -365,6 +368,7 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   reduceMotion: storageGet("reduceMotion") === "1",
   autoResume: storageGet("autoResume") === "1",
   systemNotifications: storageGet("systemNotifications") !== "0",
+  voiceToOrchestrator: storageGet("voiceToOrchestrator") !== "0",
   agentAutoNames: storageGet("agentAutoNames") === "1",
   agentNameSet: loadNameSet(),
   agentNameList: nameListFor(loadNameSet()),
@@ -494,6 +498,11 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   setSystemNotifications: (systemNotifications) => {
     storageSet("systemNotifications", systemNotifications ? "1" : "0");
     set({ systemNotifications });
+  },
+
+  setVoiceToOrchestrator: (voiceToOrchestrator) => {
+    storageSet("voiceToOrchestrator", voiceToOrchestrator ? "1" : "0");
+    set({ voiceToOrchestrator });
   },
 
   setReduceMotion: (reduceMotion) => {

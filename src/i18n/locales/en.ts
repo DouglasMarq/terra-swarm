@@ -249,6 +249,8 @@ export const en = {
   settingsPanels: {
     notificationsTitle: "Notifications",
     systemNotifications: "Notify me when an agent needs me",
+    voiceToOrchestrator: "Talk to the orchestrator",
+    voiceToOrchestratorHint: "When the project has an agent with the Orchestrator role, dictation goes to it instead of the focused agent. Pick another target in the capsule to override.",
     systemNotificationsHint: "A system notification while Terra Swarm is in the background, and the number of waiting agents on the app icon.",
     accessibility: "Accessibility",
     accessibilityHint: "Adjust the Workbench's visual pace.",

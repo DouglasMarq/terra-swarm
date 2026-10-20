@@ -628,15 +628,60 @@ fn set_width_rejects_non_finite_values_and_clamps_finite_values() {
     };
     let terminal_id = store.workspaces[0].terminals[0].id.clone();
 
-    store.set_width("ws-width", &terminal_id, f64::NAN);
+    store
+        .set_width("ws-width", &terminal_id, f64::NAN)
+        .expect("width");
     assert_eq!(store.workspaces[0].terminals[0].width, None);
-    store.set_width("ws-width", &terminal_id, f64::INFINITY);
+    store
+        .set_width("ws-width", &terminal_id, f64::INFINITY)
+        .expect("width");
     assert_eq!(store.workspaces[0].terminals[0].width, None);
-    store.set_width("ws-width", &terminal_id, 1.0);
+    store
+        .set_width("ws-width", &terminal_id, 1.0)
+        .expect("width");
     assert_eq!(
         store.workspaces[0].terminals[0].width,
         Some(MIN_TERMINAL_WIDTH)
     );
+}
+
+#[test]
+fn given_an_unknown_workspace_or_terminal_set_width_reports_not_found() {
+    let mut store = WorkspaceStore {
+        workspaces: vec![workspace("ws-1")],
+        groups: Vec::new(),
+        save_path: None,
+    };
+
+    assert!(store
+        .set_width("ws-missing", "ws-1-terminal", 40.0)
+        .unwrap_err()
+        .contains("workspace ws-missing not found"));
+    assert!(store
+        .set_width("ws-1", "t-missing", 40.0)
+        .unwrap_err()
+        .contains("terminal t-missing not found"));
+    assert_eq!(store.workspaces[0].terminals[0].width, None);
+}
+
+#[test]
+fn given_an_unknown_workspace_rename_reports_not_found() {
+    let mut store = WorkspaceStore {
+        workspaces: vec![workspace("ws-1")],
+        groups: Vec::new(),
+        save_path: None,
+    };
+
+    assert!(store
+        .rename("ws-missing", "Renamed".to_string())
+        .unwrap_err()
+        .contains("workspace ws-missing not found"));
+    store
+        .rename("ws-1", "  Renamed  ".to_string())
+        .expect("rename");
+    assert_eq!(store.workspaces[0].name, "Renamed");
+    store.rename("ws-1", "   ".to_string()).expect("blank name");
+    assert_eq!(store.workspaces[0].name, "Renamed");
 }
 
 #[test]

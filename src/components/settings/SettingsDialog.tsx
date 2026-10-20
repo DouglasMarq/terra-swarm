@@ -1,6 +1,17 @@
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { useLocale, useT } from "../../i18n";
-import { Search, X } from "lucide-react";
+import {
+  Bot,
+  Database,
+  Info,
+  Keyboard,
+  Mic2,
+  Search,
+  SlidersHorizontal,
+  SquareTerminal,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -33,6 +44,16 @@ import styles from "./SettingsDialog.module.css";
 
 const cx = (...classes: Array<string | undefined | false>) => classes.filter(Boolean).join(" ");
 const SEARCH_HOTKEY = { key: "k", meta: true, shift: false, ctrl: false, alt: false } as const;
+
+const SECTION_ICONS: Record<SettingsSectionId, LucideIcon> = {
+  general: SlidersHorizontal,
+  terminal: SquareTerminal,
+  agents: Bot,
+  voice: Mic2,
+  shortcuts: Keyboard,
+  data: Database,
+  about: Info,
+};
 
 export interface SettingsConfirmationRequest {
   title: ReactNode;
@@ -249,7 +270,7 @@ export function SettingsDialog({
                 </div>
                 <TabsPrimitive.List className={styles.sectionList} aria-label={t("settings.sectionsLabel")}>
                   {visibleSections.map((section) => {
-                    const Icon = section.icon;
+                    const Icon = SECTION_ICONS[section.id];
                     return (
                       <TabsPrimitive.Trigger
                         className={styles.sectionTrigger}

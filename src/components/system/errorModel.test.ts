@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { t } from "../../i18n";
 import { getSafeErrorDetails, haveResetKeysChanged } from "./errorModel";
 
 describe("error model", () => {
@@ -7,6 +8,7 @@ describe("error model", () => {
     const details = getSafeErrorDetails(
       new Error("falha em /home/dev/workspace/.env usando ghp_12345678901234567890"),
       { componentStack: "\n at App (/Users/dev/terra/src/App.tsx:1:1)" },
+      t,
     );
 
     expect(details.text).toContain("[path]");
@@ -16,7 +18,7 @@ describe("error model", () => {
   });
 
   it("falls back to a safe generic message for unknown thrown values", () => {
-    const details = getSafeErrorDetails({ surprise: true });
+    const details = getSafeErrorDetails({ surprise: true }, undefined, t);
     expect(details.name).toBe("UnknownError");
     expect(details.message).toContain("erro inesperado");
   });

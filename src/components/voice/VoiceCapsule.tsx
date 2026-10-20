@@ -142,7 +142,7 @@ export function VoiceCapsule({
     intent: safeIntent,
     agent: targetAgent ?? null,
   };
-  const statusText = error || voiceStateLabel(state);
+  const statusText = error || voiceStateLabel(state, t);
   const isCapturing = state === "listening";
   const isBusy = state === "transcribing";
   const canSubmit = currentTranscript.length > 0 && !disabled && !isBusy;
@@ -236,7 +236,7 @@ export function VoiceCapsule({
           </span>
           <div className={styles.intentCopy}>
             <span className={styles.intentLabel}>{t("voiceCapsule.recognized")}</span>
-            <strong>{voiceIntentLabel(safeIntent)}</strong>
+            <strong>{voiceIntentLabel(safeIntent, t)}</strong>
             {destructive ? <small>{t("voiceCapsule.needsConfirm")}</small> : null}
           </div>
         </div>

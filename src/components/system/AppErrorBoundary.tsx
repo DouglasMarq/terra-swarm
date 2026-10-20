@@ -78,7 +78,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   };
 
   private copyDetails = async () => {
-    const details = getSafeErrorDetails(this.state.error, this.state.info);
+    const details = getSafeErrorDetails(this.state.error, this.state.info, t);
     try {
       if (!navigator.clipboard?.writeText) throw new Error("clipboard-unavailable");
       await navigator.clipboard.writeText(details.text);
@@ -95,7 +95,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   public render() {
     if (this.state.error === null) return this.props.children;
 
-    const details = getSafeErrorDetails(this.state.error, this.state.info);
+    const details = getSafeErrorDetails(this.state.error, this.state.info, t);
     const fallback = this.props.fallback;
     if (typeof fallback === "function") {
       return fallback({

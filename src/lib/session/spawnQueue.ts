@@ -40,7 +40,8 @@ export type SpawnQueueResult<Output> = {
 export type SpawnQueueOptions<Input, Output> = {
   concurrency?: number;
   run?: SpawnTaskRunner<Input, Output>;
-  now?: () => number;
+  /** Clock for `startedAt` / `finishedAt`, in milliseconds. */
+  now: () => number;
   onResult?: (result: SpawnQueueResult<Output>) => void;
 };
 
@@ -109,7 +110,7 @@ function cancellationReason(reason: unknown): unknown {
  * sessions.
  */
 export function createSpawnQueue<Input, Output>(
-  options: SpawnQueueOptions<Input, Output> = {},
+  options: SpawnQueueOptions<Input, Output>,
 ): SpawnQueue<Input, Output> {
   let concurrency = checkedConcurrency(options.concurrency);
   let running = 0;
@@ -146,7 +147,7 @@ export function createSpawnQueue<Input, Output>(
       ...(value === undefined ? {} : { value }),
       ...(error === undefined ? {} : { error }),
       startedAt: item.startedAt,
-      finishedAt: (options.now ?? Date.now)(),
+      finishedAt: options.now(),
     };
     settled.set(item.id, result);
     items.delete(item.id);
@@ -171,7 +172,7 @@ export function createSpawnQueue<Input, Output>(
       }
 
       item.status = "running";
-      item.startedAt = (options.now ?? Date.now)();
+      item.startedAt = options.now();
       running += 1;
       const runner = item.run ?? options.run;
 

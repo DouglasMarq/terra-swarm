@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import type { Translate } from "../../i18n";
 import { errorMessage } from "../../lib/errors/errorMessage";
 import type { ErrorInfo } from "react";
 
@@ -29,15 +29,15 @@ function errorName(error: unknown) {
   return "UnknownError";
 }
 
-function safeErrorMessage(error: unknown) {
+function safeErrorMessage(error: unknown, t: Translate) {
   const message = errorMessage(error, "");
   return message ? sanitizeText(message, MAX_MESSAGE_LENGTH) : t("system.unexpectedError");
 }
 
 /** Convert React's error payload into a bounded, path/token-redacted report. */
-export function getSafeErrorDetails(error: unknown, info?: ErrorInfo | null): SafeErrorDetails {
+export function getSafeErrorDetails(error: unknown, info: ErrorInfo | null | undefined, t: Translate): SafeErrorDetails {
   const name = errorName(error);
-  const message = safeErrorMessage(error);
+  const message = safeErrorMessage(error, t);
   const componentStack = sanitizeText(info?.componentStack?.trim() ?? "", MAX_STACK_LENGTH);
   const text = [
     t("system.reportTitle"),

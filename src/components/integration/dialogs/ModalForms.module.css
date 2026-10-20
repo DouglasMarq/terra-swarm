@@ -307,3 +307,31 @@
   }
 
 }
+
+.pickerHint {
+  display: block;
+  margin-top: 2px;
+  color: var(--terra-text-muted, #8e8e96);
+  font-size: 10.5px;
+}
+
+.worktreeFacts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 24px 0;
+  color: var(--terra-text-secondary);
+  font-size: 12px;
+}
+
+.worktreeFiles {
+  max-height: 120px;
+  margin: 0;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: var(--terra-radius-md);
+  background: var(--terra-bg-elevated);
+  font-family: var(--terra-font-mono);
+  font-size: 11px;
+  list-style: none;
+}

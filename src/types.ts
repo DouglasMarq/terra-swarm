@@ -6,6 +6,28 @@ export interface TerminalMeta {
   tabId?: string | null;
   groupId?: string | null;
   suspended?: boolean;
+  /** The git worktree the agent is isolated in, if any. */
+  worktree?: WorktreeInfo | null;
+}
+
+export interface WorktreeInfo {
+  path: string;
+  cwd: string;
+  branch: string;
+  base: string;
+  repo: string;
+}
+
+export interface WorktreeStatus {
+  branch: string;
+  base: string;
+  path: string;
+  /** Files with uncommitted changes. */
+  dirty: string[];
+  /** Commits on the agent's branch that the base does not have. */
+  ahead: number;
+  behind: number;
+  exists: boolean;
 }
 
 export interface Workspace {
@@ -454,4 +476,6 @@ export interface McpServerInfo {
 export interface AgentLaunchExtras {
   args?: string;
   env?: Record<string, string>;
+  /** Isolate a new agent in its own git worktree. */
+  worktree?: boolean;
 }

@@ -182,7 +182,12 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
   };
 
   /** Open a new agent in a project, optionally in a given pane. */
-  const spawnInto = async (workspaceId: string, command: string, placement?: { paneId: string; tabId?: string }) => {
+  const spawnInto = async (
+    workspaceId: string,
+    command: string,
+    placement?: { paneId: string; tabId?: string },
+    options: { worktree?: boolean } = {},
+  ) => {
     // Spawn at an existing pane's size when possible: otherwise the PTY starts
     // at 80x24 and the child draws its first frame at the wrong size (worst
     // on Windows/ConPTY).
@@ -190,7 +195,8 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
       .find((workspace) => workspace.id === workspaceId)
       ?.terminals.map((terminal) => getTerminal(terminal.id))
       .find((terminal) => terminal && terminal.cols > 0 && terminal.rows > 0);
-    const result = await api.spawnTerminal(workspaceId, command, undefined, sibling?.cols, sibling?.rows, defaultShell(), launchExtras(command));
+    const extras = { ...launchExtras(command), ...(options.worktree ? { worktree: true } : {}) };
+    const result = await api.spawnTerminal(workspaceId, command, undefined, sibling?.cols, sibling?.rows, defaultShell(), extras);
     await registerSpawned(result);
     nameNewAgent(result.meta.id);
     if (placement?.paneId) {

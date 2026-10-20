@@ -15,6 +15,10 @@ export interface AgentPickerDialogProps {
   saveDefault: boolean;
   onSaveDefaultChange: (save: boolean) => void;
   onChoose: (agentId: string) => void | Promise<void>;
+  /** The project is a git repository, so the agent can get its own worktree. */
+  canIsolate?: boolean;
+  isolate?: boolean;
+  onIsolateChange?: (isolate: boolean) => void;
 }
 
 /** Agent profile picker; unavailable profiles remain visible and explain why. */
@@ -26,6 +30,9 @@ export function AgentPickerDialog({
   open,
   saveDefault,
   defaultAgent = null,
+  canIsolate = false,
+  isolate = false,
+  onIsolateChange,
 }: AgentPickerDialogProps) {
   return (
     <TerraDialog
@@ -76,6 +83,15 @@ export function AgentPickerDialog({
         />
         <span>{t("dialogs.picker.saveDefault")}</span>
       </label>
+      {canIsolate && onIsolateChange ? (
+        <label className={styles.pickerDefault}>
+          <input checked={isolate} onChange={(event) => onIsolateChange(event.target.checked)} type="checkbox" />
+          <span>
+            {t("dialogs.picker.isolate")}
+            <small className={styles.pickerHint}>{t("dialogs.picker.isolateHint")}</small>
+          </span>
+        </label>
+      ) : null}
       <DialogFooter>
         <Button onClick={() => onOpenChange(false)} type="button" variant="ghost">
           {t("common.cancel")}

@@ -84,6 +84,7 @@ export const ptBR: Dictionary<typeof en> = {
     newWorkspace: "Novo workspace",
   },
   pane: {
+    worktree: "Isolado numa worktree git, na branch {branch}",
     contextUsed: "Contexto usado: {count}%",
     maximize: "Maximizar",
     restore: "Voltar à grade",
@@ -492,6 +493,7 @@ export const ptBR: Dictionary<typeof en> = {
     snapshotExported: "Snapshot exportado ({workspaces} workspaces, {terminals} terminais).",
     snapshotImported: "Snapshot importado ({workspaces} workspaces, {terminals} terminais suspensos).",
     renameFailed: "Não foi possível renomear o projeto: {detail}",
+    worktreeRemoveFailed: "Não foi possível remover a worktree: {detail}",
     deleteFailed: "Não foi possível excluir o projeto: {detail}",
     historyCleared: "Histórico limpo para o agente em foco",
     importTitle: "Importar snapshot?",
@@ -673,6 +675,17 @@ export const ptBR: Dictionary<typeof en> = {
       unavailable: "indisponível",
       unavailableNamed: "{name} (indisponível)",
       saveDefault: "Definir a escolha como perfil padrão para os próximos agentes.",
+      isolate: "Isolar numa worktree git",
+      isolateHint: "O agente trabalha numa branch própria, numa cópia separada, e nunca edita os mesmos arquivos que os outros agentes.",
+    },
+    worktree: {
+      title: "Fechar {name}?",
+      description: "Este agente trabalha numa worktree git própria, na branch {branch}.",
+      dirty: { one: "{count} arquivo tem alterações não commitadas:", other: "{count} arquivos têm alterações não commitadas:" },
+      ahead: { one: "{count} commit ainda não está em {base}.", other: "{count} commits ainda não estão em {base}." },
+      deleteBranch: "Apagar também a branch {branch} e seus commits",
+      keep: "Manter a worktree",
+      delete: "Apagar a worktree",
     },
   },
   system: {

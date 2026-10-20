@@ -21,6 +21,7 @@ import type {
   WorkspaceLayout,
   WorkspaceFileListing,
   WorkspaceGitStatus,
+  WorktreeStatus,
 } from "../../types";
 
 /**
@@ -239,6 +240,14 @@ export interface IpcCommandContract {
     args: { workspaceId: string };
     result: McpAgentStatus[];
   };
+  worktreeStatus: {
+    args: { workspaceId: string; terminalId: string };
+    result: WorktreeStatus | null;
+  };
+  worktreeRemove: {
+    args: { workspaceId: string; terminalId: string; deleteBranch: boolean };
+    result: void;
+  };
   voiceToggleRecording: {
     args: undefined;
     result: void;
@@ -331,6 +340,8 @@ const IPC_COMMANDS = {
   mcpUpdateTask: "mcp_update_task",
   mcpDeleteTask: "mcp_delete_task",
   mcpAgentStatuses: "mcp_agent_statuses",
+  worktreeStatus: "worktree_status",
+  worktreeRemove: "worktree_remove",
   voiceToggleRecording: "voice_toggle_recording",
   voiceSetLanguage: "voice_set_language",
   voiceMicAvailable: "voice_mic_available",

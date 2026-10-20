@@ -16,6 +16,7 @@ import { useVoiceCapture } from "./app/useVoiceCapture";
 import { useVoiceSettings } from "./app/useVoiceSettings";
 import { useWorkspaceNavigation } from "./app/useWorkspaceNavigation";
 import { useWorkspaces } from "./app/useWorkspaces";
+import { useWorktreeClose } from "./app/useWorktreeClose";
 import { resumeCommandFor, useTerminalSessions } from "./app/useTerminalSessions";
 import { useUpdater } from "./app/useUpdater";
 import type { NotificationItem } from "./types";
@@ -24,6 +25,7 @@ import {
   RenameDialog,
   type RenameTargetKind,
   WorkspaceDialog,
+  WorktreeCloseDialog,
 } from "./components/integration/dialogs";
 import { ConfirmActionDialog } from "./components/overlays/Dialog";
 import type { FocusedAgentAction } from "./components/overlays/CommandPalette";
@@ -87,6 +89,7 @@ function App() {
   const [pickerTarget, setPickerTarget] = useState<string | null>(null);
   const [pickerTargetPane, setPickerTargetPane] = useState<string | null>(null);
   const [pickerSaveDefault, setPickerSaveDefault] = useState(false);
+  const [pickerIsolate, setPickerIsolate] = useState(false);
   const [renameTarget, setRenameTarget] = useState<{
     kind: RenameTargetKind;
     id: string;
@@ -270,6 +273,7 @@ function App() {
   const { appVersion, updateVersion, updateInstalling, updateCheckState, manualUpdateCheck, installUpdate } = useUpdater();
   const sessions = useTerminalSessions({ workspaces, snapshot: orchestrationSnapshot, refresh });
   const resumeQueue = useResumeQueue(sessions, refresh);
+  const worktreeClose = useWorktreeClose(workspaces, sessions);
   const snapshotTransfer = useSnapshotTransfer(sessions, refresh);
   const initialization = useAppInitialization({ workspaces: workspaceData, sessions, resumeQueue, agentCatalog, voiceSettings });
 
@@ -335,14 +339,17 @@ function App() {
     setShowAgentPicker(false);
     const target = pickerTarget;
     const targetPane = pickerTargetPane;
+    const isolate = pickerIsolate;
     setPickerTarget(null);
     setPickerTargetPane(null);
     setPickerSaveDefault(false);
+    setPickerIsolate(false);
     if (target) {
       await sessions.spawnInto(
         target,
         agentId,
         targetPane ? { paneId: targetPane } : undefined,
+        { worktree: isolate },
       ).catch(sessions.reportSpawnError);
     }
   };
@@ -544,7 +551,7 @@ function App() {
       renameWorkspace: (workspace) => setRenameTarget({ kind: "workspace", id: workspace.id, value: workspace.name }),
       closeWorkspace,
       quickNewTerminal,
-      closeTerminal: sessions.close,
+      closeTerminal: worktreeClose.request,
       toggleVoice: voice.toggle,
     },
   });
@@ -564,7 +571,7 @@ function App() {
         await sessions.restart(terminal.id, terminal.command);
         return;
       case "stop":
-        await sessions.close(terminal.id);
+        await worktreeClose.request(terminal.id);
         return;
       case "clear-scrollback":
         // Clear what the user sees, not only the cached runtime state.
@@ -728,7 +735,7 @@ function App() {
         onClearAll={clearAllNotifications}
         onJumpToNotification={jumpToNotification}
         onRestart={sessions.restart}
-        onKill={sessions.close}
+        onKill={(id) => void worktreeClose.request(id)}
         onDetach={detachTab}
         onReattach={(id) => {
           reattachTerminal(id);
@@ -836,12 +843,18 @@ function App() {
             setPickerTarget(null);
             setPickerTargetPane(null);
             setPickerSaveDefault(false);
+            setPickerIsolate(false);
           }
         }}
         onSaveDefaultChange={setPickerSaveDefault}
         open={showAgentPicker}
         saveDefault={pickerSaveDefault}
+        canIsolate={Boolean(pickerTarget && branches[pickerTarget])}
+        isolate={pickerIsolate}
+        onIsolateChange={setPickerIsolate}
       />
+
+      <WorktreeCloseDialog {...worktreeClose.dialog} />
 
       <RenameDialog
         kind={renameTarget?.kind ?? "workspace"}

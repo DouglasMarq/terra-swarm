@@ -223,6 +223,18 @@ export function resolveResumeCommand(
     .replace(/\{(\w+)\}/g, (_, key: string) => values[key] ?? "");
 }
 
+/**
+ * The command that starts an agent fresh. A continuation command
+ * (`claude --continue`) maps back to the agent's own command, so restarting
+ * an agent with no saved conversation does not fail every time.
+ */
+export function freshCommand(command: string): string {
+  const profile = profileForCommand(command);
+  const strategy = profile.resumeCommandStrategy;
+  const normalized = command.trim().split(/\s+/).join(" ");
+  return strategy.kind === "fixed" && normalized === strategy.command ? profile.command : command;
+}
+
 export function buildVoicePrompt(
   profile: AgentProfile,
   transcript: string,

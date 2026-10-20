@@ -69,6 +69,13 @@ pub fn integration_of(agent: &str) -> Option<&'static str> {
         .and_then(|entry| entry.integration.as_deref())
 }
 
+/// Whether `command` is a known agent's continuation command
+/// (`claude --continue`, `codex resume --last`, …).
+pub fn is_resume_command(command: &str) -> bool {
+    let command = command.split_whitespace().collect::<Vec<_>>().join(" ");
+    catalog().iter().any(|entry| entry.resume.as_deref() == Some(command.as_str()))
+}
+
 /// Which of `ids` resolve on the user's PATH. On Unix a single login shell
 /// answers for all of them, so detection costs one shell start, not one per
 /// agent, and sees the same PATH as the terminals the app spawns.
@@ -126,6 +133,14 @@ pub fn detect_agents() -> Vec<AgentInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn continuation_commands_are_recognised() {
+        assert!(is_resume_command("claude --continue"));
+        assert!(is_resume_command("codex  resume --last"));
+        assert!(!is_resume_command("claude"));
+        assert!(!is_resume_command("claude --model opus"));
+    }
 
     #[test]
     fn the_catalog_parses_with_unique_ids() {

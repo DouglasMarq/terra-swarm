@@ -323,12 +323,14 @@ pub fn spawn_terminal_inner<R: Runtime>(
     }
 
     // A respawned agent returns to its worktree and role; a new one may get them.
-    let (existing_worktree, existing_role) = store
+    let (existing_worktree, existing_role, existing_command) = store
         .lock()
         .map_err(|e| e.to_string())?
         .get(&workspace_id)
         .and_then(|ws| ws.terminals.iter().find(|terminal| terminal.id == id))
-        .map_or((None, None), |terminal| (terminal.worktree.clone(), terminal.role));
+        .map_or((None, None, None), |terminal| {
+            (terminal.worktree.clone(), terminal.role, Some(terminal.command.clone()))
+        });
     let role = existing_role.or(options.role);
     let mut created_worktree = CreatedWorktree(None);
     let worktree = match existing_worktree {
@@ -551,13 +553,16 @@ pub fn spawn_terminal_inner<R: Runtime>(
         });
     }
 
+    // Resuming runs the continuation command but keeps the agent's own
+    // command on record, so a later restart starts it fresh.
+    let recorded_command = match existing_command {
+        Some(original) if agents::is_resume_command(&command) && !agents::is_resume_command(&original) => original,
+        _ if command.is_empty() => "shell".into(),
+        _ => command,
+    };
     let meta = TerminalMeta {
         id: id.clone(),
-        command: if command.is_empty() {
-            "shell".into()
-        } else {
-            command
-        },
+        command: recorded_command,
         width: None,
         pane_id: None,
         tab_id: None,

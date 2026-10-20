@@ -16,11 +16,14 @@ export function listWorkspaces(): Promise<Workspace[]> {
   return invokeCommand("listWorkspaces");
 }
 
+/** Entries listed per directory unless asked otherwise; mirrors `DEFAULT_FILE_LIST_LIMIT` in `src-tauri/src/workspace/files.rs`. */
+export const DEFAULT_FILE_LIST_LIMIT = 200;
+
 /** Load one workspace-relative directory without reading file contents. */
 export function listWorkspaceFiles(
   workspaceId: string,
   relativePath = "",
-  limit = 200,
+  limit = DEFAULT_FILE_LIST_LIMIT,
 ): Promise<WorkspaceFileListing> {
   return invokeCommand("listWorkspaceFiles", {
     workspaceId,

@@ -1,12 +1,12 @@
 import { useT } from "../../i18n";
 import { errorMessage } from "../../lib/errors/errorMessage";
+import { DEFAULT_FILE_LIST_LIMIT } from "../../lib/tauri/workspace";
 import { AlertCircle, ChevronDown, ChevronRight, FileText, Folder, Link2, LoaderCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Workspace, WorkspaceFileEntry, WorkspaceFileListing } from "../../types";
 import type { NavigatorFilesLoader } from "./types";
 import styles from "./Navigator.module.css";
 
-const FILE_LIST_LIMIT = 200;
 
 interface DirectoryState {
   listing: WorkspaceFileListing | null;
@@ -125,7 +125,7 @@ export function NavigatorFilesView({
       return next;
     });
     try {
-      const listing = await loadFiles(workspaceId, relativePath, FILE_LIST_LIMIT);
+      const listing = await loadFiles(workspaceId, relativePath, DEFAULT_FILE_LIST_LIMIT);
       if (currentGeneration !== generation.current) return;
       setDirectories((current) => {
         const next = { ...current, [relativePath]: { listing, loading: false, error: null } };

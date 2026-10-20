@@ -20,6 +20,15 @@ import { PaneActionsMenu, type PaneMenuGroups } from "./workbench/PaneActionsMen
 import "@xterm/xterm/css/xterm.css";
 import "./terminal-pane.css";
 
+const SCROLLBACK_LINES = 10_000;
+/** Minimum gap between console warnings for one terminal's failed IPC calls. */
+const WARN_THROTTLE_MS = 2000;
+/** Retries of a keystroke write while the backend input channel is busy. */
+const MAX_WRITE_RETRIES = 30;
+/** Delay between write retries: one step per attempt so far, capped at `MAX_WRITE_RETRY_STEPS` steps. */
+const WRITE_RETRY_STEP_MS = 25;
+const MAX_WRITE_RETRY_STEPS = 10;
+
 interface Props {
   id: string;
   command: string;
@@ -108,7 +117,7 @@ export function TerminalPane(props: Props) {
       fontSize,
       cursorBlink: true,
       macOptionIsMeta: true,
-      scrollback: 10000,
+      scrollback: SCROLLBACK_LINES,
       theme: {
         background: "#0c0c0e",
         foreground: "#d4d4d8",
@@ -128,7 +137,7 @@ export function TerminalPane(props: Props) {
     let lastWarnAt = 0;
     const warnThrottled = (what: string, err: unknown) => {
       const now = Date.now();
-      if (now - lastWarnAt < 2000) return;
+      if (now - lastWarnAt < WARN_THROTTLE_MS) return;
       lastWarnAt = now;
       console.warn(`[terminal ${id}] ${what} failed:`, err);
     };
@@ -285,12 +294,12 @@ export function TerminalPane(props: Props) {
             await api.writeTerminal(id, data);
             return;
           } catch (err) {
-            if (!String(err).includes("busy") || attempt >= 30) {
+            if (!String(err).includes("busy") || attempt >= MAX_WRITE_RETRIES) {
               warnThrottled("write", err);
               return;
             }
             await new Promise((r) =>
-              setTimeout(r, 25 * Math.min(attempt + 1, 10)),
+              setTimeout(r, WRITE_RETRY_STEP_MS * Math.min(attempt + 1, MAX_WRITE_RETRY_STEPS)),
             );
           }
         }

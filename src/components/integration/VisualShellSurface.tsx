@@ -138,6 +138,12 @@ function shellShortcut(event: KeyboardEvent): "sidebar" | "inspector" | null {
 
 const NO_MODIFIERS = { meta: false, shift: false, ctrl: false, alt: false } as const;
 
+/** How often the inspector refreshes the focused agent's runtime info. */
+const INSPECTOR_RUNTIME_POLL_MS = 1500;
+
+/** How long "mute notifications" lasts. */
+const NOTIFICATIONS_MUTE_MS = 60 * 60 * 1000;
+
 /** The shell's fixed shortcuts; `meta` reads as Ctrl outside macOS, as their handlers accept either. */
 const SHELL_SHORTCUTS = {
   interrupt: { ...NO_MODIFIERS, key: "c", ctrl: true },
@@ -379,7 +385,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
           dispatchInspectorRuntime({ type: "failure", terminalId, requestId, error: errorMessage(error, t("inspector.unavailable")) });
         }
       }
-      if (!cancelled) timer = setTimeout(() => void poll(), 1500);
+      if (!cancelled) timer = setTimeout(() => void poll(), INSPECTOR_RUNTIME_POLL_MS);
     };
 
     void poll();
@@ -808,7 +814,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         attentionCount: muted ? 0 : attentionCount,
         notificationsOpen,
         onNotificationsOpenChange: setNotificationsOpen,
-        notificationsPanel: <NotificationCenter items={props.notificationItems} contextAlerts={contextAlerts} onFocusAgent={(terminalId) => { setNotificationsOpen(false); focusTerminal(terminalId); }} labels={agentLabels} workspaceNames={workspaceNames} muted={muted} onJump={(item) => { setNotificationsOpen(false); props.onJumpToNotification(item); }} onMarkRead={props.onClearNotifications} onMarkAllRead={props.onMarkAllRead} onToggleMute={() => setMuteUntil(muted ? 0 : Date.now() + 60 * 60 * 1000)} onOpenFleet={() => { setNotificationsOpen(false); navigate("fleet"); }} />,
+        notificationsPanel: <NotificationCenter items={props.notificationItems} contextAlerts={contextAlerts} onFocusAgent={(terminalId) => { setNotificationsOpen(false); focusTerminal(terminalId); }} labels={agentLabels} workspaceNames={workspaceNames} muted={muted} onJump={(item) => { setNotificationsOpen(false); props.onJumpToNotification(item); }} onMarkRead={props.onClearNotifications} onMarkAllRead={props.onMarkAllRead} onToggleMute={() => setMuteUntil(muted ? 0 : Date.now() + NOTIFICATIONS_MUTE_MS)} onOpenFleet={() => { setNotificationsOpen(false); navigate("fleet"); }} />,
         onToggleVoice: props.onToggleVoice,
         voiceActive,
         voiceLabel,

@@ -9,7 +9,7 @@ import {
   type McpTasksChangedPayload,
 } from "../lib/tauri/mcp";
 import { sendPromptToTerminal } from "../app/sendPromptToTerminal";
-import { taskNumber } from "../domain/taskNumber";
+import { taskNumber } from "../domain/tasks";
 import { errorMessage } from "../lib/errors/errorMessage";
 import type {
   McpAgentState,

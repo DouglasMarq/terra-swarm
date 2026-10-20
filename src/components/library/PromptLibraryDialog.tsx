@@ -7,6 +7,8 @@ import { DialogFooter, TerraDialog } from "../overlays/Dialog";
 import { Button } from "../ui/Button";
 import "./library.css";
 
+const MAX_PROMPT_TITLE_CHARS = 80;
+
 export interface PromptTarget {
   id: string;
   label: string;
@@ -108,7 +110,7 @@ export function PromptLibraryDialog({ projectName, targets, defaultTargetId }: P
           </button>
         </aside>
         <div className="terra-library-editor">
-          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t("library.titlePlaceholder")} aria-label={t("library.titleLabel")} maxLength={80} />
+          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t("library.titlePlaceholder")} aria-label={t("library.titleLabel")} maxLength={MAX_PROMPT_TITLE_CHARS} />
           <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder={t("library.bodyPlaceholder")} aria-label={t("library.bodyLabel")} />
           <p className="terra-library-hint">{t("library.placeholderHint")}</p>
         </div>

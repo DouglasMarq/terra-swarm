@@ -1,5 +1,5 @@
 import type { McpTask, McpTaskPatch, McpTaskStatus } from "../../types";
-import { taskNumber } from "../../domain/taskNumber";
+import { taskNumber } from "../../domain/tasks";
 
 /** Columns of the Kanban board, in workflow order. */
 export const BOARD_COLUMNS: readonly McpTaskStatus[] = ["todo", "in_progress", "blocked", "review", "done"];

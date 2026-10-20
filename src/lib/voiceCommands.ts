@@ -13,6 +13,8 @@ export type VoiceIntent =
   | { type: "new-agent"; agent?: string };
 
 const UNSAFE_TARGET = /[\u0000-\u001f\u007f;&|`$<>]/;
+const MAX_TARGET_CHARS = 128;
+const MAX_TRANSCRIPT_CHARS = 512;
 
 /** Folds spoken text for matching: search folding, no trailing punctuation, single spaces. */
 export function normalizeVoiceText(raw: string): string {
@@ -26,7 +28,7 @@ function safeTarget(raw: string | undefined): string | null {
     .replace(/^["']/, "")
     .replace(/["']$/, "")
     .trim();
-  if (!target || target.length > 128 || UNSAFE_TARGET.test(target)) return null;
+  if (!target || target.length > MAX_TARGET_CHARS || UNSAFE_TARGET.test(target)) return null;
   return target;
 }
 
@@ -49,7 +51,7 @@ function matchTarget(
  * host; no free-form speech is ever treated as a terminal command.
  */
 export function parseVoiceCommand(input: unknown): VoiceIntent | null {
-  if (typeof input !== "string" || input.length > 512) return null;
+  if (typeof input !== "string" || input.length > MAX_TRANSCRIPT_CHARS) return null;
   let source = normalizeVoiceText(input);
   source = source.replace(/^(?:por favor|please)[,\s]+/, "");
   if (!source) return null;

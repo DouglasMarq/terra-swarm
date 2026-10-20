@@ -21,7 +21,11 @@ import { useLibraryStore } from "../../stores/libraryStore";
 import type { McpAgentStatus, McpTask, McpTaskPatch, McpTaskStatus } from "../../types";
 import { BOARD_COLUMNS, boardColumns, planDrop } from "./boardModel";
 import { TaskCard, type TaskAgentOption } from "./TasksPanel";
+import { MAX_TASK_TITLE_CHARS } from "../../domain/tasks";
 import "./tasks.css";
+
+/** How long a board notice stays visible. */
+const NOTICE_DURATION_MS = 4000;
 
 /** What is under the pointer wins; corners only decide in the gaps. */
 const collision: CollisionDetection = (args) => {
@@ -78,7 +82,7 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
 
   useEffect(() => {
     if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(null), 4000);
+    const timer = window.setTimeout(() => setNotice(null), NOTICE_DURATION_MS);
     return () => window.clearTimeout(timer);
   }, [notice]);
 
@@ -152,7 +156,7 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
             onChange={(event) => setDraft(event.target.value)}
             placeholder={t("tasks.newPlaceholder")}
             aria-label={t("tasks.newPlaceholder")}
-            maxLength={200}
+            maxLength={MAX_TASK_TITLE_CHARS}
           />
           <button className="terra-tasks-add" type="submit" disabled={!draft.trim()} aria-label={t("tasks.add")} title={t("tasks.add")}>
             <Plus size={14} aria-hidden="true" />

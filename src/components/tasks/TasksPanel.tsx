@@ -8,6 +8,7 @@ import {
   useMcpStore,
 } from "../../stores/mcpStore";
 import type { McpAgentStatus, McpTask, McpTaskEvent, McpTaskPatch, McpTaskStatus } from "../../types";
+import { MAX_TASK_TITLE_CHARS } from "../../domain/tasks";
 import "./tasks.css";
 
 export interface TaskAgentOption {
@@ -92,7 +93,7 @@ export function TasksPanel({ workspaceId, workspaceName, agents }: TasksPanelPro
           onChange={(event) => setDraft(event.target.value)}
           placeholder={t("tasks.newPlaceholder")}
           aria-label={t("tasks.newPlaceholder")}
-          maxLength={200}
+          maxLength={MAX_TASK_TITLE_CHARS}
         />
         <button className="terra-tasks-add" type="submit" disabled={!draft.trim()} aria-label={t("tasks.add")} title={t("tasks.add")}>
           <Plus size={14} aria-hidden="true" />

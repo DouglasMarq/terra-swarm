@@ -24,7 +24,11 @@ import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
 import type { TerminalSessions } from "./useTerminalSessions";
 
+/** Time a resumed agent's CLI gets to draw its prompt before dictation is pasted. */
+const RESUMED_AGENT_PROMPT_DELAY_MS = 1500;
 
+/** Audio levels kept for the capsule's waveform. */
+const VOICE_WAVEFORM_SAMPLES = 32;
 
 interface VoiceCaptureInput {
   workspaces: Workspace[];
@@ -270,7 +274,7 @@ export function useVoiceCapture({
       setVoiceFeedback(t("app.voice.resuming"));
       await sessions.restart(id, resolveResumeCommand(profileForCommand(meta.command), meta.command));
       // Give the agent's CLI a moment to draw its prompt before pasting.
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, RESUMED_AGENT_PROMPT_DELAY_MS));
     }
     // Outside the Workbench (Fleet, Settings) the xterm is not mounted; the
     // PTY still is, so write straight to it. Agent CLIs take bracketed paste.
@@ -330,7 +334,7 @@ export function useVoiceCapture({
     const unAudioLevel = listen<number>("voice-audio-level", (e) => {
       const level = Math.max(0, Math.min(1, Number(e.payload) || 0));
       setVoiceLevel(level);
-      setVoiceSamples((previous) => [...previous.slice(-31), level]);
+      setVoiceSamples((previous) => [...previous.slice(-(VOICE_WAVEFORM_SAMPLES - 1)), level]);
     });
     const unTrStart = listen("voice-transcription-started", () => {
       setVoiceStatus("transcribing");

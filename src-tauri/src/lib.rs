@@ -142,6 +142,7 @@ pub fn run() {
             pty::running_terminals,
             pty::terminal_runtime_info,
             pty::agents::detect_agents,
+            pty::dev_server::probe_dev_servers,
             pty::shell::list_available_shells,
             fonts::list_system_fonts,
             worktree::worktree_status,

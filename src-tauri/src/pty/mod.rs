@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 pub mod agents;
+pub mod dev_server;
 mod output;
 mod output_scan;
 pub mod shell;

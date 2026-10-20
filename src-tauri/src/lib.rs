@@ -17,6 +17,30 @@ use tauri::{Listener, Manager};
 /// How long `SWARM_DEMO=1` waits for the window before seeding terminals.
 const DEMO_SEED_DELAY: Duration = Duration::from_millis(800);
 
+/// Remove the old scrollback of terminals the store no longer knows. A
+/// store that could not be read knows no terminals, so it keeps them all.
+fn clean_orphaned_scrollback(
+    store: &workspace::WorkspaceStore,
+    scrollback_store: &scrollback::ScrollbackStore,
+) {
+    if store.save_path.is_none() {
+        return;
+    }
+    let known_terminals = store
+        .workspaces
+        .iter()
+        .flat_map(|workspace| {
+            workspace
+                .terminals
+                .iter()
+                .map(|terminal| terminal.id.clone())
+        })
+        .collect::<std::collections::HashSet<_>>();
+    if let Err(error) = scrollback_store.cleanup_orphans(&known_terminals) {
+        eprintln!("failed to clean orphaned scrollback: {}", error);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -33,21 +57,11 @@ pub fn run() {
                     pty::bump_next_terminal_id(&t.id);
                 }
             }
-            let known_terminals = store
-                .workspaces
-                .iter()
-                .flat_map(|workspace| {
-                    workspace
-                        .terminals
-                        .iter()
-                        .map(|terminal| terminal.id.clone())
-                })
-                .collect::<std::collections::HashSet<_>>();
             let scrollback_dir = dir.join("scrollback");
-            let scrollback_store = scrollback::ScrollbackStore::from_root(scrollback_dir.clone());
-            if let Err(error) = scrollback_store.cleanup_orphans(&known_terminals) {
-                eprintln!("failed to clean orphaned scrollback: {}", error);
-            }
+            clean_orphaned_scrollback(
+                &store,
+                &scrollback::ScrollbackStore::from_root(scrollback_dir.clone()),
+            );
             let hub = Arc::new(mcp::McpHub::open(
                 dir.join(mcp::db::DB_FILE),
                 Some(dir.join("mcp")),
@@ -198,4 +212,60 @@ pub fn run() {
                 _ => {}
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::SystemTime;
+
+    const OLDER_THAN_ORPHAN_AGE: Duration = Duration::from_secs(60 * 24 * 60 * 60);
+
+    fn old_transcript(label: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let root = std::env::temp_dir().join(format!(
+            "terra-swarm-orphans-{label}-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let transcript = root.join("t-1.scrollback");
+        std::fs::write(&transcript, "output").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&transcript)
+            .unwrap()
+            .set_modified(SystemTime::now() - OLDER_THAN_ORPHAN_AGE)
+            .unwrap();
+        (root, transcript)
+    }
+
+    #[test]
+    fn given_a_store_that_could_not_be_read_keeps_every_transcript() {
+        let (root, transcript) = old_transcript("unread");
+        let store = workspace::WorkspaceStore::default();
+
+        clean_orphaned_scrollback(
+            &store,
+            &scrollback::ScrollbackStore::from_root(root.clone()),
+        );
+
+        assert!(transcript.exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn given_a_loaded_store_removes_old_transcripts_it_does_not_know() {
+        let (root, transcript) = old_transcript("loaded");
+        let store = workspace::WorkspaceStore {
+            save_path: Some(root.join("workspaces.json")),
+            ..workspace::WorkspaceStore::default()
+        };
+
+        clean_orphaned_scrollback(
+            &store,
+            &scrollback::ScrollbackStore::from_root(root.clone()),
+        );
+
+        assert!(!transcript.exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
 }

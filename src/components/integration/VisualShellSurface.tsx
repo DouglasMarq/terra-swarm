@@ -648,7 +648,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   );
   useEffect(() => {
     if (shell.dock.open) fullscreenIds.forEach((id) => orchestration.setContainerFullscreen(id, false));
-  }, [shell.dock.open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shell.dock.open]); // Keyed on opening the inspector only, so entering fullscreen while it is open still works.
   useEffect(() => {
     if (fullscreenIds.length === 0) return;
     const onKeyDown = (event: KeyboardEvent) => {

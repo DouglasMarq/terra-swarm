@@ -146,7 +146,11 @@ pub fn agent_usage(hub: Hub<'_>, workspace_id: String) -> Vec<crate::usage::Agen
                 crate::usage::SessionLog::Codex(_) => "codex",
             };
             let usage = crate::usage::usage_of(&log)?;
-            Some(crate::usage::AgentUsage { terminal_id, agent: agent.into(), usage })
+            Some(crate::usage::AgentUsage {
+                terminal_id,
+                agent: agent.into(),
+                usage,
+            })
         })
         .collect()
 }

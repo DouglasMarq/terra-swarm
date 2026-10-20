@@ -44,7 +44,8 @@ fn hook(args: &[String]) {
         // Not started by Terra Swarm (or MCP is off): nothing to report.
         return;
     };
-    let body = serde_json::json!({ "agent": agent, "event": event, "payload": payload }).to_string();
+    let body =
+        serde_json::json!({ "agent": agent, "event": event, "payload": payload }).to_string();
     if let Err(error) = post_hook(&url, &token, &body) {
         // stderr only: a failed report must not change what the agent does.
         eprintln!("terra-swarm hook: {}", error);
@@ -57,7 +58,12 @@ fn read_stdin_json() -> serde_json::Value {
         return serde_json::Value::Null;
     }
     let mut text = String::new();
-    if stdin.lock().take(MAX_PAYLOAD).read_to_string(&mut text).is_err() {
+    if stdin
+        .lock()
+        .take(MAX_PAYLOAD)
+        .read_to_string(&mut text)
+        .is_err()
+    {
         return serde_json::Value::Null;
     }
     serde_json::from_str(&text).unwrap_or(serde_json::Value::Null)
@@ -78,9 +84,14 @@ fn post_hook(url: &str, token: &str, body: &str) -> Result<(), String> {
     let address = authority
         .parse()
         .map_err(|error| format!("bad address {}: {}", authority, error))?;
-    let mut stream = TcpStream::connect_timeout(&address, TIMEOUT).map_err(|error| error.to_string())?;
-    stream.set_read_timeout(Some(TIMEOUT)).map_err(|error| error.to_string())?;
-    stream.set_write_timeout(Some(TIMEOUT)).map_err(|error| error.to_string())?;
+    let mut stream =
+        TcpStream::connect_timeout(&address, TIMEOUT).map_err(|error| error.to_string())?;
+    stream
+        .set_read_timeout(Some(TIMEOUT))
+        .map_err(|error| error.to_string())?;
+    stream
+        .set_write_timeout(Some(TIMEOUT))
+        .map_err(|error| error.to_string())?;
     let request = format!(
         "POST {path} HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n{body}",
         path = crate::mcp::hooks::HOOKS_PATH,
@@ -89,14 +100,19 @@ fn post_hook(url: &str, token: &str, body: &str) -> Result<(), String> {
         length = body.len(),
         body = body,
     );
-    stream.write_all(request.as_bytes()).map_err(|error| error.to_string())?;
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|error| error.to_string())?;
     let mut response = String::new();
     let _ = stream.take(4096).read_to_string(&mut response);
     let status = response.split_whitespace().nth(1).unwrap_or("");
     if status == "200" {
         Ok(())
     } else {
-        Err(format!("server answered {}", if status.is_empty() { "nothing" } else { status }))
+        Err(format!(
+            "server answered {}",
+            if status.is_empty() { "nothing" } else { status }
+        ))
     }
 }
 
@@ -109,8 +125,14 @@ mod tests {
 
     #[test]
     fn only_loopback_urls_are_used() {
-        assert_eq!(loopback_authority("http://127.0.0.1:4100/mcp").as_deref(), Some("127.0.0.1:4100"));
-        assert_eq!(loopback_authority("http://localhost:9/mcp").as_deref(), Some("127.0.0.1:9"));
+        assert_eq!(
+            loopback_authority("http://127.0.0.1:4100/mcp").as_deref(),
+            Some("127.0.0.1:4100")
+        );
+        assert_eq!(
+            loopback_authority("http://localhost:9/mcp").as_deref(),
+            Some("127.0.0.1:9")
+        );
         assert_eq!(loopback_authority("https://127.0.0.1:4100/mcp"), None);
         assert_eq!(loopback_authority("http://evil.example:4100/mcp"), None);
         assert_eq!(loopback_authority("http://127.0.0.1/mcp"), None);
@@ -119,7 +141,10 @@ mod tests {
     #[test]
     fn non_cli_arguments_start_the_app() {
         assert_eq!(run(&["terra-swarm".to_string()]), None);
-        assert_eq!(run(&["terra-swarm".to_string(), "--flag".to_string()]), None);
+        assert_eq!(
+            run(&["terra-swarm".to_string(), "--flag".to_string()]),
+            None
+        );
     }
 
     #[test]

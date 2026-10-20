@@ -15,7 +15,13 @@ pub enum Role {
 
 impl Role {
     #[cfg(test)]
-    pub const ALL: [Role; 5] = [Role::Orchestrator, Role::Planner, Role::Executor, Role::Reviewer, Role::Tester];
+    pub const ALL: [Role; 5] = [
+        Role::Orchestrator,
+        Role::Planner,
+        Role::Executor,
+        Role::Reviewer,
+        Role::Tester,
+    ];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -84,7 +90,10 @@ mod tests {
             assert_eq!(text, format!("\"{}\"", role.as_str()));
             assert_eq!(serde_json::from_str::<Role>(&text).unwrap(), role);
             assert!(!role.instructions().is_empty());
-            assert!(role.brief().chars().all(|c| c.is_ascii_alphanumeric() || " .:,".contains(c)));
+            assert!(role
+                .brief()
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || " .:,".contains(c)));
         }
         assert!(Role::Orchestrator.can_assign());
         assert!(!Role::Executor.can_assign());

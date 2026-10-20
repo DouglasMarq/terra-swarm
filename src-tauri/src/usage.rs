@@ -54,13 +54,25 @@ pub fn claude_usage(path: &Path) -> std::io::Result<TokenUsage> {
         if !line.contains("\"usage\"") {
             continue;
         }
-        let Ok(entry) = serde_json::from_str::<Value>(&line) else { continue };
-        let Some(message) = entry.get("message") else { continue };
-        let Some(usage) = message.get("usage") else { continue };
+        let Ok(entry) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        let Some(message) = entry.get("message") else {
+            continue;
+        };
+        let Some(usage) = message.get("usage") else {
+            continue;
+        };
         let key = format!(
             "{}:{}",
-            message.get("id").and_then(Value::as_str).unwrap_or_default(),
-            entry.get("requestId").and_then(Value::as_str).unwrap_or_default()
+            message
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or_default(),
+            entry
+                .get("requestId")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
         );
         if key != ":" && !seen.insert(key) {
             continue;
@@ -70,7 +82,11 @@ pub fn claude_usage(path: &Path) -> std::io::Result<TokenUsage> {
         total.cache_read_tokens += number(usage, "cache_read_input_tokens");
         total.cache_write_tokens += number(usage, "cache_creation_input_tokens");
         total.turns += 1;
-        if let Some(model) = message.get("model").and_then(Value::as_str).filter(|model| !model.starts_with('<')) {
+        if let Some(model) = message
+            .get("model")
+            .and_then(Value::as_str)
+            .filter(|model| !model.starts_with('<'))
+        {
             total.model = Some(model.to_string());
         }
     }
@@ -83,7 +99,9 @@ pub fn codex_usage(path: &Path) -> std::io::Result<TokenUsage> {
     let mut total = TokenUsage::default();
     for line in reader.lines() {
         let Ok(line) = line else { continue };
-        let Ok(entry) = serde_json::from_str::<Value>(&line) else { continue };
+        let Ok(entry) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
         let payload = entry.get("payload").unwrap_or(&Value::Null);
         match payload.get("type").and_then(Value::as_str) {
             Some("token_count") => {
@@ -106,11 +124,18 @@ pub fn codex_usage(path: &Path) -> std::io::Result<TokenUsage> {
 
 /// The Codex rollout file of `thread_id`, searched newest day first.
 pub fn find_codex_log(sessions: &Path, thread_id: &str) -> Option<PathBuf> {
-    if thread_id.is_empty() || !thread_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+    if thread_id.is_empty()
+        || !thread_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
         return None;
     }
     fn walk(dir: &Path, thread_id: &str, depth: usize) -> Option<PathBuf> {
-        let mut entries: Vec<PathBuf> = std::fs::read_dir(dir).ok()?.filter_map(|entry| entry.ok().map(|entry| entry.path())).collect();
+        let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
+            .ok()?
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .collect();
         entries.sort();
         entries.reverse();
         for path in entries {
@@ -132,16 +157,22 @@ pub fn find_codex_log(sessions: &Path, thread_id: &str) -> Option<PathBuf> {
 }
 
 fn home() -> Option<PathBuf> {
-    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from)
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
 }
 
 fn claude_projects_dir() -> Option<PathBuf> {
-    let base = std::env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from).or_else(|| home().map(|home| home.join(".claude")))?;
+    let base = std::env::var_os("CLAUDE_CONFIG_DIR")
+        .map(PathBuf::from)
+        .or_else(|| home().map(|home| home.join(".claude")))?;
     Some(base.join("projects"))
 }
 
 fn codex_sessions_dir() -> Option<PathBuf> {
-    let base = std::env::var_os("CODEX_HOME").map(PathBuf::from).or_else(|| home().map(|home| home.join(".codex")))?;
+    let base = std::env::var_os("CODEX_HOME")
+        .map(PathBuf::from)
+        .or_else(|| home().map(|home| home.join(".codex")))?;
     Some(base.join("sessions"))
 }
 
@@ -150,7 +181,8 @@ fn codex_sessions_dir() -> Option<PathBuf> {
 pub fn accept_claude_transcript(path: &str, projects: Option<&Path>) -> Option<PathBuf> {
     let projects = projects?.canonicalize().ok()?;
     let path = Path::new(path).canonicalize().ok()?;
-    (path.starts_with(&projects) && path.extension().is_some_and(|ext| ext == "jsonl")).then_some(path)
+    (path.starts_with(&projects) && path.extension().is_some_and(|ext| ext == "jsonl"))
+        .then_some(path)
 }
 
 pub fn claude_transcript_from_hook(path: &str) -> Option<PathBuf> {
@@ -160,7 +192,9 @@ pub fn claude_transcript_from_hook(path: &str) -> Option<PathBuf> {
 pub fn usage_of(log: &SessionLog) -> Option<TokenUsage> {
     match log {
         SessionLog::Claude(path) => claude_usage(path).ok(),
-        SessionLog::Codex(thread) => codex_usage(&find_codex_log(&codex_sessions_dir()?, thread)?).ok(),
+        SessionLog::Codex(thread) => {
+            codex_usage(&find_codex_log(&codex_sessions_dir()?, thread)?).ok()
+        }
     }
 }
 
@@ -169,7 +203,12 @@ mod tests {
     use super::*;
 
     fn temp(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("terra-usage-{}-{}-{}", name, std::process::id(), crate::mcp::repo::now_millis()));
+        let dir = std::env::temp_dir().join(format!(
+            "terra-usage-{}-{}-{}",
+            name,
+            std::process::id(),
+            crate::mcp::repo::now_millis()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -195,7 +234,14 @@ mod tests {
         let usage = claude_usage(&log).unwrap();
         assert_eq!(
             usage,
-            TokenUsage { input_tokens: 20, output_tokens: 10, cache_read_tokens: 200, cache_write_tokens: 14, turns: 2, model: Some("claude-test".into()) }
+            TokenUsage {
+                input_tokens: 20,
+                output_tokens: 10,
+                cache_read_tokens: 200,
+                cache_write_tokens: 14,
+                turns: 2,
+                model: Some("claude-test".into())
+            }
         );
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -216,7 +262,15 @@ mod tests {
         assert_eq!(find_codex_log(&sessions, "abc-123"), Some(log.clone()));
         assert_eq!(find_codex_log(&sessions, "../etc"), None);
         let usage = codex_usage(&log).unwrap();
-        assert_eq!((usage.input_tokens, usage.cache_read_tokens, usage.output_tokens, usage.turns), (100, 200, 30, 1));
+        assert_eq!(
+            (
+                usage.input_tokens,
+                usage.cache_read_tokens,
+                usage.output_tokens,
+                usage.turns
+            ),
+            (100, 200, 30, 1)
+        );
         assert_eq!(usage.model.as_deref(), Some("gpt-test"));
         let _ = std::fs::remove_dir_all(sessions);
     }

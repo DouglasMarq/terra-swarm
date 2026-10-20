@@ -68,8 +68,14 @@ mod tests {
         assert_eq!(
             families,
             vec![
-                FontFamily { name: "Helvetica".into(), monospace: false },
-                FontFamily { name: "JetBrains Mono".into(), monospace: true },
+                FontFamily {
+                    name: "Helvetica".into(),
+                    monospace: false
+                },
+                FontFamily {
+                    name: "JetBrains Mono".into(),
+                    monospace: true
+                },
             ]
         );
     }

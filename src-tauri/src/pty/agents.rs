@@ -73,7 +73,9 @@ pub fn integration_of(agent: &str) -> Option<&'static str> {
 /// (`claude --continue`, `codex resume --last`, …).
 pub fn is_resume_command(command: &str) -> bool {
     let command = command.split_whitespace().collect::<Vec<_>>().join(" ");
-    catalog().iter().any(|entry| entry.resume.as_deref() == Some(command.as_str()))
+    catalog()
+        .iter()
+        .any(|entry| entry.resume.as_deref() == Some(command.as_str()))
 }
 
 /// Which of `ids` resolve on the user's PATH. On Unix a single login shell

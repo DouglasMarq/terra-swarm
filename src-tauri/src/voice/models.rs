@@ -64,7 +64,8 @@ pub fn available_models() -> Vec<VoiceModel> {
             size_bytes: 1_649_885_547,
             size_label: "1.5 GB",
             description: "Best accuracy with optimized speed, heavy",
-            url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
+            url:
+                "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
         },
         VoiceModel {
             id: "large-v3",
@@ -115,22 +116,25 @@ mod tests {
             assert!(model.url.ends_with(model.filename), "{}", model.id);
             assert!(model.size_bytes > 0, "{}", model.id);
         }
-        assert_eq!(find_model("base").map(|model| model.filename), Some("ggml-base.bin"));
+        assert_eq!(
+            find_model("base").map(|model| model.filename),
+            Some("ggml-base.bin")
+        );
         assert!(find_model("nope").is_none());
     }
 
     #[test]
     fn only_present_files_count_as_downloaded() {
-        let dir = std::env::temp_dir().join(format!(
-            "terra-voice-models-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("terra-voice-models-{}", std::process::id()));
         std::fs::create_dir_all(models_dir(&dir)).unwrap();
         assert!(downloaded_model_ids(&dir).is_empty());
         assert!(model_path(&dir, "tiny").is_none());
         std::fs::write(models_dir(&dir).join("ggml-tiny.bin"), b"x").unwrap();
         assert_eq!(downloaded_model_ids(&dir), vec!["tiny".to_string()]);
-        assert_eq!(model_path(&dir, "tiny"), Some(models_dir(&dir).join("ggml-tiny.bin")));
+        assert_eq!(
+            model_path(&dir, "tiny"),
+            Some(models_dir(&dir).join("ggml-tiny.bin"))
+        );
         assert!(model_path(&dir, "unknown").is_none());
         let _ = std::fs::remove_dir_all(dir);
     }

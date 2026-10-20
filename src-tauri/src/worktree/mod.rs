@@ -50,7 +50,9 @@ pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
         .output()
         .map_err(|error| format!("could not run git: {}", error))?;
     if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim_end().to_string())
+        Ok(String::from_utf8_lossy(&output.stdout)
+            .trim_end()
+            .to_string())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         Err(if stderr.is_empty() {
@@ -70,15 +72,30 @@ pub fn repo_root(dir: &Path) -> Option<PathBuf> {
 }
 
 fn branch_exists(repo: &Path, branch: &str) -> bool {
-    git(repo, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{}", branch)]).is_ok()
+    git(
+        repo,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{}", branch),
+        ],
+    )
+    .is_ok()
 }
 
 /// Create a worktree for `terminal_id` of the project at `project_cwd`,
 /// under `<root>/<workspace_id>/<terminal_id>`.
-pub fn create(project_cwd: &Path, root: &Path, workspace_id: &str, terminal_id: &str) -> Result<WorktreeInfo, String> {
+pub fn create(
+    project_cwd: &Path,
+    root: &Path,
+    workspace_id: &str,
+    terminal_id: &str,
+) -> Result<WorktreeInfo, String> {
     let repo = repo_root(project_cwd).ok_or("this project is not inside a git repository")?;
     // Keep the agent in the same subfolder the project points at.
-    let canonical_cwd = std::fs::canonicalize(project_cwd).unwrap_or_else(|_| project_cwd.to_path_buf());
+    let canonical_cwd =
+        std::fs::canonicalize(project_cwd).unwrap_or_else(|_| project_cwd.to_path_buf());
     let canonical_repo = std::fs::canonicalize(&repo).unwrap_or_else(|_| repo.clone());
     let relative = canonical_cwd
         .strip_prefix(&canonical_repo)
@@ -86,7 +103,8 @@ pub fn create(project_cwd: &Path, root: &Path, workspace_id: &str, terminal_id: 
         .unwrap_or_default();
     let base = match git(&repo, &["symbolic-ref", "--quiet", "--short", "HEAD"]) {
         Ok(branch) if !branch.is_empty() => branch,
-        _ => git(&repo, &["rev-parse", "--short", "HEAD"]).map_err(|_| "the repository has no commits yet")?,
+        _ => git(&repo, &["rev-parse", "--short", "HEAD"])
+            .map_err(|_| "the repository has no commits yet")?,
     };
     let mut branch = format!("{}{}", BRANCH_PREFIX, terminal_id);
     let mut suffix = 2;
@@ -102,7 +120,10 @@ pub fn create(project_cwd: &Path, root: &Path, workspace_id: &str, terminal_id: 
         std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
     let path_text = path.to_string_lossy().to_string();
-    git(&repo, &["worktree", "add", "-b", &branch, &path_text, "HEAD"])?;
+    git(
+        &repo,
+        &["worktree", "add", "-b", &branch, &path_text, "HEAD"],
+    )?;
     let cwd = path.join(relative);
     Ok(WorktreeInfo {
         path: path_text,
@@ -169,7 +190,11 @@ pub fn remove(info: &WorktreeInfo, delete_branch: bool) -> Result<(), String> {
 }
 
 /// The worktree recorded for a terminal of a workspace.
-fn recorded(store: &std::sync::Mutex<crate::workspace::WorkspaceStore>, workspace_id: &str, terminal_id: &str) -> Result<WorktreeInfo, String> {
+fn recorded(
+    store: &std::sync::Mutex<crate::workspace::WorkspaceStore>,
+    workspace_id: &str,
+    terminal_id: &str,
+) -> Result<WorktreeInfo, String> {
     let store = store.lock().map_err(|error| error.to_string())?;
     store
         .workspace(workspace_id)?
@@ -244,7 +269,11 @@ pub fn worktree_open_pr(
     title: String,
     body: String,
 ) -> Result<String, String> {
-    review::open_pull_request(&recorded(&store, &workspace_id, &terminal_id)?, &title, &body)
+    review::open_pull_request(
+        &recorded(&store, &workspace_id, &terminal_id)?,
+        &title,
+        &body,
+    )
 }
 
 #[cfg(test)]
@@ -254,7 +283,12 @@ pub(crate) mod test_repo {
 
     /// A fresh repository with one commit on `main`.
     pub fn init(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("terra-wt-{}-{}-{}", name, std::process::id(), crate::mcp::repo::now_millis()));
+        let dir = std::env::temp_dir().join(format!(
+            "terra-wt-{}-{}-{}",
+            name,
+            std::process::id(),
+            crate::mcp::repo::now_millis()
+        ));
         std::fs::create_dir_all(dir.join("app")).unwrap();
         let run = |args: &[&str]| git(&dir, args).unwrap();
         run(&["init", "-q", "-b", "main"]);
@@ -316,7 +350,9 @@ mod tests {
     fn refuses_a_folder_outside_git() {
         let dir = std::env::temp_dir().join(format!("terra-wt-plain-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        assert!(create(&dir, &dir.join("wt"), "ws", "t-1").unwrap_err().contains("not inside a git repository"));
+        assert!(create(&dir, &dir.join("wt"), "ws", "t-1")
+            .unwrap_err()
+            .contains("not inside a git repository"));
         let _ = std::fs::remove_dir_all(dir);
     }
 

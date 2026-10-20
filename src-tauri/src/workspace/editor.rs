@@ -36,7 +36,10 @@ fn modified_millis(path: &Path) -> Result<u64, String> {
     let modified = std::fs::metadata(path)
         .and_then(|metadata| metadata.modified())
         .map_err(|error| format!("cannot read the file's time: {}", error))?;
-    Ok(modified.duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_millis() as u64).unwrap_or(0))
+    Ok(modified
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as u64)
+        .unwrap_or(0))
 }
 
 /// The real path of `relative` inside `root`, which must be an existing file.
@@ -64,11 +67,17 @@ fn resolve_file(root: &Path, relative: &str) -> Result<PathBuf, String> {
 
 pub(crate) fn read_file(root: &Path, relative: &str) -> Result<WorkspaceFileContent, String> {
     let target = resolve_file(root, relative)?;
-    let size = std::fs::metadata(&target).map_err(|error| error.to_string())?.len();
+    let size = std::fs::metadata(&target)
+        .map_err(|error| error.to_string())?
+        .len();
     if size > MAX_EDIT_BYTES {
-        return Err(format!("the file is too large to edit here ({} KB)", size / 1024));
+        return Err(format!(
+            "the file is too large to edit here ({} KB)",
+            size / 1024
+        ));
     }
-    let bytes = std::fs::read(&target).map_err(|error| format!("cannot read the file: {}", error))?;
+    let bytes =
+        std::fs::read(&target).map_err(|error| format!("cannot read the file: {}", error))?;
     let text = if bytes.iter().take(8192).any(|byte| *byte == 0) {
         None
     } else {
@@ -83,7 +92,12 @@ pub(crate) fn read_file(root: &Path, relative: &str) -> Result<WorkspaceFileCont
     })
 }
 
-pub(crate) fn write_file(root: &Path, relative: &str, content: &str, expected_modified: Option<u64>) -> Result<WorkspaceFileSaved, String> {
+pub(crate) fn write_file(
+    root: &Path,
+    relative: &str,
+    content: &str,
+    expected_modified: Option<u64>,
+) -> Result<WorkspaceFileSaved, String> {
     let target = resolve_file(root, relative)?;
     if content.len() as u64 > MAX_EDIT_BYTES {
         return Err("the text is too large to save here".into());
@@ -111,7 +125,10 @@ pub fn read_workspace_file(
     workspace_id: String,
     relative_path: String,
 ) -> Result<WorkspaceFileContent, String> {
-    read_file(Path::new(&workspace_cwd(&store, &workspace_id)?), &relative_path)
+    read_file(
+        Path::new(&workspace_cwd(&store, &workspace_id)?),
+        &relative_path,
+    )
 }
 
 /// `expected_modified` is the time the editor read; `None` overwrites.
@@ -123,7 +140,12 @@ pub fn write_workspace_file(
     content: String,
     expected_modified: Option<u64>,
 ) -> Result<WorkspaceFileSaved, String> {
-    write_file(Path::new(&workspace_cwd(&store, &workspace_id)?), &relative_path, &content, expected_modified)
+    write_file(
+        Path::new(&workspace_cwd(&store, &workspace_id)?),
+        &relative_path,
+        &content,
+        expected_modified,
+    )
 }
 
 #[cfg(test)]
@@ -131,7 +153,12 @@ mod tests {
     use super::*;
 
     fn temp_root(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("terra-editor-{}-{}-{}", name, std::process::id(), crate::mcp::repo::now_millis()));
+        let dir = std::env::temp_dir().join(format!(
+            "terra-editor-{}-{}-{}",
+            name,
+            std::process::id(),
+            crate::mcp::repo::now_millis()
+        ));
         std::fs::create_dir_all(dir.join("src")).unwrap();
         dir
     }
@@ -144,7 +171,10 @@ mod tests {
         assert_eq!(file.content, "let a = 1;\n");
         assert!(!file.binary);
         let saved = write_file(&root, "src/main.ts", "let a = 2;\n", Some(file.modified)).unwrap();
-        assert_eq!(std::fs::read_to_string(root.join("src/main.ts")).unwrap(), "let a = 2;\n");
+        assert_eq!(
+            std::fs::read_to_string(root.join("src/main.ts")).unwrap(),
+            "let a = 2;\n"
+        );
         assert_eq!(saved.size, 11);
         let _ = std::fs::remove_dir_all(root);
     }
@@ -158,8 +188,12 @@ mod tests {
         std::fs::write(&path, "agent wrote this").unwrap();
         let stale = file.modified.saturating_sub(5_000);
         let file_time = std::fs::File::options().write(true).open(&path).unwrap();
-        file_time.set_modified(UNIX_EPOCH + std::time::Duration::from_millis(stale)).unwrap();
-        assert!(write_file(&root, "notes.md", "mine", Some(file.modified)).unwrap_err().contains("changed on disk"));
+        file_time
+            .set_modified(UNIX_EPOCH + std::time::Duration::from_millis(stale))
+            .unwrap();
+        assert!(write_file(&root, "notes.md", "mine", Some(file.modified))
+            .unwrap_err()
+            .contains("changed on disk"));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "agent wrote this");
         write_file(&root, "notes.md", "mine", None).unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "mine");
@@ -173,7 +207,9 @@ mod tests {
         std::fs::write(&outside, "secret").unwrap();
         assert!(read_file(&root, "../x").is_err());
         assert!(read_file(&root, "/etc/hosts").is_err());
-        assert!(read_file(&root, "src").unwrap_err().contains("not a regular file"));
+        assert!(read_file(&root, "src")
+            .unwrap_err()
+            .contains("not a regular file"));
         #[cfg(unix)]
         {
             std::os::unix::fs::symlink(&outside, root.join("link")).unwrap();

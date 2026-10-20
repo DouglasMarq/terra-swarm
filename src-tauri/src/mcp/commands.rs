@@ -130,7 +130,10 @@ pub fn mcp_delete_task(hub: Hub<'_>, workspace_id: String, id: String) -> Result
 pub fn mcp_agent_statuses(hub: Hub<'_>, workspace_id: String) -> Vec<AgentStatus> {
     hub.repo()
         .map(|repo| repo.statuses(&workspace_id))
-        .unwrap_or_default()
+        .unwrap_or_else(|error| {
+            eprintln!("cannot list agent statuses: {}", error);
+            Vec::new()
+        })
 }
 
 /// Tokens used by each agent of the workspace whose session log is known

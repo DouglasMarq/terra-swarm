@@ -16,6 +16,8 @@ use super::{AgentIdentity, McpHub};
 use crate::usage::SessionLog;
 
 pub const HOOKS_PATH: &str = "/hooks";
+/// Where a Claude Code HTTP hook posts its raw event JSON.
+pub const CLAUDE_HOOKS_PATH: &str = "/hooks/claude";
 pub const EVENT_AGENT_ATTENTION: &str = "agent-attention";
 const MAX_HOOK_BODY: usize = 256 * 1024;
 const MAX_SUMMARY_CHARS: usize = 200;
@@ -121,11 +123,19 @@ pub fn apply(hub: &McpHub, who: &AgentIdentity, call: &HookCall) -> Option<Agent
         hub.set_session_log(&who.terminal_id, log);
     }
     let (state, summary) = interpret(call)?;
-    let status = hub
-        .repo()
-        .ok()?
-        .report_status(&who.workspace_id, &who.terminal_id, state, &summary)
-        .ok()?;
+    let reported = hub.repo().and_then(|mut repo| {
+        repo.report_status(&who.workspace_id, &who.terminal_id, state, &summary)
+    });
+    let status = match reported {
+        Ok(status) => status,
+        Err(error) => {
+            eprintln!(
+                "cannot record the state hook of {}: {}",
+                who.terminal_id, error
+            );
+            return None;
+        }
+    };
     hub.emit_agent_status(&status);
     if state == AgentState::NeedsInput {
         hub.emit_attention(&status);
@@ -174,7 +184,14 @@ async fn receive(
     let Some(call) = parse(&body) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
-    let _ = tokio::task::spawn_blocking(move || apply(&hub, &who, &call)).await;
+    if let Err(error) = tokio::task::spawn_blocking(move || apply(&hub, &who, &call)).await {
+        let reason = if error.is_panic() {
+            "panicked"
+        } else {
+            "was cancelled"
+        };
+        eprintln!("a hook handler {}", reason);
+    }
     // An empty body: a Claude hook reads its response as hook output, and an
     // empty one changes nothing about what the agent does.
     StatusCode::OK.into_response()
@@ -182,7 +199,7 @@ async fn receive(
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{hub, identity};
+    use super::super::test_support::{hub, identity, RecordingHost};
     use super::super::EVENT_AGENT_STATUS;
     use super::*;
     use serde_json::json;
@@ -322,5 +339,24 @@ mod tests {
             .iter()
             .any(|(event, payload)| event == EVENT_AGENT_ATTENTION
                 && payload["terminal_id"] == "t-1"));
+    }
+
+    #[test]
+    fn given_an_unavailable_database_a_hook_records_no_state() {
+        let dir = std::env::temp_dir().join(format!(
+            "terra-mcp-hook-{}",
+            super::super::repo::now_millis()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(super::super::db::DB_FILE);
+        std::fs::write(&path, b"not a sqlite database").unwrap();
+        let hub = McpHub::open(path, None, Box::new(RecordingHost::default()));
+        let state = apply(
+            &hub,
+            &identity("t-1", "ws-1", "claude"),
+            &call("claude", "Stop", json!({})),
+        );
+        assert_eq!(state, None);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

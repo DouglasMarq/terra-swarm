@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Bell, Mic, PanelLeft, PanelRight, Search } from "lucide-react";
 import { useT } from "../../i18n";
+import { COMMAND_PALETTE_SHORTCUT, formatShortcut } from "../../lib/platform/shortcuts";
 
 export interface ChromeBreadcrumb {
   project?: string | null;
@@ -46,7 +47,7 @@ export function WindowChrome({
   onToggleSidebar,
   sidebarShortcut,
   onOpenLauncher,
-  launcherShortcut = "⌘K",
+  launcherShortcut = formatShortcut(COMMAND_PALETTE_SHORTCUT),
   attentionCount = 0,
   notificationsOpen = false,
   onNotificationsOpenChange,

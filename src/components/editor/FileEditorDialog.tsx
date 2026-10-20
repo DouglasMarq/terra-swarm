@@ -2,11 +2,15 @@ import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { FileText, RotateCw, Save } from "lucide-react";
 import { api } from "../../api";
 import { useT } from "../../i18n";
+import { formatShortcut, type ShortcutDefinition } from "../../lib/platform/shortcuts";
 import { useEditorStore } from "../../stores/editorStore";
 import type { WorkspaceFileContent } from "../../types";
 import { DialogFooter, TerraDialog } from "../overlays/Dialog";
 import { Button } from "../ui/Button";
 import "./editor.css";
+
+/** CodeMirror's `Mod-s`: Cmd on macOS, Ctrl elsewhere. */
+const SAVE_SHORTCUT: ShortcutDefinition = { key: "s", meta: true, shift: false, ctrl: false, alt: false };
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
 
@@ -94,7 +98,7 @@ export function FileEditorDialog() {
           {dirty ? <span className="terra-editor-dirty" aria-label={t("editor.unsaved")} title={t("editor.unsaved")}>●</span> : null}
         </span>
       }
-      description={file ? t("editor.meta", { size: Math.max(1, Math.round(file.size / 1024)) }) : t("editor.loading")}
+      description={file ? t("editor.meta", { size: Math.max(1, Math.round(file.size / 1024)), shortcut: formatShortcut(SAVE_SHORTCUT) }) : t("editor.loading")}
     >
       <div className="terra-editor-body">
         {loadError ? (

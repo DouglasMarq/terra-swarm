@@ -20,6 +20,7 @@ import {
   hotkeyActionLabel,
   MAX_FONT_SIZE,
   MIN_FONT_SIZE,
+  DEFAULT_HOTKEYS,
   formatHotkey,
   parseEnvLines,
   type Hotkey,
@@ -592,6 +593,7 @@ function AgentPanel({
   onDefaultAgentChange,
 }: Pick<SettingsPanelsProps, "agents" | "defaultAgent" | "onDefaultAgentChange">) {
   const t = useT();
+  const newAgentHotkey = usePreferencesStore((state) => state.hotkeys.newTerminal ?? DEFAULT_HOTKEYS.newTerminal);
   const profiles: AgentProfile[] = agents.map((agent) =>
     PROFILE_BY_ID.get(agent.id) ?? {
       id: agent.id,
@@ -605,7 +607,7 @@ function AgentPanel({
     <div className={styles.stack}>
       <div className={styles.card}>
         <span className={styles.cardTitle}>{t("settingsPanels.defaultAgentTitle")}</span>
-        <p className={styles.cardDescription}>{t("settingsPanels.defaultAgentHint")}</p>
+        <p className={styles.cardDescription}>{t("settingsPanels.defaultAgentHint", { shortcut: formatHotkey(newAgentHotkey) })}</p>
         <label className={styles.fieldLabel}>
           {t("settingsPanels.defaultAgentLabel")}
           <select

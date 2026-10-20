@@ -8,6 +8,9 @@ export interface ShortcutDefinition {
   alt: boolean;
 }
 
+/** Opens the command palette; `meta` reads as Ctrl outside macOS, as its handler accepts either. */
+export const COMMAND_PALETTE_SHORTCUT: ShortcutDefinition = { key: "k", meta: true, shift: false, ctrl: false, alt: false };
+
 export interface PlatformSignals {
   platform?: string;
   userAgent?: string;

@@ -3,6 +3,7 @@ import { History } from "lucide-react";
 
 import type { ResumeItem } from "../types";
 import { intlLocale, useT } from "../i18n";
+import { COMMAND_PALETTE_SHORTCUT, formatShortcut } from "../lib/platform/shortcuts";
 import { agentKind } from "../domain/agentLabels";
 import { ConfirmActionDialog, TerraDialog } from "./overlays/Dialog";
 import styles from "./integration/dialogs/ModalForms.module.css";
@@ -158,7 +159,7 @@ export function ResumeDialog({
               {t("resume.always")}
             </label>
           ) : null}
-          <p className={styles.resumeHint}>{t("resume.laterHint")}</p>
+          <p className={styles.resumeHint}>{t("resume.laterHint", { shortcut: formatShortcut(COMMAND_PALETTE_SHORTCUT) })}</p>
         </div>
       </TerraDialog>
 

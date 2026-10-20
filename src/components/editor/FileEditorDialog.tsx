@@ -61,6 +61,8 @@ export function FileEditorDialog() {
       const saved = await api.writeWorkspaceFile(target.workspaceId, target.path, text, overwrite ? null : file.modified);
       setFile({ ...file, content: text, size: saved.size, modified: saved.modified });
       setConflict(false);
+      // Nothing is left to lose, so the close warning no longer applies.
+      setConfirmDiscard(false);
     } catch (error) {
       const message = describe(error);
       setConflict(message.includes("changed on disk"));

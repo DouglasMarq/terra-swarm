@@ -172,31 +172,25 @@ fn count(text: &str) -> u32 {
     text.trim().parse().unwrap_or(0)
 }
 
-pub fn status(info: &WorktreeInfo) -> WorktreeStatus {
+/// The checkout's uncommitted files and how far the branch and its base
+/// diverged. Fails when git cannot answer, so a failure is never mistaken
+/// for a clean worktree with nothing to lose.
+pub fn status(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
+    info.check()?;
     let path = Path::new(&info.path);
     let exists = path.is_dir();
     let dirty = if exists {
         git(path, &["status", "--porcelain"])
-            .map(|text| {
-                text.lines()
-                    .filter_map(|line| line.get(3..))
-                    .map(str::to_string)
-                    .collect()
-            })
-            .unwrap_or_default()
+            .map_err(|error| format!("could not read the worktree status: {}", error))?
+            .lines()
+            .filter_map(|line| line.get(3..))
+            .map(str::to_string)
+            .collect()
     } else {
         Vec::new()
     };
-    let repo = Path::new(&info.repo);
-    let range = format!("{}...{}", info.base, info.branch);
-    let (behind, ahead) = git(repo, &["rev-list", "--left-right", "--count", &range])
-        .ok()
-        .and_then(|text| {
-            let mut parts = text.split_whitespace();
-            Some((count(parts.next()?), count(parts.next()?)))
-        })
-        .unwrap_or((0, 0));
-    WorktreeStatus {
+    let (behind, ahead) = divergence(info)?;
+    Ok(WorktreeStatus {
         branch: info.branch.clone(),
         base: info.base.clone(),
         path: info.path.clone(),
@@ -204,6 +198,27 @@ pub fn status(info: &WorktreeInfo) -> WorktreeStatus {
         ahead,
         behind,
         exists,
+    })
+}
+
+/// Commits only the base has and commits only the branch has; none once
+/// the branch itself is gone.
+fn divergence(info: &WorktreeInfo) -> Result<(u32, u32), String> {
+    let repo = Path::new(&info.repo);
+    let range = format!("{}...{}", info.base, info.branch);
+    match git(repo, &["rev-list", "--left-right", "--count", &range]) {
+        Ok(text) => {
+            let mut parts = text.split_whitespace();
+            let (Some(behind), Some(ahead)) = (parts.next(), parts.next()) else {
+                return Err(format!("unexpected git rev-list output: {}", text));
+            };
+            Ok((count(behind), count(ahead)))
+        }
+        Err(_) if !branch_exists(repo, &info.branch) => Ok((0, 0)),
+        Err(error) => Err(format!(
+            "could not compare {} with {}: {}",
+            info.branch, info.base, error
+        )),
     }
 }
 
@@ -247,8 +262,11 @@ pub fn worktree_status(
     terminal_id: String,
 ) -> Result<Option<WorktreeStatus>, String> {
     match recorded(&store, &workspace_id, &terminal_id) {
-        Ok(info) => Ok(Some(status(&info))),
-        Err(_) => Ok(None),
+        Ok(info) => status(&info).map(Some),
+        Err(error) => {
+            eprintln!("no worktree status for terminal {}: {}", terminal_id, error);
+            Ok(None)
+        }
     }
 }
 
@@ -356,16 +374,19 @@ mod tests {
         assert!(Path::new(&info.cwd).ends_with("t-3/app"));
         assert!(Path::new(&info.cwd).join("readme.txt").exists());
 
-        let clean = status(&info);
+        let clean = status(&info).unwrap();
         assert!(clean.exists);
         assert!(clean.dirty.is_empty());
         assert_eq!((clean.ahead, clean.behind), (0, 0));
 
         std::fs::write(Path::new(&info.cwd).join("new.txt"), "x").unwrap();
-        assert_eq!(status(&info).dirty, vec!["app/new.txt".to_string()]);
+        assert_eq!(
+            status(&info).unwrap().dirty,
+            vec!["app/new.txt".to_string()]
+        );
         git(Path::new(&info.path), &["add", "."]).unwrap();
         git(Path::new(&info.path), &["commit", "-q", "-m", "work"]).unwrap();
-        let committed = status(&info);
+        let committed = status(&info).unwrap();
         assert!(committed.dirty.is_empty());
         assert_eq!(committed.ahead, 1);
 
@@ -428,6 +449,52 @@ mod tests {
         assert!(git(&repo, &["branch", "--list", "terra/*"])
             .unwrap()
             .is_empty());
+        cleanup(&repo, &root);
+    }
+
+    #[test]
+    fn given_a_broken_checkout_status_reports_an_error_instead_of_clean() {
+        let repo = init("broken");
+        let root = repo.with_extension("worktrees");
+        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        std::fs::write(Path::new(&info.path).join("draft.txt"), "x").unwrap();
+        std::fs::write(Path::new(&info.path).join(".git"), "gitdir: /missing\n").unwrap();
+
+        assert!(status(&info)
+            .unwrap_err()
+            .contains("could not read the worktree status"));
+        cleanup(&repo, &root);
+    }
+
+    #[test]
+    fn given_a_deleted_checkout_status_still_counts_the_branch_commits() {
+        let repo = init("deleted");
+        let root = repo.with_extension("worktrees");
+        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        std::fs::write(Path::new(&info.path).join("feature.txt"), "x").unwrap();
+        git(Path::new(&info.path), &["add", "."]).unwrap();
+        git(Path::new(&info.path), &["commit", "-q", "-m", "work"]).unwrap();
+        std::fs::remove_dir_all(&info.path).unwrap();
+
+        let kept_branch = status(&info).unwrap();
+        assert!(!kept_branch.exists);
+        assert_eq!((kept_branch.ahead, kept_branch.behind), (1, 0));
+
+        git(&repo, &["worktree", "prune"]).unwrap();
+        git(&repo, &["branch", "-D", "terra/t-1"]).unwrap();
+        let gone = status(&info).unwrap();
+        assert_eq!((gone.ahead, gone.behind), (0, 0));
+        cleanup(&repo, &root);
+    }
+
+    #[test]
+    fn given_a_base_git_cannot_compare_status_reports_an_error() {
+        let repo = init("no-base");
+        let root = repo.with_extension("worktrees");
+        let mut info = create(&repo, &root, "ws", "t-1").unwrap();
+        info.base = "vanished".to_string();
+
+        assert!(status(&info).unwrap_err().contains("could not compare"));
         cleanup(&repo, &root);
     }
 

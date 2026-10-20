@@ -475,6 +475,7 @@ export const en = {
     defaultAgent: "Default agent",
     snapshotExported: "Snapshot exported ({workspaces} workspaces, {terminals} terminals).",
     snapshotImported: "Snapshot imported ({workspaces} workspaces, {terminals} suspended terminals).",
+    renameFailed: "Couldn't rename the project: {detail}",
     deleteFailed: "Couldn't delete the project: {detail}",
     historyCleared: "History cleared for the focused agent",
     importTitle: "Import snapshot?",

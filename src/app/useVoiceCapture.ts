@@ -425,7 +425,7 @@ export function useVoiceCapture({
 
   const cancelVoiceCapture = () => {
     if (voiceStatus === "recording") {
-      api.voiceToggleRecording().catch(() => {});
+      api.voiceToggleRecording().catch((error) => console.warn("could not stop the recording:", error));
     }
     dispatchVoiceCapsule({ type: "cancel" });
     setVoiceStatus("idle");

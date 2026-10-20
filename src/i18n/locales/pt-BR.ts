@@ -478,6 +478,7 @@ export const ptBR: Dictionary<typeof en> = {
     defaultAgent: "Agente padrão",
     snapshotExported: "Snapshot exportado ({workspaces} workspaces, {terminals} terminais).",
     snapshotImported: "Snapshot importado ({workspaces} workspaces, {terminals} terminais suspensos).",
+    renameFailed: "Não foi possível renomear o projeto: {detail}",
     deleteFailed: "Não foi possível excluir o projeto: {detail}",
     historyCleared: "Histórico limpo para o agente em foco",
     importTitle: "Importar snapshot?",

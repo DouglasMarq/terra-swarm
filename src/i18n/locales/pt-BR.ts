@@ -495,6 +495,8 @@ export const ptBR: Dictionary<typeof en> = {
     needsConfirm: "Essa ação exige confirmação.",
   },
   app: {
+    defaultWorkspaceName: "workspace",
+    createWorkspaceFailed: "Não foi possível criar o workspace: {detail}",
     resumeAgentFailed: "Não foi possível retomar {name}: {detail}",
     snapshotFailed: "A operação do snapshot falhou. Nada foi alterado.",
     loadFailed: "Não foi possível carregar os workspaces. Tente novamente.",

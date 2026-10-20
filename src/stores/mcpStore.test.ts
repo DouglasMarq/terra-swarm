@@ -23,6 +23,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 
+import { listen } from "@tauri-apps/api/event";
 import { groupTasksByStatus, startMcpEventBridge, useMcpStore } from "./mcpStore";
 
 export function makeTask(id: string, extra: Partial<McpTask> = {}): McpTask {
@@ -136,5 +137,16 @@ describe("mcp store", () => {
     await useMcpStore.getState().setEnabled(false);
     expect(api.mcpSetEnabled).toHaveBeenCalledWith(false);
     expect(useMcpStore.getState().server?.enabled).toBe(false);
+  });
+});
+
+describe("startMcpEventBridge", () => {
+  it("given a listener fails to register, warns when stopped instead of swallowing it", async () => {
+    vi.mocked(listen).mockRejectedValueOnce(new Error("no event bus"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const stop = startMcpEventBridge();
+    stop();
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledWith("failed to stop listening for MCP events:", expect.any(Error)));
+    warn.mockRestore();
   });
 });

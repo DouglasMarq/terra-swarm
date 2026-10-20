@@ -506,6 +506,7 @@ export const ptBR: Dictionary<typeof en> = {
     snapshotImported: "Snapshot importado ({workspaces} workspaces, {terminals} terminais suspensos).",
     renameFailed: "Não foi possível renomear o projeto: {detail}",
     worktreeRemoveFailed: "Não foi possível remover a worktree: {detail}",
+    worktreeStatusFailed: "Não foi possível verificar a worktree do agente, então ele continua aberto: {detail}",
     deleteFailed: "Não foi possível excluir o projeto: {detail}",
     historyCleared: "Histórico limpo para o agente em foco",
     importTitle: "Importar snapshot?",

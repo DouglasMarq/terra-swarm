@@ -40,7 +40,14 @@ export function useWorktreeClose(workspaces: readonly Workspace[], sessions: Ter
       await sessions.close(terminalId);
       return;
     }
-    const status = await api.worktreeStatus(workspace.id, terminalId).catch(() => null);
+    let status: WorktreeStatus | null;
+    try {
+      status = await api.worktreeStatus(workspace.id, terminalId);
+    } catch (error) {
+      console.error(`failed to read the worktree status of ${terminalId}:`, error);
+      useTerminalRuntimeStore.getState().pushSystemNotification(t("app.worktreeStatusFailed", { detail: String(error) }));
+      return;
+    }
     if (!status || !status.exists) {
       await sessions.close(terminalId);
       return;

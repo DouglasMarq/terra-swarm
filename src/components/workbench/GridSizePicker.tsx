@@ -57,7 +57,7 @@ export function GridSizePicker({ dimensions, auto, paneCount, disabled, onSelect
     else if (total > paneCount) hint = t("grid.hintFill");
     else hint = t("grid.hintOverflow");
   }
-  const buttonLabel = auto ? t("grid.label") : `${t("grid.label")} ${dimensions.columns}×${dimensions.rows}`;
+  const buttonLabel = auto ? t("grid.label") : t("grid.labelWithSize", { columns: dimensions.columns, rows: dimensions.rows });
 
   return (
     <div className="terra-grid-picker" ref={rootRef}>

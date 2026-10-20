@@ -94,7 +94,7 @@ export function AgentInspector({ target, label, status, request, activity, runti
         <section className="terra-inspector-request" aria-label={t("inspector.request")}>
           <span className="terra-inspector-kicker">{t("inspector.request")}</span>
           <p>{request.message}</p>
-          <span className="terra-inspector-hint">{relativeTime(request.ts, now)}</span>
+          <span className="terra-inspector-hint">{relativeTime(request.ts, t, now)}</span>
         </section>
       ) : null}
 
@@ -106,7 +106,7 @@ export function AgentInspector({ target, label, status, request, activity, runti
           <ul className="terra-inspector-activity">
             {activity.map((item) => (
               <li key={item.key}>
-                <span className="terra-inspector-time">{relativeTime(item.ts, now)}</span>
+                <span className="terra-inspector-time">{relativeTime(item.ts, t, now)}</span>
                 <span>{item.message}</span>
               </li>
             ))}
@@ -133,14 +133,14 @@ export function AgentInspector({ target, label, status, request, activity, runti
         <summary>{t("inspector.technical")}</summary>
         <dl>
           <div><dt>{t("inspector.runtime")}</dt><dd>{runtimeText}</dd></div>
-          <div><dt>PID</dt><dd><code>{info?.pid ?? "—"}</code></dd></div>
+          <div><dt>{t("inspector.pid")}</dt><dd><code>{info?.pid ?? "—"}</code></dd></div>
           <div><dt>{t("inspector.size")}</dt><dd><code>{info ? `${info.cols} × ${info.rows}` : "—"}</code></dd></div>
           <div><dt>{t("inspector.command")}</dt><dd><code>{target.command}</code></dd></div>
           <div><dt>{t("inspector.directory")}</dt><dd><code>{target.cwd || "—"}</code></dd></div>
           <div><dt>{t("inspector.group")}</dt><dd>{target.groupName ?? "—"}</dd></div>
-          <div><dt>PTY</dt><dd><code>{target.terminalId}</code></dd></div>
-          <div><dt>Pane</dt><dd><code>{target.paneId ?? "—"}</code></dd></div>
-          <div><dt>Container</dt><dd><code>{target.containerId ?? "—"}</code></dd></div>
+          <div><dt>{t("inspector.pty")}</dt><dd><code>{target.terminalId}</code></dd></div>
+          <div><dt>{t("inspector.pane")}</dt><dd><code>{target.paneId ?? "—"}</code></dd></div>
+          <div><dt>{t("inspector.container")}</dt><dd><code>{target.containerId ?? "—"}</code></dd></div>
         </dl>
       </details>
     </div>

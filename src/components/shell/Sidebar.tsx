@@ -134,7 +134,7 @@ export function CollapsedSidebar({
   expandShortcut,
 }: CollapsedSidebarProps) {
   const t = useT();
-  const expandLabel = expandShortcut ? `${t("shell.sidebar.expand")} (${expandShortcut})` : t("shell.sidebar.expand");
+  const expandLabel = expandShortcut ? t("shell.sidebar.expandWithShortcut", { shortcut: expandShortcut }) : t("shell.sidebar.expand");
   return (
     <nav className="terra-rail" aria-label={t("shell.sidebar.collapsedLabel")}>
       <button

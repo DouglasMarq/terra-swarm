@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { useT } from "../../i18n";
 import type { ReactNode } from "react";
 import { EmptyPaneCell } from "./EmptyPaneCell";
 import { SubTabLane } from "./SubTabLane";
@@ -42,6 +42,7 @@ export function PaneFrame({
   onDetachTab,
   onKillTab,
 }: PaneFrameProps) {
+  const t = useT();
   const location = locationFor({ projection, container, project, group, renderTab });
   const activeTabId = projection.pane.activeTabId ?? projection.tabs[0]?.id ?? null;
   const laneTabs: SubTabLaneTab[] = projection.tabs.map((tab) => {

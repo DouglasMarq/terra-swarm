@@ -1,4 +1,4 @@
-import { t } from "../../../i18n";
+import { useT } from "../../../i18n";
 import { Check, CircleAlert } from "lucide-react";
 
 import { AGENT_ROLES, isAgentRole } from "../../../domain/agentRoles";
@@ -40,6 +40,7 @@ export function AgentPickerDialog({
   role = null,
   onRoleChange,
 }: AgentPickerDialogProps) {
+  const t = useT();
   return (
     <TerraDialog
       className={styles.dialog}

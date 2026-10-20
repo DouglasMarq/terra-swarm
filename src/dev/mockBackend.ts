@@ -14,10 +14,10 @@ const workspaces: Workspace[] = [
   {
     id: "ws-terra",
     name: "terra-swarm",
-    cwd: "~/Documents/projects/terra-swarm",
+    cwd: "/Users/me/projects/terra-swarm",
     terminals: [
       { id: "pty-claude-1", command: "claude", width: null, role: "orchestrator" },
-      { id: "pty-claude-2", command: "claude", width: null, role: "executor", worktree: { path: "/tmp/wt/pty-claude-2", cwd: "/tmp/wt/pty-claude-2", branch: "terra/pty-claude-2", base: "main", repo: "~/Documents/projects/terra-swarm" } },
+      { id: "pty-claude-2", command: "claude", width: null, role: "executor", worktree: { path: "/tmp/wt/pty-claude-2", cwd: "/tmp/wt/pty-claude-2", branch: "terra/pty-claude-2", base: "main", repo: "/Users/me/projects/terra-swarm" } },
       { id: "pty-codex", command: "codex", width: null, role: "reviewer" },
       { id: "pty-shell", command: "zsh", width: null },
     ],
@@ -25,7 +25,7 @@ const workspaces: Workspace[] = [
   {
     id: "ws-docs",
     name: "site-docs",
-    cwd: "~/Documents/projects/site-docs",
+    cwd: "/Users/me/projects/site-docs",
     terminals: [
       { id: "pty-kimi", command: "kimi", width: null },
       { id: "pty-claude-docs", command: "claude", width: null },
@@ -34,7 +34,7 @@ const workspaces: Workspace[] = [
   {
     id: "ws-cli",
     name: "cli-tools",
-    cwd: "~/Documents/projects/cli-tools",
+    cwd: "/Users/me/projects/cli-tools",
     terminals: [{ id: "pty-opencode", command: "opencode", width: null, suspended: true }],
   },
 ];
@@ -101,7 +101,7 @@ const mcpInfo = () => ({
   running: true,
   url: "http://127.0.0.1:52817/mcp",
   port: 52817,
-  db_path: "~/Library/Application Support/com.terra-swarm.app/mcp.db",
+  db_path: "/Users/me/Library/Application Support/com.terra-swarm.app/mcp.db",
   error: null,
 });
 

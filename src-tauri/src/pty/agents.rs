@@ -15,8 +15,14 @@ pub struct AgentInfo {
     pub available: bool,
 }
 
-#[cfg(unix)]
+/// Whether the catalog agent `id` resolves on the user's PATH. Ids outside
+/// the compiled-in catalog are refused without running anything.
 pub(super) fn command_available(id: &str) -> bool {
+    catalog().iter().any(|agent| agent.id == id) && is_on_path(id)
+}
+
+#[cfg(unix)]
+fn is_on_path(id: &str) -> bool {
     std::process::Command::new(user_shell())
         .args(["-l", "-c", &format!("command -v {}", id)])
         .stdout(std::process::Stdio::null())
@@ -27,7 +33,7 @@ pub(super) fn command_available(id: &str) -> bool {
 }
 
 #[cfg(windows)]
-pub(super) fn command_available(id: &str) -> bool {
+fn is_on_path(id: &str) -> bool {
     find_on_path(id).is_some()
 }
 
@@ -88,18 +94,21 @@ fn available_commands(ids: &[&str]) -> std::collections::HashSet<String> {
         .map(|id| format!("command -v {id} >/dev/null 2>&1 && echo {id}"))
         .collect::<Vec<_>>()
         .join("; ");
-    std::process::Command::new(user_shell())
+    match std::process::Command::new(user_shell())
         .args(["-l", "-c", &script])
         .stderr(std::process::Stdio::null())
         .output()
-        .map(|out| {
-            String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .map(|line| line.trim().to_string())
-                .filter(|line| !line.is_empty())
-                .collect()
-        })
-        .unwrap_or_default()
+    {
+        Ok(out) => String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|line| line.trim().to_string())
+            .filter(|line| !line.is_empty())
+            .collect(),
+        Err(error) => {
+            eprintln!("agent detection could not start the login shell: {}", error);
+            std::collections::HashSet::new()
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -156,5 +165,16 @@ mod tests {
         assert_eq!(integration_of("codex"), Some("codex"));
         assert_eq!(integration_of("opencode"), None);
         assert_eq!(integration_of("unknown"), None);
+    }
+
+    #[test]
+    fn given_an_id_outside_the_catalog_reports_it_unavailable_without_looking_it_up() {
+        #[cfg(unix)]
+        let installed = "sh";
+        #[cfg(windows)]
+        let installed = "cmd";
+        assert!(is_on_path(installed));
+        assert!(!command_available(installed));
+        assert!(!command_available("claude; exit 0"));
     }
 }

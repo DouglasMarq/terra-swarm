@@ -5,7 +5,7 @@ mod scrollback;
 mod voice;
 mod workspace;
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::{Listener, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -38,6 +38,30 @@ pub fn run() {
             if let Err(error) = scrollback_store.cleanup_orphans(&known_terminals) {
                 eprintln!("failed to clean orphaned scrollback: {}", error);
             }
+            let mut mcp_store = mcp::store::McpStore::open(dir.join("mcp.sqlite"));
+            let known_workspaces = store
+                .workspaces
+                .iter()
+                .map(|workspace| workspace.id.clone())
+                .collect::<std::collections::HashSet<_>>();
+            // An empty list may mean the workspace store failed to load; keep
+            // the board rather than wiping it in that case.
+            if !known_workspaces.is_empty() {
+                if let Err(error) = mcp_store.retain_workspaces(&known_workspaces) {
+                    eprintln!("failed to clean orphaned MCP data: {}", error);
+                }
+            }
+            let hub = Arc::new(mcp::McpHub::new(
+                mcp_store,
+                Some(dir.join("mcp")),
+                Box::new(mcp::TauriHost {
+                    app: app.handle().clone(),
+                }),
+            ));
+            if let Err(error) = mcp::server::start(Arc::clone(&hub)) {
+                eprintln!("failed to start the MCP server: {}", error);
+            }
+            app.manage(hub);
             app.manage(Mutex::new(store));
             app.manage(Mutex::new(pty::PtyManager::with_scrollback_dir(
                 scrollback_dir,
@@ -104,6 +128,13 @@ pub fn run() {
             pty::detect_agents,
             pty::list_available_shells,
             fonts::list_system_fonts,
+            mcp::commands::mcp_server_info,
+            mcp::commands::mcp_set_enabled,
+            mcp::commands::mcp_list_tasks,
+            mcp::commands::mcp_create_task,
+            mcp::commands::mcp_update_task,
+            mcp::commands::mcp_delete_task,
+            mcp::commands::mcp_agent_statuses,
             voice::voice_toggle_recording,
             voice::voice_set_language,
             voice::voice_mic_available,

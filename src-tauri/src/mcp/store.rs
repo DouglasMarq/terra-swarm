@@ -920,6 +920,7 @@ impl McpStore {
         Ok(count as usize)
     }
 
+    #[cfg(test)]
     pub fn list_messages(&self, workspace_id: &str, limit: usize) -> StoreResult<Vec<Message>> {
         let seqs: Vec<i64> = {
             let mut stmt = self.conn.prepare_cached(

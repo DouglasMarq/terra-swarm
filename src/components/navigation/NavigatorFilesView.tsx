@@ -18,6 +18,8 @@ export interface NavigatorFilesViewProps {
   activeWorkspaceId?: string | null;
   loadFiles: NavigatorFilesLoader;
   onSelectWorkspace?: (workspaceId: string) => void;
+  /** Open a file in the editor; files stay static rows without it. */
+  onOpenFile?: (workspaceId: string, path: string) => void;
 }
 
 function errorMessage(error: unknown): string {
@@ -38,12 +40,14 @@ function FileRow({
   loading,
   depth,
   onToggle,
+  onOpen,
 }: {
   entry: WorkspaceFileEntry;
   expanded: boolean;
   loading: boolean;
   depth: number;
   onToggle: () => void;
+  onOpen?: () => void;
 }) {
   const directory = entry.kind === "directory";
   const rowContent = (
@@ -57,6 +61,19 @@ function FileRow({
       {entry.kind === "file" && entry.size !== null ? <span className={styles.integrationMeta}>{entry.size} B</span> : null}
     </>
   );
+  if (!directory && entry.kind === "file" && onOpen) {
+    return (
+      <button
+        aria-label={t("editor.open", { name: entry.name })}
+        className={styles.integrationRow}
+        onClick={onOpen}
+        style={{ paddingInlineStart: `${8 + depth * 16}px` }}
+        type="button"
+      >
+        {rowContent}
+      </button>
+    );
+  }
   if (!directory) {
     return (
       <div
@@ -88,6 +105,7 @@ export function NavigatorFilesView({
   activeWorkspaceId = null,
   loadFiles,
   onSelectWorkspace,
+  onOpenFile,
 }: NavigatorFilesViewProps) {
   const workspace = workspaces.find((candidate) => candidate.id === activeWorkspaceId) ?? null;
   const [directories, setDirectories] = useState<Record<string, DirectoryState>>({});
@@ -174,7 +192,7 @@ export function NavigatorFilesView({
           const expanded = expandedPaths.has(entry.path);
           return (
             <div key={entry.path}>
-              <FileRow depth={depth} entry={entry} expanded={expanded} loading={Boolean(directories[entry.path]?.loading)} onToggle={() => toggleDirectory(entry)} />
+              <FileRow depth={depth} entry={entry} expanded={expanded} loading={Boolean(directories[entry.path]?.loading)} onToggle={() => toggleDirectory(entry)} onOpen={onOpenFile && workspaceId ? () => onOpenFile(workspaceId, entry.path) : undefined} />
               {entry.kind === "directory" && expanded ? renderDirectory(entry.path, depth + 1) : null}
             </div>
           );

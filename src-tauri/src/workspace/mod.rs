@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{AppHandle, Emitter};
 
 mod commands;
+mod editor;
 mod files;
 mod git;
 mod groups;
@@ -20,6 +21,7 @@ mod store;
 mod tests;
 
 pub use commands::*;
+pub use editor::*;
 pub use files::list_workspace_files;
 pub(crate) use files::*;
 pub(crate) use git::*;

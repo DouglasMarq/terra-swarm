@@ -94,6 +94,7 @@ const mcpStatuses: McpAgentStatus[] = [
   { terminal_id: "pty-codex", workspace_id: "ws-terra", state: "needs_input", summary: "Posso rodar npm test?", updated_at: now },
 ];
 let mcpEnabled = true;
+const mockFiles: Record<string, string> = {};
 const mcpInfo = () => ({
   enabled: mcpEnabled,
   available: true,
@@ -171,6 +172,15 @@ export function installMockBackend(): void {
           ? { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: ["src/styles/motion.css", "src/components/shell/shell.css"], ahead: 1, behind: 0, exists: true }
           : null;
       case "worktree_remove": return undefined;
+      case "list_workspace_files":
+        return args.relativePath
+          ? { path: String(args.relativePath), entries: [{ name: "main.ts", path: `${String(args.relativePath)}/main.ts`, kind: "file", size: 40 }], truncated: false, limit: 200 }
+          : { path: "", entries: [{ name: "src", path: "src", kind: "directory", size: null }, { name: "README.md", path: "README.md", kind: "file", size: 120 }], truncated: false, limit: 200 };
+      case "read_workspace_file":
+        return { path: String(args.relativePath), content: mockFiles[String(args.relativePath)] ?? `// ${String(args.relativePath)}\nexport const answer = 42;\n`, binary: false, size: 40, modified: 1 };
+      case "write_workspace_file":
+        mockFiles[String(args.relativePath)] = String(args.content);
+        return { size: String(args.content).length, modified: 2 };
       case "probe_dev_servers": return (args.ports as number[]).filter((port) => port === 5174);
       case "worktree_diff":
         return {

@@ -6,7 +6,9 @@ import type {
   WorkspaceGroup,
   WorkspaceLayout,
   WorkspaceSnapshotTransfer,
+  WorkspaceFileContent,
   WorkspaceFileListing,
+  WorkspaceFileSaved,
 } from "../../types";
 import { invokeCommand } from "./commands";
 
@@ -25,6 +27,21 @@ export function listWorkspaceFiles(
     relativePath,
     limit,
   });
+}
+
+/** One text file for the editor (at most 2 MB). */
+export function readWorkspaceFile(workspaceId: string, relativePath: string): Promise<WorkspaceFileContent> {
+  return invokeCommand("readWorkspaceFile", { workspaceId, relativePath });
+}
+
+/** Save the editor's text; fails when the file changed since `expectedModified` (pass null to overwrite). */
+export function writeWorkspaceFile(
+  workspaceId: string,
+  relativePath: string,
+  content: string,
+  expectedModified: number | null,
+): Promise<WorkspaceFileSaved> {
+  return invokeCommand("writeWorkspaceFile", { workspaceId, relativePath, content, expectedModified });
 }
 
 export function exportWorkspaceSnapshot(
@@ -156,6 +173,8 @@ export function setTerminalWidth(
 export const workspaceApi = {
   listWorkspaces,
   listWorkspaceFiles,
+  readWorkspaceFile,
+  writeWorkspaceFile,
   exportWorkspaceSnapshot,
   importWorkspaceSnapshot,
   createWorkspace,

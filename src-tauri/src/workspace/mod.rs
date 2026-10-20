@@ -129,11 +129,6 @@ pub struct Workspace {
     pub layout: Option<WorkspaceLayout>,
 }
 
-/// Compatibility alias used by the domain layer while the public IPC name
-/// remains `Workspace` for existing clients.
-#[allow(dead_code)]
-pub type Project = Workspace;
-
 /// A durable group of projects. Suspending a group only changes this
 /// metadata; process lifecycle is intentionally handled by PTY commands.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -226,15 +221,6 @@ pub struct TerminalTab {
 fn default_tab_kind() -> String {
     "shell".to_string()
 }
-
-#[allow(dead_code)]
-pub type SubTab = TerminalTab;
-
-#[allow(dead_code)]
-pub type PaneMeta = Pane;
-
-#[allow(dead_code)]
-pub type SubtabMeta = TerminalTab;
 
 /// Persisted project container metadata, based on the reference model's
 /// projectId/paneIds relationship. It is safe to close/remove visually while

@@ -5,6 +5,10 @@
 //!   lifecycle event (Claude Code hooks, Codex `notify`) to the running app.
 //!   Reads the payload from the last argument, else from stdin. Always exits
 //!   0 and prints nothing, so it can never block or alter the agent.
+//! - `terra-swarm mcp-stdio`: the Terra MCP server as a stdio server, for
+//!   agents that only start MCP servers as subprocesses (see `stdio`).
+
+mod stdio;
 
 use std::io::{IsTerminal, Read, Write};
 use std::net::TcpStream;
@@ -20,6 +24,7 @@ pub fn run(args: &[String]) -> Option<i32> {
             hook(&args[2..]);
             Some(0)
         }
+        Some("mcp-stdio") => Some(stdio::run()),
         _ => None,
     }
 }

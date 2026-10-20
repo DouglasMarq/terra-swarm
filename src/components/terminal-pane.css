@@ -28,15 +28,15 @@
   height: 100% !important;
 }
 
-/* The selected terminal: a solid amber edge. An agent that needs you adds
- * the pulsing glow below and the message strip, so the two stay distinct. */
+/* The selected terminal: a zinc focus ring. An agent that needs you gets the
+ * amber edge, the pulsing glow below and the message strip, so the two stay
+ * distinct. */
 .pane.focused {
-  border-color: var(--terra-amber);
-  box-shadow: 0 0 0 1px var(--terra-amber-line), var(--terra-shadow-pane);
+  box-shadow: var(--terra-pane-focus-ring), var(--terra-shadow-pane);
 }
 
 .pane.focused .pane-header {
-  background: color-mix(in srgb, var(--terra-amber) 6%, var(--terra-bg-panel));
+  background: var(--terra-bg-elevated);
 }
 
 .pane[data-status="attention"] {
@@ -183,9 +183,9 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-top: 1px solid rgb(224 180 92 / 30%);
+  border-top: 1px solid color-mix(in srgb, var(--terra-amber) 30%, transparent);
   color: var(--terra-amber-ink);
-  background: rgb(224 180 92 / 8%);
+  background: var(--terra-amber-wash);
   animation: terra-rise 240ms var(--terra-ease-out) both;
 }
 
@@ -206,7 +206,7 @@
   gap: 10px;
   padding: 24px;
   color: var(--terra-text-secondary);
-  background: rgb(12 12 14 / 88%);
+  background: color-mix(in srgb, var(--terra-terminal-bg) 88%, transparent);
   text-align: center;
   animation: terra-rise 200ms var(--terra-ease-out) both;
 }
@@ -283,7 +283,7 @@
 .pane-menu-item:hover:not(:disabled),
 .pane-menu-item:focus-visible {
   outline: none;
-  background: #2a2a31;
+  background: var(--terra-bg-menu-hover);
 }
 
 .pane-menu-item:disabled {
@@ -292,7 +292,7 @@
 }
 
 .pane-menu-item[data-danger="true"] {
-  color: var(--terra-red-ink);
+  color: var(--terra-danger-ink);
 }
 
 .pane-menu-icon {

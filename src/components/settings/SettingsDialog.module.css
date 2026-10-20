@@ -1,5 +1,5 @@
 .overlay {
-  background: rgb(0 0 0 / 72%);
+  background: var(--terra-scrim);
 }
 
 .dialogContent {
@@ -10,7 +10,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   padding: 0;
-  border-color: #303038;
+  border-color: var(--terra-border-strong);
   border-radius: 14px;
   background: var(--terra-bg-panel);
 }
@@ -337,8 +337,8 @@
   flex: 0 0 auto;
   margin-top: 5px;
   border-radius: 50%;
-  background: var(--terra-amber);
-  box-shadow: 0 0 0 4px var(--terra-amber-dim);
+  background: var(--terra-text-muted);
+  box-shadow: 0 0 0 4px var(--terra-bg-hover);
 }
 
 .emptyState {

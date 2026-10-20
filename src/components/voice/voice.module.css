@@ -1,7 +1,4 @@
 .voiceCapsule {
-  --voice-blue: #7ea6ff;
-  --voice-blue-dim: rgb(126 166 255 / 12%);
-  --voice-blue-strong: rgb(126 166 255 / 30%);
   display: flex;
   width: min(100%, 520px);
   flex-direction: column;
@@ -16,11 +13,11 @@
 
 .voiceCapsule[data-state="listening"],
 .voiceCapsule[data-state="transcribing"] {
-  border-color: var(--voice-blue-strong);
+  border-color: var(--terra-border-focus);
 }
 
 .voiceCapsule[data-state="error"] {
-  border-color: rgb(229 99 111 / 42%);
+  border-color: color-mix(in srgb, var(--terra-red) 42%, transparent);
 }
 
 .expanded {
@@ -69,7 +66,7 @@
 }
 
 .eyebrow svg {
-  color: var(--voice-blue);
+  color: var(--terra-accent);
 }
 
 .status {
@@ -81,7 +78,7 @@
 
 .status[data-state="listening"],
 .status[data-state="transcribing"] {
-  color: var(--voice-blue);
+  color: var(--terra-accent);
 }
 
 .status[data-state="error"] {
@@ -97,13 +94,13 @@
 }
 
 .status[data-state="listening"] .statusMark {
-  background: var(--voice-blue);
-  box-shadow: 0 0 0 3px var(--voice-blue-dim);
+  background: var(--terra-accent);
+  box-shadow: 0 0 0 3px var(--terra-bg-hover);
 }
 
 .status[data-state="transcribing"] .statusMark {
-  background: var(--terra-amber);
-  box-shadow: 0 0 0 3px var(--terra-amber-dim);
+  background: var(--terra-text-secondary);
+  box-shadow: 0 0 0 3px var(--terra-bg-hover);
 }
 
 .status[data-state="error"] .statusMark {
@@ -134,9 +131,9 @@
 
 .expandButton:hover,
 .voiceButton:hover:not(:disabled) {
-  border-color: var(--voice-blue-strong);
-  color: var(--voice-blue);
-  background: var(--voice-blue-dim);
+  border-color: var(--terra-border-focus);
+  color: var(--terra-accent);
+  background: var(--terra-bg-hover);
 }
 
 .expandButton:focus-visible,
@@ -158,9 +155,9 @@
 }
 
 .voiceButton[data-listening="true"] {
-  border-color: var(--voice-blue-strong);
-  color: var(--voice-blue);
-  background: var(--voice-blue-dim);
+  border-color: var(--terra-border-focus);
+  color: var(--terra-accent);
+  background: var(--terra-bg-hover);
 }
 
 .voiceButton:disabled {
@@ -183,7 +180,7 @@
 }
 
 .waveformFrame[data-active="true"] {
-  border-color: var(--voice-blue-strong);
+  border-color: var(--terra-border-focus);
 }
 
 .waveform {
@@ -199,7 +196,7 @@
 }
 
 .waveformFrame[data-active="true"] .waveformBar {
-  fill: var(--voice-blue);
+  fill: var(--terra-accent);
   animation: voice-wave 900ms ease-in-out var(--bar-delay) infinite alternate;
 }
 
@@ -236,7 +233,7 @@
   height: 1em;
   margin-left: 3px;
   vertical-align: -0.15em;
-  background: var(--voice-blue);
+  background: var(--terra-accent);
   animation: voice-blink 900ms step-end infinite;
 }
 
@@ -273,18 +270,18 @@
 }
 
 .intentPreview[data-destructive="true"] {
-  border-color: rgb(229 99 111 / 40%);
-  background: var(--terra-red-dim);
+  border-color: var(--terra-danger-line);
+  background: var(--terra-danger-dim);
 }
 
 .intentIcon {
   display: inline-flex;
   padding-top: 1px;
-  color: var(--voice-blue);
+  color: var(--terra-accent);
 }
 
 .intentPreview[data-destructive="true"] .intentIcon {
-  color: var(--terra-red);
+  color: var(--terra-danger);
 }
 
 .intentCopy {
@@ -304,7 +301,7 @@
 }
 
 .intentCopy small {
-  color: var(--terra-red);
+  color: var(--terra-danger);
   font-size: var(--terra-font-size-label);
 }
 
@@ -350,7 +347,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--terra-amber);
+  color: var(--terra-text-secondary);
 }
 
 .busyLabel svg {

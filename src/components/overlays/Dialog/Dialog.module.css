@@ -2,7 +2,7 @@
   position: fixed;
   z-index: var(--terra-z-modal-backdrop);
   inset: 0;
-  background: rgb(0 0 0 / 66%);
+  background: var(--terra-scrim);
   backdrop-filter: blur(5px);
 }
 

@@ -9,7 +9,7 @@
   --workbench-muted: var(--terra-text-muted);
   --workbench-faint: var(--terra-text-faint);
   --workbench-accent: var(--terra-accent);
-  --workbench-danger: var(--terra-red);
+  --workbench-danger: var(--terra-danger);
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -42,7 +42,7 @@
   border: 1px dashed var(--workbench-border-strong);
   border-radius: 8px;
   color: var(--workbench-muted);
-  background: rgb(255 255 255 / 1%);
+  background: var(--terra-wash-subtle);
 }
 
 .terra-workbench__container {
@@ -336,7 +336,7 @@
   gap: 2px;
   padding: 4px 3px;
   border-right: 1px solid var(--workbench-border);
-  background: rgb(255 255 255 / 2%);
+  background: var(--terra-wash-subtle);
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -388,9 +388,9 @@
 }
 
 .terra-subtab-lane__tab[data-active="true"] {
-  border-color: rgb(250 250 250 / 32%);
+  border-color: color-mix(in srgb, var(--terra-accent) 32%, transparent);
   color: var(--workbench-accent);
-  background: rgb(250 250 250 / 8%);
+  background: color-mix(in srgb, var(--terra-accent) 8%, transparent);
 }
 
 .terra-subtab-lane__tab[data-status="running"]::before,
@@ -403,8 +403,12 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: var(--terra-green);
+  background: var(--workbench-faint);
   content: "";
+}
+
+.terra-subtab-lane__tab[data-status="running"]::before {
+  background: var(--terra-green);
 }
 
 .terra-subtab-lane__tab[data-status="attention"]::before {
@@ -412,11 +416,7 @@
 }
 
 .terra-subtab-lane__tab[data-status="error"]::before {
-  background: var(--workbench-danger);
-}
-
-.terra-subtab-lane__tab[data-status="suspended"]::before {
-  background: var(--workbench-faint);
+  background: var(--terra-red);
 }
 
 .terra-subtab-lane__tab[data-unread="true"]::after {
@@ -453,7 +453,7 @@
   border: 0;
   border-radius: 3px;
   color: var(--workbench-ink);
-  background: rgb(16 16 19 / 92%);
+  background: color-mix(in srgb, var(--terra-bg) 92%, transparent);
   cursor: pointer;
   font-family: var(--terra-font-sans);
   font-size: 11px;
@@ -633,8 +633,8 @@
 }
 
 .terra-grid-picker__cell[data-inside="true"] {
-  border-color: #71717a;
-  background: #71717a;
+  border-color: var(--terra-border-focus);
+  background: var(--terra-border-focus);
 }
 
 .terra-grid-picker__cell[data-strong="true"] {

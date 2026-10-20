@@ -288,7 +288,7 @@
 }
 
 .iconButton[data-danger="true"] {
-  color: var(--terra-red);
+  color: var(--terra-danger);
 }
 
 .emptyAgents {

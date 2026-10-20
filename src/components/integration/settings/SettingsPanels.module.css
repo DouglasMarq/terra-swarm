@@ -193,7 +193,7 @@
 
 .fontOption[data-selected="true"] {
   background: var(--terra-bg-elevated);
-  box-shadow: inset 2px 0 0 var(--terra-amber);
+  box-shadow: inset 2px 0 0 var(--terra-accent);
 }
 
 .fontOptionName {
@@ -439,7 +439,7 @@
 }
 
 .available {
-  color: var(--terra-green);
+  color: var(--terra-text);
 }
 
 .unavailable {
@@ -455,8 +455,8 @@
 }
 
 .chipActive {
-  border-color: var(--terra-green);
-  color: var(--terra-green);
+  border-color: var(--terra-accent);
+  color: var(--terra-accent);
 }
 
 .micTest {
@@ -479,7 +479,7 @@
   transform: scaleX(0);
   transform-origin: left center;
   border-radius: inherit;
-  background: var(--terra-green);
+  background: var(--terra-accent);
   transition: transform 80ms linear;
 }
 
@@ -538,11 +538,11 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #52525b;
+  background: var(--terra-text-faint);
 }
 
 .nameChip[data-used="true"] .nameChipDot {
-  background: var(--terra-green);
+  background: var(--terra-accent);
 }
 
 .nameChipRemove {

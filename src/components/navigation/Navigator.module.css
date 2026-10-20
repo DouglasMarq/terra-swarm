@@ -348,9 +348,9 @@
   align-items: center;
   gap: 6px;
   padding: 8px 9px;
-  border: 1px solid color-mix(in srgb, #ca7178 42%, var(--navigator-border));
+  border: 1px solid color-mix(in srgb, var(--terra-red) 42%, var(--navigator-border));
   border-radius: 5px;
-  color: #d99298;
+  color: var(--terra-red-ink);
   font-size: 10px;
   line-height: 1.4;
 }
@@ -534,28 +534,6 @@
   box-shadow: 0 0 0 2px transparent;
 }
 
-.statusworking {
-  background: #75b798;
-  box-shadow: 0 0 7px color-mix(in srgb, #75b798 65%, transparent);
-}
-
-.statusattention {
-  background: #d7ad69;
-  box-shadow: 0 0 7px color-mix(in srgb, #d7ad69 55%, transparent);
-}
-
-.statusexited {
-  background: #ca7178;
-}
-
-.statusidle {
-  background: var(--terra-text-muted);
-}
-
-.statussuspended {
-  background: #9d91c7;
-}
-
 .nodeIcon {
   display: inline-grid;
   flex: 0 0 16px;
@@ -563,16 +541,9 @@
   color: color-mix(in srgb, var(--terra-accent) 70%, var(--navigator-muted));
 }
 
-.agent .nodeIcon {
-  color: color-mix(in srgb, #75b798 72%, var(--navigator-muted));
-}
-
-.container .nodeIcon {
-  color: color-mix(in srgb, #9d91c7 72%, var(--navigator-muted));
-}
-
+.container .nodeIcon,
 .pane .nodeIcon {
-  color: color-mix(in srgb, #83c8ed 72%, var(--navigator-muted));
+  color: var(--terra-text-muted);
 }
 
 .nodeMain {
@@ -621,16 +592,8 @@
   place-items: center;
   padding: 0 4px;
   border-radius: 4px;
-  color: #1c1710;
-  background: #d7ad69;
   font-size: 9px;
   font-variant-numeric: tabular-nums;
-}
-
-.contextBadge {
-  color: #18151d;
-  background: #9d91c7;
-  text-transform: uppercase;
 }
 
 .actions {
@@ -662,7 +625,7 @@
   border: 1px solid var(--navigator-border);
   border-radius: 6px;
   background: var(--navigator-bg);
-  box-shadow: 0 12px 28px rgb(0 0 0 / 32%);
+  box-shadow: var(--terra-shadow-dropdown);
 }
 
 .contextMenuItem {
@@ -684,8 +647,8 @@
 
 .contextMenuItem:hover,
 .contextMenuItem:focus-visible {
-  color: #ffd8dc;
-  background: color-mix(in srgb, #e5636f 18%, var(--navigator-bg));
+  color: color-mix(in srgb, var(--terra-danger-ink) 30%, var(--terra-accent));
+  background: color-mix(in srgb, var(--terra-danger) 18%, var(--navigator-bg));
   outline: none;
 }
 
@@ -967,7 +930,7 @@
 .agentMenuItem:hover:not(:disabled),
 .agentMenuItem:focus-visible {
   outline: none;
-  background: #2a2a31;
+  background: var(--terra-bg-menu-hover);
 }
 
 .agentMenuItem:disabled {
@@ -976,7 +939,7 @@
 }
 
 .agentMenuItem[data-danger="true"] {
-  color: var(--terra-red-ink);
+  color: var(--terra-danger-ink);
 }
 
 .agentMenuIcon {

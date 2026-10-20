@@ -66,10 +66,10 @@ pub fn rewrite_command(
     quoting: Quoting,
 ) -> String {
     let command = command.trim();
-    match agent {
+    match crate::pty::agents::integration_of(agent) {
         // `--mcp-config` takes several values, so it goes last: placed
         // before a prompt argument it would swallow the prompt as a file.
-        "claude" => match claude_config {
+        Some("claude") => match claude_config {
             Some(path) => format!(
                 "{} --mcp-config {}",
                 command,
@@ -79,7 +79,7 @@ pub fn rewrite_command(
         },
         // `-c` is a global flag, so it is valid before a subcommand such as
         // `codex resume --last`. The token is read from the environment.
-        "codex" => {
+        Some("codex") => {
             let rest = command
                 .split_once(char::is_whitespace)
                 .map(|(_, rest)| rest.trim_start())
@@ -159,7 +159,7 @@ impl McpHub {
             agent: agent.clone(),
         });
         let lease = McpLease::new(self, token.clone());
-        let claude_config = if agent == "claude" {
+        let claude_config = if crate::pty::agents::integration_of(&agent) == Some("claude") {
             self.config_dir()
                 .and_then(|dir| match write_claude_config(dir) {
                     Ok(path) => Some(path),

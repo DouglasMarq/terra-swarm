@@ -22,7 +22,7 @@ import { createDebouncedTask } from "../lib/async/debounce";
 import { createSpawnQueue } from "../lib/session/spawnQueue";
 import { isCurrentSpawnedTerminalRunning } from "../lib/session/terminalLifecycle";
 import { workspaceIdForTerminal } from "../lib/session/terminalOwnership";
-import { profileForCommand, resolveResumeCommand } from "../lib/features/agentProfiles";
+import { freshCommand, profileForCommand, resolveResumeCommand } from "../lib/features/agentProfiles";
 import { parseEnvLines, usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
@@ -265,7 +265,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
       // Stop the old PTY first (its record is kept): spawning onto a live id
       // would leak the old process and double-emit output.
       await api.stopTerminal(id);
-      await respawn(owner, id, command);
+      await respawn(owner, id, freshCommand(command));
     } catch (error) {
       console.error(`failed to restart terminal ${id}:`, error);
       runtime().setExited((previous) => ({ ...previous, [id]: null }));

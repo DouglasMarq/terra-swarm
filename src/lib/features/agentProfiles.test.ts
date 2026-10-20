@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_AGENT_PROFILES,
   buildVoicePrompt,
+  freshCommand,
   normalizeAgentProfile,
   normalizeAgentProfiles,
   profileForCommand,
@@ -45,3 +46,11 @@ describe("agent profiles", () => {
   });
 });
 
+describe("freshCommand", () => {
+  it("maps a continuation command back to the agent's own command", () => {
+    expect(freshCommand("claude --continue")).toBe("claude");
+    expect(freshCommand("codex  resume --last")).toBe("codex");
+    expect(freshCommand("claude --model opus")).toBe("claude --model opus");
+    expect(freshCommand("shell")).toBe("shell");
+  });
+});

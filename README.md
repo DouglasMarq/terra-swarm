@@ -54,19 +54,23 @@ Other agents still get the environment variables, so you can point any MCP clien
 | Tool            | What it does                                                                 |
 | --------------- | ---------------------------------------------------------------------------- |
 | `whoami`        | Your terminal id, agent and project, and the teammates connected with their state |
-| `list_tasks`    | Tasks of the project, filtered by `status` and/or `assignee` (`"me"` works) |
-| `get_task`      | One task with its description, dependencies and progress log                |
+| `list_tasks`    | Tasks of the project (active first, then priority and board position), filtered by `status` and/or `assignee` (`"me"` works); `blocked_by` lists unfinished dependencies |
+| `get_task`      | One task with its description, dependencies and latest history events       |
 | `create_task`   | Add a task (`title`, `description`, `priority`, `depends_on`, `labels`)      |
-| `claim_task`    | Take a task; atomic, fails if someone else has it or a dependency isn't done |
-| `update_task`   | Change status and/or append a progress note                                 |
+| `claim_task`    | Take a `todo` task; atomic, fails if someone else has it or a dependency isn't done |
+| `update_task`   | Change status and/or add a note to the task's history                       |
 | `complete_task` | Hand your task in for review with a summary (moves it to `review`)          |
 | `send_message`  | Message a teammate by terminal id, or `"all"`                               |
-| `read_inbox`    | Your messages, oldest first; marks them read (`unread_only` defaults to true) |
+| `read_inbox`    | Your messages, oldest first; marks them read (`unread_only` defaults to true, `limit` to 50) |
 | `add_note`      | Save a project note; a note with the same `key` is replaced                  |
-| `search_notes`  | Search notes by key and text                                                 |
+| `search_notes`  | Full-text search (SQLite FTS5) over note keys and text, best matches first (`limit` defaults to 20) |
 | `report_status` | Set your state and a one-line summary                                        |
 
-Tasks move through `todo → in_progress → review → done`, with `blocked` for waiting. Data lives in `<app data>/mcp.sqlite`; messages and notes keep the latest 500 per project, and task logs the latest 100 entries.
+Tasks move through `todo → in_progress → review → done`, with `blocked` for waiting. Every change is kept in the task's history (created, claimed, status, assigned, note, completed).
+
+### Storage
+
+Everything lives in a SQLite database, `<app data>/mcp.db` (on macOS `~/Library/Application Support/com.terra-swarm.app/mcp.db`; **Settings → Agents** shows the exact path). Messages, notes and task history are kept in full. Closing a project deletes its board, messages and notes. Agent statuses and tokens are kept in memory only. If the database can't be opened or upgraded, the app keeps working with the MCP server off, and Settings shows the reason.
 
 ### Turning it off
 

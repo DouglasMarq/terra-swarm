@@ -20,6 +20,7 @@ use shell::{shell_flavor, ShellFlavor};
 use crate::mcp::launch::Quoting;
 use crate::mcp::{McpHub, McpLease};
 use crate::scrollback::ScrollbackStore;
+use crate::sync::LockExt;
 use crate::workspace::{TerminalMeta, WorkspaceStore};
 
 static NEXT_TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
@@ -31,7 +32,14 @@ pub fn bump_next_terminal_id(id: &str) {
     }
 }
 
-const BACKLOG_CAP: usize = 256 * 1024;
+const BACKLOG_CAP_BYTES: usize = 256 * 1024;
+/// Smallest width and height, in cells, a PTY is opened or resized to.
+const MIN_PTY_DIMENSION: u16 = 2;
+/// Writes queued for a terminal's input before `write_terminal` reports it busy.
+const INPUT_QUEUE_CAPACITY: usize = 256;
+/// Size, in cells, of the terminals `demo_seed` opens.
+const DEMO_COLS: u16 = 100;
+const DEMO_ROWS: u16 = 30;
 
 /// Per-terminal ring of recently emitted output plus the cumulative count of
 /// bytes ever emitted. The frontend fetches a snapshot on mount and uses
@@ -45,8 +53,8 @@ pub struct Backlog {
 impl Backlog {
     fn from_bytes(data: Vec<u8>) -> Self {
         let total = data.len() as u64;
-        let buf = if data.len() > BACKLOG_CAP {
-            data[data.len() - BACKLOG_CAP..].to_vec()
+        let buf = if data.len() > BACKLOG_CAP_BYTES {
+            data[data.len() - BACKLOG_CAP_BYTES..].to_vec()
         } else {
             data
         };
@@ -55,15 +63,14 @@ impl Backlog {
 
     fn push(&mut self, s: &str) {
         self.buf.extend_from_slice(s.as_bytes());
-        if self.buf.len() > BACKLOG_CAP {
-            let cut = self.buf.len() - BACKLOG_CAP;
+        if self.buf.len() > BACKLOG_CAP_BYTES {
+            let cut = self.buf.len() - BACKLOG_CAP_BYTES;
             self.buf.drain(..cut);
         }
         self.total += s.len() as u64;
     }
 }
 
-#[cfg_attr(windows, allow(dead_code))]
 pub struct PtyEntry {
     pub input: std::sync::mpsc::SyncSender<Vec<u8>>,
     pub master: Arc<Mutex<Box<dyn MasterPty + Send>>>,
@@ -76,9 +83,9 @@ pub struct PtyEntry {
     /// Cleared before an explicit kill so a late reader flush cannot recreate
     /// a scrollback file that the user intentionally deleted.
     pub scrollback_enabled: Arc<AtomicBool>,
-    /// The terminal's MCP token; dropping the entry revokes it.
-    #[allow(dead_code)]
-    pub mcp_lease: Option<McpLease>,
+    /// The terminal's MCP token, held only for its `Drop`: dropping the entry
+    /// revokes it.
+    pub _mcp_lease: Option<McpLease>,
 }
 
 fn kill_entry(entry: PtyEntry, disable_scrollback: bool) {
@@ -96,8 +103,8 @@ fn kill_entry(entry: PtyEntry, disable_scrollback: bool) {
             }
         }
     }
-    if let Ok(mut killer) = entry.killer.lock() {
-        let _ = killer.kill();
+    if let Err(error) = entry.killer.lock_or_recover().kill() {
+        eprintln!("failed to kill a terminal process: {}", error);
     }
 }
 
@@ -259,7 +266,7 @@ fn runtime_info_from_manager(
     let Some(entry) = manager.terminals.get(id) else {
         return Ok(None);
     };
-    let (cols, rows) = *entry.last_size.lock().map_err(|e| e.to_string())?;
+    let (cols, rows) = *entry.last_size.lock_or_recover();
     let reaped = entry.reaped.load(Ordering::SeqCst);
     Ok(Some(runtime_info_from_values(
         id, entry.pid, cols, rows, entry.seq, reaped,
@@ -300,7 +307,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
     let preferred_shell = options.shell.as_deref();
     let workspace_id = workspace_id.to_string();
     let cwd = {
-        let store = store.lock().map_err(|e| e.to_string())?;
+        let store = store.lock_or_recover();
         store
             .get(&workspace_id)
             .map(|ws| ws.cwd.clone())
@@ -318,7 +325,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
     let seq = SPAWN_SEQ.fetch_add(1, Ordering::SeqCst);
 
     {
-        let store = store.lock().map_err(|e| e.to_string())?;
+        let store = store.lock_or_recover();
         if let Some(owner) = store.terminal_owner(&id) {
             if owner != workspace_id {
                 return Err(format!(
@@ -330,16 +337,14 @@ pub fn spawn_terminal_inner<R: Runtime>(
     }
 
     {
-        let manager = manager.lock().map_err(|e| e.to_string())?;
+        let manager = manager.lock_or_recover();
         if manager.terminals.contains_key(&id) {
             return Err(format!("terminal {} already running", id));
         }
     }
 
-    // A respawned agent returns to its worktree and role; a new one may get them.
     let (existing_worktree, existing_role, existing_command) = store
-        .lock()
-        .map_err(|e| e.to_string())?
+        .lock_or_recover()
         .get(&workspace_id)
         .and_then(|ws| ws.terminals.iter().find(|terminal| terminal.id == id))
         .map_or((None, None, None), |terminal| {
@@ -452,8 +457,8 @@ pub fn spawn_terminal_inner<R: Runtime>(
 
     let pair = native_pty_system()
         .openpty(PtySize {
-            rows: rows.max(2),
-            cols: cols.max(2),
+            rows: rows.max(MIN_PTY_DIMENSION),
+            cols: cols.max(MIN_PTY_DIMENSION),
             pixel_width: 0,
             pixel_height: 0,
         })
@@ -470,7 +475,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
     let reaped = Arc::new(AtomicBool::new(false));
     let scrollback_enabled = Arc::new(AtomicBool::new(true));
     let (scrollback, durable_scrollback_enabled) = {
-        let manager = manager.lock().map_err(|e| e.to_string())?;
+        let manager = manager.lock_or_recover();
         (manager.scrollback(), manager.durable_scrollback_enabled())
     };
     let durable_backlog = if durable_scrollback_enabled.load(Ordering::SeqCst) {
@@ -485,7 +490,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
     let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
     let mut writer = pair.master.take_writer().map_err(|e| e.to_string())?;
 
-    let (input_tx, input_rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(256);
+    let (input_tx, input_rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(INPUT_QUEUE_CAPACITY);
     std::thread::spawn(move || {
         while let Ok(data) = input_rx.recv() {
             if writer
@@ -518,16 +523,18 @@ pub fn spawn_terminal_inner<R: Runtime>(
         master: Arc::new(Mutex::new(pair.master)),
         killer,
         pid,
-        last_size: Arc::new(Mutex::new((cols.max(2), rows.max(2)))),
+        last_size: Arc::new(Mutex::new((
+            cols.max(MIN_PTY_DIMENSION),
+            rows.max(MIN_PTY_DIMENSION),
+        ))),
         seq,
         reaped,
         backlog,
         scrollback_enabled,
-        mcp_lease: mcp_launch.take().map(|launch| launch.lease),
+        _mcp_lease: mcp_launch.take().map(|launch| launch.lease),
     };
     manager
-        .lock()
-        .map_err(|e| e.to_string())?
+        .lock_or_recover()
         .terminals
         .insert(id.clone(), entry);
 
@@ -542,21 +549,26 @@ pub fn spawn_terminal_inner<R: Runtime>(
         let entry_killer = entry_killer;
         let reaped = monitor_reaped;
         std::thread::spawn(move || {
-            let code = child.wait().ok().map(|s| s.exit_code());
+            let code = match child.wait() {
+                Ok(status) => Some(status.exit_code()),
+                Err(error) => {
+                    eprintln!("failed to wait for terminal {}: {}", exit_id, error);
+                    None
+                }
+            };
             // Mark reaped immediately so kill_entry never signals a pid that
             // the OS may already have recycled.
             reaped.store(true, Ordering::SeqCst);
             // Remove from the manager BEFORE notifying the frontend, so a
             // concurrent running_terminals never reports this id as alive.
             if let Some(manager) = app.try_state::<Mutex<PtyManager>>() {
-                if let Ok(mut manager) = manager.lock() {
-                    let is_current = manager
-                        .terminals
-                        .get(&exit_id)
-                        .is_some_and(|e| Arc::ptr_eq(&e.killer, &entry_killer));
-                    if is_current {
-                        manager.terminals.remove(&exit_id);
-                    }
+                let mut manager = manager.lock_or_recover();
+                let is_current = manager
+                    .terminals
+                    .get(&exit_id)
+                    .is_some_and(|e| Arc::ptr_eq(&e.killer, &entry_killer));
+                if is_current {
+                    manager.terminals.remove(&exit_id);
                 }
             }
             // Clean up descendants that survive the child: while any of them
@@ -581,8 +593,6 @@ pub fn spawn_terminal_inner<R: Runtime>(
         });
     }
 
-    // Resuming runs the continuation command but keeps the agent's own
-    // command on record, so a later restart starts it fresh.
     let recorded_command = match existing_command {
         Some(original)
             if agents::is_resume_command(&command) && !agents::is_resume_command(&original) =>
@@ -604,8 +614,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
         role,
     };
     let added = store
-        .lock()
-        .map_err(|e| e.to_string())?
+        .lock_or_recover()
         .add_terminal(&workspace_id, meta.clone());
     if !added {
         // The workspace was closed while we were spawning; don't leak the
@@ -690,58 +699,32 @@ pub fn demo_seed(app: &AppHandle) {
             break;
         }
     }
-    let ws1 = store
-        .lock()
-        .map(|mut s| s.create("agents".into(), String::new()));
-    if let Ok(ws1) = ws1 {
-        for c in picked {
-            let _ = spawn_terminal_inner(
-                app,
-                &manager,
-                &store,
-                SpawnRequest {
-                    workspace_id: &ws1.id,
-                    command: c,
-                    cols: 100,
-                    rows: 30,
-                    terminal_id: None,
-                },
-                &SpawnOptions::default(),
-            );
+    let spawn = |workspace_id: &str, command: &str| {
+        let request = SpawnRequest {
+            workspace_id,
+            command,
+            cols: DEMO_COLS,
+            rows: DEMO_ROWS,
+            terminal_id: None,
+        };
+        if let Err(error) =
+            spawn_terminal_inner(app, &manager, &store, request, &SpawnOptions::default())
+        {
+            eprintln!("demo seed could not spawn `{}`: {}", command, error);
         }
+    };
+    let agents = store
+        .lock_or_recover()
+        .create("agents".into(), String::new());
+    for command in picked {
+        spawn(&agents.id, command);
     }
-    let ws2 = store
-        .lock()
-        .map(|mut s| s.create("scratch".into(), String::new()));
-    if let Ok(ws2) = ws2 {
-        #[cfg(unix)]
-        let _ = spawn_terminal_inner(
-            app,
-            &manager,
-            &store,
-            SpawnRequest {
-                workspace_id: &ws2.id,
-                command: "top",
-                cols: 100,
-                rows: 30,
-                terminal_id: None,
-            },
-            &SpawnOptions::default(),
-        );
-        let _ = spawn_terminal_inner(
-            app,
-            &manager,
-            &store,
-            SpawnRequest {
-                workspace_id: &ws2.id,
-                command: "shell",
-                cols: 100,
-                rows: 30,
-                terminal_id: None,
-            },
-            &SpawnOptions::default(),
-        );
-    }
+    let scratch = store
+        .lock_or_recover()
+        .create("scratch".into(), String::new());
+    #[cfg(unix)]
+    spawn(&scratch.id, "top");
+    spawn(&scratch.id, "shell");
     let _ = app.emit("workspaces-changed", ());
 }
 
@@ -752,7 +735,7 @@ pub fn write_terminal(
     data: String,
 ) -> Result<(), String> {
     let input = {
-        let manager = manager.lock().map_err(|e| e.to_string())?;
+        let manager = manager.lock_or_recover();
         manager
             .terminals
             .get(&id)
@@ -776,22 +759,22 @@ pub fn resize_terminal(
     rows: u16,
 ) -> Result<(), String> {
     let (master, last_size) = {
-        let manager = manager.lock().map_err(|e| e.to_string())?;
+        let manager = manager.lock_or_recover();
         let entry = manager
             .terminals
             .get(&id)
             .ok_or_else(|| format!("terminal {} not found", id))?;
         (Arc::clone(&entry.master), Arc::clone(&entry.last_size))
     };
-    let cols = cols.max(2);
-    let rows = rows.max(2);
+    let cols = cols.max(MIN_PTY_DIMENSION);
+    let rows = rows.max(MIN_PTY_DIMENSION);
     {
-        let last = last_size.lock().map_err(|e| e.to_string())?;
+        let last = last_size.lock_or_recover();
         if *last == (cols, rows) {
             return Ok(());
         }
     }
-    let guard = master.lock().map_err(|e| e.to_string())?;
+    let guard = master.lock_or_recover();
     guard
         .resize(PtySize {
             rows,
@@ -802,41 +785,31 @@ pub fn resize_terminal(
         .map_err(|e| e.to_string())?;
     // Only record the new size after the resize actually succeeded, otherwise
     // a failed resize can never be retried (dedup would treat it as a no-op).
-    *last_size.lock().map_err(|e| e.to_string())? = (cols, rows);
+    *last_size.lock_or_recover() = (cols, rows);
     Ok(())
 }
 
 pub fn kill_terminal_inner(manager: &Mutex<PtyManager>, id: &str) {
-    let entry = {
-        let mut manager = match manager.lock() {
-            Ok(m) => m,
-            Err(_) => return,
-        };
-        manager.terminals.remove(id)
-    };
+    let entry = manager.lock_or_recover().terminals.remove(id);
     if let Some(entry) = entry {
         kill_entry(entry, false);
     }
 }
 
 fn kill_terminal_inner_destructive(manager: &Mutex<PtyManager>, id: &str) {
-    let entry = {
-        let mut manager = match manager.lock() {
-            Ok(m) => m,
-            Err(_) => return,
-        };
-        manager.terminals.remove(id)
-    };
+    let entry = manager.lock_or_recover().terminals.remove(id);
     if let Some(entry) = entry {
         kill_entry(entry, true);
     }
 }
 
 pub fn kill_all(manager: &Mutex<PtyManager>) {
-    let entries: Vec<PtyEntry> = match manager.lock() {
-        Ok(mut m) => m.terminals.drain().map(|(_, e)| e).collect(),
-        Err(_) => return,
-    };
+    let entries: Vec<PtyEntry> = manager
+        .lock_or_recover()
+        .terminals
+        .drain()
+        .map(|(_, e)| e)
+        .collect();
     for entry in entries {
         kill_entry(entry, false);
     }
@@ -846,15 +819,12 @@ pub fn kill_all(manager: &Mutex<PtyManager>) {
 pub fn kill_terminal(app: AppHandle, id: String) -> Result<(), String> {
     let manager = app.state::<Mutex<PtyManager>>();
     kill_terminal_inner_destructive(&manager, &id);
-    let scrollback = manager.lock().map_err(|e| e.to_string())?.scrollback();
+    let scrollback = manager.lock_or_recover().scrollback();
     if let Err(error) = scrollback.remove(&id) {
         eprintln!("failed to remove durable scrollback for {}: {}", id, error);
     }
     let store = app.state::<Mutex<WorkspaceStore>>();
-    store
-        .lock()
-        .map_err(|e| e.to_string())?
-        .remove_terminal(&id);
+    store.lock_or_recover().remove_terminal(&id);
     Ok(())
 }
 
@@ -873,7 +843,7 @@ pub fn terminal_backlog(
     id: String,
 ) -> Result<BacklogSnapshot, String> {
     let (backlog, scrollback, durable_scrollback_enabled) = {
-        let manager = manager.lock().map_err(|e| e.to_string())?;
+        let manager = manager.lock_or_recover();
         (
             manager.terminals.get(&id).map(|e| Arc::clone(&e.backlog)),
             manager.scrollback(),
@@ -881,7 +851,7 @@ pub fn terminal_backlog(
         )
     };
     if let Some(backlog) = backlog {
-        let b = backlog.lock().unwrap_or_else(|e| e.into_inner());
+        let b = backlog.lock_or_recover();
         return Ok(BacklogSnapshot {
             data: String::from_utf8_lossy(&b.buf).into_owned(),
             total: b.total,
@@ -915,7 +885,7 @@ pub fn set_durable_scrollback_enabled(
     manager: State<'_, Mutex<PtyManager>>,
     enabled: bool,
 ) -> Result<(), String> {
-    let manager = manager.lock().map_err(|e| e.to_string())?;
+    let manager = manager.lock_or_recover();
     manager.set_durable_scrollback_enabled(enabled);
     Ok(())
 }
@@ -924,7 +894,7 @@ pub fn set_durable_scrollback_enabled(
 pub fn running_terminals(
     manager: State<'_, Mutex<PtyManager>>,
 ) -> Result<Vec<RunningTerminal>, String> {
-    let manager = manager.lock().map_err(|e| e.to_string())?;
+    let manager = manager.lock_or_recover();
     Ok(manager.running_terminals())
 }
 
@@ -936,7 +906,7 @@ pub fn terminal_runtime_info(
     manager: State<'_, Mutex<PtyManager>>,
     id: String,
 ) -> Result<Option<TerminalRuntimeInfo>, String> {
-    let manager = manager.lock().map_err(|e| e.to_string())?;
+    let manager = manager.lock_or_recover();
     runtime_info_from_manager(&manager, &id)
 }
 
@@ -1230,5 +1200,80 @@ mod spawn_lifecycle_tests {
         assert_eq!(again.meta.worktree.as_ref(), Some(&info));
         crate::worktree::remove(&info, true).unwrap();
         crate::worktree::test_repo::cleanup(&repo, &root);
+    }
+}
+
+#[cfg(all(test, unix))]
+mod kill_tests {
+    use super::{
+        kill_terminal_inner, spawn_terminal_inner, PtyManager, SpawnOptions, SpawnRequest,
+    };
+    use crate::sync::LockExt;
+    use crate::workspace::WorkspaceStore;
+    use std::sync::atomic::Ordering;
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
+    use tauri::Manager;
+
+    #[test]
+    fn given_a_poisoned_manager_lock_kill_terminal_inner_still_kills_the_process() {
+        let app = tauri::test::mock_app();
+        assert!(app.manage(Mutex::new(PtyManager::default())));
+        assert!(app.manage(Mutex::new(WorkspaceStore::default())));
+        let store = app.state::<Mutex<WorkspaceStore>>();
+        let workspace = store.lock().expect("workspace store").create(
+            "poisoned".into(),
+            std::env::temp_dir().to_string_lossy().into_owned(),
+        );
+        let manager = app.state::<Mutex<PtyManager>>();
+        let spawned = spawn_terminal_inner(
+            app.handle(),
+            manager.inner(),
+            store.inner(),
+            SpawnRequest {
+                workspace_id: &workspace.id,
+                command: "sleep 30",
+                cols: 80,
+                rows: 24,
+                terminal_id: None,
+            },
+            &SpawnOptions {
+                shell: Some("/bin/sh".into()),
+                ..SpawnOptions::default()
+            },
+        )
+        .expect("spawn long-running command");
+        let reaped = Arc::clone(
+            &manager
+                .lock()
+                .expect("pty manager")
+                .terminals
+                .get(&spawned.meta.id)
+                .expect("registered terminal")
+                .reaped,
+        );
+        std::thread::scope(|scope| {
+            let poisoner = scope.spawn(|| {
+                let _guard = manager.inner().lock().expect("pty manager");
+                panic!("poison the pty manager");
+            });
+            assert!(poisoner.join().is_err());
+        });
+        assert!(manager.is_poisoned());
+
+        kill_terminal_inner(manager.inner(), &spawned.meta.id);
+
+        assert!(!manager
+            .lock_or_recover()
+            .terminals
+            .contains_key(&spawned.meta.id));
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while !reaped.load(Ordering::SeqCst) {
+            assert!(
+                Instant::now() < deadline,
+                "the process outlived kill_terminal_inner"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 }

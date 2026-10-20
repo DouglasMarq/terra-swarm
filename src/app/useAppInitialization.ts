@@ -96,7 +96,7 @@ export function useAppInitialization({ workspaces, sessions, resumeQueue, agentC
   useEffect(() => {
     if (started.current) return;
     start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Mount only: later attempts go through `retry`.
   }, []);
 
   return { error, running, retry: start };

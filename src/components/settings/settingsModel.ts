@@ -1,13 +1,3 @@
-import {
-  Bot,
-  Database,
-  Info,
-  Keyboard,
-  Mic2,
-  SlidersHorizontal,
-  SquareTerminal,
-  type LucideIcon,
-} from "lucide-react";
 import { t } from "../../i18n";
 import { normalizeSearchText } from "../../lib/text/normalizeSearchText";
 
@@ -29,17 +19,11 @@ export interface SettingsSectionDefinition {
   readonly label: string;
   readonly description: string;
   keywords: readonly string[];
-  icon: LucideIcon;
 }
 
-function section(
-  id: SettingsSectionId,
-  icon: LucideIcon,
-  keywords: readonly string[],
-): SettingsSectionDefinition {
+function section(id: SettingsSectionId, keywords: readonly string[]): SettingsSectionDefinition {
   return {
     id,
-    icon,
     keywords,
     get label() {
       return t(`settings.sections.${id}.label` as const);
@@ -52,13 +36,13 @@ function section(
 
 /** Stable registry: ordering is part of the settings navigation contract. */
 export const SETTINGS_SECTIONS: readonly SettingsSectionDefinition[] = [
-  section("general", SlidersHorizontal, ["perfil", "profile", "aparência", "appearance", "idioma", "language", "movimento", "motion", "labs", "orquestração", "fleet", "frota", "grupo"]),
-  section("terminal", SquareTerminal, ["shell", "fonte", "font", "scrollback", "grade", "grid", "colunas", "pty", "comando"]),
-  section("agents", Bot, ["agente", "agent", "perfil", "profile", "padrão", "default", "nome", "name", "claude", "codex"]),
-  section("voice", Mic2, ["microfone", "microphone", "falar", "transcrição", "transcription", "idioma", "áudio", "audio"]),
-  section("shortcuts", Keyboard, ["teclado", "keyboard", "atalho", "shortcut", "keybind", "hotkey"]),
-  section("data", Database, ["backup", "exportar", "export", "importar", "import", "snapshot", "persistência"]),
-  section("about", Info, ["versão", "version", "atualizar", "update", "release", "sobre", "about"]),
+  section("general", ["perfil", "profile", "aparência", "appearance", "idioma", "language", "movimento", "motion", "labs", "orquestração", "fleet", "frota", "grupo"]),
+  section("terminal", ["shell", "fonte", "font", "scrollback", "grade", "grid", "colunas", "pty", "comando"]),
+  section("agents", ["agente", "agent", "perfil", "profile", "padrão", "default", "nome", "name", "claude", "codex"]),
+  section("voice", ["microfone", "microphone", "falar", "transcrição", "transcription", "idioma", "áudio", "audio"]),
+  section("shortcuts", ["teclado", "keyboard", "atalho", "shortcut", "keybind", "hotkey"]),
+  section("data", ["backup", "exportar", "export", "importar", "import", "snapshot", "persistência"]),
+  section("about", ["versão", "version", "atualizar", "update", "release", "sobre", "about"]),
 ];
 
 export function filterSettingsSections(

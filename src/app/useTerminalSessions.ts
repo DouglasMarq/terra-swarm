@@ -28,6 +28,12 @@ import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
 import { errorMessage } from "../lib/errors/errorMessage";
 
+/** Sessions respawned at the same time when resuming. */
+const RESUME_CONCURRENCY = 2;
+
+/** Debounce for `workspaces-changed` bursts (layout drags, group updates). */
+const WORKSPACES_REFRESH_DEBOUNCE_MS = 75;
+
 export function resumeCommandFor(command: string): string {
   return resolveResumeCommand(profileForCommand(command), command);
 }
@@ -101,7 +107,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     // short debounce keeps other windows current without a request per frame.
     const refreshWorkspaces = createDebouncedTask(() => {
       void refresh();
-    }, 75);
+    }, WORKSPACES_REFRESH_DEBOUNCE_MS);
     const unlistenWorkspaces = listen("workspaces-changed", () => refreshWorkspaces.schedule());
     return () => {
       refreshWorkspaces.cancel();
@@ -285,7 +291,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
 
   /** Resume several sessions, two at a time; returns one result per item. */
   const resumeItems = async (items: readonly ResumeItem[]) => {
-    const queue = createSpawnQueue<ResumeItem, void>({ concurrency: 2, run: (item) => resumeItem(item) });
+    const queue = createSpawnQueue<ResumeItem, void>({ concurrency: RESUME_CONCURRENCY, run: (item) => resumeItem(item), now: Date.now });
     const pending = items.map((item) => queue.enqueue({ id: item.terminalId, input: item }));
     await queue.whenIdle();
     return Promise.all(pending);

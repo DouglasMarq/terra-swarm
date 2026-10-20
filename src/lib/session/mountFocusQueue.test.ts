@@ -4,7 +4,7 @@ import { createMountFocusQueue } from "./mountFocusQueue";
 describe("mount/focus queue", () => {
   it("runs mount then focus and serializes the next effect", async () => {
     const events: string[] = [];
-    const queue = createMountFocusQueue();
+    const queue = createMountFocusQueue(() => 0);
     const first = queue.enqueue({
       id: "first",
       mount: () => events.push("first:mount"),
@@ -23,7 +23,7 @@ describe("mount/focus queue", () => {
 
   it("does not run focus when mount fails and continues the queue", async () => {
     const events: string[] = [];
-    const queue = createMountFocusQueue();
+    const queue = createMountFocusQueue(() => 0);
     const failed = queue.enqueue({
       id: "failed",
       mount: () => {
@@ -41,7 +41,7 @@ describe("mount/focus queue", () => {
 
   it("coalesces stale pending focus requests", async () => {
     const events: string[] = [];
-    const queue = createMountFocusQueue();
+    const queue = createMountFocusQueue(() => 0);
     const gate = new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });
@@ -56,6 +56,12 @@ describe("mount/focus queue", () => {
     expect(await first).toMatchObject({ status: "completed" });
     expect(await current).toMatchObject({ status: "completed" });
     expect(events).toEqual(["current"]);
+  });
+
+  it("given a clock, stamps start and finish times from it", async () => {
+    let time = 100;
+    const queue = createMountFocusQueue(() => time++);
+    expect(await queue.enqueue({ id: "one", focus: () => undefined })).toMatchObject({ status: "completed", startedAt: 100, finishedAt: 101 });
   });
 });
 

@@ -269,6 +269,7 @@ export const ptBR: Dictionary<typeof en> = {
     },
   },
   settingsPanels: {
+    voiceLanguageAuto: "Automático",
     notificationsTitle: "Notificações",
     systemNotifications: "Avisar quando um agente precisar de mim",
     voiceToOrchestrator: "Falar com o orquestrador",

@@ -4,6 +4,7 @@ import { api } from "../api";
 import type { VoiceDownloadProgress, VoiceModelInfo } from "../types";
 import { t } from "../i18n";
 import { usePreferencesStore } from "../stores/preferencesStore";
+import type { VoiceLanguage } from "../domain/voiceLanguages";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 
 const warn = (what: string) => (error: unknown) => console.warn(`${what}:`, error);
@@ -104,7 +105,7 @@ export function useVoiceSettings({ settingsOpen, voiceSectionOpen }: VoiceSettin
       .catch(warn("could not check the microphone"));
   };
 
-  const setLanguage = (language: string) => {
+  const setLanguage = (language: VoiceLanguage) => {
     prefs.getState().setVoiceLang(language);
     api.voiceSetLanguage(language).catch(warn("could not set the voice language"));
   };

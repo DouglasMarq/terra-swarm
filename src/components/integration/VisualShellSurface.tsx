@@ -45,6 +45,7 @@ import type {
 import type {
   Group,
   NotificationItem,
+  VoiceStatus,
   Workspace,
   WorkspaceGroup,
   WorkspaceSnapshotV2,
@@ -182,7 +183,7 @@ export interface VisualShellSurfaceProps {
   detachedTerminalIds: readonly string[];
   fontSize: number;
   voiceEnabled: boolean;
-  voiceStatus: string;
+  voiceStatus: VoiceStatus;
   voiceState?: VoiceCapsuleState;
   voiceTranscript?: string;
   voicePartialTranscript?: string;
@@ -824,7 +825,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         onClose: () => shell.setDockOpen(false),
         tabs: dockTabs,
         activeTab: shell.dock.activeTab,
-        onTabChange: (tab) => shell.setDockTab(tab === "tasks" || tab === "preview" ? tab : "inspector"),
+        onTabChange: shell.setDockTab,
         content: shell.dock.activeTab === "tasks" ? tasksPanel : shell.dock.activeTab === "preview" ? <PreviewPanel workspaceId={activeWorkspace?.id ?? null} /> : inspectorPanel,
       }}
       overlay={voiceOverlay}

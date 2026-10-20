@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { PanelRightClose } from "lucide-react";
 import { useT } from "../../i18n";
+import type { DockTab } from "../../stores/shellStore";
 
 export interface RightDockTab {
-  id: string;
+  id: DockTab;
   label: string;
 }
 
@@ -15,8 +16,8 @@ export interface RightDockProps {
   content?: ReactNode;
   /** With two or more tabs the header becomes a tab strip. */
   tabs?: readonly RightDockTab[];
-  activeTab?: string;
-  onTabChange?: (id: string) => void;
+  activeTab?: DockTab;
+  onTabChange?: (id: DockTab) => void;
 }
 
 /** The right dock: the agent inspector (⌘I) and the shared task board. */

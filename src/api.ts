@@ -1,3 +1,5 @@
+import { mcpApi } from "./lib/tauri/mcp";
+import { previewApi } from "./lib/tauri/preview";
 import { ptyApi } from "./lib/tauri/pty";
 import { systemApi } from "./lib/tauri/system";
 import { voiceApi } from "./lib/tauri/voice";
@@ -10,6 +12,8 @@ export const api = {
   ...systemApi,
   ...voiceApi,
   ...worktreeApi,
+  ...mcpApi,
+  ...previewApi,
 };
 
 export type Api = typeof api;

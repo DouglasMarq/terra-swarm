@@ -1,17 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, GitBranch, GitMerge, GitPullRequest, RefreshCw } from "lucide-react";
-import { api } from "../../api";
+import { useWorktreeReview } from "../../app/useWorktreeReview";
 import { useT } from "../../i18n";
-import { errorMessage } from "../../lib/errors/errorMessage";
 import { useMcpStore } from "../../stores/mcpStore";
 import { useReviewStore } from "../../stores/reviewStore";
-import type { WorktreeDiff } from "../../types";
 import { DialogFooter, TerraDialog } from "../overlays/Dialog";
 import { Button } from "../ui/Button";
 import { parsePatch, suggestTitle, type DiffFileSection } from "./diffModel";
 import "./review.css";
-
-type Busy = "load" | "commit" | "merge" | "pr" | null;
 
 /** How long the "copied" check stays on the copy button. */
 const COPIED_FEEDBACK_MS = 1500;
@@ -28,78 +24,36 @@ export function WorktreeReviewDialog() {
   const target = useReviewStore((state) => state.target);
   const close = useReviewStore((state) => state.close);
   const summary = useMcpStore((state) => (target ? state.statuses[target.terminalId]?.summary : undefined));
-  const [diff, setDiff] = useState<WorktreeDiff | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const review = useWorktreeReview(target);
+  const { diff, busy, error, notice, prUrl } = review;
+  const [chosen, setChosen] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState<Busy>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [confirmMerge, setConfirmMerge] = useState(false);
   const [prOpen, setPrOpen] = useState(false);
   const [prTitle, setPrTitle] = useState("");
   const [prBody, setPrBody] = useState("");
-  const [prUrl, setPrUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!target) return;
-    setBusy("load");
-    setError(null);
-    try {
-      const next = await api.worktreeDiff(target.workspaceId, target.terminalId);
-      setDiff(next);
-      setSelected((current) => (current && next.files.some((file) => file.path === current) ? current : next.files[0]?.path ?? null));
-    } catch (failure) {
-      setError(errorMessage(failure));
-    } finally {
-      setBusy(null);
-    }
-  }, [target]);
-
   useEffect(() => {
-    setDiff(null);
-    setSelected(null);
-    setNotice(null);
-    setError(null);
+    setChosen(null);
     setConfirmMerge(false);
     setPrOpen(false);
-    setPrUrl(null);
     if (!target) return;
     const title = suggestTitle(target.label, summary);
     setMessage(title);
     setPrTitle(title);
     setPrBody("");
-    void load();
     // The summary seeds the drafts once, when the dialog opens.
-  }, [target, load]);
+  }, [target]);
 
+  const selected = chosen && diff?.files.some((file) => file.path === chosen) ? chosen : diff?.files[0]?.path ?? null;
   const sections = useMemo(() => parsePatch(diff?.patch ?? ""), [diff?.patch]);
   const section: DiffFileSection | undefined = sections.find((candidate) => candidate.path === selected);
   const status = diff?.status;
   const dirty = status ? status.dirty.length > 0 : false;
   const ahead = status?.ahead ?? 0;
 
-  const run = async (kind: Exclude<Busy, "load" | null>, action: () => Promise<string | null>) => {
-    if (!target) return;
-    setBusy(kind);
-    setError(null);
-    setNotice(null);
-    try {
-      const done = await action();
-      if (done) setNotice(done);
-      await load();
-    } catch (failure) {
-      setError(errorMessage(failure));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const commit = () =>
-    run("commit", async () => {
-      await api.worktreeCommit(target!.workspaceId, target!.terminalId, message);
-      return t("review.committed");
-    });
+  const commit = () => review.commit(message);
 
   const merge = () => {
     if (!confirmMerge) {
@@ -107,19 +61,12 @@ export function WorktreeReviewDialog() {
       return;
     }
     setConfirmMerge(false);
-    void run("merge", async () => {
-      await api.worktreeMerge(target!.workspaceId, target!.terminalId);
-      return t("review.merged", { branch: status?.branch ?? "", base: status?.base ?? "" });
-    });
+    void review.merge();
   };
 
-  const openPr = () =>
-    run("pr", async () => {
-      const url = await api.worktreeOpenPr(target!.workspaceId, target!.terminalId, prTitle, prBody);
-      setPrUrl(url);
-      setPrOpen(false);
-      return t("review.prOpened");
-    });
+  const openPr = async () => {
+    if (await review.openPullRequest(prTitle, prBody)) setPrOpen(false);
+  };
 
   const copyUrl = async () => {
     if (!prUrl) return;
@@ -132,6 +79,7 @@ export function WorktreeReviewDialog() {
       setCopied(false);
     }
   };
+
 
   return (
     <TerraDialog
@@ -159,7 +107,7 @@ export function WorktreeReviewDialog() {
         <nav className="terra-review-files" aria-label={t("review.files")}>
           <div className="terra-review-files-head">
             <span>{t("review.filesCount", { count: diff?.files.length ?? 0 })}</span>
-            <button type="button" className="terra-review-icon" onClick={() => void load()} disabled={busy !== null} aria-label={t("review.refresh")} title={t("review.refresh")}>
+            <button type="button" className="terra-review-icon" onClick={() => void review.load()} disabled={busy !== null} aria-label={t("review.refresh")} title={t("review.refresh")}>
               <RefreshCw size={13} aria-hidden="true" />
             </button>
           </div>
@@ -167,7 +115,7 @@ export function WorktreeReviewDialog() {
           <ul>
             {diff?.files.map((file) => (
               <li key={file.path}>
-                <button type="button" data-active={file.path === selected} onClick={() => setSelected(file.path)} title={file.path}>
+                <button type="button" data-active={file.path === selected} onClick={() => setChosen(file.path)} title={file.path}>
                   <span className="terra-review-change" data-change={file.change}>{t(`review.change.${file.change}`)}</span>
                   <span className="terra-review-path">{file.path}</span>
                   {file.additions === null ? (

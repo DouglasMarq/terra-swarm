@@ -4,8 +4,8 @@ import { CONTEXT_ATTENTION_PERCENT, type AgentRunStatus } from "../../domain/age
 import { useT } from "../../i18n";
 import { formatTokens } from "../../domain/formatTokens";
 import type { AgentTokenUsage, NotificationItem } from "../../types";
-import type { InspectorActionKind, InspectorTarget } from "../integration/inspectorModel";
-import type { InspectorRuntimeState } from "../integration/inspectorRuntime";
+import type { InspectorActionKind, InspectorTarget } from "./inspectorModel";
+import type { InspectorRuntimeState } from "./inspectorRuntime";
 import { relativeTime } from "../notifications/NotificationCenter";
 import "./inspector.css";
 

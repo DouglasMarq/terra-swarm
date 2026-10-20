@@ -1,4 +1,5 @@
 import type {
+  AgentTokenUsage,
   McpAgentStatus,
   McpServerInfo,
   McpTask,
@@ -70,6 +71,11 @@ export function mcpAgentStatuses(workspaceId: string): Promise<McpAgentStatus[]>
   return invokeCommand("mcpAgentStatuses", { workspaceId });
 }
 
+/** Token usage of the workspace's agents, from the session logs their hooks reported. */
+export function agentUsage(workspaceId: string): Promise<AgentTokenUsage[]> {
+  return invokeCommand("agentUsage", { workspaceId });
+}
+
 export const mcpApi = {
   mcpServerInfo,
   mcpSetEnabled,
@@ -78,4 +84,5 @@ export const mcpApi = {
   mcpUpdateTask,
   mcpDeleteTask,
   mcpAgentStatuses,
+  agentUsage,
 } as const;

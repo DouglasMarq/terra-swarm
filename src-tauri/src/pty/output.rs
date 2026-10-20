@@ -7,6 +7,7 @@ use serde::Serialize;
 use std::io::Read;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Runtime};
 
 use super::dev_server::{detect_dev_server_urls, DevServerPayload};
@@ -15,6 +16,18 @@ use super::output_scan::{
 };
 use super::Backlog;
 use crate::scrollback::ScrollbackStore;
+use crate::sync::LockExt;
+
+/// Size of one read from the PTY.
+const READ_BUFFER_BYTES: usize = 16 * 1024;
+/// Pacing of output events (about 60 per second).
+const FLUSH_INTERVAL: Duration = Duration::from_millis(16);
+/// Pending output this large is emitted without waiting for the pacing.
+const FORCE_FLUSH_BYTES: usize = 64 * 1024;
+/// How often the recent output is scanned for dev servers and context usage.
+const SCAN_INTERVAL: Duration = Duration::from_millis(250);
+/// Recent output kept for the notification fallback and the periodic scans.
+const RAW_TAIL_BYTES: usize = 8 * 1024;
 
 #[derive(Serialize, Clone)]
 pub struct OutputChunk {
@@ -60,12 +73,10 @@ pub(super) fn spawn_output_pump<R: Runtime>(
     backlog: Arc<Mutex<Backlog>>,
     scrollback: DurableScrollback,
 ) {
-    // Reader thread: drains the PTY as fast as the child produces data so
-    // the kernel buffer never fills and the child never blocks on write().
     let (chunk_tx, chunk_rx) = std::sync::mpsc::channel::<Vec<u8>>();
     let reader_id = id.to_string();
     std::thread::spawn(move || {
-        let mut buf = [0u8; 16384];
+        let mut buf = [0u8; READ_BUFFER_BYTES];
         loop {
             match reader.read(&mut buf) {
                 Ok(0) => break,
@@ -82,9 +93,6 @@ pub(super) fn spawn_output_pump<R: Runtime>(
         }
     });
 
-    // Flusher thread: coalesces chunks into rate-limited emits (~60/s).
-    // Bursts larger than FORCE_FLUSH bypass the pacing so throughput
-    // scales with output volume; emit failures never kill the thread.
     let output_event = format!("pty-output-{}", id);
     let notif_id = id.to_string();
     let notif_ws = workspace_id.to_string();
@@ -96,17 +104,14 @@ pub(super) fn spawn_output_pump<R: Runtime>(
         let mut title_last: Option<String> = None;
         let mut ctx_last: Option<u8> = None;
         let mut dev_servers_seen: Vec<String> = Vec::new();
-        let mut ctx_last_check = std::time::Instant::now();
-        let flush_interval = std::time::Duration::from_millis(16);
-        let ctx_interval = std::time::Duration::from_millis(250);
-        const FORCE_FLUSH: usize = 65536;
-        let mut last_flush = std::time::Instant::now() - flush_interval;
-
-        // Side-channel scan shared by the paced path and the final flush.
+        let mut ctx_last_check = Instant::now();
+        let mut last_flush = Instant::now()
+            .checked_sub(FLUSH_INTERVAL)
+            .unwrap_or_else(Instant::now);
         let mut process = |s: &str| {
             raw_tail.extend_from_slice(s.as_bytes());
-            if raw_tail.len() > 8192 {
-                let cut = raw_tail.len() - 8192;
+            if raw_tail.len() > RAW_TAIL_BYTES {
+                let cut = raw_tail.len() - RAW_TAIL_BYTES;
                 raw_tail.drain(..cut);
             }
             let (notifs, messages) = extract_notifications(s.as_bytes(), &raw_tail);
@@ -137,8 +142,8 @@ pub(super) fn spawn_output_pump<R: Runtime>(
                     );
                 }
             }
-            if ctx_last_check.elapsed() >= ctx_interval {
-                ctx_last_check = std::time::Instant::now();
+            if ctx_last_check.elapsed() >= SCAN_INTERVAL {
+                ctx_last_check = Instant::now();
                 let plain = strip_ansi(&String::from_utf8_lossy(&raw_tail));
                 for url in detect_dev_server_urls(&plain) {
                     if !dev_servers_seen.contains(&url) {
@@ -171,7 +176,7 @@ pub(super) fn spawn_output_pump<R: Runtime>(
 
         let emit_output = |s: String| {
             let total = {
-                let mut b = backlog.lock().unwrap_or_else(|e| e.into_inner());
+                let mut b = backlog.lock_or_recover();
                 b.push(&s);
                 b.total
             };
@@ -197,7 +202,7 @@ pub(super) fn spawn_output_pump<R: Runtime>(
                     Err(_) => In::Closed,
                 }
             } else {
-                let wait = flush_interval.saturating_sub(last_flush.elapsed());
+                let wait = FLUSH_INTERVAL.saturating_sub(last_flush.elapsed());
                 if wait.is_zero() {
                     match chunk_rx.try_recv() {
                         Ok(c) => In::Chunk(c),
@@ -215,13 +220,12 @@ pub(super) fn spawn_output_pump<R: Runtime>(
             match input {
                 In::Chunk(c) => {
                     pending.extend_from_slice(&c);
-                    if pending.len() < FORCE_FLUSH && last_flush.elapsed() < flush_interval {
+                    if pending.len() < FORCE_FLUSH_BYTES && last_flush.elapsed() < FLUSH_INTERVAL {
                         continue;
                     }
                 }
                 In::Tick => {}
                 In::Closed => {
-                    // Final flush: emit whatever remains (lossy) and exit.
                     if !pending.is_empty() {
                         let s = String::from_utf8_lossy(&pending).into_owned();
                         pending.clear();
@@ -232,13 +236,12 @@ pub(super) fn spawn_output_pump<R: Runtime>(
                 }
             }
             let Some(s) = take_decodable(&mut pending) else {
-                // Incomplete UTF-8 char at the tail; wait for more bytes.
-                last_flush = std::time::Instant::now();
+                last_flush = Instant::now();
                 continue;
             };
             process(&s);
             emit_output(s);
-            last_flush = std::time::Instant::now();
+            last_flush = Instant::now();
         }
     });
 }

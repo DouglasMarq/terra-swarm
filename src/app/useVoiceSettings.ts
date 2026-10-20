@@ -114,7 +114,6 @@ export function useVoiceSettings({ settingsOpen, voiceSectionOpen }: VoiceSettin
     const value = device === "" ? null : device;
     prefs.getState().setVoiceInputDevice(value);
     api.voiceSetInputDevice(value).catch(warn("could not set the input device"));
-    // Move a running mic test to the new device so the meter follows it.
     if (micTesting) api.voiceTestMicStart(value).catch(warn("could not restart the mic test"));
   };
 

@@ -60,7 +60,8 @@ export interface McpState {
     workspaceId: string,
     input: { title: string; description?: string; priority?: McpTaskPriority; assignee?: string | null },
   ) => Promise<McpTask | null>;
-  updateTask: (workspaceId: string, id: string, patch: McpTaskPatch) => Promise<void>;
+  /** Resolves to the updated task, or null when the update failed (the reason is in `error`). */
+  updateTask: (workspaceId: string, id: string, patch: McpTaskPatch) => Promise<McpTask | null>;
   deleteTask: (workspaceId: string, id: string) => Promise<void>;
   applyStatus: (payload: McpAgentStatusPayload) => void;
   clearError: () => void;
@@ -134,8 +135,10 @@ export const useMcpStore = create<McpState>((set, get) => ({
     try {
       const task = await mcpApi.mcpUpdateTask(workspaceId, id, patch);
       set((state) => ({ tasks: { ...state.tasks, [workspaceId]: upsert(state.tasks[workspaceId], task) } }));
+      return task;
     } catch (error) {
       set({ error: errorMessage(error) });
+      return null;
     }
   },
 

@@ -9,7 +9,7 @@ import {
   reduceVoiceCapsuleModel,
   type VoiceCapsuleIntent,
   type VoiceSendPayload,
-} from "../components/voice";
+} from "../components/voice/voiceModel";
 import { getTerminal } from "../terminalRegistry";
 import { t } from "../i18n";
 import { agentKind, agentLabelText, buildAgentLabels } from "../domain/agentLabels";
@@ -89,14 +89,11 @@ export function useVoiceCapture({
         const title = titles[candidate.id] ?? "";
         const command = candidate.command.trim();
         const label = labels[candidate.id];
-        // Exact: id, raw title, command, kind, numbered tag ("claude 2"),
-        // task title or given name.
         return [candidate.id, title, command, agentKind(command), label?.tag ?? "", label?.title ?? "", label?.name ?? ""]
           .some((value) => value && normalizeVoiceText(value) === needle);
       });
       if (terminal) return { workspace, terminal };
     }
-    // Loose: the spoken words appear in the task title ("o claude das animações").
     for (const workspace of workspaces) {
       const terminal = workspace.terminals.find((candidate) => {
         const title = labels[candidate.id]?.title;
@@ -124,7 +121,6 @@ export function useVoiceCapture({
 
   const targetLabelForVoiceIntent = (intent: VoiceCapsuleIntent | null): string | null => {
     if (!intent) {
-      // The picker's choice, else the focused agent, as the readable label.
       const id = defaultTargetId;
       if (!id) return null;
       const label = buildAgentLabels(workspaces, { titles, names: usePreferencesStore.getState().agentNames })[id];
@@ -257,8 +253,6 @@ export function useVoiceCapture({
   // Latest focused terminal for the voice paste target, readable from
   // listeners that are registered once.
   const voiceFocusRef = useRef<string | null>(null);
-  // "Enviar para": an explicit voice target wins; then the project's
-  // orchestrator, when one runs and the preference is on; then the focus.
   const [voiceTargetId, setVoiceTargetId] = useState<string | null>(null);
   const voiceToOrchestrator = usePreferencesStore((state) => state.voiceToOrchestrator);
   const exitedTerminals = useTerminalRuntimeStore((state) => state.exited);
@@ -266,8 +260,6 @@ export function useVoiceCapture({
   const defaultTargetId = voiceTargetId ?? orchestratorId ?? focusedId;
   voiceFocusRef.current = defaultTargetId;
 
-  // Writes dictated text to a terminal. An exited target is first resumed
-  // with its agent's continuation command, then receives the prompt.
   const deliverDictation = async (id: string, text: string): Promise<void> => {
     const meta = workspaces.flatMap((workspace) => workspace.terminals).find((candidate) => candidate.id === id);
     if (meta && id in useTerminalRuntimeStore.getState().exited) {
@@ -302,7 +294,6 @@ export function useVoiceCapture({
   const deliverDictationRef = useRef(deliverDictation);
   deliverDictationRef.current = deliverDictation;
 
-  // A chosen target lasts for one capture; the next one starts at the focus.
   useEffect(() => {
     if (voiceCapsule.state === "idle") setVoiceTargetId(null);
   }, [voiceCapsule.state]);

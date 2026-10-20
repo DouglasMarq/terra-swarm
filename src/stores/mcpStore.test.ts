@@ -91,6 +91,19 @@ describe("mcp store", () => {
     expect(useMcpStore.getState().tasks["ws-1"]!.map((task) => task.id)).toEqual(["T-1"]);
   });
 
+  it("given an update that succeeds, resolves to the updated task", async () => {
+    const updated = makeTask("T-1", { status: "review" });
+    api.mcpUpdateTask.mockResolvedValue(updated);
+    expect(await useMcpStore.getState().updateTask("ws-1", "T-1", { status: "review" })).toEqual(updated);
+    expect(useMcpStore.getState().error).toBeNull();
+  });
+
+  it("given an update that fails, resolves to null and keeps the error", async () => {
+    api.mcpUpdateTask.mockRejectedValue("task T-9 not found");
+    expect(await useMcpStore.getState().updateTask("ws-1", "T-9", { status: "review" })).toBeNull();
+    expect(useMcpStore.getState().error).toBe("task T-9 not found");
+  });
+
   it("keeps errors instead of throwing", async () => {
     api.mcpCreateTask.mockRejectedValue("title cannot be empty");
     expect(await useMcpStore.getState().createTask("ws-1", { title: " " })).toBeNull();

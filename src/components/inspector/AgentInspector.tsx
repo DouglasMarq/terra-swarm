@@ -4,8 +4,8 @@ import { CONTEXT_ATTENTION_PERCENT, type AgentRunStatus } from "../../domain/age
 import { useT } from "../../i18n";
 import { formatTokens } from "../../domain/formatTokens";
 import type { AgentTokenUsage, NotificationItem } from "../../types";
-import type { InspectorActionKind, InspectorTarget } from "../integration/inspectorModel";
-import type { InspectorRuntimeState } from "../integration/inspectorRuntime";
+import { totalTokens, type InspectorActionKind, type InspectorTarget } from "./inspectorModel";
+import type { InspectorRuntimeState } from "./inspectorRuntime";
 import { relativeTime } from "../notifications/NotificationCenter";
 import "./inspector.css";
 
@@ -76,7 +76,7 @@ export function AgentInspector({ target, label, status, request, activity, runti
         <section className="terra-inspector-block" aria-label={t("inspector.tokens")}>
           <div className="terra-inspector-row">
             <span>{t("inspector.tokens")}</span>
-            <b>{formatTokens(usage.input_tokens + usage.output_tokens + usage.cache_read_tokens + usage.cache_write_tokens)}</b>
+            <b>{formatTokens(totalTokens(usage))}</b>
           </div>
           <span className="terra-inspector-hint">
             {t("inspector.tokensDetail", {

@@ -3,6 +3,7 @@
 import { act, render } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { IpcError } from "../lib/tauri/errors";
 import { TerminalPane } from "./TerminalPane";
 
 interface TerminalMock {
@@ -321,5 +322,30 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
     expect(mocks.api.writeTerminal).not.toHaveBeenCalled();
     expect(mocks.resizeObservers[0]?.disconnect).toHaveBeenCalledTimes(1);
     expect(terminal?.dispose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("TerminalPane input", () => {
+  it("given a busy input queue, retries the keystroke until it is written", async () => {
+    mocks.api.writeTerminal
+      .mockRejectedValueOnce(new IpcError({ code: "busy", message: "input queue full" }))
+      .mockResolvedValue(undefined);
+    pane();
+    mocks.terminals[0]?.dataHandler?.("a");
+
+    await vi.waitFor(() => expect(mocks.api.writeTerminal).toHaveBeenCalledTimes(2));
+    expect(mocks.api.writeTerminal).toHaveBeenLastCalledWith("pty-1", "a");
+  });
+
+  it("given a write that fails for another reason, warns once without retrying", async () => {
+    const failure = new IpcError({ code: "other", message: "terminal pty-1 input closed" });
+    mocks.api.writeTerminal.mockRejectedValue(failure);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    pane();
+    mocks.terminals[0]?.dataHandler?.("a");
+
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
+    expect(warn.mock.calls[0]).toContain(failure);
+    expect(mocks.api.writeTerminal).toHaveBeenCalledTimes(1);
   });
 });

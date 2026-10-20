@@ -104,8 +104,7 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
 
   const handOff = async (task: McpTask, agent: BoardAgent) => {
     clearError();
-    await update(task.id, { assignee: agent.id, status: "in_progress" });
-    if (useMcpStore.getState().error) return;
+    if (!(await update(task.id, { assignee: agent.id, status: "in_progress" }))) return;
     try {
       await onSendPrompt(agent.id, t("tasks.board.prompt", { id: task.id, title: task.title }));
       setNotice(t("tasks.board.handedOff", { id: task.id, agent: agent.label }));

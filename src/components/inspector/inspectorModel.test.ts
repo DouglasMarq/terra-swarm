@@ -3,6 +3,7 @@ import type { Workspace, WorkspaceSnapshotV2 } from "../../types";
 import {
   inspectorActionRequiresConfirmation,
   resolveInspectorTarget,
+  totalTokens,
 } from "./inspectorModel";
 
 const workspace: Workspace = {
@@ -132,5 +133,20 @@ describe("resolveInspectorTarget", () => {
       snapshot,
       exited: { "pty-codex": null },
     })?.state).toBe("encerrado");
+  });
+});
+
+describe("totalTokens", () => {
+  it("given a session's usage, adds input, output and both cache directions", () => {
+    expect(totalTokens({
+      terminal_id: "t-1",
+      agent: "claude",
+      input_tokens: 1,
+      output_tokens: 20,
+      cache_read_tokens: 300,
+      cache_write_tokens: 4000,
+      turns: 3,
+      model: null,
+    })).toBe(4321);
   });
 });

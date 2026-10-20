@@ -1,21 +1,19 @@
-import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { MotionConfig } from "motion/react";
 import { useShallow } from "zustand/react/shallow";
-import { listen } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "./api";
 import { useBranchPolling } from "./app/useBranchPolling";
 import { useFocusTracking } from "./app/useFocusTracking";
 import { useResumeQueue } from "./app/useResumeQueue";
+import { useVoiceCapture } from "./app/useVoiceCapture";
+import { useVoiceSettings } from "./app/useVoiceSettings";
 import { resumeCommandFor, useTerminalSessions } from "./app/useTerminalSessions";
 import { useUpdater } from "./app/useUpdater";
 import type {
   AgentInfo,
   NotificationItem,
   ResumeItem,
-  VoiceDownloadProgress,
-  VoiceModelInfo,
-  VoiceStatus,
   WorkspaceGroup,
   Workspace,
 } from "./types";
@@ -27,14 +25,6 @@ import {
 } from "./components/integration/dialogs";
 import { ConfirmActionDialog } from "./components/overlays/Dialog";
 import type { FocusedAgentAction } from "./components/overlays/CommandPalette";
-import {
-  createInitialVoiceCapsuleModel,
-  canExecuteVoiceIntent,
-  isDestructiveVoiceIntent,
-  reduceVoiceCapsuleModel,
-  type VoiceCapsuleIntent,
-  type VoiceSendPayload,
-} from "./components/voice";
 import { getTerminal } from "./terminalRegistry";
 import {
   GRID_COL_OPTIONS,
@@ -49,7 +39,6 @@ import { useUiStore } from "./stores/uiStore";
 import { useShellStore } from "./stores/shellStore";
 import { useOrchestrationStore } from "./stores/orchestrationStore";
 import { planResume } from "./lib/session/resumePlanner";
-import { agentLabelText, buildAgentLabels } from "./domain/agentLabels";
 import { t, useLocale } from "./i18n";
 import { createInitializationGate, type InitializationGate } from "./lib/session/initializationGate";
 import { selectWorkspaceContainerId } from "./lib/session/workspaceContainerSelection";
@@ -57,12 +46,6 @@ import {
   isTerminalSuspended,
   suspendedGroupIds,
 } from "./lib/session/resumeSelection";
-import { parseVoiceCommand } from "./lib/voiceCommands";
-import {
-  buildVoicePrompt,
-  profileForCommand,
-  resolveResumeCommand,
-} from "./lib/features/agentProfiles";
 import type { SettingsSectionId } from "./components/settings";
 import type {
   SnapshotFeedback,
@@ -96,17 +79,6 @@ function AppLoadingSurface(_props: { label?: string }) {
       <span>{t("shell.loading")}</span>
     </div>
   );
-}
-
-/** Compare spoken labels without making callers know about locale accents. */
-function normalizeVoiceLookup(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[!?.,:]+$/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLocaleLowerCase("pt-BR");
 }
 
 type DurableScrollbackApi = {
@@ -153,12 +125,20 @@ function App() {
     if (open) shell.navigate("settings", shell.activeWorkspaceId);
     else if (shell.activeSurface === "settings") shell.navigate("workbench", shell.activeWorkspaceId);
   };
+  const [settingsSection, setSettingsSection] =
+    useState<SettingsSectionId>("general");
+  const openVoiceSettings = useCallback(() => {
+    setSettingsSection("voice");
+    setShowSettings(true);
+  }, []);
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const [initializationRunning, setInitializationRunning] = useState(false);
   const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
-  const [settingsSection, setSettingsSection] =
-    useState<SettingsSectionId>("general");
   const [capturing, setCapturing] = useState<string | null>(null);
+  const voiceSettings = useVoiceSettings({
+    settingsOpen: showSettings,
+    voiceSectionOpen: showSettings && settingsSection === "voice",
+  });
   const {
     activeId,
     expandedId,
@@ -260,7 +240,6 @@ function App() {
     gridCols,
     voiceEnabled,
     voiceLang,
-    voiceModel,
     voiceInputDevice,
     setDefaultAgent,
     setHotkeys,
@@ -271,10 +250,6 @@ function App() {
     setReduceMotion,
     setAutoResume,
     setGridCols,
-    setVoiceEnabled,
-    setVoiceLang,
-    setVoiceModel,
-    setVoiceInputDevice,
     setAgentName,
   } = usePreferencesStore(
     useShallow((state) => ({
@@ -287,7 +262,6 @@ function App() {
       gridCols: state.gridCols,
       voiceEnabled: state.voiceEnabled,
       voiceLang: state.voiceLang,
-      voiceModel: state.voiceModel,
       voiceInputDevice: state.voiceInputDevice,
       setDefaultAgent: state.setDefaultAgent,
       setHotkeys: state.setHotkeys,
@@ -298,10 +272,6 @@ function App() {
       setReduceMotion: state.setReduceMotion,
       setAutoResume: state.setAutoResume,
       setGridCols: state.setGridCols,
-      setVoiceEnabled: state.setVoiceEnabled,
-      setVoiceLang: state.setVoiceLang,
-      setVoiceModel: state.setVoiceModel,
-      setVoiceInputDevice: state.setVoiceInputDevice,
       setAgentName: state.setAgentName,
     })),
   );
@@ -343,26 +313,6 @@ function App() {
   };
   const agentsRef = useRef<AgentInfo[]>([]);
   const agentsReadyRef = useRef<Promise<void>>(Promise.resolve());
-  const [availableShells, setAvailableShells] = useState<string[]>([]);
-  const [voiceInputDevices, setVoiceInputDevices] = useState<string[]>([]);
-  const [micTesting, setMicTesting] = useState(false);
-  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
-  const [voiceCapsule, dispatchVoiceCapsule] = useReducer(
-    reduceVoiceCapsuleModel,
-    undefined,
-    createInitialVoiceCapsuleModel,
-  );
-  const [voiceLevel, setVoiceLevel] = useState(0);
-  const [voiceSamples, setVoiceSamples] = useState<number[]>([]);
-  const [voiceFeedback, setVoiceFeedback] = useState<string | null>(null);
-  const [voiceSubmitted, setVoiceSubmitted] = useState(false);
-  const [voiceModels, setVoiceModels] = useState<VoiceModelInfo[]>([]);
-  const [voiceModelsStatus, setVoiceModelsStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [voiceDl, setVoiceDl] = useState<{
-    id: string;
-    percent: number;
-  } | null>(null);
-  const [micAvailable, setMicAvailable] = useState<boolean | null>(null);
   const [snapshotOperation, setSnapshotOperation] =
     useState<SnapshotOperation | null>(null);
   const [snapshotFeedback, setSnapshotFeedback] =
@@ -480,22 +430,7 @@ function App() {
     agentsReadyRef.current = agentsReady;
     await agentsReady;
 
-    // Push persisted voice settings into the backend (model load is async).
-    // If the mic is gone while the feature was left enabled, disable it.
-    if (voiceEnabled) {
-      api
-        .voiceMicAvailable()
-        .then((avail) => {
-          setMicAvailable(avail);
-          if (!avail) disableVoiceInput(false);
-        })
-        .catch(() => {});
-      api.voiceSetLanguage(voiceLang).catch(() => {});
-      api.voiceSetInputDevice(voiceInputDevice).catch(() => {});
-      if (voiceModel) {
-        api.voiceSetModel(voiceModel).catch(handleVoiceModelLoadError);
-      }
-    }
+    voiceSettings.applyStoredSettings();
   };
 
   const startInitialization = () => {
@@ -799,168 +734,19 @@ function App() {
     await refresh();
   };
 
-  const resolveVoiceTerminal = (target: string) => {
-    const needle = normalizeVoiceLookup(target);
-    if (!needle) return null;
-    const labels = buildAgentLabels(workspaces, { titles, names: usePreferencesStore.getState().agentNames });
-    for (const workspace of workspaces) {
-      const terminal = workspace.terminals.find((candidate) => {
-        const title = titles[candidate.id] ?? "";
-        const command = candidate.command.trim();
-        const label = labels[candidate.id];
-        // Exact: id, raw title, command, kind, numbered tag ("claude 2"),
-        // task title or given name.
-        return [candidate.id, title, command, command.split(/\s+/)[0] ?? "", label?.tag ?? "", label?.title ?? "", label?.name ?? ""]
-          .some((value) => value && normalizeVoiceLookup(value) === needle);
-      });
-      if (terminal) return { workspace, terminal };
-    }
-    // Loose: the spoken words appear in the task title ("o claude das animações").
-    for (const workspace of workspaces) {
-      const terminal = workspace.terminals.find((candidate) => {
-        const title = labels[candidate.id]?.title;
-        return title ? normalizeVoiceLookup(title).includes(needle) || needle.includes(normalizeVoiceLookup(title)) : false;
-      });
-      if (terminal) return { workspace, terminal };
-    }
-    const workspace = workspaces.find(
-      (candidate) =>
-        normalizeVoiceLookup(candidate.id) === needle ||
-        normalizeVoiceLookup(candidate.name) === needle,
-    );
-    const terminal = workspace?.terminals[0];
-    return workspace && terminal ? { workspace, terminal } : null;
-  };
-
-  const focusVoiceTarget = (target: string): boolean => {
-    const match = resolveVoiceTerminal(target);
-    if (!match) return false;
-    reattachTerminal(match.terminal.id);
-    selectWorkspace(match.workspace.id);
-    setFocusedId(match.terminal.id);
-    return true;
-  };
-
-  const targetLabelForVoiceIntent = (intent: VoiceCapsuleIntent | null): string | null => {
-    if (!intent) {
-      // The picker's choice, else the focused agent, as the readable label.
-      const id = voiceTargetId ?? focusedId;
-      if (!id) return null;
-      const label = buildAgentLabels(workspaces, { titles, names: usePreferencesStore.getState().agentNames })[id];
-      return label ? agentLabelText(label) : id;
-    }
-    switch (intent.type) {
-      case "focus":
-      case "stop":
-        return intent.target ?? null;
-      case "suspend-group":
-      case "resume-group":
-        return intent.group;
-      case "new-agent":
-        return intent.agent ?? t("app.defaultAgent");
-      case "open-fleet":
-        return "Frota Terra";
-    }
-  };
-
-  const resolveVoiceGroup = (target: string): string | null => {
-    const needle = normalizeVoiceLookup(target);
-    return groups.find(
-      (group) =>
-        normalizeVoiceLookup(group.id) === needle ||
-        normalizeVoiceLookup(group.name) === needle,
-    )?.id ?? null;
-  };
-
-  const startVoiceAgent = async (agentTarget?: string) => {
-    if (!active) {
-      pushSystemNotification(t("app.pickWorkspaceFirst"));
-      return;
-    }
-    if (!agentTarget) {
-      await quickNewTerminal(active.id);
-      return;
-    }
-    const needle = normalizeVoiceLookup(agentTarget);
-    const agent = agents.find(
-      (candidate) =>
-        candidate.available &&
-        (normalizeVoiceLookup(candidate.id) === needle ||
-          normalizeVoiceLookup(candidate.label) === needle),
-    );
-    if (!agent) {
-      pushSystemNotification(t("app.agentUnavailable", { name: agentTarget }));
-      return;
-    }
-    await sessions.spawnInto(active.id, agent.id);
-  };
-
-  const executeVoiceIntent = async (
-    intent: VoiceCapsuleIntent,
-    confirmed = false,
-  ): Promise<boolean> => {
-    if (!canExecuteVoiceIntent(intent, confirmed)) {
-      setVoiceFeedback(t("app.voice.confirmDestructive"));
-      return false;
-    }
-    try {
-      switch (intent.type) {
-        case "open-fleet":
-          useShellStore.getState().navigate("fleet");
-          setVoiceFeedback("Frota aberta.");
-          return true;
-        case "focus":
-          if (!focusVoiceTarget(intent.target)) {
-            pushSystemNotification(t("app.voice.terminalNotFound", { name: intent.target }));
-            setVoiceFeedback(t("app.voice.terminalNotFound", { name: intent.target }));
-            return false;
-          }
-          setVoiceFeedback(t("app.voice.focusChanged", { name: intent.target }));
-          return true;
-        case "suspend-group": {
-          const groupId = resolveVoiceGroup(intent.group);
-          if (!groupId) {
-            pushSystemNotification(t("app.voice.groupNotFound", { name: intent.group }));
-            setVoiceFeedback(t("app.voice.groupNotFound", { name: intent.group }));
-            return false;
-          }
-          await suspendGroup(groupId);
-          setVoiceFeedback(`Grupo ${intent.group} suspenso.`);
-          return true;
-        }
-        case "resume-group": {
-          const groupId = resolveVoiceGroup(intent.group);
-          if (!groupId) {
-            pushSystemNotification(t("app.voice.groupNotFound", { name: intent.group }));
-            setVoiceFeedback(t("app.voice.groupNotFound", { name: intent.group }));
-            return false;
-          }
-          await resumeGroup(groupId);
-          setVoiceFeedback(`Grupo ${intent.group} retomado.`);
-          return true;
-        }
-        case "new-agent":
-          await startVoiceAgent(intent.agent);
-          setVoiceFeedback(intent.agent ? t("app.voice.agentStarted", { name: intent.agent }) : t("app.voice.agentReady"));
-          return true;
-        case "stop": {
-          const match = intent.target ? resolveVoiceTerminal(intent.target) : null;
-          if (!match) {
-            setVoiceFeedback(intent.target ? t("app.voice.terminalNotFound", { name: intent.target }) : t("app.voice.whichStop"));
-            return false;
-          }
-          await sessions.close(match.terminal.id);
-          setVoiceFeedback(`Terminal ${intent.target} parado.`);
-          return true;
-        }
-      }
-    } catch (err) {
-      console.error("voice orchestration command failed:", err);
-      setVoiceFeedback(t("app.voice.actionFailed"));
-      pushSystemNotification(t("app.voice.actionFailed"));
-      return false;
-    }
-  };
+  const voice = useVoiceCapture({
+    workspaces,
+    groups,
+    agents,
+    activeWorkspace: active,
+    focusedId,
+    titles,
+    voiceEnabled,
+    voiceCommandsEnabled: flags.voiceCommands,
+    sessions,
+    openVoiceSettings,
+    actions: { quickNewTerminal, selectWorkspace, suspendGroup, resumeGroup },
+  });
 
   const stopFleetTerminals = async (ids: string[]) => {
     try {
@@ -1137,315 +923,6 @@ function App() {
     }
   };
 
-  const refreshVoiceModels = useCallback(() => {
-    api
-      .voiceListModels()
-      .then((models) => {
-        setVoiceModels(models);
-        setVoiceModelsStatus("ready");
-      })
-      .catch((error) => {
-        console.error("voice model list failed:", error);
-        setVoiceModelsStatus("error");
-      });
-  }, []);
-
-  const refreshVoiceInputDevices = useCallback(() => {
-    api.voiceListInputDevices().then(setVoiceInputDevices).catch(() => {});
-  }, []);
-
-  const toggleVoice = useCallback(() => {
-    if (!voiceEnabled) {
-      setSettingsSection("voice");
-      setShowSettings(true);
-      return;
-    }
-    api
-      .voiceToggleRecording()
-      .catch((err) => console.error("voice toggle failed:", err));
-  }, [voiceEnabled]);
-
-  const handleVoiceModelLoadError = (err: unknown) => {
-    console.error("voice model load failed:", err);
-    setVoiceModel(null);
-    refreshVoiceModels();
-    pushSystemNotification(t("app.voice.modelLoadFailed"));
-  };
-
-  const disableVoiceInput = (notify: boolean) => {
-    setVoiceEnabled(false);
-    if (notify) {
-      pushSystemNotification(t("app.voice.micDisconnected"));
-    }
-  };
-
-  const updateVoiceEnabled = (on: boolean) => {
-    if (!on) {
-      setVoiceEnabled(false);
-      return;
-    }
-    // Never enable without a microphone connected
-    api
-      .voiceMicAvailable()
-      .then((avail) => {
-        setMicAvailable(avail);
-        if (!avail) return;
-        setVoiceEnabled(true);
-        api.voiceSetLanguage(voiceLang).catch(() => {});
-        api.voiceSetInputDevice(voiceInputDevice).catch(() => {});
-        if (voiceModel) {
-          api.voiceSetModel(voiceModel).catch(handleVoiceModelLoadError);
-        }
-        refreshVoiceModels();
-        refreshVoiceInputDevices();
-      })
-      .catch(() => {});
-  };
-
-  const updateVoiceLang = (lang: string) => {
-    setVoiceLang(lang);
-    api.voiceSetLanguage(lang).catch(() => {});
-  };
-
-  const updateVoiceInputDevice = (device: string) => {
-    const value = device === "" ? null : device;
-    setVoiceInputDevice(value);
-    api.voiceSetInputDevice(value).catch(() => {});
-    // Switch the live test stream to the newly picked device so the meter
-    // reflects whatever is actually selected.
-    if (micTesting) {
-      api.voiceTestMicStart(value).catch(() => {});
-    }
-  };
-
-  const stopMicTest = useCallback(() => {
-    setMicTesting(false);
-    api.voiceTestMicStop().catch(() => {});
-  }, []);
-
-  const toggleMicTest = () => {
-    if (micTesting) {
-      stopMicTest();
-      return;
-    }
-    api
-      .voiceTestMicStart(voiceInputDevice)
-      .then(() => setMicTesting(true))
-      .catch((err) => {
-        console.error("mic test failed:", err);
-        const detail = typeof err === "string" ? err : t("app.voice.micTestFailed");
-        pushSystemNotification(detail);
-      });
-  };
-
-  const selectVoiceModel = (id: string) => {
-    api.voiceSetModel(id).catch(handleVoiceModelLoadError);
-  };
-
-  const downloadVoiceModel = (id: string) => {
-    setVoiceDl({ id, percent: 0 });
-    api.voiceDownloadModel(id).catch((err) => {
-      setVoiceDl(null);
-      console.error("voice model download failed:", err);
-    });
-  };
-
-  // Latest focused terminal for the voice paste target, readable from
-  // listeners that are registered once.
-  const voiceFocusRef = useRef<string | null>(null);
-  // "Enviar para": an explicit voice target wins over the focused terminal.
-  const [voiceTargetId, setVoiceTargetId] = useState<string | null>(null);
-  voiceFocusRef.current = voiceTargetId ?? focusedId;
-  const exitedRef = useRef(exited);
-  exitedRef.current = exited;
-
-  // Writes dictated text to a terminal. An exited target is first resumed
-  // with its agent's continuation command, then receives the prompt.
-  const deliverDictation = async (id: string, text: string): Promise<void> => {
-    const meta = workspaces.flatMap((workspace) => workspace.terminals).find((candidate) => candidate.id === id);
-    if (meta && id in exitedRef.current) {
-      setVoiceFeedback(t("app.voice.resuming"));
-      await sessions.restart(id, resolveResumeCommand(profileForCommand(meta.command), meta.command));
-      // Give the agent's CLI a moment to draw its prompt before pasting.
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-    }
-    // Outside the Workbench (Fleet, Settings) the xterm is not mounted; the
-    // PTY still is, so write straight to it. Agent CLIs take bracketed paste.
-    const term = getTerminal(id);
-    if (!term && !meta) {
-      setVoiceFeedback(t("app.voice.targetUnavailable"));
-      return;
-    }
-    const profile = meta ? profileForCommand(meta.command) : null;
-    const prompt = voiceCommandsEnabledRef.current && profile
-      ? buildVoicePrompt(profile, text)
-      : text;
-    const bracketed = term ? term.modes.bracketedPasteMode : profile?.id !== "shell";
-    const data = bracketed
-      ? `\u001b[200~${prompt}\u001b[201~`
-      : prompt;
-    try {
-      await api.writeTerminal(id, data);
-      term?.focus();
-      setVoiceSubmitted(true);
-      setVoiceFeedback(t("app.voice.sent"));
-    } catch (error) {
-      console.error("voice dictation write failed:", error);
-      dispatchVoiceCapsule({ type: "fail", message: t("app.voice.sendFailed") });
-      setVoiceFeedback(t("app.voice.sendFailed"));
-    }
-  };
-  const deliverDictationRef = useRef(deliverDictation);
-  deliverDictationRef.current = deliverDictation;
-
-  // A chosen target lasts for one capture; the next one starts at the focus.
-  useEffect(() => {
-    if (voiceCapsule.state === "idle") setVoiceTargetId(null);
-  }, [voiceCapsule.state]);
-  const voiceEnabledRef = useRef(voiceEnabled);
-  voiceEnabledRef.current = voiceEnabled;
-  const voiceCommandsEnabledRef = useRef(flags.voiceCommands);
-  voiceCommandsEnabledRef.current = flags.voiceCommands;
-
-  const isVoiceModelError = (message: unknown): boolean => {
-    const text = String(message ?? "").toLocaleLowerCase("pt-BR");
-    return text.includes("model") || text.includes("modelo") || text.includes("whisper");
-  };
-
-  // Voice backend events. Parsed intents stop at the capsule preview; they
-  // are executed only by the explicit Send/Confirm action below. Everything
-  // else becomes a profile-aware prompt; transcript text is never interpreted
-  // as a shell command.
-  useEffect(() => {
-    const unRecStart = listen("voice-recording-started", () => {
-      setVoiceStatus("recording");
-      setVoiceFeedback(null);
-      setVoiceSubmitted(false);
-      setVoiceLevel(0);
-      setVoiceSamples([]);
-      dispatchVoiceCapsule({ type: "start-listening" });
-    });
-    const unRecStop = listen("voice-recording-stopped", () => {
-      setVoiceStatus("transcribing");
-      dispatchVoiceCapsule({ type: "stop-listening" });
-    });
-    const unAudioLevel = listen<number>("voice-audio-level", (e) => {
-      const level = Math.max(0, Math.min(1, Number(e.payload) || 0));
-      setVoiceLevel(level);
-      setVoiceSamples((previous) => [...previous.slice(-31), level]);
-    });
-    const unTrStart = listen("voice-transcription-started", () => {
-      setVoiceStatus("transcribing");
-      dispatchVoiceCapsule({ type: "begin-transcription" });
-    });
-    const unTrDone = listen<string>("voice-transcription-complete", (e) => {
-      setVoiceStatus("idle");
-      const text = e.payload.trim();
-      if (!text) {
-        dispatchVoiceCapsule({ type: "transcription-ready", transcript: "", intent: null });
-        setVoiceFeedback(t("app.voice.noTranscript"));
-        return;
-      }
-      if (voiceCommandsEnabledRef.current) {
-        const intent = parseVoiceCommand(text);
-        if (intent) {
-          dispatchVoiceCapsule({ type: "transcription-ready", transcript: text, intent });
-          setVoiceSubmitted(false);
-          setVoiceFeedback(isDestructiveVoiceIntent(intent)
-            ? t("app.voice.reviewDestructive")
-            : t("app.voice.reviewIntent"));
-          return;
-        }
-      }
-
-      // Ordinary dictation keeps the useful legacy behavior: it is pasted
-      // into the focused terminal as text and never evaluated by the voice
-      // layer. The transcript remains visible after the send.
-      dispatchVoiceCapsule({ type: "transcription-ready", transcript: text, intent: null });
-      setVoiceSubmitted(false);
-      const id = voiceFocusRef.current;
-      if (!id) {
-        setVoiceFeedback(t("app.voice.readyPickTarget"));
-        return;
-      }
-      void deliverDictationRef.current(id, text);
-    });
-    const unTrErr = listen<string>("voice-transcription-error", (e) => {
-      setVoiceStatus("idle");
-      dispatchVoiceCapsule({ type: "fail", message: e.payload || t("app.voice.transcriptionFailed") });
-      setVoiceFeedback(e.payload || t("app.voice.transcriptionFailed"));
-      console.error("voice transcription error:", e.payload);
-      if (isVoiceModelError(e.payload)) {
-        setSettingsSection("voice");
-        setShowSettings(true);
-      }
-    });
-    const unRecErr = listen<string>("voice-recording-error", (e) => {
-      setVoiceStatus("idle");
-      dispatchVoiceCapsule({ type: "fail", message: e.payload || t("app.voice.captureFailed") });
-      setVoiceFeedback(e.payload || t("app.voice.captureFailed"));
-      console.error("voice recording error:", e.payload);
-      if (isVoiceModelError(e.payload)) {
-        setSettingsSection("voice");
-        setShowSettings(true);
-      }
-    });
-    const unDlProg = listen<VoiceDownloadProgress>(
-      "voice-model-download-progress",
-      (e) => setVoiceDl({ id: e.payload.model_id, percent: e.payload.percent }),
-    );
-    const unDlDone = listen("voice-model-download-complete", () => {
-      setVoiceDl(null);
-      refreshVoiceModels();
-    });
-    const unModelChanged = listen<string>("voice-model-changed", (e) => {
-      setVoiceModel(e.payload);
-      refreshVoiceModels();
-    });
-    const unMicChanged = listen<boolean>("voice-mic-changed", (e) => {
-      setMicAvailable(e.payload);
-      refreshVoiceInputDevices();
-      if (!e.payload && voiceEnabledRef.current) disableVoiceInput(true);
-    });
-    return () => {
-      unRecStart.then((u) => u());
-      unRecStop.then((u) => u());
-      unAudioLevel.then((u) => u());
-      unTrStart.then((u) => u());
-      unTrDone.then((u) => u());
-      unTrErr.then((u) => u());
-      unRecErr.then((u) => u());
-      unDlProg.then((u) => u());
-      unDlDone.then((u) => u());
-      unModelChanged.then((u) => u());
-      unMicChanged.then((u) => u());
-    };
-  }, [refreshVoiceModels, refreshVoiceInputDevices, workspaces]);
-
-  // Refresh mic presence and the model list whenever the settings page opens
-  useEffect(() => {
-    if (!showSettings) return;
-    api
-      .voiceMicAvailable()
-      .then(setMicAvailable)
-      .catch(() => {});
-    // The model list is just files on disk: show it even while voice is off,
-    // so the user can pick and download a model before turning voice on.
-    refreshVoiceModels();
-    if (voiceEnabled) refreshVoiceInputDevices();
-    api
-      .listShells()
-      .then(setAvailableShells)
-      .catch(() => {});
-  }, [showSettings, voiceEnabled, refreshVoiceModels, refreshVoiceInputDevices]);
-
-  // A live test stream must not outlive the settings page or the voice tab —
-  // otherwise the mic stays open and blocks real recording from starting.
-  useEffect(() => {
-    if (showSettings && settingsSection === "voice") return;
-    if (micTesting) stopMicTest();
-  }, [showSettings, settingsSection, micTesting, stopMicTest]);
-
   // Same for shortcut capture: left on, it swallows every key in the app and
   // saves the next ⌘-combo as a shortcut.
   useEffect(() => {
@@ -1500,7 +977,7 @@ function App() {
     closeTerminal: sessions.close,
     changeFontSize,
     resetFontSize,
-    toggleVoice,
+    toggleVoice: voice.toggle,
   });
   hotkeyActions.current = {
     closeWorkspace,
@@ -1508,7 +985,7 @@ function App() {
     closeTerminal: sessions.close,
     changeFontSize,
     resetFontSize,
-    toggleVoice,
+    toggleVoice: voice.toggle,
   };
 
   useEffect(() => {
@@ -1676,70 +1153,6 @@ function App() {
     }
   };
 
-  const startVoiceCapture = () => {
-    if (!voiceEnabled) {
-      toggleVoice();
-      return;
-    }
-    api.voiceToggleRecording().catch((error) => {
-      console.error("voice start failed:", error);
-      setVoiceFeedback(t("app.voice.startFailed"));
-    });
-  };
-
-  const stopVoiceCapture = () => {
-    if (voiceStatus !== "recording") return;
-    api.voiceToggleRecording().catch((error) => {
-      console.error("voice stop failed:", error);
-      setVoiceFeedback(t("app.voice.stopFailed"));
-    });
-  };
-
-  const cancelVoiceCapture = () => {
-    if (voiceStatus === "recording") {
-      api.voiceToggleRecording().catch(() => {});
-    }
-    dispatchVoiceCapsule({ type: "cancel" });
-    setVoiceStatus("idle");
-    setVoiceSubmitted(false);
-    setVoiceFeedback(null);
-    setVoiceLevel(0);
-    setVoiceSamples([]);
-  };
-
-  const retryVoiceCapture = () => {
-    if (!voiceEnabled) {
-      toggleVoice();
-      return;
-    }
-    dispatchVoiceCapsule({ type: "retry" });
-    setVoiceSubmitted(false);
-    setVoiceFeedback(null);
-    api.voiceToggleRecording().catch((error) => {
-      console.error("voice retry failed:", error);
-      dispatchVoiceCapsule({ type: "fail", message: t("app.voice.retryFailed") });
-      setVoiceFeedback(t("app.voice.retryFailed"));
-    });
-  };
-
-  const sendVoicePayload = async (payload: VoiceSendPayload, confirmed: boolean) => {
-    if (payload.intent) {
-      const success = await executeVoiceIntent(payload.intent, confirmed);
-      if (success) setVoiceSubmitted(true);
-      return;
-    }
-
-    // A transcript without a parsed intent is ordinary dictation. It can be
-    // retried from the capsule if no terminal was focused when transcription
-    // completed, but is always sent as text (never interpreted here).
-    const id = voiceFocusRef.current;
-    if (!id) {
-      setVoiceFeedback(t("app.voice.pickTarget"));
-      return;
-    }
-    await deliverDictation(id, payload.transcript);
-  };
-
   const settingsPage = showSettings ? (
         <Suspense fallback={<AppLoadingSurface label={t("common.settings")} />}>
           <LazySettingsDialog
@@ -1761,7 +1174,7 @@ function App() {
                   agents={agents}
                   defaultAgent={defaultAgent}
                   onDefaultAgentChange={setDefaultAgent}
-                  availableShells={availableShells}
+                  availableShells={voiceSettings.availableShells}
                   defaultShell={defaultShell}
                   onDefaultShellChange={setDefaultShell}
                   fontSize={fontSize}
@@ -1774,21 +1187,21 @@ function App() {
                   flags={flags}
                   onFeatureFlagChange={setFeatureFlag}
                   voiceEnabled={voiceEnabled}
-                  onVoiceEnabledChange={updateVoiceEnabled}
+                  onVoiceEnabledChange={voiceSettings.setEnabled}
                   voiceLang={voiceLang}
-                  onVoiceLangChange={updateVoiceLang}
+                  onVoiceLangChange={voiceSettings.setLanguage}
                   voiceInputDevice={voiceInputDevice}
-                  voiceInputDevices={voiceInputDevices}
-                  onVoiceInputDeviceChange={updateVoiceInputDevice}
-                  micAvailable={micAvailable}
-                  micTesting={micTesting}
-                  onMicTestToggle={toggleMicTest}
-                  voiceModels={voiceModels}
-                  voiceModelsStatus={voiceModelsStatus}
-                  onRetryVoiceModels={refreshVoiceModels}
-                  voiceDownload={voiceDl}
-                  onVoiceModelSelect={selectVoiceModel}
-                  onVoiceModelDownload={downloadVoiceModel}
+                  voiceInputDevices={voiceSettings.inputDevices}
+                  onVoiceInputDeviceChange={voiceSettings.setInputDevice}
+                  micAvailable={voiceSettings.micAvailable}
+                  micTesting={voiceSettings.micTesting}
+                  onMicTestToggle={voiceSettings.toggleMicTest}
+                  voiceModels={voiceSettings.models}
+                  voiceModelsStatus={voiceSettings.modelsStatus}
+                  onRetryVoiceModels={voiceSettings.refreshModels}
+                  voiceDownload={voiceSettings.download}
+                  onVoiceModelSelect={voiceSettings.selectModel}
+                  onVoiceModelDownload={voiceSettings.downloadModel}
                   hotkeys={hotkeys}
                   capturing={capturing}
                   onCaptureHotkey={setCapturing}
@@ -1851,24 +1264,24 @@ function App() {
         detachedTerminalIds={detachedTerminalIds}
         fontSize={fontSize}
         voiceEnabled={voiceEnabled}
-        voiceStatus={voiceStatus}
-        voiceState={voiceCapsule.state}
-        voiceTranscript={voiceCapsule.partialTranscript}
-        voicePartialTranscript={voiceCapsule.partialTranscript}
-        voiceFinalTranscript={voiceCapsule.finalTranscript}
-        voiceIntent={voiceCapsule.intent}
-        voiceTargetAgent={targetLabelForVoiceIntent(voiceCapsule.intent)}
-        voiceTargetId={voiceTargetId ?? focusedId}
+        voiceStatus={voice.status}
+        voiceState={voice.capsule.state}
+        voiceTranscript={voice.capsule.partialTranscript}
+        voicePartialTranscript={voice.capsule.partialTranscript}
+        voiceFinalTranscript={voice.capsule.finalTranscript}
+        voiceIntent={voice.capsule.intent}
+        voiceTargetAgent={voice.targetLabel}
+        voiceTargetId={voice.targetId}
         settingsPage={settingsPage}
         onRenameAgent={(terminalId) => {
           setRenameTarget({ kind: "terminal", id: terminalId, value: usePreferencesStore.getState().agentNames[terminalId] ?? "" });
         }}
-        onVoiceTargetChange={setVoiceTargetId}
-        voiceLevel={voiceLevel}
-        voiceSamples={voiceSamples}
-        voiceError={voiceCapsule.error}
-        voiceSubmitted={voiceSubmitted}
-        voiceFeedback={voiceFeedback}
+        onVoiceTargetChange={voice.setTargetId}
+        voiceLevel={voice.level}
+        voiceSamples={voice.samples}
+        voiceError={voice.capsule.error}
+        voiceSubmitted={voice.submitted}
+        voiceFeedback={voice.feedback}
         onFocus={setFocusedId}
         onSelectWorkspace={selectWorkspace}
         onNewWorkspace={() => openWorkspaceCreator()}
@@ -1935,20 +1348,17 @@ function App() {
         onOpenSettings={() => {
           setShowSettings(true);
         }}
-        onOpenVoiceSettings={() => {
-          setSettingsSection("voice");
-          setShowSettings(true);
-        }}
-        onToggleVoice={toggleVoice}
-        onVoiceStartListening={startVoiceCapture}
-        onVoiceStopListening={stopVoiceCapture}
-        onVoiceCancel={cancelVoiceCapture}
-        onVoiceRetry={retryVoiceCapture}
+        onOpenVoiceSettings={openVoiceSettings}
+        onToggleVoice={voice.toggle}
+        onVoiceStartListening={voice.start}
+        onVoiceStopListening={voice.stop}
+        onVoiceCancel={voice.cancel}
+        onVoiceRetry={voice.retry}
         onVoiceSend={(payload) => {
-          void sendVoicePayload(payload, false);
+          void voice.send(payload, false);
         }}
         onVoiceConfirm={(payload) => {
-          void sendVoicePayload(payload, true);
+          void voice.send(payload, true);
         }}
         onExportWorkspace={() => {
           void exportWorkspaceSnapshot();

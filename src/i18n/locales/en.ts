@@ -494,6 +494,11 @@ export const en = {
     updateFailed: "The update failed to install. Try again later.",
     shortcutTaken: "That shortcut is already used by “{action}”.",
     voice: {
+      fleet: "Terra Fleet",
+      fleetOpened: "Fleet opened.",
+      groupSuspended: "Group {name} suspended.",
+      groupResumed: "Group {name} resumed.",
+      terminalStopped: "Terminal {name} stopped.",
       focusChanged: "Focus moved to {name}.",
       modelLoadFailed: "The voice model failed to load. Select it again.",
       micDisconnected: "Microphone disconnected. Voice input is off.",

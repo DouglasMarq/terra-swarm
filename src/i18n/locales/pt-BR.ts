@@ -497,6 +497,11 @@ export const ptBR: Dictionary<typeof en> = {
     updateFailed: "A atualização não foi instalada. Tente mais tarde.",
     shortcutTaken: "Esse atalho já é usado por “{action}”.",
     voice: {
+      fleet: "Frota Terra",
+      fleetOpened: "Frota aberta.",
+      groupSuspended: "Grupo {name} suspenso.",
+      groupResumed: "Grupo {name} retomado.",
+      terminalStopped: "Terminal {name} parado.",
       focusChanged: "Foco alterado para {name}.",
       modelLoadFailed: "O modelo de voz não carregou. Selecione-o de novo.",
       micDisconnected: "Microfone desconectado. A entrada de voz foi desligada.",

@@ -60,10 +60,21 @@ pub fn interpret(call: &HookCall) -> Option<(AgentState, String)> {
             AgentState::Working,
             text_field(payload, &["tool_name"]).unwrap_or_default(),
         )),
-        ("claude", "Notification") => Some((
-            AgentState::NeedsInput,
-            text_field(payload, &["message"]).unwrap_or_default(),
-        )),
+        ("claude", "Notification") => {
+            let message = text_field(payload, &["message"]).unwrap_or_default();
+            // `idle_prompt` only means the turn ended a minute ago; it is not
+            // a question, and treating it as one would keep the orchestrator
+            // from waking an agent that finished. Older versions send no type.
+            match payload.get("notification_type").and_then(Value::as_str) {
+                None
+                | Some("permission_prompt")
+                | Some("elicitation_dialog")
+                | Some("elicitation_url_dialog")
+                | Some("agent_needs_input") => Some((AgentState::NeedsInput, message)),
+                Some("idle_prompt") => Some((AgentState::Idle, String::new())),
+                Some(_) => None,
+            }
+        }
         ("claude", "Stop") | ("claude", "SessionStart") => Some((AgentState::Idle, String::new())),
         ("codex", _) => match payload.get("type").and_then(Value::as_str).unwrap_or(call.event.as_str()) {
             "agent-turn-complete" => Some((
@@ -183,6 +194,16 @@ mod tests {
             interpret(&call("claude", "Notification", json!({ "message": "Claude needs your permission to use Bash" }))),
             Some((AgentState::NeedsInput, "Claude needs your permission to use Bash".into()))
         );
+        assert_eq!(
+            interpret(&call("claude", "Notification", json!({ "notification_type": "permission_prompt", "message": "Allow Bash?" }))),
+            Some((AgentState::NeedsInput, "Allow Bash?".into()))
+        );
+        // Finishing a turn and sitting quietly is not "needs you".
+        assert_eq!(
+            interpret(&call("claude", "Notification", json!({ "notification_type": "idle_prompt", "message": "Claude is waiting for your input" }))),
+            Some((AgentState::Idle, String::new()))
+        );
+        assert_eq!(interpret(&call("claude", "Notification", json!({ "notification_type": "auth_success" }))), None);
         assert_eq!(interpret(&call("claude", "Stop", json!({}))), Some((AgentState::Idle, String::new())));
         assert_eq!(interpret(&call("claude", "PostToolUse", json!({}))), None);
         assert_eq!(interpret(&call("opencode", "Stop", json!({}))), None);

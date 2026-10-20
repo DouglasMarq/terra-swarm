@@ -144,7 +144,11 @@ pub fn rewrite_command(command: &str, agent: &str, registration: Registration<'_
 /// Claude validates the URL before expanding variables, so it is written
 /// literally (loopback and port only); the token still comes from the
 /// environment, so the file holds no secret.
-pub fn claude_settings_json(hook_url: &str) -> String {
+///
+/// `SessionStart` takes no HTTP hooks, so a fresh session would never
+/// report itself idle (and the orchestrator could not wake it). It runs
+/// `session_start_command` instead: this app's `hook claude SessionStart`.
+pub fn claude_settings_json(hook_url: &str, session_start_command: Option<&str>) -> String {
     let handler = serde_json::json!({
         "type": "http",
         "url": format!("{}/claude", hook_url),
@@ -153,16 +157,16 @@ pub fn claude_settings_json(hook_url: &str) -> String {
         "timeout": 5,
     });
     let group = serde_json::json!([{ "hooks": [handler] }]);
-    serde_json::json!({
-        "hooks": {
-            "SessionStart": group,
-            "UserPromptSubmit": group,
-            "PreToolUse": group,
-            "Notification": group,
-            "Stop": group,
-        }
-    })
-    .to_string()
+    let mut hooks = serde_json::json!({
+        "UserPromptSubmit": group,
+        "PreToolUse": group,
+        "Notification": group,
+        "Stop": group,
+    });
+    if let Some(command) = session_start_command {
+        hooks["SessionStart"] = serde_json::json!([{ "hooks": [{ "type": "command", "command": command, "timeout": 5 }] }]);
+    }
+    serde_json::json!({ "hooks": hooks }).to_string()
 }
 
 /// Whether the user's own Codex config already sets `notify`; Terra's hook
@@ -226,9 +230,9 @@ pub fn write_claude_config(dir: &Path) -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
-pub fn write_claude_settings(dir: &Path, hook_url: &str) -> std::io::Result<PathBuf> {
+pub fn write_claude_settings(dir: &Path, hook_url: &str, session_start_command: Option<&str>) -> std::io::Result<PathBuf> {
     let path = dir.join(CLAUDE_SETTINGS_FILE);
-    write_if_changed(&path, &claude_settings_json(hook_url))?;
+    write_if_changed(&path, &claude_settings_json(hook_url, session_start_command))?;
     Ok(path)
 }
 
@@ -264,10 +268,16 @@ impl McpHub {
                 None
             }
         };
+        let session_start = self
+            .hook_program()
+            .map(|program| format!("{} hook claude SessionStart", quote(&program.to_string_lossy(), quoting)));
         let (claude_mcp, claude_settings) = match (integration, self.config_dir()) {
             (Some("claude"), Some(dir)) => (
                 written("Claude MCP config", write_claude_config(dir)),
-                written("Claude hooks settings", write_claude_settings(dir, &hook_url)),
+                written(
+                    "Claude hooks settings",
+                    write_claude_settings(dir, &hook_url, session_start.as_deref()),
+                ),
             ),
             _ => (None, None),
         };
@@ -378,8 +388,16 @@ mod tests {
 
     #[test]
     fn claude_hooks_settings_hold_no_secret() {
-        let json: serde_json::Value = serde_json::from_str(&claude_settings_json("http://127.0.0.1:4100/hooks")).unwrap();
-        for event in ["SessionStart", "UserPromptSubmit", "PreToolUse", "Notification", "Stop"] {
+        let json: serde_json::Value = serde_json::from_str(&claude_settings_json(
+            "http://127.0.0.1:4100/hooks",
+            Some("'/Applications/Terra Swarm.app/Contents/MacOS/terra-swarm' hook claude SessionStart"),
+        ))
+        .unwrap();
+        // SessionStart accepts only command hooks: it runs this app's binary.
+        let start = &json["hooks"]["SessionStart"][0]["hooks"][0];
+        assert_eq!(start["type"], "command");
+        assert!(start["command"].as_str().unwrap().ends_with("hook claude SessionStart"));
+        for event in ["UserPromptSubmit", "PreToolUse", "Notification", "Stop"] {
             let handler = &json["hooks"][event][0]["hooks"][0];
             assert_eq!(handler["type"], "http", "{}", event);
             assert_eq!(handler["url"], "http://127.0.0.1:4100/hooks/claude");

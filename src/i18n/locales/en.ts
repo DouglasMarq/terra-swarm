@@ -490,6 +490,8 @@ export const en = {
     pickWorkspaceFirst: "Select a project before starting an agent.",
     agentUnavailable: "Agent not available: {name}",
     stopSomeFailed: "Couldn't stop all the selected agents.",
+    exportDialogTitle: "Export a Terra Swarm snapshot",
+    snapshotFileType: "Terra Swarm snapshot",
     importDialogTitle: "Import a Terra Swarm snapshot",
     updateFailed: "The update failed to install. Try again later.",
     shortcutTaken: "That shortcut is already used by “{action}”.",

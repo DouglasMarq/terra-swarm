@@ -796,3 +796,45 @@ fn explicit_snapshot_paths_reject_relative_and_traversal_input() {
     assert!(validate_explicit_path("/tmp/../snapshot.json").is_err());
     assert!(validate_explicit_path("\0snapshot.json").is_err());
 }
+
+fn workspace_with_worktree_branch(id: &str, branch: &str) -> Workspace {
+    let checkout = std::env::temp_dir().join("terra-worktrees").join(id);
+    let mut workspace = workspace(id);
+    workspace.terminals[0].worktree = Some(crate::worktree::WorktreeInfo {
+        path: checkout.to_string_lossy().into_owned(),
+        cwd: checkout.to_string_lossy().into_owned(),
+        branch: branch.to_string(),
+        base: "main".to_string(),
+        repo: std::env::temp_dir().to_string_lossy().into_owned(),
+    });
+    workspace
+}
+
+#[test]
+fn given_a_stored_worktree_with_an_option_like_branch_drops_it_on_load() {
+    let mut store = WorkspaceStore {
+        workspaces: vec![
+            workspace_with_worktree_branch("ws-1", "--receive-pack=touch /tmp/x"),
+            workspace_with_worktree_branch("ws-2", "terra/t-2"),
+        ],
+        groups: Vec::new(),
+        save_path: None,
+    };
+
+    assert!(store.validate());
+    assert_eq!(store.workspaces[0].terminals[0].worktree, None);
+    assert_eq!(store.workspaces[0].terminals[0].id, "ws-1-terminal");
+    assert!(store.workspaces[1].terminals[0].worktree.is_some());
+}
+
+#[test]
+fn given_a_snapshot_with_an_invalid_worktree_refuses_to_import() {
+    let raw = serde_json::json!({
+        "version": WORKSPACE_FILE_VERSION,
+        "workspaces": [workspace_with_worktree_branch("ws-1", "terra/../../main")],
+        "groups": [],
+    })
+    .to_string();
+
+    assert!(parse_import_snapshot(&raw).is_err());
+}

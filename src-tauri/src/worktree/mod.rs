@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::scrollback::is_plain_path_component;
+
 pub mod review;
 
 pub const BRANCH_PREFIX: &str = "terra/";
@@ -24,6 +26,30 @@ pub struct WorktreeInfo {
     pub base: String,
     /// The main repository's root.
     pub repo: String,
+}
+
+impl WorktreeInfo {
+    /// Refuses values that git could read as an option or that do not name
+    /// an agent branch. Stored worktrees come from `workspaces.json` and
+    /// imported snapshots, and every field ends up on a git command line.
+    pub(crate) fn check(&self) -> Result<(), String> {
+        let is_agent_branch = self
+            .branch
+            .strip_prefix(BRANCH_PREFIX)
+            .is_some_and(is_plain_path_component);
+        if !is_agent_branch {
+            return Err(format!("invalid worktree branch {:?}", self.branch));
+        }
+        if self.base.is_empty() || self.base.starts_with('-') {
+            return Err(format!("invalid worktree base {:?}", self.base));
+        }
+        for path in [&self.path, &self.cwd, &self.repo] {
+            if !Path::new(path).is_absolute() {
+                return Err(format!("invalid worktree path {:?}", path));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -92,6 +118,11 @@ pub fn create(
     workspace_id: &str,
     terminal_id: &str,
 ) -> Result<WorktreeInfo, String> {
+    for id in [workspace_id, terminal_id] {
+        if !is_plain_path_component(id) {
+            return Err(format!("invalid id for a worktree folder: {:?}", id));
+        }
+    }
     let repo = repo_root(project_cwd).ok_or("this project is not inside a git repository")?;
     // Keep the agent in the same subfolder the project points at.
     let canonical_cwd =
@@ -113,6 +144,9 @@ pub fn create(
         suffix += 1;
     }
     let path = root.join(workspace_id).join(terminal_id);
+    if !path.starts_with(root) {
+        return Err(format!("{} is outside the worktree folder", path.display()));
+    }
     if path.exists() {
         return Err(format!("{} already exists", path.display()));
     }
@@ -176,15 +210,16 @@ pub fn status(info: &WorktreeInfo) -> WorktreeStatus {
 /// Remove the checkout (discarding uncommitted changes) and, when asked,
 /// the branch with its commits.
 pub fn remove(info: &WorktreeInfo, delete_branch: bool) -> Result<(), String> {
+    info.check()?;
     let repo = Path::new(&info.repo);
     if Path::new(&info.path).exists() {
-        git(repo, &["worktree", "remove", "--force", &info.path])?;
+        git(repo, &["worktree", "remove", "--force", "--", &info.path])?;
     } else {
         // Already gone from disk: drop git's record of it.
         let _ = git(repo, &["worktree", "prune"]);
     }
     if delete_branch && branch_exists(repo, &info.branch) {
-        git(repo, &["branch", "-D", &info.branch])?;
+        git(repo, &["branch", "-D", "--", &info.branch])?;
     }
     Ok(())
 }
@@ -364,6 +399,81 @@ mod tests {
         let info = create(&repo, &root, "ws", "t-9").unwrap();
         assert_eq!(info.branch, "terra/t-9-2");
         remove(&info, true).unwrap();
+        cleanup(&repo, &root);
+    }
+
+    #[test]
+    fn given_ids_that_are_not_plain_folder_names_refuses_to_create_a_worktree() {
+        let repo = init("ids");
+        let root = repo.with_extension("worktrees");
+        let absolute = std::env::temp_dir().join("terra-wt-escape");
+        let absolute = absolute.to_string_lossy();
+        for (workspace_id, terminal_id) in [
+            ("..", "t-1"),
+            ("ws-1", ".."),
+            ("ws-1", "../../escape"),
+            (absolute.as_ref(), "t-1"),
+            ("ws-1", absolute.as_ref()),
+            ("ws-1", ""),
+            ("ws-1", "--receive-pack=x/y"),
+        ] {
+            assert!(
+                create(&repo, &root, workspace_id, terminal_id)
+                    .unwrap_err()
+                    .contains("invalid id"),
+                "{workspace_id} / {terminal_id}"
+            );
+        }
+        assert!(!root.exists());
+        assert!(git(&repo, &["branch", "--list", "terra/*"])
+            .unwrap()
+            .is_empty());
+        cleanup(&repo, &root);
+    }
+
+    fn stored_info(branch: &str, base: &str) -> WorktreeInfo {
+        let checkout = std::env::temp_dir().join("terra-wt-stored");
+        WorktreeInfo {
+            path: checkout.to_string_lossy().into_owned(),
+            cwd: checkout.to_string_lossy().into_owned(),
+            branch: branch.to_string(),
+            base: base.to_string(),
+            repo: std::env::temp_dir().to_string_lossy().into_owned(),
+        }
+    }
+
+    #[test]
+    fn given_worktree_values_git_could_read_as_options_refuses_them() {
+        assert!(stored_info("terra/t-1", "main").check().is_ok());
+        assert!(stored_info("terra/t-1-2", "feature/login").check().is_ok());
+        for (branch, base) in [
+            ("--receive-pack=x", "main"),
+            ("terra/--upload-pack=x/y", "main"),
+            ("terra/../main", "main"),
+            ("terra/", "main"),
+            ("main", "main"),
+            ("terra/t-1", "--output=x"),
+            ("terra/t-1", ""),
+        ] {
+            assert!(
+                stored_info(branch, base).check().is_err(),
+                "{branch} / {base}"
+            );
+        }
+        let mut relative = stored_info("terra/t-1", "main");
+        relative.path = "-C/elsewhere".to_string();
+        assert!(relative.check().is_err());
+    }
+
+    #[test]
+    fn given_an_option_like_branch_remove_runs_no_git() {
+        let repo = init("remove-option");
+        let root = repo.with_extension("worktrees");
+        let mut info = create(&repo, &root, "ws", "t-1").unwrap();
+        info.branch = "--receive-pack=x".to_string();
+        assert!(remove(&info, true).unwrap_err().contains("invalid"));
+        assert!(Path::new(&info.path).exists());
+        assert!(branch_exists(&repo, "terra/t-1"));
         cleanup(&repo, &root);
     }
 }

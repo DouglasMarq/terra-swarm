@@ -47,6 +47,10 @@ impl WorkspaceStore {
                     .width
                     .filter(|v| v.is_finite())
                     .map(|v| v.clamp(MIN_TERMINAL_WIDTH, MAX_TERMINAL_WIDTH));
+                if let Some(Err(error)) = t.worktree.as_ref().map(|info| info.check()) {
+                    eprintln!("dropping the worktree of terminal {}: {}", t.id, error);
+                    t.worktree = None;
+                }
             }
             let workspace_terminal_ids = w
                 .terminals

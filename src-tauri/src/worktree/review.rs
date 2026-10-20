@@ -33,7 +33,10 @@ pub struct WorktreeDiff {
 
 /// The commit the branch forked from, so the diff ignores later base work.
 fn fork_point(info: &WorktreeInfo) -> Result<String, String> {
-    git(Path::new(&info.path), &["merge-base", &info.base, "HEAD"])
+    git(
+        Path::new(&info.path),
+        &["merge-base", "--", &info.base, "HEAD"],
+    )
 }
 
 fn change_kind(code: &str) -> &'static str {
@@ -57,6 +60,7 @@ fn diff_new_file(dir: &Path, file: &str) -> String {
 }
 
 pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
+    info.check()?;
     let dir = Path::new(&info.path);
     if !dir.is_dir() {
         return Err(format!("the worktree {} is gone", info.path));
@@ -125,6 +129,7 @@ pub fn commit(info: &WorktreeInfo, message: &str) -> Result<WorktreeStatus, Stri
     if message.is_empty() {
         return Err("a commit message is required".into());
     }
+    info.check()?;
     let dir = Path::new(&info.path);
     git(dir, &["add", "-A"])?;
     if git(dir, &["diff", "--cached", "--quiet"]).is_ok() {
@@ -137,6 +142,7 @@ pub fn commit(info: &WorktreeInfo, message: &str) -> Result<WorktreeStatus, Stri
 /// Merge the branch into its base, in the main checkout. The main checkout
 /// must have the base checked out, and the worktree must be committed.
 pub fn merge(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
+    info.check()?;
     let current = status(info);
     if !current.dirty.is_empty() {
         return Err("commit or discard the agent's uncommitted changes first".into());
@@ -168,16 +174,10 @@ pub fn merge(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
         );
     }
     let message = format!("Merge {} into {}", info.branch, info.base);
+    let branch_ref = format!("refs/heads/{}", info.branch);
     if let Err(error) = git(
         repo,
-        &[
-            "merge",
-            "--no-ff",
-            "--no-edit",
-            "-m",
-            &message,
-            &info.branch,
-        ],
+        &["merge", "--no-ff", "--no-edit", "-m", &message, &branch_ref],
     ) {
         // Leave the main checkout exactly as it was.
         let _ = git(repo, &["merge", "--abort"]);
@@ -216,6 +216,7 @@ pub fn open_pull_request(info: &WorktreeInfo, title: &str, body: &str) -> Result
     if title.is_empty() {
         return Err("a title is required".into());
     }
+    info.check()?;
     let current = status(info);
     if !current.dirty.is_empty() {
         return Err("commit the agent's changes before opening a pull request".into());
@@ -224,7 +225,8 @@ pub fn open_pull_request(info: &WorktreeInfo, title: &str, body: &str) -> Result
         return Err(format!("{} has no commits to propose", info.branch));
     }
     let dir = Path::new(&info.path);
-    git(dir, &["push", "-u", "origin", &info.branch])?;
+    let branch_ref = format!("refs/heads/{}", info.branch);
+    git(dir, &["push", "-u", "origin", &branch_ref])?;
     run(
         "gh",
         dir,
@@ -329,6 +331,34 @@ mod tests {
         assert!(merge(&info).unwrap_err().contains("did not apply cleanly"));
         assert_eq!(git(&repo, &["rev-parse", "HEAD"]).unwrap(), before);
         assert_eq!(git(&repo, &["status", "--porcelain"]).unwrap(), "");
+        cleanup(&repo, &root);
+    }
+
+    #[test]
+    fn given_an_option_like_branch_or_base_refuses_to_review_it() {
+        let repo = init("option");
+        let root = repo.with_extension("worktrees");
+        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        std::fs::write(Path::new(&info.path).join("feature.txt"), "done\n").unwrap();
+        commit(&info, "Add the feature").unwrap();
+        let before = git(&repo, &["rev-parse", "HEAD"]).unwrap();
+
+        let mut tampered = info.clone();
+        tampered.branch = "--receive-pack=x".to_string();
+        assert!(merge(&tampered).unwrap_err().contains("invalid"));
+        assert!(open_pull_request(&tampered, "Title", "")
+            .unwrap_err()
+            .contains("invalid"));
+        assert!(commit(&tampered, "message")
+            .unwrap_err()
+            .contains("invalid"));
+        let mut tampered = info.clone();
+        tampered.base = "--output=x".to_string();
+        assert!(diff(&tampered).unwrap_err().contains("invalid"));
+        assert_eq!(git(&repo, &["rev-parse", "HEAD"]).unwrap(), before);
+
+        let merged = merge(&info).unwrap();
+        assert_eq!(merged.ahead, 0);
         cleanup(&repo, &root);
     }
 }

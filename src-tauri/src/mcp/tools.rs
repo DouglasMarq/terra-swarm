@@ -4,9 +4,7 @@
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use super::repo::{
-    AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus,
-};
+use super::repo::{AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus};
 use super::{AgentIdentity, McpHub};
 
 pub struct ToolDef {
@@ -68,7 +66,8 @@ pub fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "list_tasks",
             title: "List tasks",
-            description: "Lists the tasks on this project's shared board: active work first, then by \
+            description:
+                "Lists the tasks on this project's shared board: active work first, then by \
                 priority and board position. Filter by `status` and/or `assignee` (a terminal id, \
                 or \"me\" for your own tasks). `blocked_by` lists unfinished dependencies: such a \
                 task can't be claimed yet. Each entry is a summary; use `get_task` for the \
@@ -116,7 +115,8 @@ pub fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "claim_task",
             title: "Claim task",
-            description: "Assigns a `todo` task to you and moves it to `in_progress`. Claim before \
+            description:
+                "Assigns a `todo` task to you and moves it to `in_progress`. Claim before \
                 you start working on a task. Atomic: if another agent already claimed it, it is \
                 not in `todo`, or a dependency is not done yet, this fails and you should pick \
                 something else.",
@@ -345,7 +345,12 @@ struct ReportStatusArgs {
 
 /// Run one tool for `who`. Every store call uses `who.workspace_id`, so a
 /// caller can never reach another project's data.
-pub fn call(hub: &McpHub, who: &AgentIdentity, name: &str, args: Value) -> Result<Value, ToolError> {
+pub fn call(
+    hub: &McpHub,
+    who: &AgentIdentity,
+    name: &str,
+    args: Value,
+) -> Result<Value, ToolError> {
     let ws = who.workspace_id.as_str();
     let me = who.terminal_id.as_str();
     match name {
@@ -391,7 +396,9 @@ pub fn call(hub: &McpHub, who: &AgentIdentity, name: &str, args: Value) -> Resul
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
                 .map(|value| if value == "me" { me.to_string() } else { value });
-            let tasks = hub.repo()?.list_tasks(ws, status, assignee.as_deref(), None)?;
+            let tasks = hub
+                .repo()?
+                .list_tasks(ws, status, assignee.as_deref(), None)?;
             Ok(json!({
                 "tasks": tasks.iter().map(task_summary).collect::<Vec<_>>(),
             }))
@@ -437,7 +444,12 @@ pub fn call(hub: &McpHub, who: &AgentIdentity, name: &str, args: Value) -> Resul
         "update_task" => {
             let args: UpdateTaskArgs = parse(args)?;
             let status = status_arg(args.status)?;
-            if status.is_none() && args.note.as_deref().map_or(true, |note| note.trim().is_empty()) {
+            if status.is_none()
+                && args
+                    .note
+                    .as_deref()
+                    .map_or(true, |note| note.trim().is_empty())
+            {
                 return Err(ToolError::InvalidArguments(
                     "pass a status, a note, or both".into(),
                 ));
@@ -485,14 +497,16 @@ pub fn call(hub: &McpHub, who: &AgentIdentity, name: &str, args: Value) -> Resul
         }
         "read_inbox" => {
             let args: ReadInboxArgs = parse(args)?;
-            let messages = hub
-                .repo()?
-                .read_inbox(ws, me, args.unread_only.unwrap_or(true), args.limit)?;
+            let messages =
+                hub.repo()?
+                    .read_inbox(ws, me, args.unread_only.unwrap_or(true), args.limit)?;
             Ok(json!({ "messages": messages }))
         }
         "add_note" => {
             let args: AddNoteArgs = parse(args)?;
-            let note = hub.repo()?.add_note(ws, me, &args.body, args.key.as_deref())?;
+            let note = hub
+                .repo()?
+                .add_note(ws, me, &args.body, args.key.as_deref())?;
             Ok(json!(note))
         }
         "search_notes" => {
@@ -551,10 +565,22 @@ mod tests {
         let lead = identity("t-1", "ws-1", "claude");
         let helper = identity("t-2", "ws-1", "claude");
 
-        let task = call(&hub, &lead, "create_task", json!({ "title": "Add login form", "priority": "high" })).unwrap();
+        let task = call(
+            &hub,
+            &lead,
+            "create_task",
+            json!({ "title": "Add login form", "priority": "high" }),
+        )
+        .unwrap();
         assert_eq!(task["id"], "T-1");
         assert_eq!(task["created_by"], "t-1");
-        call(&hub, &lead, "send_message", json!({ "to": "t-2", "body": "T-1 is yours" })).unwrap();
+        call(
+            &hub,
+            &lead,
+            "send_message",
+            json!({ "to": "t-2", "body": "T-1 is yours" }),
+        )
+        .unwrap();
 
         let me = call(&hub, &helper, "whoami", Value::Null).unwrap();
         assert_eq!(me["terminal_id"], "t-2");
@@ -564,7 +590,10 @@ mod tests {
 
         let inbox = call(&hub, &helper, "read_inbox", json!({})).unwrap();
         assert_eq!(inbox["messages"][0]["body"], "T-1 is yours");
-        assert_eq!(call(&hub, &helper, "read_inbox", json!({})).unwrap()["messages"], json!([]));
+        assert_eq!(
+            call(&hub, &helper, "read_inbox", json!({})).unwrap()["messages"],
+            json!([])
+        );
 
         let claimed = call(&hub, &helper, "claim_task", json!({ "id": "T-1" })).unwrap();
         assert_eq!(claimed["assignee"], "t-2");
@@ -573,23 +602,48 @@ mod tests {
         let mine = call(&hub, &helper, "list_tasks", json!({ "assignee": "me" })).unwrap();
         assert_eq!(mine["tasks"].as_array().unwrap().len(), 1);
 
-        let done = call(&hub, &helper, "complete_task", json!({ "id": "T-1", "summary": "form + tests" })).unwrap();
+        let done = call(
+            &hub,
+            &helper,
+            "complete_task",
+            json!({ "id": "T-1", "summary": "form + tests" }),
+        )
+        .unwrap();
         assert_eq!(done["status"], "review");
 
         let full = call(&hub, &lead, "get_task", json!({ "id": "1" })).unwrap();
-        let kinds: Vec<&str> = full["events"].as_array().unwrap().iter().map(|e| e["kind"].as_str().unwrap()).collect();
+        let kinds: Vec<&str> = full["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["kind"].as_str().unwrap())
+            .collect();
         assert_eq!(kinds, vec!["created", "claimed", "completed"]);
 
         // A dependent task shows what it waits on and can't be claimed yet.
-        call(&hub, &lead, "create_task", json!({ "title": "Ship", "depends_on": ["T-1"] })).unwrap();
+        call(
+            &hub,
+            &lead,
+            "create_task",
+            json!({ "title": "Ship", "depends_on": ["T-1"] }),
+        )
+        .unwrap();
         let listed = call(&hub, &lead, "list_tasks", json!({ "status": "todo" })).unwrap();
         assert_eq!(listed["tasks"][0]["blocked_by"], json!(["T-1"]));
         assert!(listed["tasks"][0].get("events").is_none());
         assert!(call(&hub, &helper, "claim_task", json!({ "id": "T-2" })).is_err());
 
         let events = events.lock().unwrap();
-        assert!(events.iter().filter(|(e, _)| e == EVENT_TASKS_CHANGED).count() >= 3);
-        assert!(events.iter().any(|(e, p)| e == EVENT_MESSAGE && p["to"] == "t-2"));
+        assert!(
+            events
+                .iter()
+                .filter(|(e, _)| e == EVENT_TASKS_CHANGED)
+                .count()
+                >= 3
+        );
+        assert!(events
+            .iter()
+            .any(|(e, p)| e == EVENT_MESSAGE && p["to"] == "t-2"));
     }
 
     #[test]
@@ -602,12 +656,27 @@ mod tests {
 
         call(&hub, &one, "create_task", json!({ "title": "private" })).unwrap();
         call(&hub, &one, "add_note", json!({ "body": "secret sauce" })).unwrap();
-        assert_eq!(call(&hub, &other, "list_tasks", json!({})).unwrap()["tasks"], json!([]));
+        assert_eq!(
+            call(&hub, &other, "list_tasks", json!({})).unwrap()["tasks"],
+            json!([])
+        );
         assert!(call(&hub, &other, "get_task", json!({ "id": "T-1" })).is_err());
-        assert_eq!(call(&hub, &other, "search_notes", json!({ "query": "secret" })).unwrap()["notes"], json!([]));
+        assert_eq!(
+            call(&hub, &other, "search_notes", json!({ "query": "secret" })).unwrap()["notes"],
+            json!([])
+        );
         // Agents of other projects are not addressable either.
-        assert!(call(&hub, &other, "send_message", json!({ "to": "t-1", "body": "hi" })).is_err());
-        assert_eq!(call(&hub, &other, "whoami", json!({})).unwrap()["peers"], json!([]));
+        assert!(call(
+            &hub,
+            &other,
+            "send_message",
+            json!({ "to": "t-1", "body": "hi" })
+        )
+        .is_err());
+        assert_eq!(
+            call(&hub, &other, "whoami", json!({})).unwrap()["peers"],
+            json!([])
+        );
     }
 
     #[test]
@@ -619,11 +688,21 @@ mod tests {
             Err(ToolError::InvalidArguments(_))
         ));
         assert!(matches!(
-            call(&hub, &who, "create_task", json!({ "title": "x", "priority": "asap" })),
+            call(
+                &hub,
+                &who,
+                "create_task",
+                json!({ "title": "x", "priority": "asap" })
+            ),
             Err(ToolError::InvalidArguments(_))
         ));
         assert!(matches!(
-            call(&hub, &who, "send_message", json!({ "to": "t-1", "body": "me" })),
+            call(
+                &hub,
+                &who,
+                "send_message",
+                json!({ "to": "t-1", "body": "me" })
+            ),
             Err(ToolError::InvalidArguments(_))
         ));
         assert!(matches!(
@@ -644,17 +723,39 @@ mod tests {
         hub.issue(identity("t-2", "ws-1", "codex"));
         let one = identity("t-1", "ws-1", "claude");
         let two = identity("t-2", "ws-1", "codex");
-        call(&hub, &one, "report_status", json!({ "state": "needs_input", "summary": "which DB?" })).unwrap();
+        call(
+            &hub,
+            &one,
+            "report_status",
+            json!({ "state": "needs_input", "summary": "which DB?" }),
+        )
+        .unwrap();
         let me = call(&hub, &two, "whoami", json!({})).unwrap();
         assert_eq!(me["peers"][0]["state"], "needs_input");
         assert_eq!(me["peers"][0]["summary"], "which DB?");
-        assert!(events.lock().unwrap().iter().any(|(e, _)| e == EVENT_AGENT_STATUS));
+        assert!(events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(e, _)| e == EVENT_AGENT_STATUS));
 
-        call(&hub, &one, "add_note", json!({ "body": "use sqlite", "key": "db" })).unwrap();
+        call(
+            &hub,
+            &one,
+            "add_note",
+            json!({ "body": "use sqlite", "key": "db" }),
+        )
+        .unwrap();
         let found = call(&hub, &two, "search_notes", json!({ "query": "db" })).unwrap();
         assert_eq!(found["notes"][0]["body"], "use sqlite");
         call(&hub, &one, "add_note", json!({ "body": "second" })).unwrap();
-        let limited = call(&hub, &two, "search_notes", json!({ "query": "", "limit": 1 })).unwrap();
+        let limited = call(
+            &hub,
+            &two,
+            "search_notes",
+            json!({ "query": "", "limit": 1 }),
+        )
+        .unwrap();
         assert_eq!(limited["notes"].as_array().unwrap().len(), 1);
     }
 }

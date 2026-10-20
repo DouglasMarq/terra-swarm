@@ -48,7 +48,9 @@ impl TaskStatus {
     }
 
     pub fn parse(value: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|status| status.as_str() == value)
+        Self::ALL
+            .into_iter()
+            .find(|status| status.as_str() == value)
     }
 }
 
@@ -80,7 +82,9 @@ impl TaskPriority {
     }
 
     pub fn parse(value: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|priority| priority.as_str() == value)
+        Self::ALL
+            .into_iter()
+            .find(|priority| priority.as_str() == value)
     }
 
     pub fn rank(self) -> i64 {
@@ -295,12 +299,18 @@ fn clean_labels(raw: &[String]) -> StoreResult<Vec<String>> {
             continue;
         }
         if label.chars().count() > 40 {
-            return Err(StoreError::Invalid(format!("label `{}` is too long", label)));
+            return Err(StoreError::Invalid(format!(
+                "label `{}` is too long",
+                label
+            )));
         }
         labels.push(label.to_string());
     }
     if labels.len() > MAX_LABELS {
-        return Err(StoreError::Invalid(format!("at most {} labels", MAX_LABELS)));
+        return Err(StoreError::Invalid(format!(
+            "at most {} labels",
+            MAX_LABELS
+        )));
     }
     Ok(labels)
 }
@@ -321,7 +331,14 @@ fn fts_query(query: &str) -> Option<String> {
     (!terms.is_empty()).then(|| terms.join(" "))
 }
 
-fn add_event(tx: &Transaction<'_>, task_id: &str, actor: &str, kind: &str, body: &str, at: i64) -> StoreResult<()> {
+fn add_event(
+    tx: &Transaction<'_>,
+    task_id: &str,
+    actor: &str,
+    kind: &str,
+    body: &str,
+    at: i64,
+) -> StoreResult<()> {
     tx.execute(
         "INSERT INTO task_events(task_id, actor, kind, body, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
         params![task_id, actor, kind, body, at],
@@ -362,9 +379,11 @@ impl Repo {
     /// Whether terminals get the MCP server injected. On unless turned off.
     pub fn enabled(&self) -> bool {
         self.conn
-            .query_row("SELECT value FROM settings WHERE key = 'enabled'", [], |row| {
-                row.get::<_, String>(0)
-            })
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'enabled'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
             .optional()
             .ok()
             .flatten()
@@ -386,9 +405,18 @@ impl Repo {
     pub fn purge_workspace(&mut self, workspace_id: &str) -> StoreResult<()> {
         let tx = self.conn.transaction()?;
         // Child rows go with their parents through ON DELETE CASCADE.
-        tx.execute("DELETE FROM tasks WHERE workspace_id = ?1", params![workspace_id])?;
-        tx.execute("DELETE FROM messages WHERE workspace_id = ?1", params![workspace_id])?;
-        tx.execute("DELETE FROM notes WHERE workspace_id = ?1", params![workspace_id])?;
+        tx.execute(
+            "DELETE FROM tasks WHERE workspace_id = ?1",
+            params![workspace_id],
+        )?;
+        tx.execute(
+            "DELETE FROM messages WHERE workspace_id = ?1",
+            params![workspace_id],
+        )?;
+        tx.execute(
+            "DELETE FROM notes WHERE workspace_id = ?1",
+            params![workspace_id],
+        )?;
         tx.commit()?;
         self.statuses
             .retain(|_, status| status.workspace_id != workspace_id);
@@ -527,14 +555,26 @@ impl Repo {
         self.load_task(&id, Some(TASK_EVENTS_SHOWN))
     }
 
-    pub fn create_task(&mut self, workspace_id: &str, created_by: &str, new: NewTask) -> StoreResult<Task> {
+    pub fn create_task(
+        &mut self,
+        workspace_id: &str,
+        created_by: &str,
+        new: NewTask,
+    ) -> StoreResult<Task> {
         let title = clean_title(&new.title)?;
-        let description = clean_body(new.description.as_deref().unwrap_or(""), "description", true)?;
+        let description = clean_body(
+            new.description.as_deref().unwrap_or(""),
+            "description",
+            true,
+        )?;
         let labels = clean_labels(&new.labels)?;
         let mut depends_on: Vec<String> = Vec::new();
         for dep in &new.depends_on {
             let id = self.task_id(workspace_id, dep).map_err(|_| {
-                StoreError::Invalid(format!("dependency {} is not a task in this workspace", dep))
+                StoreError::Invalid(format!(
+                    "dependency {} is not a task in this workspace",
+                    dep
+                ))
             })?;
             if !depends_on.contains(&id) {
                 depends_on.push(id);
@@ -628,7 +668,13 @@ impl Repo {
         self.load_task(&id, Some(TASK_EVENTS_SHOWN))
     }
 
-    pub fn update_task(&mut self, workspace_id: &str, id: &str, actor: &str, patch: TaskPatch) -> StoreResult<Task> {
+    pub fn update_task(
+        &mut self,
+        workspace_id: &str,
+        id: &str,
+        actor: &str,
+        patch: TaskPatch,
+    ) -> StoreResult<Task> {
         let id = self.task_id(workspace_id, id)?;
         let before = self.load_task(&id, None)?;
         let title = patch.title.as_deref().map(clean_title).transpose()?;
@@ -647,19 +693,30 @@ impl Repo {
             .map(|value| value.filter(|id| !id.trim().is_empty()));
         if let Some(position) = patch.position {
             if !position.is_finite() {
-                return Err(StoreError::Invalid("position must be a finite number".into()));
+                return Err(StoreError::Invalid(
+                    "position must be a finite number".into(),
+                ));
             }
         }
         let at = now_millis();
         let tx = self.conn.transaction()?;
         if let Some(title) = &title {
-            tx.execute("UPDATE tasks SET title = ?1 WHERE id = ?2", params![title, id])?;
+            tx.execute(
+                "UPDATE tasks SET title = ?1 WHERE id = ?2",
+                params![title, id],
+            )?;
         }
         if let Some(description) = &description {
-            tx.execute("UPDATE tasks SET description = ?1 WHERE id = ?2", params![description, id])?;
+            tx.execute(
+                "UPDATE tasks SET description = ?1 WHERE id = ?2",
+                params![description, id],
+            )?;
         }
         if let Some(priority) = patch.priority {
-            tx.execute("UPDATE tasks SET priority = ?1 WHERE id = ?2", params![priority.rank(), id])?;
+            tx.execute(
+                "UPDATE tasks SET priority = ?1 WHERE id = ?2",
+                params![priority.rank(), id],
+            )?;
         }
         if let Some(status) = patch.status.filter(|status| *status != before.status) {
             // A task that changes column goes to the end of the new one
@@ -672,27 +729,56 @@ impl Repo {
                 "UPDATE tasks SET status = ?1, position = ?2 WHERE id = ?3",
                 params![status.as_str(), position, id],
             )?;
-            add_event(&tx, &id, actor, "status", &format!("{} → {}", before.status.as_str(), status.as_str()), at)?;
+            add_event(
+                &tx,
+                &id,
+                actor,
+                "status",
+                &format!("{} → {}", before.status.as_str(), status.as_str()),
+                at,
+            )?;
         } else if let Some(position) = patch.position {
-            tx.execute("UPDATE tasks SET position = ?1 WHERE id = ?2", params![position, id])?;
+            tx.execute(
+                "UPDATE tasks SET position = ?1 WHERE id = ?2",
+                params![position, id],
+            )?;
         }
         if let Some(assignee) = &assignee {
             if assignee.as_deref() != before.assignee.as_deref() {
-                tx.execute("UPDATE tasks SET assignee = ?1 WHERE id = ?2", params![assignee, id])?;
-                add_event(&tx, &id, actor, "assigned", assignee.as_deref().unwrap_or(""), at)?;
+                tx.execute(
+                    "UPDATE tasks SET assignee = ?1 WHERE id = ?2",
+                    params![assignee, id],
+                )?;
+                add_event(
+                    &tx,
+                    &id,
+                    actor,
+                    "assigned",
+                    assignee.as_deref().unwrap_or(""),
+                    at,
+                )?;
             }
         }
         if let Some(note) = &note {
             add_event(&tx, &id, actor, "note", note, at)?;
         }
-        tx.execute("UPDATE tasks SET updated_at = ?1 WHERE id = ?2", params![at, id])?;
+        tx.execute(
+            "UPDATE tasks SET updated_at = ?1 WHERE id = ?2",
+            params![at, id],
+        )?;
         tx.commit()?;
         self.load_task(&id, Some(TASK_EVENTS_SHOWN))
     }
 
     /// Hand work in for review. Only the assignee (or anyone, while the task
     /// is unassigned) can complete it.
-    pub fn complete_task(&mut self, workspace_id: &str, id: &str, who: &str, summary: &str) -> StoreResult<Task> {
+    pub fn complete_task(
+        &mut self,
+        workspace_id: &str,
+        id: &str,
+        who: &str,
+        summary: &str,
+    ) -> StoreResult<Task> {
         let summary = clean_body(summary, "summary", false)?;
         let id = self.task_id(workspace_id, id)?;
         let task = self.load_task(&id, None)?;
@@ -725,7 +811,8 @@ impl Repo {
 
     pub fn delete_task(&mut self, workspace_id: &str, id: &str) -> StoreResult<()> {
         let id = self.task_id(workspace_id, id)?;
-        self.conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
+        self.conn
+            .execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
         Ok(())
     }
 
@@ -747,15 +834,21 @@ impl Repo {
                 })
             },
         )?;
-        let mut stmt = self
-            .conn
-            .prepare_cached("SELECT reader FROM message_reads WHERE message_id = ?1 ORDER BY rowid")?;
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT reader FROM message_reads WHERE message_id = ?1 ORDER BY rowid",
+        )?;
         let readers = stmt.query_map(params![id], |row| row.get::<_, String>(0))?;
         message.read_by = readers.collect::<Result<_, _>>()?;
         Ok(message)
     }
 
-    pub fn send_message(&mut self, workspace_id: &str, from: &str, to: &str, body: &str) -> StoreResult<Message> {
+    pub fn send_message(
+        &mut self,
+        workspace_id: &str,
+        from: &str,
+        to: &str,
+        body: &str,
+    ) -> StoreResult<Message> {
         let body = clean_body(body, "message", false)?;
         let to = to.trim();
         if to.is_empty() {
@@ -772,7 +865,13 @@ impl Repo {
 
     /// Messages sent to `reader` or to `all`, oldest first, at most `limit`.
     /// Every returned message is recorded as read by `reader`.
-    pub fn read_inbox(&mut self, workspace_id: &str, reader: &str, unread_only: bool, limit: Option<usize>) -> StoreResult<Vec<Message>> {
+    pub fn read_inbox(
+        &mut self,
+        workspace_id: &str,
+        reader: &str,
+        unread_only: bool,
+        limit: Option<usize>,
+    ) -> StoreResult<Vec<Message>> {
         let limit = clamp_limit(limit, DEFAULT_INBOX_LIMIT);
         let ids: Vec<i64> = {
             let mut stmt = self.conn.prepare_cached(
@@ -833,11 +932,19 @@ impl Repo {
 
     /// Save a note. A note with the same `key` is updated in place, so keys
     /// work as named facts ("test-command", "api-conventions").
-    pub fn add_note(&mut self, workspace_id: &str, author: &str, body: &str, key: Option<&str>) -> StoreResult<Note> {
+    pub fn add_note(
+        &mut self,
+        workspace_id: &str,
+        author: &str,
+        body: &str,
+        key: Option<&str>,
+    ) -> StoreResult<Note> {
         let body = clean_body(body, "note", false)?;
         let key = key.map(str::trim).filter(|key| !key.is_empty());
         if key.is_some_and(|key| key.chars().count() > 80) {
-            return Err(StoreError::Invalid("note key is longer than 80 characters".into()));
+            return Err(StoreError::Invalid(
+                "note key is longer than 80 characters".into(),
+            ));
         }
         let at = now_millis();
         let id: i64 = self.conn.query_row(
@@ -854,7 +961,12 @@ impl Repo {
 
     /// Full-text search over key and body, best matches first. An empty
     /// query lists the most recently updated notes.
-    pub fn search_notes(&self, workspace_id: &str, query: &str, limit: Option<usize>) -> StoreResult<Vec<Note>> {
+    pub fn search_notes(
+        &self,
+        workspace_id: &str,
+        query: &str,
+        limit: Option<usize>,
+    ) -> StoreResult<Vec<Note>> {
         let limit = clamp_limit(limit, DEFAULT_SEARCH_LIMIT) as i64;
         let ids: Vec<i64> = match fts_query(query) {
             Some(fts) => {
@@ -880,10 +992,18 @@ impl Repo {
 
     // ----- agent status (memory only) -------------------------------------
 
-    pub fn report_status(&mut self, workspace_id: &str, terminal_id: &str, state: AgentState, summary: &str) -> StoreResult<AgentStatus> {
+    pub fn report_status(
+        &mut self,
+        workspace_id: &str,
+        terminal_id: &str,
+        state: AgentState,
+        summary: &str,
+    ) -> StoreResult<AgentStatus> {
         let summary = summary.trim();
         if summary.chars().count() > 500 {
-            return Err(StoreError::Invalid("summary is longer than 500 characters".into()));
+            return Err(StoreError::Invalid(
+                "summary is longer than 500 characters".into(),
+            ));
         }
         let status = AgentStatus {
             terminal_id: terminal_id.to_string(),
@@ -892,7 +1012,8 @@ impl Repo {
             summary: summary.to_string(),
             updated_at: now_millis(),
         };
-        self.statuses.insert(terminal_id.to_string(), status.clone());
+        self.statuses
+            .insert(terminal_id.to_string(), status.clone());
         Ok(status)
     }
 
@@ -918,7 +1039,9 @@ impl Repo {
     #[cfg(test)]
     fn count(&self, table: &str) -> i64 {
         self.conn
-            .query_row(&format!("SELECT COUNT(*) FROM {}", table), [], |row| row.get(0))
+            .query_row(&format!("SELECT COUNT(*) FROM {}", table), [], |row| {
+                row.get(0)
+            })
             .unwrap()
     }
 }
@@ -990,7 +1113,13 @@ mod tests {
             )
             .unwrap();
         assert_eq!(updated.status, TaskStatus::Blocked);
-        let kinds: Vec<&str> = updated.events.as_ref().unwrap().iter().map(|e| e.kind.as_str()).collect();
+        let kinds: Vec<&str> = updated
+            .events
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|e| e.kind.as_str())
+            .collect();
         assert_eq!(kinds, vec!["created", "status", "note"]);
         assert_eq!(updated.events.as_ref().unwrap()[1].body, "todo → blocked");
 
@@ -998,7 +1127,10 @@ mod tests {
         assert!(repo.get_task("ws-1", "T-2").unwrap().blocked_by.is_empty());
 
         repo.delete_task("ws-1", "T-1").unwrap();
-        assert!(matches!(repo.get_task("ws-1", "T-1"), Err(StoreError::NotFound(_))));
+        assert!(matches!(
+            repo.get_task("ws-1", "T-1"),
+            Err(StoreError::NotFound(_))
+        ));
         // Deleting a task cascades to its dependency links and events.
         assert!(repo.get_task("ws-1", "T-2").unwrap().depends_on.is_empty());
         assert_eq!(repo.count("task_deps"), 0);
@@ -1008,21 +1140,62 @@ mod tests {
     fn list_orders_by_status_priority_and_position() {
         let mut repo = Repo::in_memory();
         repo.create_task("ws-1", "u", task("medium first")).unwrap(); // T-1
-        repo.create_task("ws-1", "u", NewTask { title: "urgent".into(), priority: Some(TaskPriority::Urgent), ..NewTask::default() }).unwrap(); // T-2
-        repo.create_task("ws-1", "u", task("medium second")).unwrap(); // T-3
+        repo.create_task(
+            "ws-1",
+            "u",
+            NewTask {
+                title: "urgent".into(),
+                priority: Some(TaskPriority::Urgent),
+                ..NewTask::default()
+            },
+        )
+        .unwrap(); // T-2
+        repo.create_task("ws-1", "u", task("medium second"))
+            .unwrap(); // T-3
         repo.create_task("ws-1", "u", task("in progress")).unwrap(); // T-4
         repo.create_task("ws-1", "u", task("finished")).unwrap(); // T-5
         set_status(&mut repo, "T-4", TaskStatus::InProgress);
         set_status(&mut repo, "T-5", TaskStatus::Done);
         // Same priority: T-3 is moved ahead of T-1 inside the column.
-        repo.update_task("ws-1", "T-3", "u", TaskPatch { position: Some(0.5), ..TaskPatch::default() }).unwrap();
+        repo.update_task(
+            "ws-1",
+            "T-3",
+            "u",
+            TaskPatch {
+                position: Some(0.5),
+                ..TaskPatch::default()
+            },
+        )
+        .unwrap();
 
-        let ids: Vec<String> = repo.list_tasks("ws-1", None, None, None).unwrap().into_iter().map(|t| t.id).collect();
+        let ids: Vec<String> = repo
+            .list_tasks("ws-1", None, None, None)
+            .unwrap()
+            .into_iter()
+            .map(|t| t.id)
+            .collect();
         assert_eq!(ids, vec!["T-4", "T-2", "T-3", "T-1", "T-5"]);
-        assert!(repo.list_tasks("ws-1", None, None, None).unwrap()[0].events.is_none());
-        assert_eq!(repo.list_tasks("ws-1", Some(TaskStatus::Todo), None, None).unwrap().len(), 3);
+        assert!(repo.list_tasks("ws-1", None, None, None).unwrap()[0]
+            .events
+            .is_none());
+        assert_eq!(
+            repo.list_tasks("ws-1", Some(TaskStatus::Todo), None, None)
+                .unwrap()
+                .len(),
+            3
+        );
         // Moving to a new column without a position lands at its end.
-        let moved = repo.update_task("ws-1", "T-2", "u", TaskPatch { status: Some(TaskStatus::Done), ..TaskPatch::default() }).unwrap();
+        let moved = repo
+            .update_task(
+                "ws-1",
+                "T-2",
+                "u",
+                TaskPatch {
+                    status: Some(TaskStatus::Done),
+                    ..TaskPatch::default()
+                },
+            )
+            .unwrap();
         assert_eq!(moved.position, 2.0);
     }
 
@@ -1030,24 +1203,55 @@ mod tests {
     fn tasks_are_invisible_from_other_workspaces() {
         let mut repo = Repo::in_memory();
         repo.create_task("ws-1", "t-1", task("secret")).unwrap();
-        assert!(repo.list_tasks("ws-2", None, None, None).unwrap().is_empty());
-        assert!(matches!(repo.get_task("ws-2", "T-1"), Err(StoreError::NotFound(_))));
+        assert!(repo
+            .list_tasks("ws-2", None, None, None)
+            .unwrap()
+            .is_empty());
+        assert!(matches!(
+            repo.get_task("ws-2", "T-1"),
+            Err(StoreError::NotFound(_))
+        ));
         assert!(repo.claim_task("ws-2", "T-1", "t-9").is_err());
         assert!(repo.delete_task("ws-2", "T-1").is_err());
         assert!(repo
-            .create_task("ws-2", "t-9", NewTask { title: "x".into(), depends_on: vec!["T-1".into()], ..NewTask::default() })
+            .create_task(
+                "ws-2",
+                "t-9",
+                NewTask {
+                    title: "x".into(),
+                    depends_on: vec!["T-1".into()],
+                    ..NewTask::default()
+                }
+            )
             .is_err());
     }
 
     #[test]
     fn rejects_bad_input() {
         let mut repo = Repo::in_memory();
-        assert!(matches!(repo.create_task("ws-1", "t-1", task("   ")), Err(StoreError::Invalid(_))));
-        assert!(repo.create_task("ws-1", "t-1", task(&"x".repeat(MAX_TITLE_CHARS + 1))).is_err());
-        assert!(repo.send_message("ws-1", "t-1", "all", &"x".repeat(MAX_BODY_BYTES + 1)).is_err());
+        assert!(matches!(
+            repo.create_task("ws-1", "t-1", task("   ")),
+            Err(StoreError::Invalid(_))
+        ));
+        assert!(repo
+            .create_task("ws-1", "t-1", task(&"x".repeat(MAX_TITLE_CHARS + 1)))
+            .is_err());
+        assert!(repo
+            .send_message("ws-1", "t-1", "all", &"x".repeat(MAX_BODY_BYTES + 1))
+            .is_err());
         assert!(repo.add_note("ws-1", "t-1", "", None).is_err());
         repo.create_task("ws-1", "t-1", task("x")).unwrap();
-        assert!(repo.update_task("ws-1", "T-1", "u", TaskPatch { position: Some(f64::NAN), ..TaskPatch::default() }).is_err());
+        assert!(repo
+            .update_task(
+                "ws-1",
+                "T-1",
+                "u",
+                TaskPatch {
+                    position: Some(f64::NAN),
+                    ..TaskPatch::default()
+                }
+            )
+            .is_err());
     }
 
     #[test]
@@ -1055,7 +1259,15 @@ mod tests {
         let mut repo = Repo::in_memory();
         let first = repo.create_task("ws-1", "t-1", task("first")).unwrap();
         let second = repo
-            .create_task("ws-1", "t-1", NewTask { title: "second".into(), depends_on: vec![first.id.clone()], ..NewTask::default() })
+            .create_task(
+                "ws-1",
+                "t-1",
+                NewTask {
+                    title: "second".into(),
+                    depends_on: vec![first.id.clone()],
+                    ..NewTask::default()
+                },
+            )
             .unwrap();
 
         let err = repo.claim_task("ws-1", &second.id, "t-2").unwrap_err();
@@ -1064,7 +1276,10 @@ mod tests {
         let claimed = repo.claim_task("ws-1", &first.id, "t-2").unwrap();
         assert_eq!(claimed.assignee.as_deref(), Some("t-2"));
         assert_eq!(claimed.status, TaskStatus::InProgress);
-        assert_eq!(claimed.events.as_ref().unwrap().last().unwrap().kind, "claimed");
+        assert_eq!(
+            claimed.events.as_ref().unwrap().last().unwrap().kind,
+            "claimed"
+        );
         assert_eq!(
             repo.claim_task("ws-1", &first.id, "t-3").unwrap_err(),
             StoreError::Conflict("task T-1 is already claimed by t-2".into())
@@ -1076,19 +1291,36 @@ mod tests {
 
         let third = repo.create_task("ws-1", "t-1", task("third")).unwrap();
         set_status(&mut repo, &third.id, TaskStatus::Blocked);
-        assert!(repo.claim_task("ws-1", &third.id, "t-2").unwrap_err().to_string().contains("only `todo`"));
+        assert!(repo
+            .claim_task("ws-1", &third.id, "t-2")
+            .unwrap_err()
+            .to_string()
+            .contains("only `todo`"));
 
-        assert!(matches!(repo.complete_task("ws-1", &first.id, "t-3", "done"), Err(StoreError::Conflict(_))));
-        let reviewed = repo.complete_task("ws-1", &first.id, "t-2", "parser works").unwrap();
+        assert!(matches!(
+            repo.complete_task("ws-1", &first.id, "t-3", "done"),
+            Err(StoreError::Conflict(_))
+        ));
+        let reviewed = repo
+            .complete_task("ws-1", &first.id, "t-2", "parser works")
+            .unwrap();
         assert_eq!(reviewed.status, TaskStatus::Review);
         let last = reviewed.events.as_ref().unwrap().last().unwrap().clone();
-        assert_eq!((last.kind.as_str(), last.body.as_str()), ("completed", "parser works"));
+        assert_eq!(
+            (last.kind.as_str(), last.body.as_str()),
+            ("completed", "parser works")
+        );
     }
 
     #[test]
     fn concurrent_claims_have_exactly_one_winner() {
         let repo = Arc::new(Mutex::new(Repo::in_memory()));
-        let id = repo.lock().unwrap().create_task("ws-1", "t-1", task("race")).unwrap().id;
+        let id = repo
+            .lock()
+            .unwrap()
+            .create_task("ws-1", "t-1", task("race"))
+            .unwrap()
+            .id;
         let agents = 8;
         let barrier = Arc::new(Barrier::new(agents));
         let handles: Vec<_> = (0..agents)
@@ -1098,11 +1330,18 @@ mod tests {
                 let id = id.clone();
                 std::thread::spawn(move || {
                     barrier.wait();
-                    repo.lock().unwrap().claim_task("ws-1", &id, &format!("t-{}", n + 10)).is_ok()
+                    repo.lock()
+                        .unwrap()
+                        .claim_task("ws-1", &id, &format!("t-{}", n + 10))
+                        .is_ok()
                 })
             })
             .collect();
-        let winners = handles.into_iter().map(|h| h.join().unwrap()).filter(|won| *won).count();
+        let winners = handles
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .filter(|won| *won)
+            .count();
         assert_eq!(winners, 1);
     }
 
@@ -1130,19 +1369,30 @@ mod tests {
         repo.send_message("ws-1", "t-1", "t-2", "hi two").unwrap();
         repo.send_message("ws-1", "t-1", "all", "hi all").unwrap();
         repo.send_message("ws-1", "t-2", "all", "mine").unwrap();
-        repo.send_message("ws-1", "t-1", "t-3", "not for two").unwrap();
-        repo.send_message("ws-2", "t-8", "all", "other project").unwrap();
+        repo.send_message("ws-1", "t-1", "t-3", "not for two")
+            .unwrap();
+        repo.send_message("ws-2", "t-8", "all", "other project")
+            .unwrap();
 
         assert_eq!(repo.unread_count("ws-1", "t-2").unwrap(), 2);
         let inbox = repo.read_inbox("ws-1", "t-2", true, None).unwrap();
         let bodies: Vec<&str> = inbox.iter().map(|m| m.body.as_str()).collect();
         assert_eq!(bodies, vec!["hi two", "hi all"]);
         assert!(inbox.iter().all(|m| m.read_by.contains(&"t-2".to_string())));
-        assert!(repo.read_inbox("ws-1", "t-2", true, None).unwrap().is_empty());
-        assert_eq!(repo.read_inbox("ws-1", "t-2", false, None).unwrap().len(), 2);
+        assert!(repo
+            .read_inbox("ws-1", "t-2", true, None)
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            repo.read_inbox("ws-1", "t-2", false, None).unwrap().len(),
+            2
+        );
         // t-3 gets both broadcasts and its own direct message; `limit` reads one.
         assert_eq!(repo.unread_count("ws-1", "t-3").unwrap(), 3);
-        assert_eq!(repo.read_inbox("ws-1", "t-3", true, Some(1)).unwrap()[0].body, "hi all");
+        assert_eq!(
+            repo.read_inbox("ws-1", "t-3", true, Some(1)).unwrap()[0].body,
+            "hi all"
+        );
         assert_eq!(repo.unread_count("ws-1", "t-3").unwrap(), 2);
     }
 
@@ -1150,14 +1400,32 @@ mod tests {
     fn history_is_kept_in_full() {
         let mut repo = Repo::in_memory();
         for n in 0..700 {
-            repo.send_message("ws-1", "t-1", "all", &format!("m{}", n)).unwrap();
+            repo.send_message("ws-1", "t-1", "all", &format!("m{}", n))
+                .unwrap();
         }
         assert_eq!(repo.count("messages"), 700);
-        assert_eq!(repo.read_inbox("ws-1", "t-2", true, Some(MAX_LIMIT + 50)).unwrap().len(), MAX_LIMIT);
-        assert_eq!(repo.read_inbox("ws-1", "t-2", true, None).unwrap()[0].body, format!("m{}", MAX_LIMIT));
+        assert_eq!(
+            repo.read_inbox("ws-1", "t-2", true, Some(MAX_LIMIT + 50))
+                .unwrap()
+                .len(),
+            MAX_LIMIT
+        );
+        assert_eq!(
+            repo.read_inbox("ws-1", "t-2", true, None).unwrap()[0].body,
+            format!("m{}", MAX_LIMIT)
+        );
         let id = repo.create_task("ws-1", "t-1", task("log")).unwrap().id;
         for n in 0..150 {
-            repo.update_task("ws-1", &id, "t-1", TaskPatch { note: Some(format!("step {}", n)), ..TaskPatch::default() }).unwrap();
+            repo.update_task(
+                "ws-1",
+                &id,
+                "t-1",
+                TaskPatch {
+                    note: Some(format!("step {}", n)),
+                    ..TaskPatch::default()
+                },
+            )
+            .unwrap();
         }
         assert_eq!(repo.count("task_events"), 151);
         let shown = repo.get_task("ws-1", &id).unwrap().events.unwrap();
@@ -1168,26 +1436,52 @@ mod tests {
     #[test]
     fn keyed_notes_upsert_and_full_text_search() {
         let mut repo = Repo::in_memory();
-        let first = repo.add_note("ws-1", "t-1", "npm test", Some("test-command")).unwrap();
-        let second = repo.add_note("ws-1", "t-2", "npm run test:unit", Some("test-command")).unwrap();
+        let first = repo
+            .add_note("ws-1", "t-1", "npm test", Some("test-command"))
+            .unwrap();
+        let second = repo
+            .add_note("ws-1", "t-2", "npm run test:unit", Some("test-command"))
+            .unwrap();
         assert_eq!(first.id, second.id);
         assert_eq!(second.author, "t-2");
         assert_eq!(second.created_at, first.created_at);
-        repo.add_note("ws-1", "t-1", "A API devolve JSON em snake_case", None).unwrap();
-        repo.add_note("ws-1", "t-1", "Configuração do banco: migrações em db.rs", None).unwrap();
+        repo.add_note("ws-1", "t-1", "A API devolve JSON em snake_case", None)
+            .unwrap();
+        repo.add_note(
+            "ws-1",
+            "t-1",
+            "Configuração do banco: migrações em db.rs",
+            None,
+        )
+        .unwrap();
         repo.add_note("ws-2", "t-9", "npm elsewhere", None).unwrap();
 
         let hits = repo.search_notes("ws-1", "NPM unit", None).unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].body, "npm run test:unit");
         // Prefix and accent-insensitive matching.
-        assert_eq!(repo.search_notes("ws-1", "configuracao migr", None).unwrap().len(), 1);
+        assert_eq!(
+            repo.search_notes("ws-1", "configuracao migr", None)
+                .unwrap()
+                .len(),
+            1
+        );
         // The key is searchable too, and FTS syntax is taken literally.
-        assert_eq!(repo.search_notes("ws-1", "test-command", None).unwrap().len(), 1);
-        assert!(repo.search_notes("ws-1", "\"unbalanced AND (", None).is_ok());
+        assert_eq!(
+            repo.search_notes("ws-1", "test-command", None)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(repo
+            .search_notes("ws-1", "\"unbalanced AND (", None)
+            .is_ok());
         assert_eq!(repo.search_notes("ws-1", "", None).unwrap().len(), 3);
         assert_eq!(repo.search_notes("ws-1", "", Some(1)).unwrap().len(), 1);
-        assert!(repo.search_notes("ws-1", "elsewhere", None).unwrap().is_empty());
+        assert!(repo
+            .search_notes("ws-1", "elsewhere", None)
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
@@ -1195,15 +1489,28 @@ mod tests {
         let mut repo = Repo::in_memory();
         for ws in ["ws-1", "ws-2"] {
             let a = repo.create_task(ws, "t-1", task("a")).unwrap();
-            repo.create_task(ws, "t-1", NewTask { title: "b".into(), depends_on: vec![a.id], ..NewTask::default() }).unwrap();
+            repo.create_task(
+                ws,
+                "t-1",
+                NewTask {
+                    title: "b".into(),
+                    depends_on: vec![a.id],
+                    ..NewTask::default()
+                },
+            )
+            .unwrap();
             let message = repo.send_message(ws, "t-1", "all", "hi").unwrap();
             repo.read_inbox(ws, "t-2", true, None).unwrap();
             assert!(message.id > 0);
             repo.add_note(ws, "t-1", "note", Some("k")).unwrap();
-            repo.report_status(ws, &format!("{}-agent", ws), AgentState::Working, "").unwrap();
+            repo.report_status(ws, &format!("{}-agent", ws), AgentState::Working, "")
+                .unwrap();
         }
         repo.purge_workspace("ws-1").unwrap();
-        assert!(repo.list_tasks("ws-1", None, None, None).unwrap().is_empty());
+        assert!(repo
+            .list_tasks("ws-1", None, None, None)
+            .unwrap()
+            .is_empty());
         assert!(repo.search_notes("ws-1", "", None).unwrap().is_empty());
         assert!(repo.statuses("ws-1").is_empty());
         assert_eq!(repo.list_tasks("ws-2", None, None, None).unwrap().len(), 2);
@@ -1220,10 +1527,14 @@ mod tests {
     #[test]
     fn statuses_are_scoped_and_validated() {
         let mut repo = Repo::in_memory();
-        repo.report_status("ws-1", "t-1", AgentState::Working, "parsing").unwrap();
-        repo.report_status("ws-2", "t-5", AgentState::Idle, "").unwrap();
+        repo.report_status("ws-1", "t-1", AgentState::Working, "parsing")
+            .unwrap();
+        repo.report_status("ws-2", "t-5", AgentState::Idle, "")
+            .unwrap();
         assert_eq!(repo.statuses("ws-1").len(), 1);
-        assert!(repo.report_status("ws-1", "t-1", AgentState::Idle, &"x".repeat(501)).is_err());
+        assert!(repo
+            .report_status("ws-1", "t-1", AgentState::Idle, &"x".repeat(501))
+            .is_err());
         repo.forget_status("t-1");
         assert!(repo.statuses("ws-1").is_empty());
     }
@@ -1246,7 +1557,10 @@ mod tests {
         assert_eq!(repo.read_inbox("ws-1", "t-2", true, None).unwrap().len(), 1);
         assert_eq!(repo.search_notes("ws-1", "kept", None).unwrap().len(), 1);
         // Ids keep counting after a restart.
-        assert_eq!(repo.create_task("ws-1", "t-1", task("next")).unwrap().id, "T-2");
+        assert_eq!(
+            repo.create_task("ws-1", "t-1", task("next")).unwrap().id,
+            "T-2"
+        );
         drop(repo);
         let _ = std::fs::remove_dir_all(dir);
     }

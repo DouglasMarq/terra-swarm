@@ -139,13 +139,15 @@ mod tests {
 
     #[test]
     fn patch_distinguishes_missing_and_null_assignee() {
-        let missing: TaskPatchInput = serde_json::from_str(r#"{"status":"done","position":2.5}"#).unwrap();
+        let missing: TaskPatchInput =
+            serde_json::from_str(r#"{"status":"done","position":2.5}"#).unwrap();
         assert_eq!(missing.assignee, None);
         assert_eq!(missing.status, Some(TaskStatus::Done));
         assert_eq!(missing.position, Some(2.5));
         let cleared: TaskPatchInput = serde_json::from_str(r#"{"assignee":null}"#).unwrap();
         assert_eq!(cleared.assignee, Some(None));
-        let set: TaskPatchInput = serde_json::from_str(r#"{"assignee":"t-2","priority":"urgent"}"#).unwrap();
+        let set: TaskPatchInput =
+            serde_json::from_str(r#"{"assignee":"t-2","priority":"urgent"}"#).unwrap();
         assert_eq!(set.assignee, Some(Some("t-2".into())));
         assert_eq!(set.priority, Some(TaskPriority::Urgent));
     }

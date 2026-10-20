@@ -11,10 +11,10 @@ mod output;
 mod output_scan;
 pub mod shell;
 
+use agents::command_available;
+use shell::resolve_shell;
 #[cfg(windows)]
 use shell::{shell_flavor, ShellFlavor};
-use shell::resolve_shell;
-use agents::command_available;
 
 use crate::mcp::launch::Quoting;
 use crate::mcp::{McpHub, McpLease};

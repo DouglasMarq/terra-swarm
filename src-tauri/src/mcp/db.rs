@@ -182,9 +182,13 @@ mod tests {
         let path = temp_path("fresh");
         {
             let conn = open(&path).unwrap();
-            let version: u32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+            let version: u32 = conn
+                .query_row("PRAGMA user_version", [], |r| r.get(0))
+                .unwrap();
             assert_eq!(version, schema_version());
-            let mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
+            let mode: String = conn
+                .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+                .unwrap();
             assert_eq!(mode, "wal");
             conn.execute(
                 "INSERT INTO settings(key, value) VALUES ('probe', 'kept')",
@@ -196,7 +200,9 @@ mod tests {
         let mut conn = open(&path).unwrap();
         assert_eq!(migrate(&mut conn).unwrap(), schema_version());
         let kept: String = conn
-            .query_row("SELECT value FROM settings WHERE key = 'probe'", [], |r| r.get(0))
+            .query_row("SELECT value FROM settings WHERE key = 'probe'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(kept, "kept");
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
@@ -207,7 +213,8 @@ mod tests {
         let path = temp_path("newer");
         {
             let conn = open(&path).unwrap();
-            conn.pragma_update(None, "user_version", schema_version() + 1).unwrap();
+            conn.pragma_update(None, "user_version", schema_version() + 1)
+                .unwrap();
         }
         let error = open(&path).unwrap_err();
         assert!(error.contains("newer"), "{}", error);

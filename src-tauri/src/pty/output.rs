@@ -8,7 +8,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Runtime};
 
-use super::output_scan::{detect_context_used, extract_notifications, scan_titles, strip_ansi, take_decodable};
+use super::output_scan::{
+    detect_context_used, extract_notifications, scan_titles, strip_ansi, take_decodable,
+};
 use super::Backlog;
 use crate::scrollback::ScrollbackStore;
 
@@ -80,7 +82,7 @@ pub(super) fn spawn_output_pump<R: Runtime>(
     let notif_id = id.to_string();
     let notif_ws = workspace_id.to_string();
     let app = app.clone();
-                    std::thread::spawn(move || {
+    std::thread::spawn(move || {
         let mut pending: Vec<u8> = Vec::new();
         let mut raw_tail: Vec<u8> = Vec::new();
         let mut title_buf: Vec<u8> = Vec::new();

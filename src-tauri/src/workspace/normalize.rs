@@ -47,6 +47,10 @@ impl WorkspaceStore {
                     .width
                     .filter(|v| v.is_finite())
                     .map(|v| v.clamp(MIN_TERMINAL_WIDTH, MAX_TERMINAL_WIDTH));
+                if let Some(Err(error)) = t.worktree.as_ref().map(|info| info.check()) {
+                    eprintln!("dropping the worktree of terminal {}: {}", t.id, error);
+                    t.worktree = None;
+                }
             }
             let workspace_terminal_ids = w
                 .terminals
@@ -144,7 +148,9 @@ impl WorkspaceStore {
                     suffix += 1;
                 }
                 container.id = candidate;
-                container.size = container.size.clamp(0.0, 100.0);
+                container.size = container
+                    .size
+                    .clamp(MIN_CONTAINER_SIZE_PERCENT, MAX_CONTAINER_SIZE_PERCENT);
                 let valid_panes = container
                     .pane_ids
                     .iter()

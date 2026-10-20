@@ -38,6 +38,16 @@ const MIN_TERMINAL_WIDTH: f64 = 15.0;
 
 const MAX_TERMINAL_WIDTH: f64 = 100.0;
 
+/// A container's share of the workspace, in percent.
+const MIN_CONTAINER_SIZE_PERCENT: f64 = 0.0;
+
+const MAX_CONTAINER_SIZE_PERCENT: f64 = 100.0;
+
+/// Bounds for the column and row counts a layout may ask for.
+const MIN_LAYOUT_TRACKS: u32 = 1;
+
+const MAX_LAYOUT_TRACKS: u32 = 128;
+
 /// Broadcast durable workspace metadata changes to every Tauri window. The
 /// frontend already coalesces/refreshes this event; keeping emission at the
 /// command boundary also covers secondary windows that did not initiate the
@@ -118,11 +128,6 @@ pub struct Workspace {
     #[serde(default)]
     pub layout: Option<WorkspaceLayout>,
 }
-
-/// Compatibility alias used by the domain layer while the public IPC name
-/// remains `Workspace` for existing clients.
-#[allow(dead_code)]
-pub type Project = Workspace;
 
 /// A durable group of projects. Suspending a group only changes this
 /// metadata; process lifecycle is intentionally handled by PTY commands.
@@ -217,15 +222,6 @@ fn default_tab_kind() -> String {
     "shell".to_string()
 }
 
-#[allow(dead_code)]
-pub type SubTab = TerminalTab;
-
-#[allow(dead_code)]
-pub type PaneMeta = Pane;
-
-#[allow(dead_code)]
-pub type SubtabMeta = TerminalTab;
-
 /// Persisted project container metadata, based on the reference model's
 /// projectId/paneIds relationship. It is safe to close/remove visually while
 /// PTYs continue to run until an explicit kill command is issued.
@@ -274,8 +270,12 @@ fn normalize_layout_state(layout: &mut WorkspaceLayout) {
         "auto" | "grid" | "horizontal" | "vertical" | "stack" | "spotlight" => normalized_mode,
         _ => default_layout_mode(),
     };
-    layout.columns = layout.columns.map(|value| value.clamp(1, 128));
-    layout.rows = layout.rows.map(|value| value.clamp(1, 128));
+    layout.columns = layout
+        .columns
+        .map(|value| value.clamp(MIN_LAYOUT_TRACKS, MAX_LAYOUT_TRACKS));
+    layout.rows = layout
+        .rows
+        .map(|value| value.clamp(MIN_LAYOUT_TRACKS, MAX_LAYOUT_TRACKS));
     let mut seen = std::collections::HashSet::new();
     layout.item_ids.retain_mut(|id| {
         let trimmed = id.trim();

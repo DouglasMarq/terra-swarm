@@ -2,6 +2,7 @@
 //! debounced atomic writes and `.bak` copies of anything it had to drop.
 
 use super::*;
+use crate::sync::LockExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -26,6 +27,9 @@ pub(crate) static LAST_WRITTEN: OnceLock<Mutex<HashMap<PathBuf, u64>>> = OnceLoc
 pub(crate) static WRITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 pub(crate) static ATOMIC_TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Quiet time after the last change before the debounced save writes.
+const SAVE_DEBOUNCE: Duration = Duration::from_millis(150);
 
 /// Version of the on-disk workspace envelope.  The contents of the envelope
 /// are intentionally kept separate from `WorkspaceStore`: the latter also
@@ -164,9 +168,9 @@ pub(crate) fn write_guarded(path: &std::path::Path, json: &str, seq: u64) {
 /// import/export must return the failure to the caller instead.
 pub(crate) fn write_guarded_result(path: &Path, json: &str, seq: u64) -> std::io::Result<()> {
     let lock = WRITE_LOCK.get_or_init(|| Mutex::new(()));
-    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = lock.lock_or_recover();
     let last_written = LAST_WRITTEN.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut last_written = last_written.lock().unwrap_or_else(|e| e.into_inner());
+    let mut last_written = last_written.lock_or_recover();
     if last_written
         .get(path)
         .is_some_and(|last_seq| seq < *last_seq)
@@ -200,7 +204,12 @@ pub(crate) fn write_atomic(path: &std::path::Path, json: &str) -> std::io::Resul
         std::fs::rename(&tmp, path)
     })();
     if result.is_err() {
-        let _ = std::fs::remove_file(&tmp);
+        match std::fs::remove_file(&tmp) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                eprintln!("failed to remove {}: {}", tmp.display(), error);
+            }
+            _ => {}
+        }
     }
     result
 }
@@ -241,7 +250,7 @@ pub(crate) fn backup_store(path: &std::path::Path) -> std::io::Result<Option<Pat
 /// the rollback path restores the backup if the atomic write fails.
 pub(crate) fn replace_store_file(path: &Path, json: &str) -> Result<Option<PathBuf>, String> {
     let lock = WRITE_LOCK.get_or_init(|| Mutex::new(()));
-    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = lock.lock_or_recover();
     let backup = backup_store(path).map_err(|error| {
         format!(
             "failed to back up the current workspace store {}: {}",
@@ -267,21 +276,20 @@ pub(crate) fn replace_store_file(path: &Path, json: &str) -> Result<Option<PathB
     let seq = SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
     LAST_WRITTEN
         .get_or_init(|| Mutex::new(HashMap::new()))
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .lock_or_recover()
         .insert(path.to_path_buf(), seq);
     Ok(backup)
 }
 
-/// Background writer: coalesces save requests and flushes to disk 150ms after
-/// the last change, so mutations never do blocking disk I/O on a caller thread.
+/// Background writer: coalesces a burst of save requests into the newest one
+/// and flushes it to disk `SAVE_DEBOUNCE` after the last change, so mutations
+/// never do blocking disk I/O on a caller thread.
 pub(crate) fn save_channel() -> &'static Sender<SaveRequest> {
     SAVE_TX.get_or_init(|| {
         let (tx, rx) = channel::<SaveRequest>();
         std::thread::spawn(move || {
             while let Ok(mut req) = rx.recv() {
-                // Coalesce a burst of saves into the newest one.
-                while let Ok(newer) = rx.recv_timeout(Duration::from_millis(150)) {
+                while let Ok(newer) = rx.recv_timeout(SAVE_DEBOUNCE) {
                     req = newer;
                 }
                 write_guarded(&req.path, &req.json, req.seq);
@@ -291,10 +299,22 @@ pub(crate) fn save_channel() -> &'static Sender<SaveRequest> {
     })
 }
 
+/// Never silently wipe the user's data: keep an unusable store around for
+/// inspection instead of overwriting it.
+fn back_up_unusable_store(path: &Path) {
+    if let Err(error) = backup_store(path) {
+        eprintln!("failed to back up unusable workspaces store: {}", error);
+    }
+}
+
 impl WorkspaceStore {
+    /// Load the store at `path`. A missing file starts empty; a file that
+    /// cannot be decoded is backed up and replaced; a file that cannot be
+    /// read at all is left untouched and this session never saves over it.
     pub fn load(path: PathBuf) -> Self {
         let mut needs_migration = false;
         let mut needs_backup = false;
+        let mut save_path = Some(path.clone());
         let (workspaces, groups) = match std::fs::read_to_string(&path) {
             Ok(s) => match decode_workspace_file(&s) {
                 Ok(decoded) => {
@@ -303,27 +323,37 @@ impl WorkspaceStore {
                     (decoded.workspaces, decoded.groups)
                 }
                 Err(e) => {
-                    // Never silently wipe the user's data: keep the corrupt
-                    // file around for inspection instead of overwriting it.
                     eprintln!(
                         "workspaces store is corrupt ({}); backing up to .bak and starting fresh",
                         e
                     );
-                    if let Err(backup_error) = backup_store(&path) {
-                        eprintln!(
-                            "failed to back up corrupt workspaces store: {}",
-                            backup_error
-                        );
-                    }
+                    back_up_unusable_store(&path);
                     (Vec::new(), Vec::new())
                 }
             },
-            Err(_) => (Vec::new(), Vec::new()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (Vec::new(), Vec::new()),
+            Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {
+                eprintln!(
+                    "workspaces store is not UTF-8 ({}); backing up to .bak and starting fresh",
+                    error
+                );
+                back_up_unusable_store(&path);
+                (Vec::new(), Vec::new())
+            }
+            Err(error) => {
+                eprintln!(
+                    "cannot read the workspaces store {} ({}); leaving it untouched and not saving this session",
+                    path.display(),
+                    error
+                );
+                save_path = None;
+                (Vec::new(), Vec::new())
+            }
         };
         let mut store = Self {
             workspaces,
             groups,
-            save_path: Some(path),
+            save_path,
         };
 
         // Normalize loaded data before it can reach the UI or PTY layer.  If
@@ -368,17 +398,25 @@ impl WorkspaceStore {
 
     pub fn save(&self) {
         let Some(path) = &self.save_path else { return };
-        if let Ok(json) = self.serialized_snapshot() {
-            let _ = save_channel().send(SaveRequest {
-                path: path.clone(),
-                json,
-                seq: SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1,
-            });
+        let json = match self.serialized_snapshot() {
+            Ok(json) => json,
+            Err(error) => {
+                eprintln!("failed to serialize workspaces: {}", error);
+                return;
+            }
+        };
+        let request = SaveRequest {
+            path: path.clone(),
+            json,
+            seq: SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1,
+        };
+        if let Err(error) = save_channel().send(request) {
+            eprintln!("failed to queue a workspaces save: {}", error);
         }
     }
 
     /// Synchronous, un-debounced save for shutdown, so the final state is
-    /// never lost when the app exits within the 150ms debounce window.
+    /// never lost when the app exits within the `SAVE_DEBOUNCE` window.
     pub fn save_now(&self) {
         let Some(path) = &self.save_path else { return };
         match self.serialized_snapshot() {

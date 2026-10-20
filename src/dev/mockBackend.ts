@@ -8,7 +8,7 @@
  */
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
-import type { AgentInfo, Workspace, WorkspaceGroup } from "../types";
+import type { AgentInfo, McpAgentStatus, McpTask, McpTaskPatch, Workspace, WorkspaceGroup } from "../types";
 
 const workspaces: Workspace[] = [
   {
@@ -52,6 +52,51 @@ const agents: AgentInfo[] = [
   { id: "deepseek", label: "DeepSeek", available: false },
   { id: "shell", label: "Shell", available: true },
 ];
+
+const now = Date.now();
+let nextTaskNumber = 5;
+const mockTask = (id: number, title: string, extra: Partial<McpTask> = {}): McpTask => ({
+  id: `T-${id}`,
+  workspace_id: "ws-terra",
+  title,
+  description: "",
+  status: "todo",
+  assignee: null,
+  created_by: "pty-claude-1",
+  priority: "medium",
+  labels: [],
+  depends_on: [],
+  created_at: now - (10 - id) * 60_000,
+  updated_at: now - (10 - id) * 30_000,
+  notes: [],
+  ...extra,
+});
+const mcpTasks: McpTask[] = [
+  mockTask(1, "Refatorar resumePlanner para grupos suspensos", {
+    status: "in_progress",
+    assignee: "pty-claude-1",
+    priority: "high",
+    description: "Aceitar grupos suspensos sem perder a ordem das abas.",
+    notes: [{ author: "pty-claude-1", body: "claimed the task", created_at: now - 400_000 }],
+  }),
+  mockTask(2, "Cobrir layout.ts com testes", { status: "in_progress", assignee: "pty-codex" }),
+  mockTask(3, "Revisar animações do Workbench", { status: "review", assignee: "pty-claude-2", labels: ["ui"] }),
+  mockTask(4, "Documentar atalhos de voz", { priority: "low" }),
+];
+const mcpStatuses: McpAgentStatus[] = [
+  { terminal_id: "pty-claude-1", workspace_id: "ws-terra", state: "working", summary: "Editando resumePlanner.ts", updated_at: now },
+  { terminal_id: "pty-codex", workspace_id: "ws-terra", state: "needs_input", summary: "Posso rodar npm test?", updated_at: now },
+];
+let mcpEnabled = true;
+const mcpInfo = () => ({ enabled: mcpEnabled, running: true, url: "http://127.0.0.1:52817/mcp", port: 52817 });
+
+function mcpUpdate(id: string, patch: McpTaskPatch): McpTask {
+  const task = mcpTasks.find((candidate) => candidate.id === id);
+  if (!task) throw new Error(`task ${id} not found in this workspace`);
+  Object.assign(task, Object.fromEntries(Object.entries(patch).filter(([key]) => key !== "note")), { updated_at: Date.now() });
+  if (patch.note) task.notes.push({ author: "user", body: patch.note, created_at: Date.now() });
+  return task;
+}
 
 const ESC = "\u001b";
 const backlog: Record<string, string> = {
@@ -99,6 +144,27 @@ export function installMockBackend(): void {
       case "plugin:app|version": return "2.1.1";
       case "plugin:updater|check": return null;
       case "spawn_terminal": return { meta: { id: String(args.id ?? `pty-${Date.now()}`), command: String(args.command ?? "claude"), width: null }, seq: 1 };
+      case "mcp_server_info": return mcpInfo();
+      case "mcp_set_enabled": mcpEnabled = Boolean(args.enabled); return mcpInfo();
+      case "mcp_list_tasks": return mcpTasks.filter((task) => task.workspace_id === args.workspaceId);
+      case "mcp_agent_statuses": return mcpStatuses.filter((status) => status.workspace_id === args.workspaceId);
+      case "mcp_create_task": {
+        const task = mockTask(nextTaskNumber++, String(args.title), {
+          workspace_id: String(args.workspaceId),
+          created_by: "user",
+          created_at: Date.now(),
+          updated_at: Date.now(),
+          ...(args.priority ? { priority: args.priority as McpTask["priority"] } : {}),
+        });
+        mcpTasks.push(task);
+        return task;
+      }
+      case "mcp_update_task": return mcpUpdate(String(args.id), args.patch as McpTaskPatch);
+      case "mcp_delete_task": {
+        const index = mcpTasks.findIndex((task) => task.id === args.id);
+        if (index >= 0) mcpTasks.splice(index, 1);
+        return undefined;
+      }
       default: return undefined;
     }
   }, { shouldMockEvents: true });
@@ -115,4 +181,14 @@ export function installMockBackend(): void {
     void emit("terminal-notification", { id: "pty-claude-1", workspace_id: "ws-terra", count: 1, messages: ["Posso rodar npm test?"] });
     void emit("terminal-exit", { id: "pty-shell", workspace_id: "ws-terra", code: 1, seq: 1 });
   }, 1200);
+
+  // An agent claims a task a few seconds in, so the Tasks panel updates live.
+  window.setTimeout(() => {
+    const task = mcpTasks.find((candidate) => candidate.id === "T-4");
+    if (task && !task.assignee) {
+      Object.assign(task, { assignee: "pty-claude-2", status: "in_progress", updated_at: Date.now() });
+      task.notes.push({ author: "pty-claude-2", body: "claimed the task", created_at: Date.now() });
+      void emit("mcp-tasks-changed", { workspace_id: "ws-terra" });
+    }
+  }, 5000);
 }

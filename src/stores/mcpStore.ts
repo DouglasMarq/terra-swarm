@@ -1,0 +1,185 @@
+import { create } from "zustand";
+import { listen } from "@tauri-apps/api/event";
+import {
+  MCP_EVENTS,
+  mcpApi,
+  type McpAgentStatusPayload,
+  type McpTasksChangedPayload,
+} from "../lib/tauri/mcp";
+import type {
+  McpAgentStatus,
+  McpServerInfo,
+  McpTask,
+  McpTaskPatch,
+  McpTaskPriority,
+  McpTaskStatus,
+} from "../types";
+
+/** Column order of the board: what is moving first, finished work last. */
+export const TASK_STATUS_ORDER: readonly McpTaskStatus[] = ["in_progress", "todo", "blocked", "review", "done"];
+export const TASK_PRIORITIES: readonly McpTaskPriority[] = ["urgent", "high", "medium", "low"];
+
+const PRIORITY_RANK: Record<McpTaskPriority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+
+function taskNumber(id: string): number {
+  const value = Number(id.replace(/^T-/i, ""));
+  return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
+}
+
+/** Tasks bucketed by status, each bucket sorted by priority, then age. */
+export function groupTasksByStatus(tasks: readonly McpTask[]): Record<McpTaskStatus, McpTask[]> {
+  const groups = Object.fromEntries(TASK_STATUS_ORDER.map((status) => [status, [] as McpTask[]])) as Record<
+    McpTaskStatus,
+    McpTask[]
+  >;
+  for (const task of tasks) (groups[task.status] ?? groups.todo).push(task);
+  for (const status of TASK_STATUS_ORDER) {
+    groups[status].sort(
+      (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || taskNumber(a.id) - taskNumber(b.id),
+    );
+  }
+  return groups;
+}
+
+function describe(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error) return error;
+  return String(error);
+}
+
+export interface McpState {
+  server: McpServerInfo | null;
+  /** Tasks by workspace id; a workspace appears once it has been loaded. */
+  tasks: Record<string, McpTask[]>;
+  /** Reported agent states by terminal id. */
+  statuses: Record<string, McpAgentStatus>;
+  error: string | null;
+  loadServer: () => Promise<void>;
+  setEnabled: (enabled: boolean) => Promise<void>;
+  loadTasks: (workspaceId: string) => Promise<void>;
+  loadStatuses: (workspaceId: string) => Promise<void>;
+  createTask: (
+    workspaceId: string,
+    input: { title: string; description?: string; priority?: McpTaskPriority; assignee?: string | null },
+  ) => Promise<McpTask | null>;
+  updateTask: (workspaceId: string, id: string, patch: McpTaskPatch) => Promise<void>;
+  deleteTask: (workspaceId: string, id: string) => Promise<void>;
+  applyStatus: (payload: McpAgentStatusPayload) => void;
+  clearError: () => void;
+  reset: () => void;
+}
+
+function upsert(list: readonly McpTask[] | undefined, task: McpTask): McpTask[] {
+  const next = (list ?? []).filter((candidate) => candidate.id !== task.id);
+  next.push(task);
+  return next;
+}
+
+export const useMcpStore = create<McpState>((set, get) => ({
+  server: null,
+  tasks: {},
+  statuses: {},
+  error: null,
+
+  loadServer: async () => {
+    try {
+      set({ server: await mcpApi.mcpServerInfo() });
+    } catch (error) {
+      set({ error: describe(error) });
+    }
+  },
+
+  setEnabled: async (enabled) => {
+    try {
+      set({ server: await mcpApi.mcpSetEnabled(enabled) });
+    } catch (error) {
+      set({ error: describe(error) });
+    }
+  },
+
+  loadTasks: async (workspaceId) => {
+    try {
+      const list = await mcpApi.mcpListTasks(workspaceId);
+      set((state) => ({ tasks: { ...state.tasks, [workspaceId]: list } }));
+    } catch (error) {
+      set({ error: describe(error) });
+    }
+  },
+
+  loadStatuses: async (workspaceId) => {
+    try {
+      const list = await mcpApi.mcpAgentStatuses(workspaceId);
+      set((state) => {
+        const statuses = Object.fromEntries(
+          Object.entries(state.statuses).filter(([, status]) => status.workspace_id !== workspaceId),
+        );
+        for (const status of list) statuses[status.terminal_id] = status;
+        return { statuses };
+      });
+    } catch (error) {
+      set({ error: describe(error) });
+    }
+  },
+
+  createTask: async (workspaceId, input) => {
+    try {
+      const task = await mcpApi.mcpCreateTask(workspaceId, input);
+      set((state) => ({ tasks: { ...state.tasks, [workspaceId]: upsert(state.tasks[workspaceId], task) } }));
+      return task;
+    } catch (error) {
+      set({ error: describe(error) });
+      return null;
+    }
+  },
+
+  updateTask: async (workspaceId, id, patch) => {
+    try {
+      const task = await mcpApi.mcpUpdateTask(workspaceId, id, patch);
+      set((state) => ({ tasks: { ...state.tasks, [workspaceId]: upsert(state.tasks[workspaceId], task) } }));
+    } catch (error) {
+      set({ error: describe(error) });
+    }
+  },
+
+  deleteTask: async (workspaceId, id) => {
+    try {
+      await mcpApi.mcpDeleteTask(workspaceId, id);
+      set((state) => ({
+        tasks: { ...state.tasks, [workspaceId]: (state.tasks[workspaceId] ?? []).filter((task) => task.id !== id) },
+      }));
+    } catch (error) {
+      set({ error: describe(error) });
+    }
+  },
+
+  applyStatus: ({ terminal_id, status }) => {
+    const statuses = { ...get().statuses };
+    if (status) statuses[terminal_id] = status;
+    else delete statuses[terminal_id];
+    set({ statuses });
+  },
+
+  clearError: () => set({ error: null }),
+  reset: () => set({ server: null, tasks: {}, statuses: {}, error: null }),
+}));
+
+/**
+ * Keep the store in step with agent activity. A board is refetched only for
+ * workspaces that have been opened, so idle projects cost nothing.
+ */
+export function startMcpEventBridge(): () => void {
+  const pending = [
+    listen<McpTasksChangedPayload>(MCP_EVENTS.tasksChanged, (event) => {
+      const workspaceId = event.payload?.workspace_id;
+      if (workspaceId && workspaceId in useMcpStore.getState().tasks) {
+        void useMcpStore.getState().loadTasks(workspaceId);
+      }
+    }),
+    listen<McpAgentStatusPayload>(MCP_EVENTS.agentStatus, (event) => {
+      if (event.payload?.terminal_id) useMcpStore.getState().applyStatus(event.payload);
+    }),
+  ];
+  return () => {
+    for (const unlisten of pending) void unlisten.then((stop) => stop()).catch(() => undefined);
+  };
+}

@@ -3,6 +3,11 @@ import type {
   AgentInfo,
   ActivePaneSelection,
   BacklogSnapshot,
+  McpAgentStatus,
+  McpServerInfo,
+  McpTask,
+  McpTaskPatch,
+  McpTaskPriority,
   RunningTerminal,
   SpawnedTerminal,
   TerminalRuntimeInfo,
@@ -198,6 +203,40 @@ export interface IpcCommandContract {
     args: { workspaceId: string };
     result: WorkspaceGitStatus;
   };
+  mcpServerInfo: {
+    args: undefined;
+    result: McpServerInfo;
+  };
+  mcpSetEnabled: {
+    args: { enabled: boolean };
+    result: McpServerInfo;
+  };
+  mcpListTasks: {
+    args: { workspaceId: string };
+    result: McpTask[];
+  };
+  mcpCreateTask: {
+    args: {
+      workspaceId: string;
+      title: string;
+      description: string | null;
+      priority: McpTaskPriority | null;
+      assignee: string | null;
+    };
+    result: McpTask;
+  };
+  mcpUpdateTask: {
+    args: { workspaceId: string; id: string; patch: McpTaskPatch };
+    result: McpTask;
+  };
+  mcpDeleteTask: {
+    args: { workspaceId: string; id: string };
+    result: void;
+  };
+  mcpAgentStatuses: {
+    args: { workspaceId: string };
+    result: McpAgentStatus[];
+  };
   voiceToggleRecording: {
     args: undefined;
     result: void;
@@ -283,6 +322,13 @@ export const IPC_COMMANDS = {
   gitBranch: "git_branch",
   listWorkspaceFiles: "list_workspace_files",
   gitStatus: "git_status",
+  mcpServerInfo: "mcp_server_info",
+  mcpSetEnabled: "mcp_set_enabled",
+  mcpListTasks: "mcp_list_tasks",
+  mcpCreateTask: "mcp_create_task",
+  mcpUpdateTask: "mcp_update_task",
+  mcpDeleteTask: "mcp_delete_task",
+  mcpAgentStatuses: "mcp_agent_statuses",
   voiceToggleRecording: "voice_toggle_recording",
   voiceSetLanguage: "voice_set_language",
   voiceMicAvailable: "voice_mic_available",

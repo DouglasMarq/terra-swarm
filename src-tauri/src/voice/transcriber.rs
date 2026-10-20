@@ -1,12 +1,30 @@
+use super::audio::TARGET_SAMPLE_RATE;
+use crate::sync::LockExt;
 use std::path::Path;
 use std::sync::Mutex;
 use whisper_rs::{
     FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState,
 };
 
+/// Most tokens Whisper may produce for one dictation.
+const MAX_TOKENS: i32 = 128;
+/// Threads used when the number of cores cannot be read.
+const FALLBACK_THREAD_COUNT: i32 = 4;
+/// Whisper's encoder window: `WINDOW_SECONDS` of audio fill `MAX_AUDIO_CTX`
+/// audio-context frames.
+const WINDOW_SECONDS: f32 = 30.0;
+const MAX_AUDIO_CTX: i32 = 1500;
+const MIN_AUDIO_CTX: i32 = 768;
+/// Frames added to the proportional audio context.
+const AUDIO_CTX_PADDING: f32 = 256.0;
+/// The audio context is rounded up to a multiple of this.
+const AUDIO_CTX_STEP: i32 = 64;
+
 pub struct Transcriber {
     ctx: WhisperContext,
     state: Mutex<Option<WhisperState>>,
+    /// With a GPU every logical core runs pre/post-processing; on CPU only
+    /// half of them do, as hyperthreads slow whisper down.
     use_gpu: bool,
 }
 
@@ -55,24 +73,19 @@ impl Transcriber {
         params.set_suppress_blank(true);
         params.set_suppress_nst(true);
         params.set_temperature_inc(0.0);
-        params.set_max_tokens(128);
+        params.set_max_tokens(MAX_TOKENS);
 
         params.set_audio_ctx(compute_audio_ctx(audio.len()));
 
-        // GPU handles heavy compute — use all logical cores for pre/post processing
-        // CPU-only: physical cores only (hyperthreads hurt whisper)
         let threads = std::thread::available_parallelism()
             .map(|n| match self.use_gpu {
                 true => n.get() as i32,
                 false => ((n.get() as i32) / 2).max(1),
             })
-            .unwrap_or(4);
+            .unwrap_or(FALLBACK_THREAD_COUNT);
         params.set_n_threads(threads);
 
-        let mut guard = self
-            .state
-            .lock()
-            .map_err(|e| format!("State lock poisoned: {e}"))?;
+        let mut guard = self.state.lock_or_recover();
 
         let mut state = match guard.take() {
             Some(s) => s,
@@ -100,7 +113,6 @@ impl Transcriber {
             text.push_str(s);
         }
 
-        // Return state for reuse
         *guard = Some(state);
 
         Ok(text.trim().to_string())
@@ -111,9 +123,11 @@ impl Transcriber {
 /// Formula from whisper.cpp issue #1855: (duration/30)*1500 + padding.
 /// Minimum 768, maximum 1500, always a multiple of 64.
 fn compute_audio_ctx(num_samples: usize) -> i32 {
-    let duration_secs = num_samples as f32 / 16000.0;
-    let raw_ctx = (duration_secs / 30.0 * 1500.0 + 256.0).ceil() as i32;
-    ((raw_ctx + 63) / 64 * 64).clamp(768, 1500)
+    let duration_secs = num_samples as f32 / TARGET_SAMPLE_RATE as f32;
+    let raw_ctx =
+        (duration_secs / WINDOW_SECONDS * MAX_AUDIO_CTX as f32 + AUDIO_CTX_PADDING).ceil() as i32;
+    ((raw_ctx + AUDIO_CTX_STEP - 1) / AUDIO_CTX_STEP * AUDIO_CTX_STEP)
+        .clamp(MIN_AUDIO_CTX, MAX_AUDIO_CTX)
 }
 
 /// Trim trailing silence from audio. Works backwards in 100ms chunks.
@@ -134,7 +148,6 @@ fn trim_trailing_silence(audio: &[f32]) -> &[f32] {
         end = start;
     }
 
-    // Keep 100ms padding after last non-silent chunk
     let padded = (end + CHUNK).min(audio.len());
     &audio[..padded]
 }

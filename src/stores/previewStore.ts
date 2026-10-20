@@ -76,5 +76,5 @@ export function startPreviewBridge(): () => void {
     const payload = event.payload;
     if (payload?.workspace_id && payload.url) usePreviewStore.getState().addDetected(payload.workspace_id, payload.url);
   });
-  return () => void pending.then((stop) => stop()).catch(() => undefined);
+  return () => void pending.then((stop) => stop()).catch((error) => console.warn("failed to stop listening for dev servers:", error));
 }

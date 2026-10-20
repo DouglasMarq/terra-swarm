@@ -1,5 +1,5 @@
 import { useReportedStates } from "../../stores/mcpStore";
-import { t } from "../../i18n";
+import { useT, type MessageKey } from "../../i18n";
 import { Folder, GitBranch, Plus, Search } from "../../components/icons";
 import { Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type ChangeEvent, type MouseEvent } from "react";
@@ -14,10 +14,10 @@ import {
 import type { ActivityTab, NavigatorNode, NavigatorNodeRef, NavigatorPanelProps } from "./types";
 import styles from "./Navigator.module.css";
 
-const ACTIVITY_TABS: readonly { id: ActivityTab; label: string }[] = [
-  { id: "projects", get label() { return t("nav.projects"); } },
-  { id: "files", get label() { return t("nav.files"); } },
-  { id: "git", label: "Git" },
+const ACTIVITY_TABS: readonly { id: ActivityTab; label: MessageKey }[] = [
+  { id: "projects", label: "nav.projects" },
+  { id: "files", label: "nav.files" },
+  { id: "git", label: "nav.gitTab" },
 ];
 
 const DEFAULT_ACTIVITIES: readonly ActivityTab[] = ["projects"];
@@ -88,6 +88,7 @@ export function NavigatorPanel({
   headerSlot,
   agentMenu,
 }: NavigatorPanelProps) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [localCollapsed, setLocalCollapsed] = useState<Set<string>>(() => new Set(defaultCollapsedIds));
   const [contextMenu, setContextMenu] = useState<{
@@ -212,7 +213,7 @@ export function NavigatorPanel({
               type="button"
             >
               {tab.id === "git" ? <GitBranch aria-hidden="true" size={12} /> : null}
-              <span className={styles.tabLabel}>{tab.label}</span>
+              <span className={styles.tabLabel}>{t(tab.label)}</span>
             </button>
           ))}
         </nav>

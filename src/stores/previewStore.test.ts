@@ -6,7 +6,10 @@ vi.mock("../lib/tauri/preview", async (importOriginal) => ({
   previewApi: api,
 }));
 
-import { loopbackUrl, usePreviewStore } from "./previewStore";
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
+
+import { listen } from "@tauri-apps/api/event";
+import { loopbackUrl, startPreviewBridge, usePreviewStore } from "./previewStore";
 
 describe("preview store", () => {
   afterEach(() => usePreviewStore.getState().reset());
@@ -37,5 +40,16 @@ describe("preview store", () => {
     await usePreviewStore.getState().probe("ws", 5173);
     expect(api.probeDevServers.mock.calls[0][0]).not.toContain(5173);
     expect(usePreviewStore.getState().detected.ws).toEqual(["http://localhost:3000/", "http://localhost:8080/"]);
+  });
+});
+
+describe("startPreviewBridge", () => {
+  it("given the listener fails to register, warns when stopped instead of swallowing it", async () => {
+    vi.mocked(listen).mockRejectedValueOnce(new Error("no event bus"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const stop = startPreviewBridge();
+    stop();
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledWith("failed to stop listening for dev servers:", expect.any(Error)));
+    warn.mockRestore();
   });
 });

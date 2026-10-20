@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight, Maximize2, Minimize2, Plus, X } from "lucide-react";
 import { useT } from "../../i18n";
+import { DEFAULT_HOTKEYS, formatHotkey, usePreferencesStore } from "../../stores/preferencesStore";
 import { ContainerLayout } from "./ContainerLayout";
 import { GridSizePicker } from "./GridSizePicker";
 import {
@@ -28,6 +29,7 @@ export function ProjectContainer({
   ...actions
 }: ProjectContainerProps) {
   const t = useT();
+  const newAgentHotkey = usePreferencesStore((state) => state.hotkeys.newTerminal ?? DEFAULT_HOTKEYS.newTerminal);
   const { container } = projection;
   const label = projectLabel({ projection, renderTab, visible, ...actions });
   const paneCount = projection.panes.length;
@@ -113,7 +115,7 @@ export function ProjectContainer({
           >
             <Plus size={13} aria-hidden="true" />
             {t("grid.newAgent")}
-            <kbd>⌘T</kbd>
+            <kbd>{formatHotkey(newAgentHotkey)}</kbd>
           </button>
         ) : null}
         <div className="terra-project-container__actions">

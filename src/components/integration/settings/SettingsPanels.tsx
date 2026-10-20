@@ -20,9 +20,11 @@ import {
   hotkeyActionLabel,
   MAX_FONT_SIZE,
   MIN_FONT_SIZE,
+  DEFAULT_HOTKEYS,
   formatHotkey,
   parseEnvLines,
   type Hotkey,
+  type HotkeyActionId,
 } from "../../../stores/preferencesStore";
 import type {
   SettingsSectionDefinition,
@@ -30,6 +32,7 @@ import type {
 } from "../../settings";
 import { LOCALES, useLocaleStore, useT, type Locale } from "../../../i18n";
 import { pickAgentName, type NameSetId } from "../../../domain/agentNames";
+import { isVoiceLanguage, VOICE_LANGUAGE_ENDONYMS, VOICE_LANGUAGES, type VoiceLanguage } from "../../../domain/voiceLanguages";
 import { useMcpStore } from "../../../stores/mcpStore";
 import { usePreferencesStore } from "../../../stores/preferencesStore";
 import { DEFAULT_TERMINAL_FONT_STACK, filterFonts, loadSystemFonts, terminalFontStack, type SystemFont } from "../../../lib/terminalFonts";
@@ -71,8 +74,8 @@ export interface SettingsPanelsProps {
   onFeatureFlagChange: (id: FeatureFlagId, enabled: boolean) => void;
   voiceEnabled: boolean;
   onVoiceEnabledChange: (enabled: boolean) => void;
-  voiceLang: string;
-  onVoiceLangChange: (lang: string) => void;
+  voiceLang: VoiceLanguage;
+  onVoiceLangChange: (lang: VoiceLanguage) => void;
   voiceInputDevice: string | null;
   voiceInputDevices: readonly string[];
   onVoiceInputDeviceChange: (device: string) => void;
@@ -86,9 +89,9 @@ export interface SettingsPanelsProps {
   voiceDownload: VoiceDownloadState | null;
   onVoiceModelSelect: (id: string) => void;
   onVoiceModelDownload: (id: string) => void;
-  hotkeys: Readonly<Record<string, Hotkey>>;
-  capturing: string | null;
-  onCaptureHotkey: (id: string) => void;
+  hotkeys: Readonly<Record<HotkeyActionId, Hotkey>>;
+  capturing: HotkeyActionId | null;
+  onCaptureHotkey: (id: HotkeyActionId) => void;
   onResetHotkeys: () => void;
   snapshotOperation: SnapshotOperation | null;
   snapshotFeedback: SnapshotFeedback | null;
@@ -102,27 +105,6 @@ export interface SettingsPanelsProps {
   onInstallUpdate: () => void;
 }
 
-
-/** Voice languages are listed by their own name, so they read the same in any UI locale. */
-const VOICE_LANGUAGES = [
-  ["auto", "Auto"],
-  ["pt", "Português"],
-  ["en", "English"],
-  ["es", "Español"],
-  ["fr", "Français"],
-  ["de", "Deutsch"],
-  ["it", "Italiano"],
-  ["nl", "Nederlands"],
-  ["pl", "Polski"],
-  ["ru", "Русский"],
-  ["uk", "Українська"],
-  ["tr", "Türkçe"],
-  ["ar", "العربية"],
-  ["hi", "हिन्दी"],
-  ["zh", "中文"],
-  ["ja", "日本語"],
-  ["ko", "한국어"],
-] as const;
 
 // Groups, sub-tabs and the Fleet are product foundations; only these remain optional.
 const LAB_FEATURE_FLAG_IDS = ["durableScrollback", "voiceCommands"] as const;
@@ -148,8 +130,8 @@ export interface SettingsPanelsProps {
   onFeatureFlagChange: (id: FeatureFlagId, enabled: boolean) => void;
   voiceEnabled: boolean;
   onVoiceEnabledChange: (enabled: boolean) => void;
-  voiceLang: string;
-  onVoiceLangChange: (lang: string) => void;
+  voiceLang: VoiceLanguage;
+  onVoiceLangChange: (lang: VoiceLanguage) => void;
   voiceInputDevice: string | null;
   voiceInputDevices: readonly string[];
   onVoiceInputDeviceChange: (device: string) => void;
@@ -160,9 +142,9 @@ export interface SettingsPanelsProps {
   voiceDownload: VoiceDownloadState | null;
   onVoiceModelSelect: (id: string) => void;
   onVoiceModelDownload: (id: string) => void;
-  hotkeys: Readonly<Record<string, Hotkey>>;
-  capturing: string | null;
-  onCaptureHotkey: (id: string) => void;
+  hotkeys: Readonly<Record<HotkeyActionId, Hotkey>>;
+  capturing: HotkeyActionId | null;
+  onCaptureHotkey: (id: HotkeyActionId) => void;
   onResetHotkeys: () => void;
   snapshotOperation: SnapshotOperation | null;
   snapshotFeedback: SnapshotFeedback | null;
@@ -481,8 +463,7 @@ function McpCard() {
       ) : server ? (
         server.running && server.url ? (
           <p className={styles.hint}>
-            {t("settingsPanels.mcpUrl")}: <code className={styles.agentCommand}>{server.url}</code>
-            {server.port ? ` · ${t("settingsPanels.mcpPort", { port: server.port })}` : null}
+            {server.port ? t("settingsPanels.mcpUrlWithPort", { url: server.url, port: server.port }) : t("settingsPanels.mcpUrl", { url: server.url })}
           </p>
         ) : (
           <p className={styles.hint}>{t("settingsPanels.mcpNotRunning")}</p>
@@ -565,7 +546,7 @@ function AgentNamesCard() {
             <button type="button" className={styles.button} onClick={addName}>{t("settingsPanels.add")}</button>
           </div>
           <p className={styles.hint}>
-            {t("settingsPanels.inUse", { count: usedCount })} · {t("settingsPanels.free", { count: prefs.agentNameList.length - usedCount })} · {t("settingsPanels.next")} <b>{next ?? "—"}</b>
+            {t("settingsPanels.namesUsage", { inUse: usedCount, free: prefs.agentNameList.length - usedCount, next: next ?? "—" })}
           </p>
           <div className={styles.row}>
             <div className={styles.rowLabel}>
@@ -593,6 +574,7 @@ function AgentPanel({
   onDefaultAgentChange,
 }: Pick<SettingsPanelsProps, "agents" | "defaultAgent" | "onDefaultAgentChange">) {
   const t = useT();
+  const newAgentHotkey = usePreferencesStore((state) => state.hotkeys.newTerminal ?? DEFAULT_HOTKEYS.newTerminal);
   const profiles: AgentProfile[] = agents.map((agent) =>
     PROFILE_BY_ID.get(agent.id) ?? {
       id: agent.id,
@@ -606,7 +588,7 @@ function AgentPanel({
     <div className={styles.stack}>
       <div className={styles.card}>
         <span className={styles.cardTitle}>{t("settingsPanels.defaultAgentTitle")}</span>
-        <p className={styles.cardDescription}>{t("settingsPanels.defaultAgentHint")}</p>
+        <p className={styles.cardDescription}>{t("settingsPanels.defaultAgentHint", { shortcut: formatHotkey(newAgentHotkey) })}</p>
         <label className={styles.fieldLabel}>
           {t("settingsPanels.defaultAgentLabel")}
           <select
@@ -814,8 +796,8 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
               <>
                 <label className={styles.fieldLabel}>
                   {t("settingsPanels.voiceLanguage")}
-                  <select className={styles.select} value={voiceLang} onChange={(event) => onVoiceLangChange(event.target.value)}>
-                    {VOICE_LANGUAGES.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                  <select className={styles.select} value={voiceLang} onChange={(event) => { if (isVoiceLanguage(event.target.value)) onVoiceLangChange(event.target.value); }}>
+                    {VOICE_LANGUAGES.map((code) => <option key={code} value={code}>{code === "auto" ? t("settingsPanels.voiceLanguageAuto") : VOICE_LANGUAGE_ENDONYMS[code]}</option>)}
                   </select>
                 </label>
                 <label className={styles.fieldLabel}>
@@ -901,7 +883,7 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
       {section.id === "about" && (
         <div className={styles.stack}>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>Terra Swarm</span>
+            <span className={styles.cardTitle}>{t("common.appName")}</span>
             <div className={styles.row}><span className={styles.label}>{t("settingsPanels.installedVersion")}</span><span className={styles.status}>{appVersion || t("settingsPanels.unknown")}</span></div>
             <p className={styles.hint}>{t("settingsPanels.localHint")}</p>
           </div>

@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { fillPrompt, useLibraryStore } from "./libraryStore";
 
 describe("prompt library", () => {
+  beforeEach(() => {
+    if (typeof localStorage !== "undefined") localStorage.clear();
+    useLibraryStore.setState(useLibraryStore.getInitialState(), true);
+  });
+
   it("starts with defaults, then adds, edits and deletes", () => {
     const store = useLibraryStore.getState();
     expect(store.prompts.length).toBeGreaterThan(0);

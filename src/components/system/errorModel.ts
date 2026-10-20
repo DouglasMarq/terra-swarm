@@ -35,7 +35,7 @@ function errorMessage(error: unknown) {
   if (typeof error === "string" && error.trim()) {
     return sanitizeText(error, MAX_MESSAGE_LENGTH);
   }
-  return "O aplicativo encontrou um erro inesperado.";
+  return t("system.unexpectedError");
 }
 
 /** Convert React's error payload into a bounded, path/token-redacted report. */
@@ -45,9 +45,9 @@ export function getSafeErrorDetails(error: unknown, info?: ErrorInfo | null): Sa
   const componentStack = sanitizeText(info?.componentStack?.trim() ?? "", MAX_STACK_LENGTH);
   const text = [
     t("system.reportTitle"),
-    `${t("system.reportType")}: ${name}`,
-    `${t("system.reportMessage")}: ${message}`,
-    componentStack ? `${t("system.reportTree")}:\n${componentStack}` : "",
+    t("system.reportType", { name }),
+    t("system.reportMessage", { message }),
+    componentStack ? t("system.reportTree", { stack: componentStack }) : "",
   ]
     .filter(Boolean)
     .join("\n");

@@ -1,5 +1,5 @@
 import * as TabsPrimitive from "@radix-ui/react-tabs";
-import { useT } from "../../i18n";
+import { useLocale, useT } from "../../i18n";
 import { Search, X } from "lucide-react";
 import {
   useCallback,
@@ -82,16 +82,18 @@ function renderSlot(
 }
 
 function DefaultSectionContent({ section }: { section: SettingsSectionDefinition }) {
+  const t = useT();
+  const locale = useLocale();
   return (
     <div className={styles.defaultSection}>
       <div className={styles.sectionKicker}>{section.label}</div>
-      <h3 className={styles.defaultTitle}>Configure o {section.label.toLocaleLowerCase("pt-BR")}</h3>
+      <h3 className={styles.defaultTitle}>{t("settings.defaultSectionTitle", { section: section.label.toLocaleLowerCase(locale) })}</h3>
       <p className={styles.defaultDescription}>{section.description}</p>
       <div className={styles.placeholderCard}>
         <span className={styles.placeholderDot} aria-hidden="true" />
         <div>
-          <strong>Pronto para receber o módulo Terra</strong>
-          <span>O host pode injetar o formulário desta seção via <code>slots</code> ou <code>renderSection</code>.</span>
+          <strong>{t("settings.defaultSectionReady")}</strong>
+          <span>{t("settings.defaultSectionHost")}</span>
         </div>
       </div>
     </div>

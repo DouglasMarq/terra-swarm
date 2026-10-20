@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { useT } from "../../i18n";
 import { AlertCircle, ChevronDown, ChevronRight, FileText, Folder, Link2, LoaderCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Workspace, WorkspaceFileEntry, WorkspaceFileListing } from "../../types";
@@ -22,10 +22,11 @@ export interface NavigatorFilesViewProps {
   onOpenFile?: (workspaceId: string, path: string) => void;
 }
 
+/** The failure's own message, or "" when it has none (the view shows a generic one). */
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) return error.message;
   if (typeof error === "string" && error.trim()) return error;
-  return t("nav.filesView.error");
+  return "";
 }
 
 function FileIcon({ entry }: { entry: WorkspaceFileEntry }) {
@@ -49,6 +50,7 @@ function FileRow({
   onToggle: () => void;
   onOpen?: () => void;
 }) {
+  const t = useT();
   const directory = entry.kind === "directory";
   const rowContent = (
     <>
@@ -57,8 +59,8 @@ function FileRow({
       </span>
       <span className={styles.integrationIcon}><FileIcon entry={entry} /></span>
       <span className={styles.integrationName}>{entry.name}</span>
-      {loading ? <LoaderCircle aria-label="Carregando" className={styles.spin} size={12} /> : null}
-      {entry.kind === "file" && entry.size !== null ? <span className={styles.integrationMeta}>{entry.size} B</span> : null}
+      {loading ? <LoaderCircle aria-label={t("nav.filesView.loadingEntry")} className={styles.spin} size={12} /> : null}
+      {entry.kind === "file" && entry.size !== null ? <span className={styles.integrationMeta}>{t("nav.filesView.sizeBytes", { size: entry.size })}</span> : null}
     </>
   );
   if (!directory && entry.kind === "file" && onOpen) {
@@ -77,7 +79,7 @@ function FileRow({
   if (!directory) {
     return (
       <div
-        aria-label={`Arquivo ${entry.name}`}
+        aria-label={t("nav.filesView.fileRow", { name: entry.name })}
         className={styles.integrationRow}
         data-file-static="true"
         role="listitem"
@@ -107,6 +109,7 @@ export function NavigatorFilesView({
   onSelectWorkspace,
   onOpenFile,
 }: NavigatorFilesViewProps) {
+  const t = useT();
   const workspace = workspaces.find((candidate) => candidate.id === activeWorkspaceId) ?? null;
   const [directories, setDirectories] = useState<Record<string, DirectoryState>>({});
   const directoriesRef = useRef<Record<string, DirectoryState>>({});
@@ -171,11 +174,11 @@ export function NavigatorFilesView({
   const renderDirectory = (relativePath: string, depth: number): ReactNode => {
     const state = directories[relativePath];
     if (!state) return null;
-    if (state.error && !state.listing) {
+    if (state.error !== null && !state.listing) {
       return (
         <div className={styles.integrationError} style={{ paddingInlineStart: `${12 + depth * 16}px` }}>
           <AlertCircle aria-hidden="true" size={13} />
-          <span>{state.error}</span>
+          <span>{state.error || t("nav.filesView.error")}</span>
           <button aria-label={t("nav.retry")} onClick={() => void loadDirectory(relativePath, true)} type="button"><RefreshCw size={12} /></button>
         </div>
       );
@@ -198,7 +201,7 @@ export function NavigatorFilesView({
           );
         })}
         {state.listing.truncated ? <div className={styles.integrationNotice}>{t("nav.filesView.truncated", { count: state.listing.limit })}</div> : null}
-        {state.error ? <div className={styles.integrationNotice}>{state.error}</div> : null}
+        {state.error !== null ? <div className={styles.integrationNotice}>{state.error || t("nav.filesView.error")}</div> : null}
       </>
     );
   };

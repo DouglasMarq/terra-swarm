@@ -125,7 +125,8 @@ export function WorktreeReviewDialog() {
       await navigator.clipboard.writeText(prUrl);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
-    } catch {
+    } catch (error) {
+      console.warn("failed to copy the pull request URL:", error);
       setCopied(false);
     }
   };

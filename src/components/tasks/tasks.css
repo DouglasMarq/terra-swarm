@@ -144,11 +144,11 @@
 }
 
 .terra-task[data-priority="urgent"] {
-  border-left: 2px solid var(--terra-red);
+  border-left: 2px solid var(--terra-priority-urgent);
 }
 
 .terra-task[data-priority="high"] {
-  border-left: 2px solid var(--terra-amber);
+  border-left: 2px solid var(--terra-priority-high);
 }
 
 .terra-task-title {
@@ -198,8 +198,8 @@
 }
 
 .terra-task-chip[data-priority="urgent"] {
-  color: var(--terra-red-ink);
-  background: var(--terra-red-dim);
+  color: var(--terra-priority-urgent-ink);
+  background: var(--terra-priority-urgent-dim);
 }
 
 .terra-task-chip[data-blocked="true"] {
@@ -209,8 +209,8 @@
 }
 
 .terra-task-chip[data-priority="high"] {
-  color: var(--terra-amber-ink);
-  background: var(--terra-amber-dim);
+  color: var(--terra-priority-high-ink);
+  background: var(--terra-priority-high-dim);
 }
 
 .terra-task-assignee {
@@ -327,7 +327,7 @@
 
 .terra-board-notice {
   margin: 0;
-  color: var(--terra-green);
+  color: var(--terra-success);
   font-size: var(--terra-font-size-label);
 }
 

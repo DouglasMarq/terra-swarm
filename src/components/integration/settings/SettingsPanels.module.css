@@ -11,7 +11,7 @@
 
 .eyebrow {
   color: var(--terra-text-secondary);
-  font-family: var(--terra-font-mono, monospace);
+  font-family: var(--terra-font-mono);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -19,7 +19,7 @@
 
 .title {
   margin: 0;
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.025em;
@@ -29,7 +29,7 @@
 .description {
   max-width: 640px;
   margin: 0;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -42,10 +42,10 @@
 .card {
   display: grid;
   gap: 13px;
-  border: 1px solid var(--terra-border, #26262c);
+  border: 1px solid var(--terra-border);
   border-radius: 9px;
   padding: 16px;
-  background: var(--terra-bg-elevated, #1d1d22);
+  background: var(--terra-bg-elevated);
 }
 
 .card + .card {
@@ -53,7 +53,7 @@
 }
 
 .cardTitle {
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   font-size: 13px;
   font-weight: 600;
 }
@@ -62,7 +62,7 @@
 .hint,
 .muted {
   margin: 0;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 12px;
   line-height: 1.55;
 }
@@ -89,7 +89,7 @@
 }
 
 .label {
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   font-size: 12px;
   font-weight: 550;
 }
@@ -103,18 +103,18 @@
 .fieldLabel {
   display: grid;
   gap: 7px;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 12px;
 }
 
 .select,
 .textInput {
   min-height: 34px;
-  border: 1px solid var(--terra-border, #26262c);
+  border: 1px solid var(--terra-border);
   border-radius: 6px;
   padding: 0 9px;
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-panel, #17171b);
+  color: var(--terra-text);
+  background: var(--terra-bg-panel);
   font: inherit;
   font-size: 12px;
 }
@@ -126,7 +126,7 @@
 .toggle:focus-visible,
 .chip:focus-visible {
   outline: 0;
-  box-shadow: var(--terra-focus-ring, 0 0 0 3px rgb(113 113 122 / 18%));
+  box-shadow: var(--terra-focus-ring);
 }
 
 .select {
@@ -156,9 +156,9 @@
 }
 
 .fontFilters .chip[data-active="true"] {
-  border-color: var(--terra-border-strong, #3a3a42);
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-elevated, #222228);
+  border-color: var(--terra-border-strong);
+  color: var(--terra-text);
+  background: var(--terra-bg-elevated);
 }
 
 .fontList {
@@ -167,9 +167,9 @@
   flex-direction: column;
   overflow-y: auto;
   padding: 4px;
-  border: 1px solid var(--terra-border, #26262c);
+  border: 1px solid var(--terra-border);
   border-radius: 6px;
-  background: var(--terra-bg-panel, #17171b);
+  background: var(--terra-bg-panel);
 }
 
 .fontOption {
@@ -181,19 +181,19 @@
   gap: 12px;
   padding: 0 10px;
   border-radius: 5px;
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   text-align: left;
 }
 
 .fontOption:hover,
 .fontOption:focus-visible {
   outline: 0;
-  background: var(--terra-bg-hover, #222228);
+  background: var(--terra-bg-hover);
 }
 
 .fontOption[data-selected="true"] {
-  background: var(--terra-bg-elevated, #26262c);
-  box-shadow: inset 2px 0 0 var(--terra-amber, #e0b45c);
+  background: var(--terra-bg-elevated);
+  box-shadow: inset 2px 0 0 var(--terra-accent);
 }
 
 .fontOptionName {
@@ -221,10 +221,10 @@
   gap: 2px;
   overflow: hidden;
   padding: 10px 12px;
-  border: 1px solid var(--terra-border, #26262c);
+  border: 1px solid var(--terra-border);
   border-radius: 6px;
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-terminal-bg, #0c0c0e);
+  color: var(--terra-text);
+  background: var(--terra-terminal-bg);
   line-height: 1.35;
   white-space: pre;
 }
@@ -240,11 +240,11 @@
 .primary,
 .chip {
   min-height: 30px;
-  border: 1px solid var(--terra-border-strong, #34343c);
+  border: 1px solid var(--terra-border-strong);
   border-radius: 6px;
   padding: 0 10px;
-  color: var(--terra-text-muted, #8e8e96);
-  background: var(--terra-bg-panel, #17171b);
+  color: var(--terra-text-muted);
+  background: var(--terra-bg-panel);
   cursor: pointer;
   font: inherit;
   font-size: 11px;
@@ -260,9 +260,9 @@
 .stepperButton:hover:not(:disabled),
 .button:hover:not(:disabled),
 .chip:hover:not(:disabled) {
-  border-color: var(--terra-border-focus, #71717a);
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-hover, #232329);
+  border-color: var(--terra-border-focus);
+  color: var(--terra-text);
+  background: var(--terra-bg-hover);
 }
 
 .stepperButton:disabled,
@@ -275,8 +275,8 @@
 
 .stepperValue {
   min-width: 54px;
-  color: var(--terra-text, #e4e4e7);
-  font-family: var(--terra-font-mono, monospace);
+  color: var(--terra-text);
+  font-family: var(--terra-font-mono);
   font-size: 12px;
   text-align: center;
 }
@@ -290,21 +290,21 @@
 .gridOption {
   min-width: 31px;
   min-height: 30px;
-  border: 1px solid var(--terra-border, #26262c);
+  border: 1px solid var(--terra-border);
   border-radius: 5px;
-  color: var(--terra-text-muted, #8e8e96);
-  background: var(--terra-bg-panel, #17171b);
+  color: var(--terra-text-muted);
+  background: var(--terra-bg-panel);
   cursor: pointer;
   font: inherit;
-  font-family: var(--terra-font-mono, monospace);
+  font-family: var(--terra-font-mono);
   font-size: 11px;
 }
 
 .gridOption:hover,
 .gridOptionActive {
-  border-color: var(--terra-border-focus, #71717a);
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-hover, #232329);
+  border-color: var(--terra-border-focus);
+  color: var(--terra-text);
+  background: var(--terra-bg-hover);
 }
 
 .toggle {
@@ -312,17 +312,17 @@
   width: 38px;
   height: 22px;
   flex: 0 0 auto;
-  border: 1px solid var(--terra-border-strong, #34343c);
+  border: 1px solid var(--terra-border-strong);
   border-radius: 99px;
   padding: 0;
-  background: var(--terra-bg-panel, #17171b);
+  background: var(--terra-bg-panel);
   cursor: pointer;
   transition: background 140ms ease, border-color 140ms ease;
 }
 
 .toggleOn {
-  border-color: var(--terra-accent, #fafafa);
-  background: var(--terra-accent, #fafafa);
+  border-color: var(--terra-accent);
+  background: var(--terra-accent);
 }
 
 .toggleKnob {
@@ -332,13 +332,13 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--terra-text-muted, #8e8e96);
+  background: var(--terra-text-muted);
   transition: transform 140ms ease, background 140ms ease;
 }
 
 .toggleOn .toggleKnob {
   transform: translateX(16px);
-  background: var(--terra-bg-sidebar, #131316);
+  background: var(--terra-bg-sidebar);
 }
 
 .actions {
@@ -349,15 +349,15 @@
 }
 
 .primary {
-  border-color: var(--terra-accent, #fafafa);
-  color: var(--terra-bg-sidebar, #131316);
-  background: var(--terra-accent, #fafafa);
+  border-color: var(--terra-accent);
+  color: var(--terra-bg-sidebar);
+  background: var(--terra-accent);
   font-weight: 600;
 }
 
 .primary:hover:not(:disabled) {
-  border-color: var(--terra-text, #e4e4e7);
-  background: var(--terra-text, #e4e4e7);
+  border-color: var(--terra-text);
+  background: var(--terra-text);
 }
 
 .feedback {
@@ -365,25 +365,25 @@
   gap: 4px;
   border-radius: 6px;
   padding: 10px;
-  color: var(--terra-text-muted, #8e8e96);
-  background: var(--terra-bg-panel, #17171b);
+  color: var(--terra-text-muted);
+  background: var(--terra-bg-panel);
   font-size: 11px;
   line-height: 1.45;
 }
 
 .feedbackSuccess {
-  border: 1px solid var(--terra-border, #26262c);
+  border: 1px solid var(--terra-border);
 }
 
 .feedbackError {
-  border: 1px solid var(--terra-red, #c97777);
-  color: var(--terra-red, #c97777);
+  border: 1px solid var(--terra-red);
+  color: var(--terra-red);
 }
 
 .path {
   overflow-wrap: anywhere;
   color: var(--terra-text-secondary);
-  font-family: var(--terra-font-mono, monospace);
+  font-family: var(--terra-font-mono);
   font-size: 10px;
 }
 
@@ -402,10 +402,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border: 1px solid var(--terra-border, #26262c);
+  border: 1px solid var(--terra-border);
   border-radius: 6px;
   padding: 7px 9px;
-  background: var(--terra-bg-panel, #17171b);
+  background: var(--terra-bg-panel);
 }
 
 .agentIdentity,
@@ -420,7 +420,7 @@
 .modelName,
 .shortcutName {
   overflow: hidden;
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   font-size: 11px;
   font-weight: 550;
   text-overflow: ellipsis;
@@ -432,14 +432,14 @@
 .shortcutMeta {
   overflow: hidden;
   color: var(--terra-text-secondary);
-  font-family: var(--terra-font-mono, monospace);
+  font-family: var(--terra-font-mono);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .available {
-  color: var(--terra-green, #8fc59a);
+  color: var(--terra-text);
 }
 
 .unavailable {
@@ -450,13 +450,13 @@
   min-height: 26px;
   flex: 0 0 auto;
   padding: 0 8px;
-  font-family: var(--terra-font-mono, monospace);
+  font-family: var(--terra-font-mono);
   font-size: 10px;
 }
 
 .chipActive {
-  border-color: var(--terra-green, #8fc59a);
-  color: var(--terra-green, #8fc59a);
+  border-color: var(--terra-accent);
+  color: var(--terra-accent);
 }
 
 .micTest {
@@ -470,7 +470,7 @@
   height: 5px;
   overflow: hidden;
   border-radius: 99px;
-  background: var(--terra-bg-panel, #17171b);
+  background: var(--terra-bg-panel);
 }
 
 .micMeterFill {
@@ -479,7 +479,7 @@
   transform: scaleX(0);
   transform-origin: left center;
   border-radius: inherit;
-  background: var(--terra-green, #8fc59a);
+  background: var(--terra-accent);
   transition: transform 80ms linear;
 }
 
@@ -489,7 +489,7 @@
 }
 
 .empty {
-  border: 1px dashed var(--terra-border, #26262c);
+  border: 1px dashed var(--terra-border);
   border-radius: 7px;
   padding: 14px;
   color: var(--terra-text-secondary);
@@ -538,11 +538,11 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #52525b;
+  background: var(--terra-text-faint);
 }
 
 .nameChip[data-used="true"] .nameChipDot {
-  background: var(--terra-green);
+  background: var(--terra-accent);
 }
 
 .nameChipRemove {

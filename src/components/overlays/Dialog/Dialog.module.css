@@ -1,34 +1,34 @@
 .overlay {
   position: fixed;
-  z-index: var(--terra-z-modal-backdrop, 400);
+  z-index: var(--terra-z-modal-backdrop);
   inset: 0;
-  background: rgb(0 0 0 / 66%);
+  background: var(--terra-scrim);
   backdrop-filter: blur(5px);
 }
 
 .content {
   position: fixed;
-  z-index: var(--terra-z-modal, 500);
+  z-index: var(--terra-z-modal);
   top: 50%;
   left: 50%;
   width: min(520px, calc(100vw - 32px));
   max-height: min(760px, calc(100vh - 32px));
   overflow: auto;
-  border: 1px solid var(--terra-border-strong, #34343c);
-  border-radius: var(--terra-radius-modal, 14px);
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-panel, #17171b);
-  box-shadow: var(--terra-shadow-modal, 0 24px 64px rgb(0 0 0 / 55%));
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-modal);
+  color: var(--terra-text);
+  background: var(--terra-bg-panel);
+  box-shadow: var(--terra-shadow-modal);
   transform: translate(-50%, -50%);
   outline: 0;
 }
 
 .content[data-state="open"] {
-  animation: terra-dialog-in var(--terra-duration-med, 200ms) var(--terra-ease-out, ease-out);
+  animation: terra-dialog-in var(--terra-duration-med) var(--terra-ease-out);
 }
 
 .content[data-state="closed"] {
-  animation: terra-dialog-out var(--terra-duration-med, 200ms) ease-in;
+  animation: terra-dialog-out var(--terra-duration-med) ease-in;
 }
 
 .header {
@@ -39,7 +39,7 @@
 
 .title {
   margin: 0;
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   font-size: 16px;
   font-weight: 650;
   letter-spacing: -0.01em;
@@ -48,7 +48,7 @@
 
 .description {
   margin: 0;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -62,25 +62,25 @@
   height: 28px;
   place-items: center;
   border: 1px solid transparent;
-  border-radius: var(--terra-radius-md, 6px);
-  color: var(--terra-text-muted, #8e8e96);
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text-muted);
   background: transparent;
   cursor: pointer;
   transition:
-    border-color var(--terra-duration-hover, 140ms) ease,
-    color var(--terra-duration-hover, 140ms) ease,
-    background var(--terra-duration-hover, 140ms) ease;
+    border-color var(--terra-duration-hover) ease,
+    color var(--terra-duration-hover) ease,
+    background var(--terra-duration-hover) ease;
 }
 
 .closeButton:hover {
-  border-color: var(--terra-border-strong, #34343c);
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-hover, #232329);
+  border-color: var(--terra-border-strong);
+  color: var(--terra-text);
+  background: var(--terra-bg-hover);
 }
 
 .closeButton:focus-visible {
   outline: 0;
-  box-shadow: var(--terra-focus-ring, 0 0 0 3px rgb(113 113 122 / 18%));
+  box-shadow: var(--terra-focus-ring);
 }
 
 .footer {

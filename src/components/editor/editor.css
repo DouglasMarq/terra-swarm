@@ -12,7 +12,7 @@
 }
 
 .terra-editor-dirty {
-  color: var(--terra-amber);
+  color: var(--terra-accent);
   font-size: 10px;
 }
 

@@ -1,33 +1,33 @@
 .overlay {
   position: fixed;
-  z-index: var(--terra-z-modal-backdrop, 400);
+  z-index: var(--terra-z-modal-backdrop);
   inset: 0;
-  background: rgb(0 0 0 / 62%);
+  background: var(--terra-scrim);
   backdrop-filter: blur(3px);
   animation: palette-fade-in 140ms ease-out;
 }
 
 .dialogContent {
   position: fixed;
-  z-index: var(--terra-z-modal, 500);
+  z-index: var(--terra-z-modal);
   top: 12vh;
   left: 50%;
   width: min(640px, calc(100vw - 28px));
   max-height: min(480px, calc(100vh - 56px));
   transform: translateX(-50%);
   overflow: hidden;
-  border: 1px solid var(--terra-border-strong, #34343c);
-  border-radius: var(--terra-radius-modal, 14px);
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-panel, #17171b);
-  box-shadow: var(--terra-shadow-modal, 0 24px 64px rgb(0 0 0 / 55%));
-  animation: palette-rise-in 180ms var(--terra-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-modal);
+  color: var(--terra-text);
+  background: var(--terra-bg-panel);
+  box-shadow: var(--terra-shadow-modal);
+  animation: palette-rise-in 180ms var(--terra-ease-out);
 }
 
 .dialog {
   width: 100%;
   min-height: 0;
-  font-family: var(--terra-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-family: var(--terra-font-sans);
 }
 
 .body {
@@ -42,13 +42,13 @@
   min-height: 62px;
   align-items: center;
   gap: 10px;
-  border-bottom: 1px solid var(--terra-border, #26262c);
+  border-bottom: 1px solid var(--terra-border);
   padding: 0 18px;
 }
 
 .searchGlyph {
   width: 20px;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   font-size: 27px;
   line-height: 1;
   transform: translateY(-2px);
@@ -59,7 +59,7 @@
   flex: 1;
   border: 0;
   outline: 0;
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
   background: transparent;
   font-size: 16px;
   line-height: 24px;
@@ -72,12 +72,12 @@
 .escapeKey,
 .itemShortcut,
 .footer kbd {
-  border: 1px solid var(--terra-border-strong, #34343c);
-  border-radius: var(--terra-radius-sm, 4px);
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-sm);
   padding: 2px 6px;
-  color: var(--terra-text-muted, #8e8e96);
-  background: var(--terra-bg-elevated, #1d1d22);
-  font-family: var(--terra-font-mono, monospace);
+  color: var(--terra-text-muted);
+  background: var(--terra-bg-elevated);
+  font-family: var(--terra-font-mono);
   font-size: 10px;
   line-height: 14px;
 }
@@ -95,7 +95,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 5px 8px 10px;
-  scrollbar-color: var(--terra-scrollbar-thumb, #2c2c33) transparent;
+  scrollbar-color: var(--terra-scrollbar-thumb) transparent;
 }
 
 .group {
@@ -117,18 +117,18 @@
   align-items: center;
   gap: 10px;
   border: 1px solid transparent;
-  border-radius: var(--terra-radius-md, 6px);
+  border-radius: var(--terra-radius-md);
   padding: 7px 10px;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   cursor: pointer;
   outline: none;
   transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
 }
 
 .item[data-selected="true"] {
-  border-color: var(--terra-border-strong, #34343c);
-  color: var(--terra-text, #e4e4e7);
-  background: var(--terra-bg-hover, #232329);
+  border-color: var(--terra-border-strong);
+  color: var(--terra-text);
+  background: var(--terra-bg-hover);
 }
 
 .item[data-disabled="true"] {
@@ -137,8 +137,8 @@
 }
 
 .item.destructive[data-selected="true"] {
-  border-color: rgb(229 99 111 / 38%);
-  background: var(--terra-red-dim, rgb(229 99 111 / 14%));
+  border-color: color-mix(in srgb, var(--terra-danger) 38%, transparent);
+  background: var(--terra-danger-dim);
 }
 
 .itemIcon {
@@ -147,7 +147,7 @@
 }
 
 .item[data-selected="true"] .itemIcon {
-  color: var(--terra-text, #e4e4e7);
+  color: var(--terra-text);
 }
 
 .itemCopy {
@@ -183,7 +183,7 @@
 
 .confirmHint {
   flex: 0 0 auto;
-  color: var(--terra-amber, #e0b45c);
+  color: var(--terra-amber);
   font-size: 9px;
   font-weight: 650;
   letter-spacing: 0.04em;
@@ -192,7 +192,7 @@
 
 .empty {
   padding: 38px 20px;
-  color: var(--terra-text-muted, #8e8e96);
+  color: var(--terra-text-muted);
   text-align: center;
   font-size: 12px;
 }
@@ -202,7 +202,7 @@
   min-height: 34px;
   align-items: center;
   gap: 14px;
-  border-top: 1px solid var(--terra-border, #26262c);
+  border-top: 1px solid var(--terra-border);
   padding: 0 16px;
   color: var(--terra-text-secondary);
   font-size: 10px;
@@ -218,7 +218,7 @@
   min-width: 0;
   margin-left: auto;
   overflow: hidden;
-  color: var(--terra-amber, #e0b45c);
+  color: var(--terra-amber);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

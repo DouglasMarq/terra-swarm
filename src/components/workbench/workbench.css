@@ -1,15 +1,15 @@
 .terra-workbench {
-  --workbench-bg: var(--terra-bg, #101013);
-  --workbench-panel: var(--terra-bg-panel, #17171b);
-  --workbench-elevated: var(--terra-bg-elevated, #1d1d22);
-  --workbench-hover: var(--terra-bg-hover, #232329);
-  --workbench-border: var(--terra-border, #26262c);
-  --workbench-border-strong: var(--terra-border-strong, #34343c);
-  --workbench-ink: var(--terra-text, #e4e4e7);
-  --workbench-muted: var(--terra-text-muted, #8e8e96);
-  --workbench-faint: var(--terra-text-faint, #5b5b64);
-  --workbench-accent: var(--terra-accent, #fafafa);
-  --workbench-danger: var(--terra-red, #e5636f);
+  --workbench-bg: var(--terra-bg);
+  --workbench-panel: var(--terra-bg-panel);
+  --workbench-elevated: var(--terra-bg-elevated);
+  --workbench-hover: var(--terra-bg-hover);
+  --workbench-border: var(--terra-border);
+  --workbench-border-strong: var(--terra-border-strong);
+  --workbench-ink: var(--terra-text);
+  --workbench-muted: var(--terra-text-muted);
+  --workbench-faint: var(--terra-text-faint);
+  --workbench-accent: var(--terra-accent);
+  --workbench-danger: var(--terra-red);
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -20,7 +20,7 @@
   overflow: hidden;
   background: var(--workbench-bg);
   color: var(--workbench-ink);
-  font-family: var(--terra-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-family: var(--terra-font-sans);
 }
 
 .terra-workbench__list {
@@ -51,7 +51,7 @@
   min-height: 160px;
   flex: 1 1 0;
   flex-direction: column;
-  transition: transform 140ms var(--terra-ease-out, cubic-bezier(.22, 1, .36, 1));
+  transition: transform 140ms var(--terra-ease-out);
 }
 
 /* Keep the container and its project card as the height-bearing flex
@@ -97,7 +97,7 @@
   border: 1px solid var(--workbench-border);
   border-radius: 8px;
   background: var(--workbench-panel);
-  box-shadow: var(--terra-shadow-pane, 0 1px 4px rgb(0 0 0 / 35%));
+  box-shadow: var(--terra-shadow-pane);
   transition: border-color 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
 }
 
@@ -112,7 +112,7 @@
   height: auto;
   min-height: 0;
   border-color: var(--workbench-border-strong);
-  box-shadow: var(--terra-shadow-modal, 0 24px 64px rgb(0 0 0 / 55%));
+  box-shadow: var(--terra-shadow-modal);
 }
 
 .terra-project-container[data-collapsed="true"] {
@@ -212,7 +212,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--terra-terminal-bg, #0c0c0e);
+  background: var(--terra-terminal-bg);
 }
 
 .terra-pane-grid__cell > * {
@@ -258,7 +258,7 @@
   flex: 1 1 auto;
   overflow: hidden;
   border-right: 1px solid var(--workbench-border);
-  background: var(--terra-terminal-bg, #0c0c0e);
+  background: var(--terra-terminal-bg);
 }
 
 .terra-pane-frame:last-child {
@@ -358,7 +358,7 @@
   color: var(--workbench-faint);
   background: transparent;
   cursor: pointer;
-  font-family: var(--terra-font-mono, ui-monospace, monospace);
+  font-family: var(--terra-font-mono);
   font-size: 9px;
   font-weight: 700;
   writing-mode: vertical-rl;
@@ -403,12 +403,12 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: var(--terra-green, #4ade80);
+  background: var(--terra-green);
   content: "";
 }
 
 .terra-subtab-lane__tab[data-status="attention"]::before {
-  background: var(--terra-amber, #e0b45c);
+  background: var(--terra-amber);
 }
 
 .terra-subtab-lane__tab[data-status="error"]::before {
@@ -455,7 +455,7 @@
   color: var(--workbench-ink);
   background: rgb(16 16 19 / 92%);
   cursor: pointer;
-  font-family: var(--terra-font-sans, sans-serif);
+  font-family: var(--terra-font-sans);
   font-size: 11px;
   line-height: 1;
   writing-mode: horizontal-tb;
@@ -491,7 +491,7 @@
   gap: 8px;
   padding: 24px;
   color: var(--workbench-muted);
-  background: var(--terra-terminal-bg, #0c0c0e);
+  background: var(--terra-terminal-bg);
   font-size: 11px;
   text-align: center;
 }
@@ -537,9 +537,9 @@
 }
 
 .terra-workbench :where(button, [tabindex]):focus-visible {
-  outline: 2px solid var(--terra-border-focus, #71717a);
+  outline: 2px solid var(--terra-border-focus);
   outline-offset: 2px;
-  box-shadow: var(--terra-focus-ring, 0 0 0 3px rgb(113 113 122 / 18%));
+  box-shadow: var(--terra-focus-ring);
 }
 
 @media (max-width: 720px) {

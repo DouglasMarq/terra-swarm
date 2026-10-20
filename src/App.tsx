@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { MotionConfig } from "motion/react";
 import { useShallow } from "zustand/react/shallow";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -19,6 +19,10 @@ import { useWorkspaces } from "./app/useWorkspaces";
 import { useWorktreeClose } from "./app/useWorktreeClose";
 import { WorktreeReviewDialog } from "./components/review/WorktreeReviewDialog";
 import { FileEditorDialog } from "./components/editor/FileEditorDialog";
+import { PromptLibraryDialog } from "./components/library/PromptLibraryDialog";
+import { TeamDialog } from "./components/library/TeamDialog";
+import { orchestratorOf } from "./domain/agentRoles";
+import { agentLabelText, buildAgentLabels } from "./domain/agentLabels";
 import { resumeCommandFor, useTerminalSessions } from "./app/useTerminalSessions";
 import { useUpdater } from "./app/useUpdater";
 import type { AgentRole, NotificationItem } from "./types";
@@ -281,6 +285,15 @@ function App() {
   const initialization = useAppInitialization({ workspaces: workspaceData, sessions, resumeQueue, agentCatalog, voiceSettings });
 
   const active = workspaces.find((w) => w.id === activeId) ?? null;
+  const agentNames = usePreferencesStore((state) => state.agentNames);
+  // Running agents of the active project, for the prompt library.
+  const promptTargets = useMemo(() => {
+    if (!active) return [];
+    const labels = buildAgentLabels([active], { titles, names: agentNames });
+    return active.terminals
+      .filter((terminal) => !terminal.suspended && !(terminal.id in exited))
+      .map((terminal) => ({ id: terminal.id, label: labels[terminal.id] ? agentLabelText(labels[terminal.id]) : terminal.command }));
+  }, [active, titles, agentNames, exited]);
   const showResume = resumeQueue.open;
   const modalOpen =
     showNewWs ||
@@ -865,6 +878,21 @@ function App() {
       <WorktreeCloseDialog {...worktreeClose.dialog} />
       <WorktreeReviewDialog />
       <FileEditorDialog />
+      <PromptLibraryDialog
+        projectName={active?.name ?? null}
+        targets={promptTargets}
+        defaultTargetId={(active ? orchestratorOf(active, exited) : null) ?? (focusedId && promptTargets.some((target) => target.id === focusedId) ? focusedId : null)}
+      />
+      <TeamDialog
+        projectName={active?.name ?? null}
+        agents={agents}
+        defaultAgent={defaultAgent}
+        canIsolate={Boolean(active && branches[active.id])}
+        onSpawn={async (agent, options) => {
+          if (!active) return;
+          await sessions.spawnInto(active.id, agent, undefined, options);
+        }}
+      />
 
       <RenameDialog
         kind={renameTarget?.kind ?? "workspace"}

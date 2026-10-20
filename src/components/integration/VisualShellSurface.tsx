@@ -25,6 +25,7 @@ import { TaskBoard } from "../tasks/TaskBoard";
 import { sendPromptToTerminal } from "../../lib/session/sendPrompt";
 import { startMcpEventBridge, useReportedStates } from "../../stores/mcpStore";
 import { useReviewStore } from "../../stores/reviewStore";
+import { useLibraryStore } from "../../stores/libraryStore";
 import { startPreviewBridge } from "../../stores/previewStore";
 import { PreviewPanel } from "../preview/PreviewPanel";
 import { deriveAgentStatus } from "../../domain/agentStatus";
@@ -855,6 +856,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
           if (terminalId) focusTerminal(terminalId);
         },
         onOpenResume: props.onOpenResume,
+        onOpenLibrary: (dialog) => useLibraryStore.getState().openDialog(dialog),
         onReopenTab: () => {
           const candidate = shell.recentlyClosedTabs[0];
           if (shell.reopenWorkspaceTab() && candidate) props.onSelectWorkspace(candidate.workspaceId);

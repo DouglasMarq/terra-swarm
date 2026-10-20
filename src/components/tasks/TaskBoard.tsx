@@ -14,9 +14,10 @@ import {
   type CollisionDetection,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Bot, SquareKanban, Plus } from "lucide-react";
+import { Bot, SquareKanban, Plus, Users } from "lucide-react";
 import { useT } from "../../i18n";
 import { useMcpStore } from "../../stores/mcpStore";
+import { useLibraryStore } from "../../stores/libraryStore";
 import type { McpAgentStatus, McpTask, McpTaskPatch, McpTaskStatus } from "../../types";
 import { BOARD_COLUMNS, boardColumns, planDrop } from "./boardModel";
 import { TaskCard, type TaskAgentOption } from "./TasksPanel";
@@ -187,6 +188,9 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
             <h3>{t("tasks.board.agents")}</h3>
             <p className="terra-tasks-hint">{t("tasks.board.agentsHint")}</p>
             {agents.some((agent) => agent.running) ? null : <p className="terra-tasks-hint">{t("tasks.board.noAgents")}</p>}
+            <button type="button" className="terra-board-team" onClick={() => useLibraryStore.getState().openDialog("team")}>
+              <Users size={13} aria-hidden="true" /> {t("palette.startTeam")}
+            </button>
             <ul>
               {agents.filter((agent) => agent.running).map((agent) => (
                 <li key={agent.id}>

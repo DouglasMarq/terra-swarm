@@ -1,25 +1,23 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { MotionConfig } from "motion/react";
 import { useShallow } from "zustand/react/shallow";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "./api";
 import { useBranchPolling } from "./app/useBranchPolling";
 import { useFocusTracking } from "./app/useFocusTracking";
+import { useAgentCatalog } from "./app/useAgentCatalog";
+import { useAppInitialization } from "./app/useAppInitialization";
 import { useGlobalHotkeys } from "./app/useGlobalHotkeys";
 import { useGroupActions } from "./app/useGroupActions";
 import { useResumeQueue } from "./app/useResumeQueue";
 import { useSnapshotTransfer } from "./app/useSnapshotTransfer";
 import { useVoiceCapture } from "./app/useVoiceCapture";
 import { useVoiceSettings } from "./app/useVoiceSettings";
+import { useWorkspaceNavigation } from "./app/useWorkspaceNavigation";
+import { useWorkspaces } from "./app/useWorkspaces";
 import { resumeCommandFor, useTerminalSessions } from "./app/useTerminalSessions";
 import { useUpdater } from "./app/useUpdater";
-import type {
-  AgentInfo,
-  NotificationItem,
-  ResumeItem,
-  WorkspaceGroup,
-  Workspace,
-} from "./types";
+import type { NotificationItem } from "./types";
 import {
   AgentPickerDialog,
   RenameDialog,
@@ -38,12 +36,6 @@ import { useUiStore } from "./stores/uiStore";
 import { useShellStore } from "./stores/shellStore";
 import { useOrchestrationStore } from "./stores/orchestrationStore";
 import { t, useLocale } from "./i18n";
-import { createInitializationGate, type InitializationGate } from "./lib/session/initializationGate";
-import { selectWorkspaceContainerId } from "./lib/session/workspaceContainerSelection";
-import {
-  isTerminalSuspended,
-  suspendedGroupIds,
-} from "./lib/session/resumeSelection";
 import type { SettingsSectionId } from "./components/settings";
 import "./App.css";
 
@@ -79,17 +71,13 @@ type DurableScrollbackApi = {
   setDurableScrollbackEnabled?: (enabled: boolean) => Promise<void>;
 };
 
-function describeInitializationError(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  if (typeof error === "string" && error.trim()) return error;
-  return t("app.loadFailed");
-}
-
 function App() {
   // Re-render on a language switch so dialogs and labels built here follow it.
   useLocale();
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const workspaceData = useWorkspaces();
+  const { workspaces, setWorkspaces, refresh } = workspaceData;
+  const agentCatalog = useAgentCatalog();
+  const { agents } = agentCatalog;
   const [showNewWs, setShowNewWs] = useState(false);
   const [newWsName, setNewWsName] = useState("");
   const [newWsCwd, setNewWsCwd] = useState("");
@@ -119,8 +107,6 @@ function App() {
     setSettingsSection("voice");
     setShowSettings(true);
   }, []);
-  const [initializationError, setInitializationError] = useState<string | null>(null);
-  const [initializationRunning, setInitializationRunning] = useState(false);
   const [capturing, setCapturing] = useState<string | null>(null);
   const voiceSettings = useVoiceSettings({
     settingsOpen: showSettings,
@@ -147,9 +133,7 @@ function App() {
     snapshot: orchestrationSnapshot,
     groups,
     flags,
-    sync: syncOrchestration,
     setFeatureFlag,
-    setContainerVisible,
     persistenceError: orchestrationPersistenceError,
     clearPersistenceError,
     detachedTerminalIds,
@@ -160,9 +144,7 @@ function App() {
       snapshot: state.snapshot,
       groups: state.groups,
       flags: state.flags,
-      sync: state.sync,
       setFeatureFlag: state.setFeatureFlag,
-      setContainerVisible: state.setContainerVisible,
       persistenceError: state.persistenceError,
       clearPersistenceError: state.clearPersistenceError,
       detachedTerminalIds: state.detachedTerminalIds,
@@ -179,7 +161,6 @@ function App() {
     titles,
     resumeItems,
     resumeSavedAt,
-    setExited,
     clearNotificationCount,
     markTerminalRead,
     markAllRead,
@@ -197,7 +178,6 @@ function App() {
       titles: state.titles,
       resumeItems: state.resumeItems,
       resumeSavedAt: state.resumeSavedAt,
-      setExited: state.setExited,
       clearNotificationCount: state.clearNotificationCount,
       markTerminalRead: state.markTerminalRead,
       markAllRead: state.markAllRead,
@@ -286,148 +266,11 @@ function App() {
   const updateReduceMotion = (on: boolean) => {
     setReduceMotion(on);
   };
-  const agentsRef = useRef<AgentInfo[]>([]);
-  const agentsReadyRef = useRef<Promise<void>>(Promise.resolve());
   const { appVersion, updateVersion, updateInstalling, updateCheckState, manualUpdateCheck, installUpdate } = useUpdater();
-  const inited = useRef(false);
-  const initializationGateRef = useRef<InitializationGate | null>(null);
-  if (!initializationGateRef.current) {
-    initializationGateRef.current = createInitializationGate();
-  }
-
-  const refresh = useCallback(async () => {
-    try {
-      const list = await api.listWorkspaces();
-      const loadedGroups = await api.listGroups().catch(() => [] as WorkspaceGroup[]);
-      syncOrchestration(list, loadedGroups);
-      setWorkspaces(list);
-      const visibleIds = new Set(
-        (useOrchestrationStore.getState().snapshot?.containers ?? [])
-          .filter((container) => container.visible)
-          .map((container) => container.projectId)
-          .filter((id): id is string => Boolean(id)),
-      );
-      setActiveId((prev) =>
-        prev && visibleIds.has(prev)
-          ? prev
-          : (list.find((workspace) => visibleIds.has(workspace.id))?.id ?? list[0]?.id ?? null),
-      );
-    } catch (err) {
-      console.error("failed to list workspaces:", err);
-    }
-  }, [syncOrchestration]);
-
   const sessions = useTerminalSessions({ workspaces, snapshot: orchestrationSnapshot, refresh });
   const resumeQueue = useResumeQueue(sessions, refresh);
   const snapshotTransfer = useSnapshotTransfer(sessions, refresh);
-
-  // Load workspaces and offer to resume terminals that were running at last
-  // close. The gate coalesces StrictMode/concurrent attempts, while a failed
-  // attempt clears `inited` so the visible retry action can safely run again.
-  const initializeApplication = async () => {
-    let list = await api.listWorkspaces();
-    if (list.length === 0) {
-      await api.createWorkspace("default", "");
-      list = await api.listWorkspaces();
-    }
-    const loadedGroups = await api.listGroups().catch(() => [] as WorkspaceGroup[]);
-    syncOrchestration(list, loadedGroups);
-    setWorkspaces(list);
-    const visibleIds = new Set(
-      (useOrchestrationStore.getState().snapshot?.containers ?? [])
-        .filter((container) => container.visible)
-        .map((container) => container.projectId)
-        .filter((id): id is string => Boolean(id)),
-    );
-    setActiveId((previous) =>
-      previous && visibleIds.has(previous)
-        ? previous
-        : (list.find((workspace) => visibleIds.has(workspace.id))?.id ?? list[0]?.id ?? null),
-    );
-
-    const running = await api.runningTerminals();
-    const runningIds = new Set(running.map((r) => r.id));
-    sessions.track(list.flatMap((ws) => ws.terminals.map((terminal) => terminal.id)), running);
-    const suspendedGroups = suspendedGroupIds(loadedGroups);
-    const suspendedProjects = new Set(
-      loadedGroups
-        .filter((group) => group.suspended === true)
-        .flatMap((group) => group.projectIds),
-    );
-    // Persisted terminals that are no longer alive were running when the
-    // app last closed; offer to resume them instead of silently respawning.
-    const items: ResumeItem[] = [];
-    const deadIds: string[] = [];
-    for (const ws of list) {
-      for (const t of ws.terminals) {
-        if (runningIds.has(t.id)) continue;
-        // Suspended sessions are deliberate dormant state. This also covers
-        // imported snapshots, whose backend marks every session suspended.
-        if (
-          isTerminalSuspended(ws, t, suspendedGroups) ||
-          suspendedProjects.has(ws.id)
-        ) {
-          continue;
-        }
-        deadIds.push(t.id);
-        items.push({
-          terminalId: t.id,
-          wsId: ws.id,
-          wsName: ws.name,
-          cwd: ws.cwd,
-          command: t.command,
-          agentId: t.command.trim().split(/\s+/)[0] || "shell",
-          resumeCommand: resumeCommandFor(t.command),
-        });
-      }
-    }
-    if (items.length > 0) {
-      // Mark persisted-dead terminals as exited up front so panes show the
-      // exited overlay instead of a blank live-looking terminal.
-      setExited((prev) => {
-        const next = { ...prev };
-        for (const id of deadIds) next[id] = null;
-        return next;
-      });
-      resumeQueue.offer(items);
-    }
-
-    const agentsReady = api
-      .detectAgents()
-      .then((a) => {
-        agentsRef.current = a;
-        setAgents(a);
-      })
-      .catch(() => {});
-    agentsReadyRef.current = agentsReady;
-    await agentsReady;
-
-    voiceSettings.applyStoredSettings();
-  };
-
-  const startInitialization = () => {
-    const gate = initializationGateRef.current;
-    if (!gate || gate.isRunning()) return;
-    inited.current = true;
-    setInitializationError(null);
-    setInitializationRunning(true);
-    void gate.run(initializeApplication).then(
-      () => {
-        setInitializationRunning(false);
-      },
-      (error) => {
-        console.error("initialization failed:", error);
-        inited.current = false;
-        setInitializationError(describeInitializationError(error));
-        setInitializationRunning(false);
-      },
-    );
-  };
-
-  useEffect(() => {
-    if (inited.current) return;
-    startInitialization();
-  }, []);
+  const initialization = useAppInitialization({ workspaces: workspaceData, sessions, resumeQueue, agentCatalog, voiceSettings });
 
   const active = workspaces.find((w) => w.id === activeId) ?? null;
   const showResume = resumeQueue.open;
@@ -455,10 +298,8 @@ function App() {
     setExpandedId(null);
     // Wait for agent detection: at startup `agents` is still empty, and
     // deciding on a stale list would open the picker despite a saved default.
-    await agentsReadyRef.current;
-    const defAvailable =
-      defaultAgent &&
-      agentsRef.current.some((a) => a.id === defaultAgent && a.available);
+    await agentCatalog.whenReady();
+    const defAvailable = defaultAgent && agentCatalog.isAvailable(defaultAgent);
     if (defAvailable) {
       sessions.spawnInto(wsId, defaultAgent, paneId ? { paneId } : undefined).catch(sessions.reportSpawnError);
     } else {
@@ -478,7 +319,7 @@ function App() {
   const chooseAgentForPanel = async (wsId: string, paneId: string | null = null) => {
     setActiveId(wsId);
     setExpandedId(null);
-    await agentsReadyRef.current;
+    await agentCatalog.whenReady();
     setPickerTarget(wsId);
     setPickerTargetPane(paneId);
     setPickerSaveDefault(true);
@@ -539,60 +380,12 @@ function App() {
     }
   };
 
-  const containerIdForWorkspace = (
-    workspaceId: string,
-    visibleOnly = false,
-    focusedTerminalId = focusedId,
-  ): string | null =>
-    selectWorkspaceContainerId(orchestrationSnapshot, workspaces, workspaceId, {
-      focusedTerminalId,
-      visibleOnly,
-    });
-
-  /** Hide exactly one visual container. PTYs and sibling containers remain intact. */
-  const hideContainer = (containerId: string) => {
-    const before = useOrchestrationStore.getState().snapshot;
-    const container = before?.containers.find((candidate) => candidate.id === containerId);
-    if (!container) return;
-    setContainerVisible(containerId, false);
-    if (!container.projectId || activeId !== container.projectId) return;
-
-    const after = useOrchestrationStore.getState().snapshot;
-    const visibleContainers = (after?.containers ?? []).filter(
-      (candidate) => candidate.visible && candidate.id !== containerId && candidate.projectId,
-    );
-    const next =
-      visibleContainers.find((candidate) => candidate.projectId !== container.projectId) ??
-      visibleContainers[0];
-    setActiveId(next?.projectId ?? null);
-    setExpandedId(null);
-    setFocusedId(null);
-  };
-
-  /** Hide the workspace's persisted active container when invoked by chrome/navigation. */
-  const hideWorkspace = (id: string) => {
-    const containerId = containerIdForWorkspace(id);
-    if (containerId) {
-      hideContainer(containerId);
-      return;
-    }
-    if (activeId !== id) return;
-    const next = workspaces.find((workspace) => {
-      if (workspace.id === id) return false;
-      return Boolean(containerIdForWorkspace(workspace.id, true));
-    });
-    setActiveId(next?.id ?? null);
-    setExpandedId(null);
-    setFocusedId(null);
-  };
-
-  const selectWorkspace = (id: string, focusedTerminalId?: string) => {
-    const containerId = containerIdForWorkspace(id, false, focusedTerminalId);
-    if (containerId) setContainerVisible(containerId, true);
-    // Clicking into a pane of the open project must not undo its maximize.
-    if (id !== activeId) setExpandedId(null);
-    setActiveId(id);
-  };
+  const { selectWorkspace, hideWorkspace, hideContainer } = useWorkspaceNavigation({
+    workspaces,
+    snapshot: orchestrationSnapshot,
+    activeId,
+    focusedId,
+  });
 
   const createGroup = () => {
     setNewGroupName("");
@@ -860,14 +653,14 @@ function App() {
 
   return (
     <MotionConfig reducedMotion={reduceMotion ? "always" : "user"}>
-      {initializationError ? (
+      {initialization.error ? (
         <div className="terra-initialization-error" role="alert" aria-live="assertive">
           <div>
             <strong>{t("system.initFailed")}</strong>
-            <span>{initializationError}</span>
+            <span>{initialization.error}</span>
           </div>
-          <button type="button" className="terra-button" onClick={startInitialization} disabled={initializationRunning}>
-            {initializationRunning ? t("system.retrying") : t("nav.retry")}
+          <button type="button" className="terra-button" onClick={initialization.retry} disabled={initialization.running}>
+            {initialization.running ? t("system.retrying") : t("nav.retry")}
           </button>
         </div>
       ) : null}

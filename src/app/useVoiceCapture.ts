@@ -13,6 +13,7 @@ import {
 import { getTerminal } from "../terminalRegistry";
 import { t } from "../i18n";
 import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
+import { orchestratorOf } from "../domain/agentRoles";
 import { parseVoiceCommand } from "../lib/voiceCommands";
 import { buildVoicePrompt, profileForCommand, resolveResumeCommand } from "../lib/features/agentProfiles";
 import { usePreferencesStore } from "../stores/preferencesStore";
@@ -129,7 +130,7 @@ export function useVoiceCapture({
   const targetLabelForVoiceIntent = (intent: VoiceCapsuleIntent | null): string | null => {
     if (!intent) {
       // The picker's choice, else the focused agent, as the readable label.
-      const id = voiceTargetId ?? focusedId;
+      const id = defaultTargetId;
       if (!id) return null;
       const label = buildAgentLabels(workspaces, { titles, names: usePreferencesStore.getState().agentNames })[id];
       return label ? agentLabelText(label) : id;
@@ -261,9 +262,14 @@ export function useVoiceCapture({
   // Latest focused terminal for the voice paste target, readable from
   // listeners that are registered once.
   const voiceFocusRef = useRef<string | null>(null);
-  // "Enviar para": an explicit voice target wins over the focused terminal.
+  // "Enviar para": an explicit voice target wins; then the project's
+  // orchestrator, when one runs and the preference is on; then the focus.
   const [voiceTargetId, setVoiceTargetId] = useState<string | null>(null);
-  voiceFocusRef.current = voiceTargetId ?? focusedId;
+  const voiceToOrchestrator = usePreferencesStore((state) => state.voiceToOrchestrator);
+  const exitedTerminals = useTerminalRuntimeStore((state) => state.exited);
+  const orchestratorId = voiceToOrchestrator ? orchestratorOf(activeWorkspace, exitedTerminals) : null;
+  const defaultTargetId = voiceTargetId ?? orchestratorId ?? focusedId;
+  voiceFocusRef.current = defaultTargetId;
 
   // Writes dictated text to a terminal. An exited target is first resumed
   // with its agent's continuation command, then receives the prompt.
@@ -475,7 +481,7 @@ export function useVoiceCapture({
     samples: voiceSamples,
     feedback: voiceFeedback,
     submitted: voiceSubmitted,
-    targetId: voiceTargetId ?? focusedId,
+    targetId: defaultTargetId,
     setTargetId: setVoiceTargetId,
     targetLabel: targetLabelForVoiceIntent(voiceCapsule.intent),
     toggle: toggleVoice,

@@ -355,6 +355,22 @@ function useNamesInUse(): string[] {
   return useMemo(() => Object.values(agentNames), [agentNames]);
 }
 
+/** Dictation goes to the project's orchestrator agent when one is running. */
+function VoiceToOrchestratorRow() {
+  const t = useT();
+  const enabled = usePreferencesStore((state) => state.voiceToOrchestrator);
+  const setEnabled = usePreferencesStore((state) => state.setVoiceToOrchestrator);
+  return (
+    <div className={styles.row}>
+      <div className={styles.rowLabel}>
+        <span className={styles.label}>{t("settingsPanels.voiceToOrchestrator")}</span>
+        <span className={styles.rowHint}>{t("settingsPanels.voiceToOrchestratorHint")}</span>
+      </div>
+      <Toggle checked={enabled} label={t("settingsPanels.voiceToOrchestrator")} onChange={setEnabled} />
+    </div>
+  );
+}
+
 /** Native notifications and the app icon badge. */
 function SystemNotificationsCard() {
   const t = useT();
@@ -821,6 +837,7 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
                   </div>
                 </div>
                 {micTesting ? <p className={styles.hint}>{t("settingsPanels.micTestBody")}</p> : null}
+                <VoiceToOrchestratorRow />
               </>
             ) : null}
           </div>

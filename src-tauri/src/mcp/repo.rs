@@ -5,7 +5,7 @@
 //! Statuses are runtime facts and live only in memory; everything else is in
 //! `mcp.db` and is kept in full (no size-based eviction).
 
-use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -13,10 +13,16 @@ pub const MAX_TITLE_CHARS: usize = 200;
 /// Guards against runaway input; history itself is never trimmed.
 pub const MAX_BODY_BYTES: usize = 64 * 1024;
 pub const MAX_LABELS: usize = 16;
+pub const MAX_LABEL_CHARS: usize = 40;
+pub const MAX_NOTE_KEY_CHARS: usize = 80;
+pub const MAX_STATUS_SUMMARY_CHARS: usize = 500;
 pub const DEFAULT_INBOX_LIMIT: usize = 50;
 pub const DEFAULT_SEARCH_LIMIT: usize = 20;
 pub const MAX_LIMIT: usize = 200;
 pub const TASK_EVENTS_SHOWN: usize = 50;
+/// The tables a workspace's rows live in; fixed at compile time, so they
+/// can be named in SQL with `format!`.
+const WORKSPACE_TABLES: [&str; 3] = ["tasks", "messages", "notes"];
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -93,7 +99,7 @@ impl TaskPriority {
 
     pub fn from_rank(rank: i64) -> Self {
         Self::ALL
-            .get(rank.clamp(0, 3) as usize)
+            .get(rank.clamp(TaskPriority::Urgent.rank(), TaskPriority::Low.rank()) as usize)
             .copied()
             .unwrap_or(TaskPriority::Medium)
     }
@@ -298,7 +304,7 @@ fn clean_labels(raw: &[String]) -> StoreResult<Vec<String>> {
         if label.is_empty() || labels.iter().any(|existing| existing == label) {
             continue;
         }
-        if label.chars().count() > 40 {
+        if label.chars().count() > MAX_LABEL_CHARS {
             return Err(StoreError::Invalid(format!(
                 "label `{}` is too long",
                 label
@@ -356,6 +362,402 @@ fn end_of_column(tx: &Transaction<'_>, workspace_id: &str, status: TaskStatus) -
     Ok(max.map_or(1.0, |max| max.floor() + 1.0))
 }
 
+/// Child rows go with their parents through ON DELETE CASCADE.
+fn delete_workspace_rows(tx: &Transaction<'_>, workspace_id: &str) -> StoreResult<()> {
+    tx.execute(
+        "DELETE FROM tasks WHERE workspace_id = ?1",
+        params![workspace_id],
+    )?;
+    tx.execute(
+        "DELETE FROM messages WHERE workspace_id = ?1",
+        params![workspace_id],
+    )?;
+    tx.execute(
+        "DELETE FROM notes WHERE workspace_id = ?1",
+        params![workspace_id],
+    )?;
+    Ok(())
+}
+
+fn task_id(conn: &Connection, workspace_id: &str, raw: &str) -> StoreResult<String> {
+    let id = normalize_task_id(raw).ok_or_else(|| task_not_found(raw))?;
+    conn.query_row(
+        "SELECT id FROM tasks WHERE id = ?1 AND workspace_id = ?2",
+        params![id, workspace_id],
+        |row| row.get(0),
+    )
+    .optional()?
+    .ok_or_else(|| task_not_found(raw))
+}
+
+/// Resolve dependency ids with one query, keeping their order and dropping
+/// duplicates. Any id that is not a task of the workspace is refused.
+fn dependency_ids(
+    conn: &Connection,
+    workspace_id: &str,
+    raw: &[String],
+) -> StoreResult<Vec<String>> {
+    if raw.is_empty() {
+        return Ok(Vec::new());
+    }
+    let normalized: Vec<Option<String>> = raw.iter().map(|dep| normalize_task_id(dep)).collect();
+    let candidates = normalized
+        .iter()
+        .flatten()
+        .map(String::as_str)
+        .collect::<serde_json::Value>()
+        .to_string();
+    let existing: HashSet<String> = {
+        let mut stmt = conn.prepare_cached(
+            "SELECT id FROM tasks
+             WHERE workspace_id = ?1 AND id IN (SELECT value FROM json_each(?2))",
+        )?;
+        let rows = stmt.query_map(params![workspace_id, candidates], |row| row.get(0))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    let mut depends_on: Vec<String> = Vec::new();
+    for (dep, id) in raw.iter().zip(normalized) {
+        let Some(id) = id.filter(|id| existing.contains(id)) else {
+            return Err(StoreError::Invalid(format!(
+                "dependency {} is not a task in this workspace",
+                dep
+            )));
+        };
+        if !depends_on.contains(&id) {
+            depends_on.push(id);
+        }
+    }
+    Ok(depends_on)
+}
+
+fn task_from_row(row: &Row<'_>) -> rusqlite::Result<Task> {
+    let id: String = row.get(0)?;
+    let status: String = row.get(4)?;
+    let labels: String = row.get(8)?;
+    let labels = serde_json::from_str(&labels).unwrap_or_else(|error| {
+        eprintln!("task {} has unreadable labels, showing none: {}", id, error);
+        Vec::new()
+    });
+    Ok(Task {
+        id,
+        workspace_id: row.get(1)?,
+        title: row.get(2)?,
+        description: row.get(3)?,
+        status: TaskStatus::parse(&status).unwrap_or(TaskStatus::Todo),
+        priority: TaskPriority::from_rank(row.get(5)?),
+        assignee: row.get(6)?,
+        created_by: row.get(7)?,
+        labels,
+        position: row.get(9)?,
+        depends_on: Vec::new(),
+        blocked_by: Vec::new(),
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
+        events: None,
+    })
+}
+
+fn load_task(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    events: Option<usize>,
+) -> StoreResult<Task> {
+    let mut task = conn
+        .query_row(
+            "SELECT id, workspace_id, title, description, status, priority, assignee, created_by,
+                    labels, position, created_at, updated_at
+             FROM tasks WHERE id = ?1 AND workspace_id = ?2",
+            params![id, workspace_id],
+            task_from_row,
+        )
+        .optional()?
+        .ok_or_else(|| task_not_found(id))?;
+    attach_task_details(conn, workspace_id, std::slice::from_mut(&mut task), events)?;
+    Ok(task)
+}
+
+/// Fill the dependencies of `tasks` and, when `events` is set, their latest
+/// events, with one query each however many tasks there are.
+fn attach_task_details(
+    conn: &Connection,
+    workspace_id: &str,
+    tasks: &mut [Task],
+    events: Option<usize>,
+) -> StoreResult<()> {
+    let ids = tasks
+        .iter()
+        .map(|task| task.id.as_str())
+        .collect::<serde_json::Value>()
+        .to_string();
+    let index: HashMap<String, usize> = tasks
+        .iter()
+        .enumerate()
+        .map(|(position, task)| (task.id.clone(), position))
+        .collect();
+    {
+        let mut stmt = conn.prepare_cached(
+            "SELECT d.task_id, d.depends_on, t.status FROM task_deps d
+             JOIN tasks t ON t.id = d.depends_on AND t.workspace_id = ?1
+             WHERE d.task_id IN (SELECT value FROM json_each(?2))
+             ORDER BY t.created_at",
+        )?;
+        let rows = stmt.query_map(params![workspace_id, ids], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+        for row in rows {
+            let (task_id, dep, status) = row?;
+            let Some(task) = index.get(&task_id).and_then(|at| tasks.get_mut(*at)) else {
+                continue;
+            };
+            if status != TaskStatus::Done.as_str() {
+                task.blocked_by.push(dep.clone());
+            }
+            task.depends_on.push(dep);
+        }
+    }
+    let Some(limit) = events else {
+        return Ok(());
+    };
+    for task in tasks.iter_mut() {
+        task.events = Some(Vec::new());
+    }
+    let mut stmt = conn.prepare_cached(
+        "SELECT task_id, actor, kind, body, created_at FROM (
+            SELECT id, task_id, actor, kind, body, created_at,
+                   ROW_NUMBER() OVER (PARTITION BY task_id ORDER BY id DESC) AS recency
+            FROM task_events WHERE task_id IN (SELECT value FROM json_each(?1))
+         ) WHERE recency <= ?2 ORDER BY id",
+    )?;
+    let rows = stmt.query_map(params![ids, limit as i64], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            TaskEvent {
+                actor: row.get(1)?,
+                kind: row.get(2)?,
+                body: row.get(3)?,
+                created_at: row.get(4)?,
+            },
+        ))
+    })?;
+    for row in rows {
+        let (task_id, event) = row?;
+        if let Some(events) = index
+            .get(&task_id)
+            .and_then(|at| tasks.get_mut(*at))
+            .and_then(|task| task.events.as_mut())
+        {
+            events.push(event);
+        }
+    }
+    Ok(())
+}
+
+/// The writes of `update_task`, inside the caller's transaction. Returns the
+/// resolved task id.
+fn apply_task_patch(
+    tx: &Transaction<'_>,
+    workspace_id: &str,
+    id: &str,
+    actor: &str,
+    patch: TaskPatch,
+) -> StoreResult<String> {
+    let id = task_id(tx, workspace_id, id)?;
+    let before = load_task(tx, workspace_id, &id, None)?;
+    let title = patch.title.as_deref().map(clean_title).transpose()?;
+    let description = patch
+        .description
+        .as_deref()
+        .map(|value| clean_body(value, "description", true))
+        .transpose()?;
+    let note = patch
+        .note
+        .as_deref()
+        .map(|value| clean_body(value, "note", false))
+        .transpose()?;
+    let assignee = patch
+        .assignee
+        .map(|value| value.filter(|id| !id.trim().is_empty()));
+    if let Some(position) = patch.position {
+        if !position.is_finite() {
+            return Err(StoreError::Invalid(
+                "position must be a finite number".into(),
+            ));
+        }
+    }
+    let at = now_millis();
+    if let Some(title) = &title {
+        tx.execute(
+            "UPDATE tasks SET title = ?1 WHERE id = ?2 AND workspace_id = ?3",
+            params![title, id, workspace_id],
+        )?;
+    }
+    if let Some(description) = &description {
+        tx.execute(
+            "UPDATE tasks SET description = ?1 WHERE id = ?2 AND workspace_id = ?3",
+            params![description, id, workspace_id],
+        )?;
+    }
+    if let Some(priority) = patch.priority {
+        tx.execute(
+            "UPDATE tasks SET priority = ?1 WHERE id = ?2 AND workspace_id = ?3",
+            params![priority.rank(), id, workspace_id],
+        )?;
+    }
+    if let Some(status) = patch.status.filter(|status| *status != before.status) {
+        // A task that changes column goes to the end of the new one
+        // unless the caller placed it explicitly.
+        let position = match patch.position {
+            Some(position) => position,
+            None => end_of_column(tx, workspace_id, status)?,
+        };
+        tx.execute(
+            "UPDATE tasks SET status = ?1, position = ?2 WHERE id = ?3 AND workspace_id = ?4",
+            params![status.as_str(), position, id, workspace_id],
+        )?;
+        add_event(
+            tx,
+            &id,
+            actor,
+            "status",
+            &format!("{} → {}", before.status.as_str(), status.as_str()),
+            at,
+        )?;
+    } else if let Some(position) = patch.position {
+        tx.execute(
+            "UPDATE tasks SET position = ?1 WHERE id = ?2 AND workspace_id = ?3",
+            params![position, id, workspace_id],
+        )?;
+    }
+    if let Some(assignee) = &assignee {
+        if assignee.as_deref() != before.assignee.as_deref() {
+            tx.execute(
+                "UPDATE tasks SET assignee = ?1 WHERE id = ?2 AND workspace_id = ?3",
+                params![assignee, id, workspace_id],
+            )?;
+            add_event(
+                tx,
+                &id,
+                actor,
+                "assigned",
+                assignee.as_deref().unwrap_or(""),
+                at,
+            )?;
+        }
+    }
+    if let Some(note) = &note {
+        add_event(tx, &id, actor, "note", note, at)?;
+    }
+    tx.execute(
+        "UPDATE tasks SET updated_at = ?1 WHERE id = ?2 AND workspace_id = ?3",
+        params![at, id, workspace_id],
+    )?;
+    Ok(id)
+}
+
+fn message_from_row(row: &Row<'_>) -> rusqlite::Result<Message> {
+    Ok(Message {
+        id: row.get(0)?,
+        workspace_id: row.get(1)?,
+        from: row.get(2)?,
+        to: row.get(3)?,
+        body: row.get(4)?,
+        created_at: row.get(5)?,
+        read_by: Vec::new(),
+    })
+}
+
+/// Fill `read_by` of `messages` with one query however many there are.
+fn attach_readers(conn: &Connection, messages: &mut [Message]) -> StoreResult<()> {
+    let ids = messages
+        .iter()
+        .map(|message| message.id)
+        .collect::<serde_json::Value>()
+        .to_string();
+    let index: HashMap<i64, usize> = messages
+        .iter()
+        .enumerate()
+        .map(|(position, message)| (message.id, position))
+        .collect();
+    let mut stmt = conn.prepare_cached(
+        "SELECT message_id, reader FROM message_reads
+         WHERE message_id IN (SELECT value FROM json_each(?1)) ORDER BY rowid",
+    )?;
+    let rows = stmt.query_map(params![ids], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+    })?;
+    for row in rows {
+        let (message_id, reader) = row?;
+        if let Some(message) = index.get(&message_id).and_then(|at| messages.get_mut(*at)) {
+            message.read_by.push(reader);
+        }
+    }
+    Ok(())
+}
+
+fn load_message(conn: &Connection, workspace_id: &str, id: i64) -> StoreResult<Message> {
+    let mut message = conn
+        .query_row(
+            "SELECT id, workspace_id, sender, recipient, body, created_at FROM messages
+             WHERE id = ?1 AND workspace_id = ?2",
+            params![id, workspace_id],
+            message_from_row,
+        )
+        .optional()?
+        .ok_or_else(|| {
+            StoreError::NotFound(format!("message {} not found in this workspace", id))
+        })?;
+    attach_readers(conn, std::slice::from_mut(&mut message))?;
+    Ok(message)
+}
+
+fn insert_message(
+    conn: &Connection,
+    workspace_id: &str,
+    from: &str,
+    to: &str,
+    body: &str,
+) -> StoreResult<Message> {
+    let body = clean_body(body, "message", false)?;
+    let to = to.trim();
+    if to.is_empty() {
+        return Err(StoreError::Invalid("recipient cannot be empty".into()));
+    }
+    conn.execute(
+        "INSERT INTO messages(workspace_id, sender, recipient, body, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![workspace_id, from, to, body, now_millis()],
+    )?;
+    load_message(conn, workspace_id, conn.last_insert_rowid())
+}
+
+fn note_from_row(row: &Row<'_>) -> rusqlite::Result<Note> {
+    Ok(Note {
+        id: row.get(0)?,
+        workspace_id: row.get(1)?,
+        key: row.get(2)?,
+        body: row.get(3)?,
+        author: row.get(4)?,
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
+    })
+}
+
+fn load_note(conn: &Connection, workspace_id: &str, id: i64) -> StoreResult<Note> {
+    conn.query_row(
+        "SELECT id, workspace_id, key, body, author, created_at, updated_at FROM notes
+         WHERE id = ?1 AND workspace_id = ?2",
+        params![id, workspace_id],
+        note_from_row,
+    )
+    .optional()?
+    .ok_or_else(|| StoreError::NotFound(format!("note {} not found in this workspace", id)))
+}
+
 pub struct Repo {
     conn: Connection,
     statuses: HashMap<String, AgentStatus>,
@@ -378,16 +780,24 @@ impl Repo {
 
     /// Whether terminals get the MCP server injected. On unless turned off.
     pub fn enabled(&self) -> bool {
-        self.conn
+        match self
+            .conn
             .query_row(
                 "SELECT value FROM settings WHERE key = 'enabled'",
                 [],
                 |row| row.get::<_, String>(0),
             )
             .optional()
-            .ok()
-            .flatten()
-            .is_none_or(|value| value != "0")
+        {
+            Ok(value) => value.is_none_or(|value| value != "0"),
+            Err(error) => {
+                eprintln!(
+                    "cannot read the MCP enabled setting, assuming on: {}",
+                    error
+                );
+                true
+            }
+        }
     }
 
     pub fn set_enabled(&self, enabled: bool) -> StoreResult<()> {
@@ -404,29 +814,18 @@ impl Repo {
     /// `workspaces.json`, so there is no foreign key to cascade from.
     pub fn purge_workspace(&mut self, workspace_id: &str) -> StoreResult<()> {
         let tx = self.conn.transaction()?;
-        // Child rows go with their parents through ON DELETE CASCADE.
-        tx.execute(
-            "DELETE FROM tasks WHERE workspace_id = ?1",
-            params![workspace_id],
-        )?;
-        tx.execute(
-            "DELETE FROM messages WHERE workspace_id = ?1",
-            params![workspace_id],
-        )?;
-        tx.execute(
-            "DELETE FROM notes WHERE workspace_id = ?1",
-            params![workspace_id],
-        )?;
+        delete_workspace_rows(&tx, workspace_id)?;
         tx.commit()?;
         self.statuses
             .retain(|_, status| status.workspace_id != workspace_id);
         Ok(())
     }
 
-    /// Purge workspaces that disappeared while the app was not running.
+    /// Purge workspaces that disappeared while the app was not running, all
+    /// in one transaction.
     pub fn retain_workspaces(&mut self, known: &HashSet<String>) -> StoreResult<()> {
         let mut gone: Vec<String> = Vec::new();
-        for table in ["tasks", "messages", "notes"] {
+        for table in WORKSPACE_TABLES {
             let mut stmt = self
                 .conn
                 .prepare(&format!("SELECT DISTINCT workspace_id FROM {}", table))?;
@@ -438,89 +837,17 @@ impl Repo {
                 }
             }
         }
-        for id in gone {
-            self.purge_workspace(&id)?;
+        let tx = self.conn.transaction()?;
+        for id in &gone {
+            delete_workspace_rows(&tx, id)?;
         }
+        tx.commit()?;
+        self.statuses
+            .retain(|_, status| !gone.contains(&status.workspace_id));
         Ok(())
     }
 
     // ----- tasks ----------------------------------------------------------
-
-    fn task_id(&self, workspace_id: &str, raw: &str) -> StoreResult<String> {
-        let id = normalize_task_id(raw).ok_or_else(|| task_not_found(raw))?;
-        self.conn
-            .query_row(
-                "SELECT id FROM tasks WHERE id = ?1 AND workspace_id = ?2",
-                params![id, workspace_id],
-                |row| row.get(0),
-            )
-            .optional()?
-            .ok_or_else(|| task_not_found(raw))
-    }
-
-    fn load_task(&self, id: &str, events: Option<usize>) -> StoreResult<Task> {
-        let mut task = self.conn.query_row(
-            "SELECT id, workspace_id, title, description, status, priority, assignee, created_by,
-                    labels, position, created_at, updated_at
-             FROM tasks WHERE id = ?1",
-            params![id],
-            |row| {
-                let status: String = row.get(4)?;
-                Ok(Task {
-                    id: row.get(0)?,
-                    workspace_id: row.get(1)?,
-                    title: row.get(2)?,
-                    description: row.get(3)?,
-                    status: TaskStatus::parse(&status).unwrap_or(TaskStatus::Todo),
-                    priority: TaskPriority::from_rank(row.get(5)?),
-                    assignee: row.get(6)?,
-                    created_by: row.get(7)?,
-                    labels: serde_json::from_str(&row.get::<_, String>(8)?).unwrap_or_default(),
-                    position: row.get(9)?,
-                    depends_on: Vec::new(),
-                    blocked_by: Vec::new(),
-                    created_at: row.get(10)?,
-                    updated_at: row.get(11)?,
-                    events: None,
-                })
-            },
-        )?;
-        {
-            let mut stmt = self.conn.prepare_cached(
-                "SELECT d.depends_on, t.status FROM task_deps d
-                 JOIN tasks t ON t.id = d.depends_on
-                 WHERE d.task_id = ?1 ORDER BY t.created_at",
-            )?;
-            let rows = stmt.query_map(params![id], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-            })?;
-            for row in rows {
-                let (dep, status) = row?;
-                if status != TaskStatus::Done.as_str() {
-                    task.blocked_by.push(dep.clone());
-                }
-                task.depends_on.push(dep);
-            }
-        }
-        if let Some(limit) = events {
-            let mut stmt = self.conn.prepare_cached(
-                "SELECT actor, kind, body, created_at FROM (
-                    SELECT id, actor, kind, body, created_at FROM task_events
-                    WHERE task_id = ?1 ORDER BY id DESC LIMIT ?2
-                 ) ORDER BY id",
-            )?;
-            let rows = stmt.query_map(params![id, limit as i64], |row| {
-                Ok(TaskEvent {
-                    actor: row.get(0)?,
-                    kind: row.get(1)?,
-                    body: row.get(2)?,
-                    created_at: row.get(3)?,
-                })
-            })?;
-            task.events = Some(rows.collect::<Result<_, _>>()?);
-        }
-        Ok(task)
-    }
 
     /// Ordered by status (active work first), priority, then position.
     pub fn list_tasks(
@@ -530,9 +857,11 @@ impl Repo {
         assignee: Option<&str>,
         events: Option<usize>,
     ) -> StoreResult<Vec<Task>> {
-        let ids: Vec<String> = {
+        let mut tasks: Vec<Task> = {
             let mut stmt = self.conn.prepare_cached(
-                "SELECT id FROM tasks
+                "SELECT id, workspace_id, title, description, status, priority, assignee, created_by,
+                        labels, position, created_at, updated_at
+                 FROM tasks
                  WHERE workspace_id = ?1
                    AND (?2 IS NULL OR status = ?2)
                    AND (?3 IS NULL OR assignee = ?3)
@@ -543,16 +872,17 @@ impl Repo {
             )?;
             let rows = stmt.query_map(
                 params![workspace_id, status.map(TaskStatus::as_str), assignee],
-                |row| row.get(0),
+                task_from_row,
             )?;
             rows.collect::<Result<_, _>>()?
         };
-        ids.iter().map(|id| self.load_task(id, events)).collect()
+        attach_task_details(&self.conn, workspace_id, &mut tasks, events)?;
+        Ok(tasks)
     }
 
     pub fn get_task(&self, workspace_id: &str, id: &str) -> StoreResult<Task> {
-        let id = self.task_id(workspace_id, id)?;
-        self.load_task(&id, Some(TASK_EVENTS_SHOWN))
+        let id = task_id(&self.conn, workspace_id, id)?;
+        load_task(&self.conn, workspace_id, &id, Some(TASK_EVENTS_SHOWN))
     }
 
     pub fn create_task(
@@ -568,18 +898,6 @@ impl Repo {
             true,
         )?;
         let labels = clean_labels(&new.labels)?;
-        let mut depends_on: Vec<String> = Vec::new();
-        for dep in &new.depends_on {
-            let id = self.task_id(workspace_id, dep).map_err(|_| {
-                StoreError::Invalid(format!(
-                    "dependency {} is not a task in this workspace",
-                    dep
-                ))
-            })?;
-            if !depends_on.contains(&id) {
-                depends_on.push(id);
-            }
-        }
         let priority = new.priority.unwrap_or(TaskPriority::Medium);
         let assignee = new.assignee.filter(|id| !id.trim().is_empty());
         let status = if assignee.is_some() {
@@ -589,6 +907,7 @@ impl Repo {
         };
         let at = now_millis();
         let tx = self.conn.transaction()?;
+        let depends_on = dependency_ids(&tx, workspace_id, &new.depends_on)?;
         let seq: i64 = tx.query_row(
             "UPDATE counters SET value = value + 1 WHERE name = 'task' RETURNING value",
             [],
@@ -625,14 +944,16 @@ impl Repo {
             add_event(&tx, &id, created_by, "assigned", assignee, at)?;
         }
         tx.commit()?;
-        self.load_task(&id, Some(TASK_EVENTS_SHOWN))
+        load_task(&self.conn, workspace_id, &id, Some(TASK_EVENTS_SHOWN))
     }
 
     /// Take a `todo` task. The conditional UPDATE is the lock: of two agents
     /// racing for a task, exactly one sees its row change.
     pub fn claim_task(&mut self, workspace_id: &str, id: &str, who: &str) -> StoreResult<Task> {
-        let id = self.task_id(workspace_id, id)?;
-        let task = self.load_task(&id, None)?;
+        let at = now_millis();
+        let tx = self.conn.transaction()?;
+        let id = task_id(&tx, workspace_id, id)?;
+        let task = load_task(&tx, workspace_id, &id, None)?;
         if !task.blocked_by.is_empty() {
             return Err(StoreError::Conflict(format!(
                 "task {} depends on unfinished tasks: {}",
@@ -640,8 +961,6 @@ impl Repo {
                 task.blocked_by.join(", ")
             )));
         }
-        let at = now_millis();
-        let tx = self.conn.transaction()?;
         let position = end_of_column(&tx, workspace_id, TaskStatus::InProgress)?;
         let changed = tx.execute(
             "UPDATE tasks SET assignee = ?1, status = 'in_progress', position = ?2, updated_at = ?3
@@ -650,8 +969,8 @@ impl Repo {
         )?;
         if changed == 0 {
             let (owner, status): (Option<String>, String) = tx.query_row(
-                "SELECT assignee, status FROM tasks WHERE id = ?1",
-                params![id],
+                "SELECT assignee, status FROM tasks WHERE id = ?1 AND workspace_id = ?2",
+                params![id, workspace_id],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )?;
             return Err(StoreError::Conflict(match owner {
@@ -665,7 +984,7 @@ impl Repo {
         }
         add_event(&tx, &id, who, "claimed", "", at)?;
         tx.commit()?;
-        self.load_task(&id, Some(TASK_EVENTS_SHOWN))
+        load_task(&self.conn, workspace_id, &id, Some(TASK_EVENTS_SHOWN))
     }
 
     pub fn update_task(
@@ -675,99 +994,55 @@ impl Repo {
         actor: &str,
         patch: TaskPatch,
     ) -> StoreResult<Task> {
-        let id = self.task_id(workspace_id, id)?;
-        let before = self.load_task(&id, None)?;
-        let title = patch.title.as_deref().map(clean_title).transpose()?;
-        let description = patch
-            .description
-            .as_deref()
-            .map(|value| clean_body(value, "description", true))
-            .transpose()?;
-        let note = patch
-            .note
-            .as_deref()
-            .map(|value| clean_body(value, "note", false))
-            .transpose()?;
-        let assignee = patch
-            .assignee
-            .map(|value| value.filter(|id| !id.trim().is_empty()));
-        if let Some(position) = patch.position {
-            if !position.is_finite() {
-                return Err(StoreError::Invalid(
-                    "position must be a finite number".into(),
-                ));
-            }
-        }
-        let at = now_millis();
         let tx = self.conn.transaction()?;
-        if let Some(title) = &title {
-            tx.execute(
-                "UPDATE tasks SET title = ?1 WHERE id = ?2",
-                params![title, id],
-            )?;
-        }
-        if let Some(description) = &description {
-            tx.execute(
-                "UPDATE tasks SET description = ?1 WHERE id = ?2",
-                params![description, id],
-            )?;
-        }
-        if let Some(priority) = patch.priority {
-            tx.execute(
-                "UPDATE tasks SET priority = ?1 WHERE id = ?2",
-                params![priority.rank(), id],
-            )?;
-        }
-        if let Some(status) = patch.status.filter(|status| *status != before.status) {
-            // A task that changes column goes to the end of the new one
-            // unless the caller placed it explicitly.
-            let position = match patch.position {
-                Some(position) => position,
-                None => end_of_column(&tx, workspace_id, status)?,
-            };
-            tx.execute(
-                "UPDATE tasks SET status = ?1, position = ?2 WHERE id = ?3",
-                params![status.as_str(), position, id],
-            )?;
-            add_event(
-                &tx,
-                &id,
-                actor,
-                "status",
-                &format!("{} → {}", before.status.as_str(), status.as_str()),
-                at,
-            )?;
-        } else if let Some(position) = patch.position {
-            tx.execute(
-                "UPDATE tasks SET position = ?1 WHERE id = ?2",
-                params![position, id],
-            )?;
-        }
-        if let Some(assignee) = &assignee {
-            if assignee.as_deref() != before.assignee.as_deref() {
-                tx.execute(
-                    "UPDATE tasks SET assignee = ?1 WHERE id = ?2",
-                    params![assignee, id],
-                )?;
-                add_event(
-                    &tx,
-                    &id,
-                    actor,
-                    "assigned",
-                    assignee.as_deref().unwrap_or(""),
-                    at,
-                )?;
-            }
-        }
-        if let Some(note) = &note {
-            add_event(&tx, &id, actor, "note", note, at)?;
-        }
-        tx.execute(
-            "UPDATE tasks SET updated_at = ?1 WHERE id = ?2",
-            params![at, id],
-        )?;
+        let id = apply_task_patch(&tx, workspace_id, id, actor, patch)?;
         tx.commit()?;
-        self.load_task(&id, Some(TASK_EVENTS_SHOWN))
+        load_task(&self.conn, workspace_id, &id, Some(TASK_EVENTS_SHOWN))
+    }
+
+    /// Hand a task to `to` and tell them in a message: both are written or
+    /// neither is. Done tasks and tasks with unfinished dependencies can't be
+    /// assigned; a `todo` task moves to `in_progress`.
+    pub fn assign_task(
+        &mut self,
+        workspace_id: &str,
+        id: &str,
+        by: &str,
+        to: &str,
+        note: Option<&str>,
+    ) -> StoreResult<(Task, Message)> {
+        let tx = self.conn.transaction()?;
+        let id = task_id(&tx, workspace_id, id)?;
+        let current = load_task(&tx, workspace_id, &id, None)?;
+        if !current.blocked_by.is_empty() {
+            return Err(StoreError::Conflict(format!(
+                "task {} depends on unfinished tasks: {}",
+                id,
+                current.blocked_by.join(", ")
+            )));
+        }
+        if current.status == TaskStatus::Done {
+            return Err(StoreError::Conflict(format!("task {} is already done", id)));
+        }
+        apply_task_patch(
+            &tx,
+            workspace_id,
+            &id,
+            by,
+            TaskPatch {
+                assignee: Some(Some(to.to_string())),
+                status: (current.status == TaskStatus::Todo).then_some(TaskStatus::InProgress),
+                ..TaskPatch::default()
+            },
+        )?;
+        let task = load_task(&tx, workspace_id, &id, Some(TASK_EVENTS_SHOWN))?;
+        let body = match note.map(str::trim).filter(|note| !note.is_empty()) {
+            Some(note) => format!("I assigned you {}: {}. {}", task.id, task.title, note),
+            None => format!("I assigned you {}: {}.", task.id, task.title),
+        };
+        let message = insert_message(&tx, workspace_id, by, to, &body)?;
+        tx.commit()?;
+        Ok((task, message))
     }
 
     /// Hand work in for review. Only the assignee (or anyone, while the task
@@ -780,8 +1055,10 @@ impl Repo {
         summary: &str,
     ) -> StoreResult<Task> {
         let summary = clean_body(summary, "summary", false)?;
-        let id = self.task_id(workspace_id, id)?;
-        let task = self.load_task(&id, None)?;
+        let at = now_millis();
+        let tx = self.conn.transaction()?;
+        let id = task_id(&tx, workspace_id, id)?;
+        let task = load_task(&tx, workspace_id, &id, None)?;
         if let Some(owner) = task.assignee.as_deref() {
             if owner != who {
                 return Err(StoreError::Conflict(format!(
@@ -793,54 +1070,31 @@ impl Repo {
         if task.status == TaskStatus::Done {
             return Err(StoreError::Conflict(format!("task {} is already done", id)));
         }
-        let at = now_millis();
-        let tx = self.conn.transaction()?;
         let position = if task.status == TaskStatus::Review {
             task.position
         } else {
             end_of_column(&tx, workspace_id, TaskStatus::Review)?
         };
         tx.execute(
-            "UPDATE tasks SET status = 'review', assignee = ?1, position = ?2, updated_at = ?3 WHERE id = ?4",
-            params![who, position, at, id],
+            "UPDATE tasks SET status = 'review', assignee = ?1, position = ?2, updated_at = ?3
+             WHERE id = ?4 AND workspace_id = ?5",
+            params![who, position, at, id, workspace_id],
         )?;
         add_event(&tx, &id, who, "completed", &summary, at)?;
         tx.commit()?;
-        self.load_task(&id, Some(TASK_EVENTS_SHOWN))
+        load_task(&self.conn, workspace_id, &id, Some(TASK_EVENTS_SHOWN))
     }
 
     pub fn delete_task(&mut self, workspace_id: &str, id: &str) -> StoreResult<()> {
-        let id = self.task_id(workspace_id, id)?;
-        self.conn
-            .execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
+        let id = task_id(&self.conn, workspace_id, id)?;
+        self.conn.execute(
+            "DELETE FROM tasks WHERE id = ?1 AND workspace_id = ?2",
+            params![id, workspace_id],
+        )?;
         Ok(())
     }
 
     // ----- messages -------------------------------------------------------
-
-    fn load_message(&self, id: i64) -> StoreResult<Message> {
-        let mut message = self.conn.query_row(
-            "SELECT id, workspace_id, sender, recipient, body, created_at FROM messages WHERE id = ?1",
-            params![id],
-            |row| {
-                Ok(Message {
-                    id: row.get(0)?,
-                    workspace_id: row.get(1)?,
-                    from: row.get(2)?,
-                    to: row.get(3)?,
-                    body: row.get(4)?,
-                    created_at: row.get(5)?,
-                    read_by: Vec::new(),
-                })
-            },
-        )?;
-        let mut stmt = self.conn.prepare_cached(
-            "SELECT reader FROM message_reads WHERE message_id = ?1 ORDER BY rowid",
-        )?;
-        let readers = stmt.query_map(params![id], |row| row.get::<_, String>(0))?;
-        message.read_by = readers.collect::<Result<_, _>>()?;
-        Ok(message)
-    }
 
     pub fn send_message(
         &mut self,
@@ -849,18 +1103,7 @@ impl Repo {
         to: &str,
         body: &str,
     ) -> StoreResult<Message> {
-        let body = clean_body(body, "message", false)?;
-        let to = to.trim();
-        if to.is_empty() {
-            return Err(StoreError::Invalid("recipient cannot be empty".into()));
-        }
-        self.conn.execute(
-            "INSERT INTO messages(workspace_id, sender, recipient, body, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![workspace_id, from, to, body, now_millis()],
-        )?;
-        let id = self.conn.last_insert_rowid();
-        self.load_message(id)
+        insert_message(&self.conn, workspace_id, from, to, body)
     }
 
     /// Messages sent to `reader` or to `all`, oldest first, at most `limit`.
@@ -873,9 +1116,10 @@ impl Repo {
         limit: Option<usize>,
     ) -> StoreResult<Vec<Message>> {
         let limit = clamp_limit(limit, DEFAULT_INBOX_LIMIT);
-        let ids: Vec<i64> = {
-            let mut stmt = self.conn.prepare_cached(
-                "SELECT id FROM messages m
+        let tx = self.conn.transaction()?;
+        let mut messages: Vec<Message> = {
+            let mut stmt = tx.prepare_cached(
+                "SELECT id, workspace_id, sender, recipient, body, created_at FROM messages m
                  WHERE workspace_id = ?1 AND (recipient = ?2 OR recipient = 'all') AND sender != ?2
                    AND (?3 = 0 OR NOT EXISTS (
                         SELECT 1 FROM message_reads r WHERE r.message_id = m.id AND r.reader = ?2))
@@ -883,19 +1127,23 @@ impl Repo {
             )?;
             let rows = stmt.query_map(
                 params![workspace_id, reader, unread_only as i64, limit as i64],
-                |row| row.get(0),
+                message_from_row,
             )?;
             rows.collect::<Result<_, _>>()?
         };
-        let tx = self.conn.transaction()?;
-        for id in &ids {
-            tx.execute(
-                "INSERT OR IGNORE INTO message_reads(message_id, reader) VALUES (?1, ?2)",
-                params![id, reader],
-            )?;
-        }
+        let ids = messages
+            .iter()
+            .map(|message| message.id)
+            .collect::<serde_json::Value>()
+            .to_string();
+        tx.execute(
+            "INSERT OR IGNORE INTO message_reads(message_id, reader)
+             SELECT value, ?2 FROM json_each(?1)",
+            params![ids, reader],
+        )?;
+        attach_readers(&tx, &mut messages)?;
         tx.commit()?;
-        ids.into_iter().map(|id| self.load_message(id)).collect()
+        Ok(messages)
     }
 
     pub fn unread_count(&self, workspace_id: &str, reader: &str) -> StoreResult<usize> {
@@ -912,24 +1160,6 @@ impl Repo {
 
     // ----- notes ----------------------------------------------------------
 
-    fn load_note(&self, id: i64) -> StoreResult<Note> {
-        Ok(self.conn.query_row(
-            "SELECT id, workspace_id, key, body, author, created_at, updated_at FROM notes WHERE id = ?1",
-            params![id],
-            |row| {
-                Ok(Note {
-                    id: row.get(0)?,
-                    workspace_id: row.get(1)?,
-                    key: row.get(2)?,
-                    body: row.get(3)?,
-                    author: row.get(4)?,
-                    created_at: row.get(5)?,
-                    updated_at: row.get(6)?,
-                })
-            },
-        )?)
-    }
-
     /// Save a note. A note with the same `key` is updated in place, so keys
     /// work as named facts ("test-command", "api-conventions").
     pub fn add_note(
@@ -941,10 +1171,11 @@ impl Repo {
     ) -> StoreResult<Note> {
         let body = clean_body(body, "note", false)?;
         let key = key.map(str::trim).filter(|key| !key.is_empty());
-        if key.is_some_and(|key| key.chars().count() > 80) {
-            return Err(StoreError::Invalid(
-                "note key is longer than 80 characters".into(),
-            ));
+        if key.is_some_and(|key| key.chars().count() > MAX_NOTE_KEY_CHARS) {
+            return Err(StoreError::Invalid(format!(
+                "note key is longer than {} characters",
+                MAX_NOTE_KEY_CHARS
+            )));
         }
         let at = now_millis();
         let id: i64 = self.conn.query_row(
@@ -956,7 +1187,7 @@ impl Repo {
             params![workspace_id, key, body, author, at],
             |row| row.get(0),
         )?;
-        self.load_note(id)
+        load_note(&self.conn, workspace_id, id)
     }
 
     /// Full-text search over key and body, best matches first. An empty
@@ -968,26 +1199,28 @@ impl Repo {
         limit: Option<usize>,
     ) -> StoreResult<Vec<Note>> {
         let limit = clamp_limit(limit, DEFAULT_SEARCH_LIMIT) as i64;
-        let ids: Vec<i64> = match fts_query(query) {
+        let notes: Vec<Note> = match fts_query(query) {
             Some(fts) => {
                 let mut stmt = self.conn.prepare_cached(
-                    "SELECT n.id FROM notes_fts f JOIN notes n ON n.id = f.rowid
+                    "SELECT n.id, n.workspace_id, n.key, n.body, n.author, n.created_at, n.updated_at
+                     FROM notes_fts f JOIN notes n ON n.id = f.rowid
                      WHERE notes_fts MATCH ?1 AND n.workspace_id = ?2
                      ORDER BY bm25(notes_fts, 2.0, 1.0), n.updated_at DESC LIMIT ?3",
                 )?;
-                let rows = stmt.query_map(params![fts, workspace_id, limit], |row| row.get(0))?;
+                let rows = stmt.query_map(params![fts, workspace_id, limit], note_from_row)?;
                 rows.collect::<Result<_, _>>()?
             }
             None => {
                 let mut stmt = self.conn.prepare_cached(
-                    "SELECT id FROM notes WHERE workspace_id = ?1
+                    "SELECT id, workspace_id, key, body, author, created_at, updated_at
+                     FROM notes WHERE workspace_id = ?1
                      ORDER BY updated_at DESC, id DESC LIMIT ?2",
                 )?;
-                let rows = stmt.query_map(params![workspace_id, limit], |row| row.get(0))?;
+                let rows = stmt.query_map(params![workspace_id, limit], note_from_row)?;
                 rows.collect::<Result<_, _>>()?
             }
         };
-        ids.into_iter().map(|id| self.load_note(id)).collect()
+        Ok(notes)
     }
 
     // ----- agent status (memory only) -------------------------------------
@@ -1000,10 +1233,11 @@ impl Repo {
         summary: &str,
     ) -> StoreResult<AgentStatus> {
         let summary = summary.trim();
-        if summary.chars().count() > 500 {
-            return Err(StoreError::Invalid(
-                "summary is longer than 500 characters".into(),
-            ));
+        if summary.chars().count() > MAX_STATUS_SUMMARY_CHARS {
+            return Err(StoreError::Invalid(format!(
+                "summary is longer than {} characters",
+                MAX_STATUS_SUMMARY_CHARS
+            )));
         }
         let status = AgentStatus {
             terminal_id: terminal_id.to_string(),
@@ -1224,6 +1458,212 @@ mod tests {
                 }
             )
             .is_err());
+    }
+
+    #[test]
+    fn given_a_task_of_another_workspace_task_writes_find_nothing_and_change_nothing() {
+        let mut repo = Repo::in_memory();
+        repo.create_task("ws-1", "t-1", task("private")).unwrap();
+        let not_found = |result: StoreResult<Task>| matches!(result, Err(StoreError::NotFound(_)));
+        assert!(not_found(repo.update_task(
+            "ws-2",
+            "T-1",
+            "t-9",
+            TaskPatch {
+                title: Some("taken over".into()),
+                status: Some(TaskStatus::Done),
+                note: Some("mine now".into()),
+                ..TaskPatch::default()
+            },
+        )));
+        assert!(not_found(repo.claim_task("ws-2", "T-1", "t-9")));
+        assert!(not_found(repo.complete_task("ws-2", "T-1", "t-9", "done")));
+        assert!(matches!(
+            repo.assign_task("ws-2", "T-1", "t-9", "t-8", None),
+            Err(StoreError::NotFound(_))
+        ));
+        assert!(matches!(
+            repo.delete_task("ws-2", "T-1"),
+            Err(StoreError::NotFound(_))
+        ));
+
+        let task = repo.get_task("ws-1", "T-1").unwrap();
+        assert_eq!(task.title, "private");
+        assert_eq!(task.status, TaskStatus::Todo);
+        assert_eq!(task.assignee, None);
+        assert_eq!(task.events.unwrap().len(), 1);
+        assert_eq!(repo.count("messages"), 0);
+    }
+
+    #[test]
+    fn given_ids_of_another_workspace_the_loaders_find_nothing() {
+        let mut repo = Repo::in_memory();
+        let task_id = repo.create_task("ws-1", "t-1", task("private")).unwrap().id;
+        let message_id = repo.send_message("ws-1", "t-1", "all", "hi").unwrap().id;
+        let note_id = repo.add_note("ws-1", "t-1", "secret", None).unwrap().id;
+        assert!(matches!(
+            load_task(&repo.conn, "ws-2", &task_id, None),
+            Err(StoreError::NotFound(_))
+        ));
+        assert!(matches!(
+            load_message(&repo.conn, "ws-2", message_id),
+            Err(StoreError::NotFound(_))
+        ));
+        assert!(matches!(
+            load_note(&repo.conn, "ws-2", note_id),
+            Err(StoreError::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn given_a_dependency_link_to_another_workspace_it_neither_shows_nor_blocks() {
+        let mut repo = Repo::in_memory();
+        let foreign = repo.create_task("ws-1", "t-1", task("foreign")).unwrap();
+        let local = repo.create_task("ws-2", "t-5", task("local")).unwrap();
+        repo.conn
+            .execute(
+                "INSERT INTO task_deps(task_id, depends_on) VALUES (?1, ?2)",
+                params![local.id, foreign.id],
+            )
+            .unwrap();
+        let loaded = repo.get_task("ws-2", &local.id).unwrap();
+        assert!(loaded.depends_on.is_empty());
+        assert!(loaded.blocked_by.is_empty());
+        assert!(repo.claim_task("ws-2", &local.id, "t-5").is_ok());
+    }
+
+    #[test]
+    fn given_several_tasks_each_gets_its_own_dependencies_and_latest_events() {
+        let mut repo = Repo::in_memory();
+        let first = repo.create_task("ws-1", "t-1", task("first")).unwrap();
+        let second = repo
+            .create_task(
+                "ws-1",
+                "t-1",
+                NewTask {
+                    title: "second".into(),
+                    depends_on: vec![first.id.clone()],
+                    ..NewTask::default()
+                },
+            )
+            .unwrap();
+        repo.create_task(
+            "ws-1",
+            "t-1",
+            NewTask {
+                title: "third".into(),
+                depends_on: vec![second.id.clone(), first.id.clone(), "T-2".into()],
+                ..NewTask::default()
+            },
+        )
+        .unwrap();
+        set_status(&mut repo, &first.id, TaskStatus::Done);
+        for step in ["a", "b", "c"] {
+            repo.update_task(
+                "ws-1",
+                &second.id,
+                "t-1",
+                TaskPatch {
+                    note: Some(step.into()),
+                    ..TaskPatch::default()
+                },
+            )
+            .unwrap();
+        }
+
+        let tasks = repo.list_tasks("ws-1", None, None, Some(2)).unwrap();
+        let by_title = |title: &str| tasks.iter().find(|task| task.title == title).unwrap();
+        assert_eq!(by_title("third").depends_on, vec!["T-1", "T-2"]);
+        assert_eq!(by_title("third").blocked_by, vec!["T-2"]);
+        assert_eq!(by_title("second").depends_on, vec!["T-1"]);
+        assert!(by_title("second").blocked_by.is_empty());
+        assert!(by_title("first").depends_on.is_empty());
+        let notes: Vec<&str> = by_title("second")
+            .events
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|event| event.body.as_str())
+            .collect();
+        assert_eq!(notes, vec!["b", "c"]);
+        let kinds: Vec<&str> = by_title("third")
+            .events
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|event| event.kind.as_str())
+            .collect();
+        assert_eq!(kinds, vec!["created"]);
+    }
+
+    #[test]
+    fn given_an_unknown_dependency_create_task_names_it_and_creates_nothing() {
+        let mut repo = Repo::in_memory();
+        repo.create_task("ws-1", "t-1", task("base")).unwrap();
+        assert_eq!(
+            repo.create_task(
+                "ws-1",
+                "t-1",
+                NewTask {
+                    title: "next".into(),
+                    depends_on: vec!["T-1".into(), "nope".into()],
+                    ..NewTask::default()
+                },
+            ),
+            Err(StoreError::Invalid(
+                "dependency nope is not a task in this workspace".into()
+            ))
+        );
+        assert_eq!(repo.count("tasks"), 1);
+    }
+
+    #[test]
+    fn given_unreadable_labels_the_task_loads_with_none() {
+        let mut repo = Repo::in_memory();
+        let id = repo.create_task("ws-1", "t-1", task("x")).unwrap().id;
+        repo.conn
+            .execute(
+                "UPDATE tasks SET labels = 'not json' WHERE id = ?1",
+                params![id],
+            )
+            .unwrap();
+        assert!(repo.get_task("ws-1", &id).unwrap().labels.is_empty());
+    }
+
+    #[test]
+    fn given_a_todo_task_assign_task_starts_it_and_messages_the_assignee() {
+        let mut repo = Repo::in_memory();
+        let id = repo.create_task("ws-1", "t-1", task("API")).unwrap().id;
+        let (task, message) = repo
+            .assign_task("ws-1", &id, "t-1", "t-2", Some("  Use axum. "))
+            .unwrap();
+        assert_eq!(task.assignee.as_deref(), Some("t-2"));
+        assert_eq!(task.status, TaskStatus::InProgress);
+        assert_eq!((message.from.as_str(), message.to.as_str()), ("t-1", "t-2"));
+        assert_eq!(message.body, "I assigned you T-1: API. Use axum.");
+
+        set_status(&mut repo, &id, TaskStatus::Done);
+        assert_eq!(
+            repo.assign_task("ws-1", &id, "t-1", "t-3", None)
+                .unwrap_err(),
+            StoreError::Conflict("task T-1 is already done".into())
+        );
+    }
+
+    #[test]
+    fn given_the_message_cannot_be_written_assign_task_leaves_the_task_untouched() {
+        let mut repo = Repo::in_memory();
+        let id = repo.create_task("ws-1", "t-1", task("API")).unwrap().id;
+        let note = "x".repeat(MAX_BODY_BYTES);
+        assert!(matches!(
+            repo.assign_task("ws-1", &id, "t-1", "t-2", Some(&note)),
+            Err(StoreError::Invalid(_))
+        ));
+        let task = repo.get_task("ws-1", &id).unwrap();
+        assert_eq!(task.assignee, None);
+        assert_eq!(task.status, TaskStatus::Todo);
+        assert_eq!(task.events.unwrap().len(), 1);
+        assert_eq!(repo.count("messages"), 0);
     }
 
     #[test]

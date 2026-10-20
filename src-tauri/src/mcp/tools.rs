@@ -4,7 +4,11 @@
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use super::repo::{AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus};
+use super::repo::{
+    AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus,
+    DEFAULT_INBOX_LIMIT, DEFAULT_SEARCH_LIMIT, MAX_LIMIT, MAX_STATUS_SUMMARY_CHARS,
+    MAX_TITLE_CHARS,
+};
 use super::{AgentIdentity, McpHub};
 
 pub struct ToolDef {
@@ -103,7 +107,10 @@ pub fn definitions() -> Vec<ToolDef> {
             schema: json!({
                 "type": "object",
                 "properties": {
-                    "title": { "type": "string", "description": "Short imperative summary (max 200 characters)." },
+                    "title": {
+                        "type": "string",
+                        "description": format!("Short imperative summary (max {} characters).", MAX_TITLE_CHARS)
+                    },
                     "description": { "type": "string", "description": "What done looks like, relevant files, constraints." },
                     "priority": { "type": "string", "enum": PRIORITY_VALUES, "default": "medium" },
                     "depends_on": { "type": "array", "items": { "type": "string" } },
@@ -187,7 +194,7 @@ pub fn definitions() -> Vec<ToolDef> {
                 "type": "object",
                 "properties": {
                     "unread_only": { "type": "boolean", "default": true },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }
+                    "limit": { "type": "integer", "minimum": 1, "maximum": MAX_LIMIT, "default": DEFAULT_INBOX_LIMIT }
                 }
             }),
         },
@@ -219,7 +226,7 @@ pub fn definitions() -> Vec<ToolDef> {
                 "type": "object",
                 "properties": {
                     "query": { "type": "string" },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": 200, "default": 20 }
+                    "limit": { "type": "integer", "minimum": 1, "maximum": MAX_LIMIT, "default": DEFAULT_SEARCH_LIMIT }
                 },
                 "required": ["query"]
             }),
@@ -227,7 +234,10 @@ pub fn definitions() -> Vec<ToolDef> {
         ToolDef {
             name: "assign_task",
             title: "Assign task",
-            description: "Orchestrator only. Hands a task to a teammate: makes them the assignee,                 moves a `todo` task to `in_progress`, puts the task (and your optional `note`) in                 their inbox, and, when they are idle, types a prompt into their terminal so they                 start right away. A task with unfinished dependencies cannot be assigned yet.",
+            description: "Orchestrator only. Hands a task to a teammate: makes them the assignee, \
+                moves a `todo` task to `in_progress`, puts the task (and your optional `note`) in \
+                their inbox, and, when they are idle, types a prompt into their terminal so they \
+                start right away. A task with unfinished dependencies cannot be assigned yet.",
             read_only: false,
             schema: json!({
                 "type": "object",
@@ -250,7 +260,10 @@ pub fn definitions() -> Vec<ToolDef> {
                 "type": "object",
                 "properties": {
                     "state": { "type": "string", "enum": STATE_VALUES },
-                    "summary": { "type": "string", "description": "One line, max 500 characters." }
+                    "summary": {
+                        "type": "string",
+                        "description": format!("One line, max {} characters.", MAX_STATUS_SUMMARY_CHARS)
+                    }
                 },
                 "required": ["state", "summary"]
             }),
@@ -543,40 +556,7 @@ pub fn call(
                 )));
             }
             let mut repo = hub.repo()?;
-            let current = repo.get_task(ws, &args.id)?;
-            if !current.blocked_by.is_empty() {
-                return Err(ToolError::Store(StoreError::Conflict(format!(
-                    "task {} depends on unfinished tasks: {}",
-                    current.id,
-                    current.blocked_by.join(", ")
-                ))));
-            }
-            if current.status == TaskStatus::Done {
-                return Err(ToolError::Store(StoreError::Conflict(format!(
-                    "task {} is already done",
-                    current.id
-                ))));
-            }
-            let task = repo.update_task(
-                ws,
-                &current.id,
-                me,
-                TaskPatch {
-                    assignee: Some(Some(to.to_string())),
-                    status: (current.status == TaskStatus::Todo).then_some(TaskStatus::InProgress),
-                    ..TaskPatch::default()
-                },
-            )?;
-            let note = args
-                .note
-                .as_deref()
-                .map(str::trim)
-                .filter(|note| !note.is_empty());
-            let body = match note {
-                Some(note) => format!("I assigned you {}: {}. {}", task.id, task.title, note),
-                None => format!("I assigned you {}: {}.", task.id, task.title),
-            };
-            let message = repo.send_message(ws, me, to, &body)?;
+            let (task, message) = repo.assign_task(ws, &args.id, me, to, args.note.as_deref())?;
             // Typing into a terminal that is busy or waiting on a human could
             // answer a prompt by accident, so only idle agents are woken.
             let idle = repo
@@ -775,6 +755,51 @@ mod tests {
         .is_err());
         assert_eq!(
             call(&hub, &other, "whoami", json!({})).unwrap()["peers"],
+            json!([])
+        );
+    }
+
+    #[test]
+    fn given_a_task_of_another_workspace_every_task_tool_reports_not_found_and_changes_nothing() {
+        let (hub, _) = hub();
+        let owner = identity("t-1", "ws-1", "claude");
+        let lead = AgentIdentity {
+            role: Some(Role::Orchestrator),
+            ..identity("t-5", "ws-2", "codex")
+        };
+        hub.issue(owner.clone());
+        hub.issue(lead.clone());
+        hub.issue(identity("t-6", "ws-2", "codex"));
+        call(&hub, &owner, "create_task", json!({ "title": "private" })).unwrap();
+
+        let attempts = [
+            ("get_task", json!({ "id": "T-1" })),
+            ("claim_task", json!({ "id": "T-1" })),
+            (
+                "update_task",
+                json!({ "id": "T-1", "status": "done", "note": "mine" }),
+            ),
+            ("complete_task", json!({ "id": "T-1", "summary": "done" })),
+            ("assign_task", json!({ "id": "T-1", "to": "t-6" })),
+        ];
+        for (tool, args) in attempts {
+            assert!(
+                matches!(
+                    call(&hub, &lead, tool, args),
+                    Err(ToolError::Store(StoreError::NotFound(_)))
+                ),
+                "{}",
+                tool
+            );
+        }
+
+        let task = call(&hub, &owner, "get_task", json!({ "id": "T-1" })).unwrap();
+        assert_eq!(task["status"], "todo");
+        assert_eq!(task["assignee"], Value::Null);
+        assert_eq!(task["events"].as_array().unwrap().len(), 1);
+        let helper = identity("t-6", "ws-2", "codex");
+        assert_eq!(
+            call(&hub, &helper, "read_inbox", json!({})).unwrap()["messages"],
             json!([])
         );
     }

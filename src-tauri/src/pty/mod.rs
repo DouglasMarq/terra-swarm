@@ -169,6 +169,10 @@ pub struct SpawnOptions {
     pub args: Option<String>,
     /// Extra environment variables (per-agent setting).
     pub env: HashMap<String, String>,
+    /// Isolate a new agent in its own git worktree.
+    pub worktree: bool,
+    /// Where worktrees go; the app data directory when unset.
+    pub worktree_root: Option<std::path::PathBuf>,
 }
 
 impl SpawnOptions {
@@ -191,6 +195,8 @@ pub struct LaunchExtras {
     pub args: Option<String>,
     #[serde(default)]
     pub env: HashMap<String, String>,
+    #[serde(default)]
+    pub worktree: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -310,6 +316,34 @@ pub fn spawn_terminal_inner<R: Runtime>(
             return Err(format!("terminal {} already running", id));
         }
     }
+
+    // A respawned agent returns to its worktree; a new one may get one.
+    let existing_worktree = store
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get(&workspace_id)
+        .and_then(|ws| ws.terminals.iter().find(|terminal| terminal.id == id))
+        .and_then(|terminal| terminal.worktree.clone());
+    let mut created_worktree = CreatedWorktree(None);
+    let worktree = match existing_worktree {
+        Some(existing) => {
+            if !std::path::Path::new(&existing.cwd).is_dir() {
+                return Err(format!("the agent's worktree {} no longer exists", existing.path));
+            }
+            Some(existing)
+        }
+        None if options.worktree => {
+            let root = match &options.worktree_root {
+                Some(root) => root.clone(),
+                None => app.path().app_data_dir().map_err(|e| e.to_string())?.join("worktrees"),
+            };
+            let info = crate::worktree::create(std::path::Path::new(&cwd), &root, &workspace_id, &id)?;
+            created_worktree = CreatedWorktree(Some(info.clone()));
+            Some(info)
+        }
+        None => None,
+    };
+    let cwd = worktree.as_ref().map_or(cwd, |info| info.cwd.clone());
 
     let shell = resolve_shell(preferred_shell);
     let mut cmd = CommandBuilder::new(&shell);
@@ -523,6 +557,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
         tab_id: None,
         group_id: None,
         suspended: false,
+        worktree: worktree.clone(),
     };
     let added = store
         .lock()
@@ -538,7 +573,27 @@ pub fn spawn_terminal_inner<R: Runtime>(
         ));
     }
 
+    created_worktree.disarm();
     Ok(SpawnedTerminal { meta, seq })
+}
+
+/// Removes a worktree created for a spawn that then failed.
+struct CreatedWorktree(Option<crate::worktree::WorktreeInfo>);
+
+impl CreatedWorktree {
+    fn disarm(mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for CreatedWorktree {
+    fn drop(&mut self) {
+        if let Some(info) = self.0.take() {
+            if let Err(error) = crate::worktree::remove(&info, true) {
+                eprintln!("failed to clean up worktree {}: {}", info.path, error);
+            }
+        }
+    }
 }
 
 #[tauri::command(async)]
@@ -568,6 +623,8 @@ pub fn spawn_terminal(
             shell,
             args: launch.args,
             env: launch.env,
+            worktree: launch.worktree,
+            worktree_root: None,
         },
     )
 }
@@ -979,6 +1036,7 @@ mod spawn_lifecycle_tests {
                 ]
                 .into_iter()
                 .collect(),
+                ..SpawnOptions::default()
             };
             let spawned = spawn_terminal_inner(
                 app.handle(),
@@ -1013,5 +1071,46 @@ mod spawn_lifecycle_tests {
         std::thread::sleep(Duration::from_millis(300));
         assert_eq!(read("terra.txt").trim(), "");
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_isolated_agent_gets_a_worktree_and_keeps_it_on_respawn() {
+        let app = tauri::test::mock_app();
+        assert!(app.manage(Mutex::new(PtyManager::default())));
+        assert!(app.manage(Mutex::new(WorkspaceStore::default())));
+        let repo = crate::worktree::test_repo::init("spawn");
+        let root = repo.with_extension("worktrees");
+        let store = app.state::<Mutex<WorkspaceStore>>();
+        let workspace = store
+            .lock()
+            .unwrap()
+            .create("repo".into(), repo.join("app").to_string_lossy().into_owned());
+        let manager = app.state::<Mutex<PtyManager>>();
+        let options = SpawnOptions {
+            shell: Some("/bin/sh".into()),
+            worktree: true,
+            worktree_root: Some(root.clone()),
+            ..SpawnOptions::default()
+        };
+        let first = spawn_terminal_inner(app.handle(), manager.inner(), store.inner(), &workspace.id, "pwd > where.txt", 80, 24, None, &options)
+            .expect("spawn isolated agent");
+        let info = first.meta.worktree.clone().expect("worktree recorded");
+        assert_eq!(info.branch, format!("terra/{}", first.meta.id));
+        let written = std::path::Path::new(&info.cwd).join("where.txt");
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while !written.exists() {
+            assert!(Instant::now() < deadline, "the agent did not start in its worktree");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        // Respawning the same id (resume) goes back to the same worktree,
+        // even without asking for isolation again.
+        let plain = SpawnOptions { shell: Some("/bin/sh".into()), ..SpawnOptions::default() };
+        std::thread::sleep(Duration::from_millis(200));
+        let again = spawn_terminal_inner(app.handle(), manager.inner(), store.inner(), &workspace.id, "true", 80, 24, Some(&first.meta.id), &plain)
+            .expect("respawn isolated agent");
+        assert_eq!(again.meta.worktree.as_ref(), Some(&info));
+        crate::worktree::remove(&info, true).unwrap();
+        crate::worktree::test_repo::cleanup(&repo, &root);
     }
 }

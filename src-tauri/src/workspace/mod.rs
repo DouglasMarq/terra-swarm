@@ -76,6 +76,9 @@ pub struct TerminalMeta {
     pub group_id: Option<String>,
     #[serde(default)]
     pub suspended: bool,
+    /// The git worktree the agent is isolated in, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worktree: Option<crate::worktree::WorktreeInfo>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

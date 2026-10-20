@@ -6,6 +6,7 @@ mod scrollback;
 mod sync;
 mod voice;
 mod workspace;
+mod worktree;
 
 use std::sync::{Arc, Mutex};
 use tauri::{Listener, Manager};
@@ -143,6 +144,8 @@ pub fn run() {
             pty::agents::detect_agents,
             pty::shell::list_available_shells,
             fonts::list_system_fonts,
+            worktree::worktree_status,
+            worktree::worktree_remove,
             mcp::commands::mcp_server_info,
             mcp::commands::mcp_set_enabled,
             mcp::commands::mcp_list_tasks,

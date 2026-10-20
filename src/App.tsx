@@ -1,11 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { MotionConfig } from "motion/react";
 import { useShallow } from "zustand/react/shallow";
-import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "./api";
 import { useBranchPolling } from "./app/useBranchPolling";
 import { useFocusTracking } from "./app/useFocusTracking";
+import { useGlobalHotkeys } from "./app/useGlobalHotkeys";
+import { useGroupActions } from "./app/useGroupActions";
 import { useResumeQueue } from "./app/useResumeQueue";
+import { useSnapshotTransfer } from "./app/useSnapshotTransfer";
 import { useVoiceCapture } from "./app/useVoiceCapture";
 import { useVoiceSettings } from "./app/useVoiceSettings";
 import { resumeCommandFor, useTerminalSessions } from "./app/useTerminalSessions";
@@ -28,17 +31,12 @@ import type { FocusedAgentAction } from "./components/overlays/CommandPalette";
 import { getTerminal } from "./terminalRegistry";
 import {
   GRID_COL_OPTIONS,
-  HOTKEY_ACTIONS,
-  hotkeyActionLabel,
-  matchHotkey,
-  type Hotkey,
   usePreferencesStore,
 } from "./stores/preferencesStore";
 import { useTerminalRuntimeStore } from "./stores/terminalRuntimeStore";
 import { useUiStore } from "./stores/uiStore";
 import { useShellStore } from "./stores/shellStore";
 import { useOrchestrationStore } from "./stores/orchestrationStore";
-import { planResume } from "./lib/session/resumePlanner";
 import { t, useLocale } from "./i18n";
 import { createInitializationGate, type InitializationGate } from "./lib/session/initializationGate";
 import { selectWorkspaceContainerId } from "./lib/session/workspaceContainerSelection";
@@ -47,10 +45,6 @@ import {
   suspendedGroupIds,
 } from "./lib/session/resumeSelection";
 import type { SettingsSectionId } from "./components/settings";
-import type {
-  SnapshotFeedback,
-  SnapshotOperation,
-} from "./components/integration/settings/SettingsPanels";
 import "./App.css";
 
 const LazyResumeDialog = lazy(async () => {
@@ -84,12 +78,6 @@ function AppLoadingSurface(_props: { label?: string }) {
 type DurableScrollbackApi = {
   setDurableScrollbackEnabled?: (enabled: boolean) => Promise<void>;
 };
-
-function describeSnapshotError(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === "string" && error.trim()) return error;
-  return t("app.snapshotFailed");
-}
 
 function describeInitializationError(error: unknown): string {
   if (error instanceof Error && error.message.trim()) return error.message;
@@ -133,7 +121,6 @@ function App() {
   }, []);
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const [initializationRunning, setInitializationRunning] = useState(false);
-  const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
   const [capturing, setCapturing] = useState<string | null>(null);
   const voiceSettings = useVoiceSettings({
     settingsOpen: showSettings,
@@ -163,7 +150,6 @@ function App() {
     sync: syncOrchestration,
     setFeatureFlag,
     setContainerVisible,
-    setGroupSuspended,
     persistenceError: orchestrationPersistenceError,
     clearPersistenceError,
     detachedTerminalIds,
@@ -177,7 +163,6 @@ function App() {
       sync: state.sync,
       setFeatureFlag: state.setFeatureFlag,
       setContainerVisible: state.setContainerVisible,
-      setGroupSuspended: state.setGroupSuspended,
       persistenceError: state.persistenceError,
       clearPersistenceError: state.clearPersistenceError,
       detachedTerminalIds: state.detachedTerminalIds,
@@ -195,15 +180,11 @@ function App() {
     resumeItems,
     resumeSavedAt,
     setExited,
-    setContextUsage,
-    setTitles,
     clearNotificationCount,
     markTerminalRead,
     markAllRead,
     clearAllNotifications,
     pushSystemNotification,
-    setResumeItems,
-    setResumeSavedAt,
     clearTerminal,
     clearTerminals,
   } = useTerminalRuntimeStore(
@@ -217,15 +198,11 @@ function App() {
       resumeItems: state.resumeItems,
       resumeSavedAt: state.resumeSavedAt,
       setExited: state.setExited,
-      setContextUsage: state.setContextUsage,
-      setTitles: state.setTitles,
       clearNotificationCount: state.clearNotificationCount,
       markTerminalRead: state.markTerminalRead,
       markAllRead: state.markAllRead,
       clearAllNotifications: state.clearAllNotifications,
       pushSystemNotification: state.pushSystemNotification,
-      setResumeItems: state.setResumeItems,
-      setResumeSavedAt: state.setResumeSavedAt,
       clearTerminal: state.clearTerminal,
       clearTerminals: state.clearTerminals,
     })),
@@ -242,7 +219,6 @@ function App() {
     voiceLang,
     voiceInputDevice,
     setDefaultAgent,
-    setHotkeys,
     resetHotkeys,
     changeFontSize,
     resetFontSize,
@@ -264,7 +240,6 @@ function App() {
       voiceLang: state.voiceLang,
       voiceInputDevice: state.voiceInputDevice,
       setDefaultAgent: state.setDefaultAgent,
-      setHotkeys: state.setHotkeys,
       resetHotkeys: state.resetHotkeys,
       changeFontSize: state.changeFontSize,
       resetFontSize: state.resetFontSize,
@@ -313,10 +288,6 @@ function App() {
   };
   const agentsRef = useRef<AgentInfo[]>([]);
   const agentsReadyRef = useRef<Promise<void>>(Promise.resolve());
-  const [snapshotOperation, setSnapshotOperation] =
-    useState<SnapshotOperation | null>(null);
-  const [snapshotFeedback, setSnapshotFeedback] =
-    useState<SnapshotFeedback | null>(null);
   const { appVersion, updateVersion, updateInstalling, updateCheckState, manualUpdateCheck, installUpdate } = useUpdater();
   const inited = useRef(false);
   const initializationGateRef = useRef<InitializationGate | null>(null);
@@ -348,6 +319,7 @@ function App() {
 
   const sessions = useTerminalSessions({ workspaces, snapshot: orchestrationSnapshot, refresh });
   const resumeQueue = useResumeQueue(sessions, refresh);
+  const snapshotTransfer = useSnapshotTransfer(sessions, refresh);
 
   // Load workspaces and offer to resume terminals that were running at last
   // close. The gate coalesces StrictMode/concurrent attempts, while a failed
@@ -466,7 +438,7 @@ function App() {
     renameTarget !== null ||
     workspaceToDelete !== null ||
     showNewGroup ||
-    pendingImportPath !== null;
+    snapshotTransfer.pendingImportPath !== null;
 
   useBranchPolling(workspaces);
 
@@ -632,107 +604,11 @@ function App() {
     if (!name) return;
     setShowNewGroup(false);
     setNewGroupName("");
-    await api.createGroup(name).then(() => refresh()).catch((err) => {
-      console.error("failed to create group:", err);
-    });
+    await groupActions.createGroup(name);
   };
 
-  const renameGroup = async (id: string, name: string) => {
-    await api.renameGroup(id, name).then(() => refresh()).catch((err) => {
-      console.error(`failed to rename group ${id}:`, err);
-    });
-  };
-
-  const groupWorkspaceIds = (groupId: string): string[] => {
-    const group = groups.find((candidate) => candidate.id === groupId);
-    const fromGroup = group?.projectIds ?? [];
-    const fromWorkspaces = workspaces
-      .filter((workspace) => workspace.groupId === groupId)
-      .map((workspace) => workspace.id);
-    return [...new Set([...fromGroup, ...fromWorkspaces])];
-  };
-
-  const terminalEntriesForGroup = (groupId: string) =>
-    groupWorkspaceIds(groupId).flatMap((workspaceId) => {
-      const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
-      return (workspace?.terminals ?? []).map((terminal) => ({ workspace, terminal }));
-    }).filter((entry): entry is { workspace: Workspace; terminal: Workspace["terminals"][number] } => Boolean(entry.workspace));
-
-  const suspendGroup = async (groupId: string) => {
-    const entries = terminalEntriesForGroup(groupId);
-    try {
-      // The backend owns the group lifecycle now: it marks metadata first and
-      // then stops every PTY without deleting scrollback or terminal records.
-      await api.suspendGroup(groupId);
-    } catch (err) {
-      console.error(`failed to suspend group ${groupId}:`, err);
-      return;
-    }
-    setGroupSuspended(groupId, true);
-    const suspendedIds = new Set(entries.map(({ terminal }) => terminal.id));
-    setWorkspaces((previous) => previous.map((workspace) => ({
-      ...workspace,
-      terminals: workspace.terminals.map((terminal) =>
-        suspendedIds.has(terminal.id) ? { ...terminal, suspended: true } : terminal,
-      ),
-    })));
-    await refresh();
-  };
-
-  const resumeGroup = async (groupId: string) => {
-    const group = groups.find((candidate) => candidate.id === groupId);
-    const groupName = group?.name ?? groupId;
-    const entries = terminalEntriesForGroup(groupId);
-    const candidates = entries.map(({ workspace, terminal }) => ({
-      terminalId: terminal.id,
-      projectId: workspace.id,
-      projectName: workspace.name,
-      groupId,
-      groupName,
-      cwd: workspace.cwd,
-      command: terminal.command,
-      resumeCommand: resumeCommandFor(terminal.command),
-    }));
-    const plan = planResume(candidates);
-    const resumeItems: ResumeItem[] = plan.items.map((candidate) => ({
-      terminalId: candidate.terminalId,
-      wsId: candidate.projectId,
-      wsName: candidate.projectName,
-      cwd: candidate.cwd ?? "",
-      command: candidate.command ?? "shell",
-      agentId: candidate.agentId ?? candidate.command?.trim().split(/\s+/)[0] ?? "shell",
-      resumeCommand: candidate.resumeCommand ?? candidate.command ?? "shell",
-    }));
-    const results = await sessions.resumeItems(resumeItems);
-    const labels = new Map(resumeItems.map((item) => [item.terminalId, groupName]));
-    sessions.notifyResumeFailures(results, labels);
-    const failed = results.filter((result) => result.status !== "succeeded");
-    if (failed.length > 0) {
-      // Restore the group-wide suspended invariant. Successful spawns are
-      // stopped again so a retry never leaves a half-active group behind.
-      await api.suspendGroup(groupId).catch((err) => {
-        console.error(`failed to restore suspended group ${groupId}:`, err);
-      });
-      setGroupSuspended(groupId, true);
-      pushSystemNotification(
-        t("app.groupResumePartial", { count: failed.length, group: groupName }),
-      );
-      await refresh();
-      return;
-    }
-    try {
-      await api.resumeGroup(groupId);
-      setGroupSuspended(groupId, false);
-    } catch (err) {
-      console.error(`failed to resume group ${groupId}:`, err);
-      await api.suspendGroup(groupId).catch((restoreError) => {
-        console.error(`failed to restore suspended group ${groupId}:`, restoreError);
-      });
-      setGroupSuspended(groupId, true);
-      pushSystemNotification(t("app.groupActivateFailed", { group: groupName }));
-    }
-    await refresh();
-  };
+  const groupActions = useGroupActions({ workspaces, groups, sessions, refresh, setWorkspaces });
+  const { renameGroup, suspendGroup, resumeGroup } = groupActions;
 
   const voice = useVoiceCapture({
     workspaces,
@@ -778,95 +654,6 @@ function App() {
       }
     } catch (err) {
       console.error("folder picker failed:", err);
-    }
-  };
-
-  const exportWorkspaceSnapshot = async () => {
-    if (snapshotOperation) return;
-    setSnapshotOperation("exporting");
-    try {
-      const path = await saveDialog({
-        title: "Export Terra Swarm snapshot",
-        defaultPath: "terra-swarm-snapshot.json",
-        filters: [{ name: "Terra Swarm snapshot", extensions: ["json"] }],
-      });
-      // Tauri returns null when the native picker is cancelled. Keep that a
-      // true no-op: no IPC call and no replacement of the current feedback.
-      if (typeof path !== "string" || !path.trim()) return;
-      setSnapshotFeedback(null);
-      const transfer = await api.exportWorkspaceSnapshot(path);
-      setSnapshotFeedback({
-        kind: "success",
-        message: t("app.snapshotExported", { workspaces: transfer.workspaceCount, terminals: transfer.terminalCount }),
-        backupPath: transfer.path,
-        pathKind: "file",
-      });
-    } catch (error) {
-      console.error("workspace snapshot export failed:", error);
-      setSnapshotFeedback({
-        kind: "error",
-        message: describeSnapshotError(error),
-      });
-    } finally {
-      setSnapshotOperation(null);
-    }
-  };
-
-  const performImportWorkspaceSnapshot = async (path: string) => {
-    if (snapshotOperation || !path.trim()) return;
-    setPendingImportPath(null);
-    setSnapshotOperation("importing");
-    try {
-      setSnapshotFeedback(null);
-      const transfer = await api.importWorkspaceSnapshot(path);
-
-      // Import is metadata-only and the backend stops every PTY before the
-      // store is replaced. Drop stale runtime references without respawning
-      // imported sessions implicitly; the user can resume them explicitly.
-      const previousTerminalIds = sessions.forgetAll();
-      clearTerminals(previousTerminalIds);
-      clearAllNotifications();
-      setExited({});
-      setContextUsage({});
-      setTitles({});
-      setResumeItems(null);
-      setResumeSavedAt(null);
-      setExpandedId(null);
-      setFocusedId(null);
-      await refresh();
-
-      setSnapshotFeedback({
-        kind: "success",
-        message: t("app.snapshotImported", { workspaces: transfer.workspaceCount, terminals: transfer.suspendedTerminalCount }),
-        backupPath: transfer.backupPath,
-        pathKind: "backup",
-      });
-    } catch (error) {
-      console.error("workspace snapshot import failed:", error);
-      setSnapshotFeedback({
-        kind: "error",
-        message: describeSnapshotError(error),
-      });
-    } finally {
-      setSnapshotOperation(null);
-    }
-  };
-
-  const importWorkspaceSnapshot = async () => {
-    if (snapshotOperation || pendingImportPath) return;
-    try {
-      const path = await openDialog({
-        title: t("app.importDialogTitle"),
-        multiple: false,
-        directory: false,
-        filters: [{ name: "Snapshot Terra Swarm", extensions: ["json"] }],
-      });
-      // Tauri returns null when the native picker is cancelled. Do not ask
-      // for confirmation or mutate anything when no file was selected.
-      if (typeof path !== "string" || !path.trim()) return;
-      setPendingImportPath(path);
-    } catch (error) {
-      console.error("workspace snapshot picker failed:", error);
     }
   };
 
@@ -923,13 +710,6 @@ function App() {
     }
   };
 
-  // Same for shortcut capture: left on, it swallows every key in the app and
-  // saves the next ⌘-combo as a shortcut.
-  useEffect(() => {
-    if (showSettings && settingsSection === "shortcuts") return;
-    setCapturing(null);
-  }, [showSettings, settingsSection]);
-
   const applyGridLayout = async (cols: number) => {
     if (!(GRID_COL_OPTIONS as readonly number[]).includes(cols)) return;
     setGridCols(cols);
@@ -953,175 +733,23 @@ function App() {
     await refresh();
   };
 
-  // Latest-values ref so the global hotkey listener can be registered once
-  // instead of being torn down and re-added on every render.
-  const hotkeyCtx = useRef({
+  useGlobalHotkeys({
     modalOpen,
     capturing,
-    hotkeys,
+    setCapturing,
+    shortcutsSectionOpen: showSettings && settingsSection === "shortcuts",
     active,
     focusedId,
     workspaces,
+    actions: {
+      openWorkspaceCreator: () => openWorkspaceCreator(),
+      renameWorkspace: (workspace) => setRenameTarget({ kind: "workspace", id: workspace.id, value: workspace.name }),
+      closeWorkspace,
+      quickNewTerminal,
+      closeTerminal: sessions.close,
+      toggleVoice: voice.toggle,
+    },
   });
-  hotkeyCtx.current = {
-    modalOpen,
-    capturing,
-    hotkeys,
-    active,
-    focusedId,
-    workspaces,
-  };
-  const hotkeyActions = useRef({
-    closeWorkspace,
-    quickNewTerminal,
-    closeTerminal: sessions.close,
-    changeFontSize,
-    resetFontSize,
-    toggleVoice: voice.toggle,
-  });
-  hotkeyActions.current = {
-    closeWorkspace,
-    quickNewTerminal,
-    closeTerminal: sessions.close,
-    changeFontSize,
-    resetFontSize,
-    toggleVoice: voice.toggle,
-  };
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const { modalOpen, capturing, hotkeys, active, focusedId, workspaces } =
-        hotkeyCtx.current;
-      const actions = hotkeyActions.current;
-      if (modalOpen || capturing) return;
-      const target = e.target as HTMLElement | null;
-      if (
-        target?.closest("input, select") ||
-        target?.closest("textarea:not(.xterm-helper-textarea)")
-      )
-        return;
-      for (const [action, hk] of Object.entries(hotkeys)) {
-        if (!matchHotkey(e, hk)) continue;
-        e.preventDefault();
-        e.stopPropagation();
-        switch (action) {
-          case "newWorkspace":
-            openWorkspaceCreator();
-            break;
-          case "renameWorkspace":
-            if (active) {
-              setRenameTarget({ kind: "workspace", id: active.id, value: active.name });
-            }
-            break;
-          case "deleteWorkspace":
-            if (active) actions.closeWorkspace(active.id);
-            break;
-          case "newTerminal":
-            if (active) actions.quickNewTerminal(active.id);
-            break;
-          case "closeTerminal":
-            if (focusedId) actions.closeTerminal(focusedId);
-            break;
-          case "maximizeTerminal": {
-            const last = active?.terminals[active.terminals.length - 1];
-            const target =
-              focusedId && active?.terminals.some((t) => t.id === focusedId)
-                ? focusedId
-                : last?.id;
-            if (target) {
-              setExpandedId((prev) => (prev === target ? null : target));
-            }
-            break;
-          }
-          case "minimizeTerminal":
-            setExpandedId(null);
-            break;
-          case "increaseFontSize":
-            actions.changeFontSize(1);
-            break;
-          case "decreaseFontSize":
-            actions.changeFontSize(-1);
-            break;
-          case "resetFontSize":
-            actions.resetFontSize();
-            break;
-          case "toggleVoice":
-            actions.toggleVoice();
-            break;
-          default: {
-            const wsMatch = /^selectWorkspace([1-9])$/.exec(action);
-            if (wsMatch) {
-              const ws = workspaces[Number(wsMatch[1]) - 1];
-              if (ws) {
-                setActiveId(ws.id);
-                setExpandedId(null);
-              }
-              break;
-            }
-            const termMatch = /^selectTerminal([1-9])$/.exec(action);
-            if (termMatch) {
-              const t = active?.terminals[Number(termMatch[1]) - 1];
-              if (t) {
-                setFocusedId(t.id);
-                setExpandedId((cur) => (cur === t.id ? cur : null));
-              }
-            }
-            break;
-          }
-        }
-        return;
-      }
-    };
-    window.addEventListener("keydown", handler, { capture: true });
-    return () =>
-      window.removeEventListener("keydown", handler, { capture: true });
-  }, []);
-
-  useEffect(() => {
-    if (!capturing) return;
-    const handler = (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.key === "Escape") {
-        setCapturing(null);
-        return;
-      }
-      if (["Meta", "Shift", "Control", "Alt"].includes(e.key)) return;
-      const hk: Hotkey = {
-        key: e.key,
-        meta: e.metaKey,
-        shift: e.shiftKey,
-        ctrl: e.ctrlKey,
-        alt: e.altKey,
-      };
-      if (!hk.meta && !hk.ctrl && !hk.alt) return;
-      // Reject duplicates: dispatch stops at the first match, so a combo
-      // already bound to another action would silently never fire.
-      const conflict = HOTKEY_ACTIONS.find(
-        (a) =>
-          a.id !== capturing &&
-          hotkeys[a.id] &&
-          hotkeys[a.id].key === hk.key &&
-          hotkeys[a.id].meta === hk.meta &&
-          hotkeys[a.id].shift === hk.shift &&
-          hotkeys[a.id].ctrl === hk.ctrl &&
-          hotkeys[a.id].alt === hk.alt,
-      );
-      if (conflict) {
-        pushSystemNotification(
-          t("app.shortcutTaken", { action: hotkeyActionLabel(conflict.id) }),
-        );
-        setCapturing(null);
-        return;
-      }
-      const next = { ...hotkeys, [capturing]: hk };
-      setHotkeys(next);
-      setCapturing(null);
-    };
-    window.addEventListener("keydown", handler, { capture: true });
-    return () =>
-      window.removeEventListener("keydown", handler, { capture: true });
-  }, [capturing, hotkeys]);
 
   const handleFocusedAgentAction = async (
     action: FocusedAgentAction,
@@ -1209,13 +837,13 @@ function App() {
                     resetHotkeys();
                     setCapturing(null);
                   }}
-                  snapshotOperation={snapshotOperation}
-                  snapshotFeedback={snapshotFeedback}
+                  snapshotOperation={snapshotTransfer.operation}
+                  snapshotFeedback={snapshotTransfer.feedback}
                   onExportSnapshot={() => {
-                    void exportWorkspaceSnapshot();
+                    void snapshotTransfer.exportSnapshot();
                   }}
                   onImportSnapshot={() => {
-                    void importWorkspaceSnapshot();
+                    void snapshotTransfer.pickImport();
                   }}
                   appVersion={appVersion}
                   updateVersion={updateVersion}
@@ -1361,10 +989,10 @@ function App() {
           void voice.send(payload, true);
         }}
         onExportWorkspace={() => {
-          void exportWorkspaceSnapshot();
+          void snapshotTransfer.exportSnapshot();
         }}
         onImportWorkspace={() => {
-          void importWorkspaceSnapshot();
+          void snapshotTransfer.pickImport();
         }}
         onFocusedAgentAction={(action, context) => {
           void handleFocusedAgentAction(action, context);
@@ -1445,11 +1073,11 @@ function App() {
 
       <ConfirmActionDialog
         description={t("app.importDescription")}
-        onConfirm={() => pendingImportPath ? performImportWorkspaceSnapshot(pendingImportPath) : undefined}
+        onConfirm={() => snapshotTransfer.confirmImport()}
         onOpenChange={(open) => {
-          if (!open) setPendingImportPath(null);
+          if (!open) snapshotTransfer.cancelImport();
         }}
-        open={pendingImportPath !== null}
+        open={snapshotTransfer.pendingImportPath !== null}
         title={t("app.importTitle")}
         confirmLabel={t("settingsPanels.importSnapshot")}
       />

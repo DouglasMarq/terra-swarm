@@ -493,6 +493,8 @@ export const ptBR: Dictionary<typeof en> = {
     pickWorkspaceFirst: "Selecione um projeto antes de iniciar um agente.",
     agentUnavailable: "Agente indisponível: {name}",
     stopSomeFailed: "Não foi possível parar todos os agentes selecionados.",
+    exportDialogTitle: "Exportar snapshot do Terra Swarm",
+    snapshotFileType: "Snapshot do Terra Swarm",
     importDialogTitle: "Importar snapshot do Terra Swarm",
     updateFailed: "A atualização não foi instalada. Tente mais tarde.",
     shortcutTaken: "Esse atalho já é usado por “{action}”.",

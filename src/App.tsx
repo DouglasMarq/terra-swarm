@@ -20,7 +20,7 @@ import { useWorktreeClose } from "./app/useWorktreeClose";
 import { WorktreeReviewDialog } from "./components/review/WorktreeReviewDialog";
 import { resumeCommandFor, useTerminalSessions } from "./app/useTerminalSessions";
 import { useUpdater } from "./app/useUpdater";
-import type { NotificationItem } from "./types";
+import type { AgentRole, NotificationItem } from "./types";
 import {
   AgentPickerDialog,
   RenameDialog,
@@ -91,6 +91,7 @@ function App() {
   const [pickerTargetPane, setPickerTargetPane] = useState<string | null>(null);
   const [pickerSaveDefault, setPickerSaveDefault] = useState(false);
   const [pickerIsolate, setPickerIsolate] = useState(false);
+  const [pickerRole, setPickerRole] = useState<AgentRole | null>(null);
   const [renameTarget, setRenameTarget] = useState<{
     kind: RenameTargetKind;
     id: string;
@@ -341,16 +342,18 @@ function App() {
     const target = pickerTarget;
     const targetPane = pickerTargetPane;
     const isolate = pickerIsolate;
+    const role = pickerRole;
     setPickerTarget(null);
     setPickerTargetPane(null);
     setPickerSaveDefault(false);
     setPickerIsolate(false);
+    setPickerRole(null);
     if (target) {
       await sessions.spawnInto(
         target,
         agentId,
         targetPane ? { paneId: targetPane } : undefined,
-        { worktree: isolate },
+        { worktree: isolate, role },
       ).catch(sessions.reportSpawnError);
     }
   };
@@ -845,6 +848,7 @@ function App() {
             setPickerTargetPane(null);
             setPickerSaveDefault(false);
             setPickerIsolate(false);
+            setPickerRole(null);
           }
         }}
         onSaveDefaultChange={setPickerSaveDefault}
@@ -853,6 +857,8 @@ function App() {
         canIsolate={Boolean(pickerTarget && branches[pickerTarget])}
         isolate={pickerIsolate}
         onIsolateChange={setPickerIsolate}
+        role={pickerRole}
+        onRoleChange={setPickerRole}
       />
 
       <WorktreeCloseDialog {...worktreeClose.dialog} />

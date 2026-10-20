@@ -665,6 +665,11 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       .filter((terminal) => terminal.worktree)
       .map((terminal) => [terminal.id, terminal.worktree!.branch]),
   );
+  const roleLabels: Record<string, string> = Object.fromEntries(
+    props.workspaces.flatMap((workspace) => workspace.terminals)
+      .filter((terminal) => terminal.role)
+      .map((terminal) => [terminal.id, t(`roles.${terminal.role!}`)]),
+  );
   const openReview = (terminalId: string) => {
     const workspaceId = workspaceIdFor(terminalId);
     if (!workspaceId) return;
@@ -731,6 +736,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
           titles={props.titles}
           branch={project ? props.branches[project.id] : undefined}
           worktreeBranches={worktreeBranches}
+          roleLabels={roleLabels}
           onOpenReview={openReview}
           detachedIds={new Set(props.detachedTerminalIds)}
           labels={agentLabels}

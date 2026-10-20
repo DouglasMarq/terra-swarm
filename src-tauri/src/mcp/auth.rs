@@ -13,6 +13,9 @@ pub struct AgentIdentity {
     pub terminal_id: String,
     pub workspace_id: String,
     pub agent: String,
+    /// The team role the agent was started with, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<super::roles::Role>,
 }
 
 pub fn new_token() -> String {
@@ -86,7 +89,7 @@ impl TokenRegistry {
             .filter(|identity| identity.workspace_id == workspace_id)
             .cloned()
             .collect();
-        peers.sort_by(|a, b| terminal_order(&a.terminal_id).cmp(&terminal_order(&b.terminal_id)));
+        peers.sort_by_key(|a| terminal_order(&a.terminal_id));
         peers.dedup_by(|a, b| a.terminal_id == b.terminal_id);
         peers
     }
@@ -126,6 +129,7 @@ mod tests {
             terminal_id: terminal_id.into(),
             workspace_id: workspace_id.into(),
             agent: "claude".into(),
+            role: None,
         }
     }
 

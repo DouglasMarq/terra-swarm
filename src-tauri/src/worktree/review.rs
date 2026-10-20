@@ -66,9 +66,9 @@ pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
     let kinds = git(dir, &["diff", "--name-status", "-M", &base])?;
     let counts = git(dir, &["diff", "--numstat", "-M", &base])?;
     for (kind_line, count_line) in kinds.lines().zip(counts.lines()) {
-        let mut kind = kind_line.split('\t');
-        let code = kind.next().unwrap_or("M");
-        let path = kind.last().unwrap_or_default().to_string();
+        let code = kind_line.split('\t').next().unwrap_or("M");
+        // A rename lists the old and the new path; the new one is last.
+        let path = kind_line.rsplit('\t').next().unwrap_or_default().to_string();
         let mut numbers = count_line.split('\t');
         let additions = numbers.next().and_then(|n| n.parse().ok());
         let deletions = numbers.next().and_then(|n| n.parse().ok());

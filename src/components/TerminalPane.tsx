@@ -35,6 +35,8 @@ interface Props {
   branch?: string;
   /** Branch of the agent's own git worktree, when it is isolated. */
   worktreeBranch?: string;
+  /** The agent's team role, already translated. */
+  roleLabel?: string;
   /** Opens the review of the worktree's changes. */
   onOpenReview?: () => void;
   /** Task title (or name) shown first; falls back to the command. */
@@ -391,6 +393,7 @@ export function TerminalPane(props: Props) {
         <span className="terra-dot pane-dot" data-status={status} aria-hidden="true" />
         <span className="pane-name" title={command}>{primary}</span>
         {secondary ? <span className="terra-tag pane-tag">{secondary}</span> : null}
+        {props.roleLabel ? <span className="terra-tag pane-role">{props.roleLabel}</span> : null}
         {props.worktreeBranch ? (
           <button
             type="button"

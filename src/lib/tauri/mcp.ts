@@ -12,7 +12,15 @@ export const MCP_EVENTS = {
   tasksChanged: "mcp-tasks-changed",
   message: "mcp-message",
   agentStatus: "mcp-agent-status",
+  nudge: "mcp-nudge",
 } as const;
+
+/** The orchestrator assigned a task to an idle agent: type this prompt into it. */
+export interface McpNudgePayload {
+  workspace_id: string;
+  terminal_id: string;
+  prompt: string;
+}
 
 export interface McpTasksChangedPayload {
   workspace_id: string;

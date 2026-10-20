@@ -6,6 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use super::roles::Role;
 use super::{AgentIdentity, McpHub, McpLease};
 
 pub const ENV_URL: &str = "TERRA_MCP_URL";
@@ -69,6 +70,8 @@ pub struct Registration<'a> {
     /// Program Codex runs as `notify` (this app's binary), when the user has
     /// no `notify` of their own.
     pub codex_notify: Option<&'a Path>,
+    /// Appended to Claude Code's system prompt (the agent's team role).
+    pub system_prompt: Option<&'a str>,
 }
 
 /// Insert the flags that register the server (and the state hooks) with a
@@ -80,6 +83,9 @@ pub fn rewrite_command(command: &str, agent: &str, registration: Registration<'_
             let mut flags = String::new();
             if let Some(path) = registration.claude_settings {
                 flags.push_str(&format!(" --settings {}", quote(&path.to_string_lossy(), quoting)));
+            }
+            if let Some(prompt) = registration.system_prompt {
+                flags.push_str(&format!(" --append-system-prompt {}", quote(prompt, quoting)));
             }
             // `--mcp-config` takes several values, so it goes last: placed
             // before a prompt argument it would swallow the prompt as a file.
@@ -234,6 +240,7 @@ impl McpHub {
         terminal_id: &str,
         workspace_id: &str,
         command: &str,
+        role: Option<Role>,
         quoting: Quoting,
     ) -> Option<McpLaunch> {
         if !self.enabled() {
@@ -245,6 +252,7 @@ impl McpHub {
             terminal_id: terminal_id.to_string(),
             workspace_id: workspace_id.to_string(),
             agent: agent.clone(),
+            role,
         });
         let lease = McpLease::new(self, token.clone());
         let hook_url = url.trim_end_matches(super::server::MCP_PATH).to_string() + super::hooks::HOOKS_PATH;
@@ -267,8 +275,10 @@ impl McpHub {
             Some("codex") if !user_has_codex_notify() => self.hook_program(),
             _ => None,
         };
+        let brief = role.map(Role::brief);
         let registration = Registration {
             url: &url,
+            system_prompt: brief.as_deref(),
             claude_mcp: claude_mcp.as_deref(),
             claude_settings: claude_settings.as_deref(),
             codex_notify: codex_notify.as_deref(),
@@ -312,7 +322,7 @@ mod tests {
     fn claude_gets_hooks_and_its_config_file_last() {
         let mcp = Path::new("/Users/me/Library/Application Support/x/claude-mcp.json");
         let hooks = Path::new("/Users/me/Library/Application Support/x/claude-hooks.json");
-        let registration = Registration { url: URL, claude_mcp: Some(mcp), claude_settings: Some(hooks), codex_notify: None };
+        let registration = Registration { url: URL, claude_mcp: Some(mcp), claude_settings: Some(hooks), ..Registration::default() };
         assert_eq!(
             rewrite_command("claude --continue", "claude", registration, Quoting::Posix),
             "claude --continue --settings '/Users/me/Library/Application Support/x/claude-hooks.json' \
@@ -325,6 +335,12 @@ mod tests {
         );
         let bare = Registration { url: URL, ..Registration::default() };
         assert_eq!(rewrite_command("claude", "claude", bare, Quoting::Posix), "claude");
+        let brief = Role::Tester.brief();
+        let role = Registration { url: URL, system_prompt: Some(&brief), claude_mcp: Some(Path::new("/m.json")), ..Registration::default() };
+        assert_eq!(
+            rewrite_command("claude", "claude", role, Quoting::Posix),
+            format!("claude --append-system-prompt '{}' --mcp-config '/m.json'", brief)
+        );
     }
 
     #[test]
@@ -402,10 +418,10 @@ mod tests {
     fn launch_issues_a_token_and_env_only_when_enabled_and_running() {
         let (hub, _) = hub();
         assert!(hub
-            .launch("t-1", "ws-1", "claude", Quoting::Posix)
+            .launch("t-1", "ws-1", "claude", None, Quoting::Posix)
             .is_none());
         hub.set_port(4100);
-        let launch = hub.launch("t-1", "ws-1", "shell", Quoting::Posix).unwrap();
+        let launch = hub.launch("t-1", "ws-1", "shell", None, Quoting::Posix).unwrap();
         let env: std::collections::HashMap<_, _> = launch.env.iter().cloned().collect();
         assert_eq!(env[ENV_URL], URL);
         assert_eq!(env[ENV_HOOK_URL], "http://127.0.0.1:4100/hooks");
@@ -418,7 +434,7 @@ mod tests {
 
         hub.repo().unwrap().set_enabled(false).unwrap();
         assert!(hub
-            .launch("t-1", "ws-1", "claude", Quoting::Posix)
+            .launch("t-1", "ws-1", "claude", None, Quoting::Posix)
             .is_none());
     }
 }

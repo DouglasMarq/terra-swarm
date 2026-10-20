@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Bell, Mic, PanelLeft, PanelRight, Search } from "lucide-react";
-import { useT } from "../../i18n";
+import { useT, type Translate } from "../../i18n";
 import { COMMAND_PALETTE_SHORTCUT, formatShortcut } from "../../lib/platform/shortcuts";
 
 export interface ChromeBreadcrumb {
@@ -32,8 +32,8 @@ export interface WindowChromeProps {
   inspectorShortcut?: string;
 }
 
-function withShortcut(label: string, shortcut?: string): string {
-  return shortcut ? `${label} (${shortcut})` : label;
+function withShortcut(t: Translate, label: string, shortcut?: string): string {
+  return shortcut ? t("common.withShortcut", { label, shortcut }) : label;
 }
 
 /**
@@ -80,9 +80,9 @@ export function WindowChrome({
     };
   }, [notificationsOpen, onNotificationsOpenChange]);
 
-  const sidebarLabel = withShortcut(t(sidebarCollapsed ? "shell.sidebar.expand" : "shell.sidebar.collapse"), sidebarShortcut);
-  const inspectorLabel = withShortcut(t(inspectorOpen ? "shell.inspector.hide" : "shell.inspector.show"), inspectorShortcut);
-  const voiceTitle = withShortcut(voiceLabel ?? t("shell.voice"), voiceShortcut);
+  const sidebarLabel = withShortcut(t, t(sidebarCollapsed ? "shell.sidebar.expand" : "shell.sidebar.collapse"), sidebarShortcut);
+  const inspectorLabel = withShortcut(t, t(inspectorOpen ? "shell.inspector.hide" : "shell.inspector.show"), inspectorShortcut);
+  const voiceTitle = withShortcut(t, voiceLabel ?? t("shell.voice"), voiceShortcut);
   const notificationLabel = attentionCount > 0
     ? t("shell.attention.button", { count: attentionCount })
     : t("shell.attention.notifications");
@@ -127,7 +127,7 @@ export function WindowChrome({
           type="button"
           onClick={onOpenLauncher}
           aria-label={t("shell.search.open")}
-          title={withShortcut(t("shell.search.title"), launcherShortcut)}
+          title={withShortcut(t, t("shell.search.title"), launcherShortcut)}
         >
           <Search size={14} aria-hidden="true" />
           <span className="terra-window-search-label">{t("shell.search.placeholder")}</span>

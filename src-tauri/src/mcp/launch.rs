@@ -20,6 +20,8 @@ pub const SERVER_NAME: &str = "terra";
 
 const CLAUDE_CONFIG_FILE: &str = "claude-mcp.json";
 const CLAUDE_SETTINGS_FILE: &str = "claude-hooks.json";
+/// How long Claude Code waits for one of Terra's hooks.
+const CLAUDE_HOOK_TIMEOUT_SECS: u64 = 5;
 
 /// How the shell that runs the command expects arguments to be quoted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,6 +29,7 @@ pub enum Quoting {
     /// `sh -c`: single quotes.
     Posix,
     /// PowerShell `-Command` / `cmd /C`: double quotes.
+    // Constructed only under cfg(windows) in pty::spawn_terminal_inner.
     #[cfg_attr(unix, allow(dead_code))]
     Windows,
 }
@@ -171,7 +174,7 @@ pub fn claude_settings_json(hook_url: &str, session_start_command: Option<&str>)
         "url": format!("{}/claude", hook_url),
         "headers": { "Authorization": format!("Bearer ${{{}}}", ENV_TOKEN) },
         "allowedEnvVars": [ENV_TOKEN],
-        "timeout": 5,
+        "timeout": CLAUDE_HOOK_TIMEOUT_SECS,
     });
     let group = serde_json::json!([{ "hooks": [handler] }]);
     let mut hooks = serde_json::json!({
@@ -181,7 +184,7 @@ pub fn claude_settings_json(hook_url: &str, session_start_command: Option<&str>)
         "Stop": group,
     });
     if let Some(command) = session_start_command {
-        hooks["SessionStart"] = serde_json::json!([{ "hooks": [{ "type": "command", "command": command, "timeout": 5 }] }]);
+        hooks["SessionStart"] = serde_json::json!([{ "hooks": [{ "type": "command", "command": command, "timeout": CLAUDE_HOOK_TIMEOUT_SECS }] }]);
     }
     serde_json::json!({ "hooks": hooks }).to_string()
 }

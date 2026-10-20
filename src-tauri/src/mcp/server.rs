@@ -348,7 +348,14 @@ mod tests {
         assert_eq!(server.post(Some("not-a-token"), ping.clone()).0, 401);
 
         hub.revoke_terminal("t-1");
-        assert_eq!(server.post(Some(&token), ping).0, 401);
+        assert_eq!(server.post(Some(&token), ping.clone()).0, 401);
+
+        // A killed terminal drops its PTY entry, and with it the lease.
+        let lease_token = hub.issue(identity("t-2", "ws-1", "claude"));
+        let lease = crate::mcp::McpLease::new(&hub, lease_token.clone());
+        assert_eq!(server.post(Some(&lease_token), ping.clone()).0, 200);
+        drop(lease);
+        assert_eq!(server.post(Some(&lease_token), ping).0, 401);
     }
 
     #[test]

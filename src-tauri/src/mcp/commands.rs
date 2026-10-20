@@ -1,15 +1,17 @@
-//! Tauri commands behind the Tasks panel and the Settings toggle. Changes
-//! made here are logged as the human ("user") and emit the same events as
-//! agent changes, so every window refreshes the same way.
+//! Tauri commands behind the Tasks panel and the Settings toggle. They use
+//! the same `repo` as the MCP tools, log changes as the human ("user") and
+//! emit the same events, so every window refreshes the same way.
 
 use serde::{Deserialize, Deserializer};
 use std::sync::Arc;
 use tauri::State;
 
-use super::store::{AgentStatus, NewTask, Task, TaskPatch, TaskPriority, TaskStatus};
+use super::repo::{AgentStatus, NewTask, Task, TaskPatch, TaskPriority, TaskStatus};
 use super::{McpHub, ServerInfo};
 
 pub const USER_ACTOR: &str = "user";
+/// History shown on each card of the Tasks panel.
+const PANEL_EVENTS: usize = 20;
 
 type Hub<'a> = State<'a, Arc<McpHub>>;
 
@@ -30,6 +32,7 @@ pub struct TaskPatchInput {
     pub priority: Option<TaskPriority>,
     #[serde(default, deserialize_with = "double_option")]
     pub assignee: Option<Option<String>>,
+    pub position: Option<f64>,
     pub note: Option<String>,
 }
 
@@ -42,14 +45,16 @@ pub fn mcp_server_info(hub: Hub<'_>) -> ServerInfo {
 /// the setting applies to terminals started afterwards.
 #[tauri::command(async)]
 pub fn mcp_set_enabled(hub: Hub<'_>, enabled: bool) -> Result<ServerInfo, String> {
-    hub.store().set_enabled(enabled).map_err(|e| e.to_string())?;
+    hub.repo()
+        .and_then(|repo| repo.set_enabled(enabled))
+        .map_err(|e| e.to_string())?;
     Ok(hub.info())
 }
 
 #[tauri::command(async)]
 pub fn mcp_list_tasks(hub: Hub<'_>, workspace_id: String) -> Result<Vec<Task>, String> {
-    hub.store()
-        .list_tasks(&workspace_id, None, None)
+    hub.repo()
+        .and_then(|repo| repo.list_tasks(&workspace_id, None, None, Some(PANEL_EVENTS)))
         .map_err(|e| e.to_string())
 }
 
@@ -63,18 +68,20 @@ pub fn mcp_create_task(
     assignee: Option<String>,
 ) -> Result<Task, String> {
     let task = hub
-        .store()
-        .create_task(
-            &workspace_id,
-            USER_ACTOR,
-            NewTask {
-                title,
-                description,
-                priority,
-                assignee,
-                ..NewTask::default()
-            },
-        )
+        .repo()
+        .and_then(|mut repo| {
+            repo.create_task(
+                &workspace_id,
+                USER_ACTOR,
+                NewTask {
+                    title,
+                    description,
+                    priority,
+                    assignee,
+                    ..NewTask::default()
+                },
+            )
+        })
         .map_err(|e| e.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(task)
@@ -88,20 +95,23 @@ pub fn mcp_update_task(
     patch: TaskPatchInput,
 ) -> Result<Task, String> {
     let task = hub
-        .store()
-        .update_task(
-            &workspace_id,
-            &id,
-            USER_ACTOR,
-            TaskPatch {
-                title: patch.title,
-                description: patch.description,
-                status: patch.status,
-                priority: patch.priority,
-                assignee: patch.assignee,
-                note: patch.note,
-            },
-        )
+        .repo()
+        .and_then(|mut repo| {
+            repo.update_task(
+                &workspace_id,
+                &id,
+                USER_ACTOR,
+                TaskPatch {
+                    title: patch.title,
+                    description: patch.description,
+                    status: patch.status,
+                    priority: patch.priority,
+                    assignee: patch.assignee,
+                    position: patch.position,
+                    note: patch.note,
+                },
+            )
+        })
         .map_err(|e| e.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(task)
@@ -109,8 +119,8 @@ pub fn mcp_update_task(
 
 #[tauri::command(async)]
 pub fn mcp_delete_task(hub: Hub<'_>, workspace_id: String, id: String) -> Result<(), String> {
-    hub.store()
-        .delete_task(&workspace_id, &id)
+    hub.repo()
+        .and_then(|mut repo| repo.delete_task(&workspace_id, &id))
         .map_err(|e| e.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(())
@@ -118,7 +128,9 @@ pub fn mcp_delete_task(hub: Hub<'_>, workspace_id: String, id: String) -> Result
 
 #[tauri::command(async)]
 pub fn mcp_agent_statuses(hub: Hub<'_>, workspace_id: String) -> Vec<AgentStatus> {
-    hub.store().statuses(&workspace_id)
+    hub.repo()
+        .map(|repo| repo.statuses(&workspace_id))
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -127,12 +139,14 @@ mod tests {
 
     #[test]
     fn patch_distinguishes_missing_and_null_assignee() {
-        let missing: TaskPatchInput = serde_json::from_str(r#"{"status":"done"}"#).unwrap();
+        let missing: TaskPatchInput = serde_json::from_str(r#"{"status":"done","position":2.5}"#).unwrap();
         assert_eq!(missing.assignee, None);
         assert_eq!(missing.status, Some(TaskStatus::Done));
+        assert_eq!(missing.position, Some(2.5));
         let cleared: TaskPatchInput = serde_json::from_str(r#"{"assignee":null}"#).unwrap();
         assert_eq!(cleared.assignee, Some(None));
-        let set: TaskPatchInput = serde_json::from_str(r#"{"assignee":"t-2"}"#).unwrap();
+        let set: TaskPatchInput = serde_json::from_str(r#"{"assignee":"t-2","priority":"urgent"}"#).unwrap();
         assert_eq!(set.assignee, Some(Some("t-2".into())));
+        assert_eq!(set.priority, Some(TaskPriority::Urgent));
     }
 }

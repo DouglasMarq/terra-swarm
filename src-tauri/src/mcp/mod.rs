@@ -1,37 +1,33 @@
 //! Embedded MCP server that lets the agent CLIs running in Terra Swarm's
 //! terminals share a task board, message each other and keep project notes.
 //!
-//! - `store`: SQLite persistence (`<app_data_dir>/mcp.sqlite`).
+//! - `db`: SQLite connection and migrations (`<app_data_dir>/mcp.db`).
+//! - `repo`: the queries, shared by the MCP tools and the Tasks panel.
+//! - `auth`: per-terminal bearer tokens.
 //! - `tools`: the MCP tool catalogue and its handlers, independent of HTTP.
-//! - `server`: Streamable HTTP transport on 127.0.0.1 (rmcp + axum) with
-//!   per-terminal bearer tokens.
+//! - `server`: Streamable HTTP transport on 127.0.0.1 (rmcp + axum).
 //! - `launch`: how a terminal gets its token, environment and CLI flags.
 //! - `commands`: Tauri commands used by the Tasks panel and Settings.
 
+pub mod auth;
 pub mod commands;
+pub mod db;
 pub mod launch;
+pub mod repo;
 pub mod server;
-pub mod store;
 pub mod tools;
 
 use serde::Serialize;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use store::{AgentStatus, McpStore, Message};
+pub use auth::{AgentIdentity, McpLease};
+use auth::TokenRegistry;
+use repo::{AgentStatus, Message, Repo, StoreError, StoreResult};
 
 pub const EVENT_TASKS_CHANGED: &str = "mcp-tasks-changed";
 pub const EVENT_MESSAGE: &str = "mcp-message";
 pub const EVENT_AGENT_STATUS: &str = "mcp-agent-status";
-
-/// Who is calling: resolved from the bearer token, never from the request.
-#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
-pub struct AgentIdentity {
-    pub terminal_id: String,
-    pub workspace_id: String,
-    pub agent: String,
-}
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct WorkspaceInfo {
@@ -44,60 +40,92 @@ pub struct WorkspaceInfo {
 pub trait McpHost: Send + Sync {
     fn emit(&self, event: &str, payload: serde_json::Value);
     fn workspace(&self, workspace_id: &str) -> Option<WorkspaceInfo>;
+    /// Ids of every terminal of the workspace, running or not.
+    fn terminals(&self, workspace_id: &str) -> Vec<String>;
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct ServerInfo {
+    /// The "Expose Terra MCP to agents" preference.
     pub enabled: bool,
+    /// False when `mcp.db` could not be opened or migrated.
+    pub available: bool,
     pub running: bool,
     pub url: Option<String>,
     pub port: Option<u16>,
+    pub db_path: Option<String>,
+    pub error: Option<String>,
 }
 
 pub struct McpHub {
-    store: Mutex<McpStore>,
-    tokens: Mutex<HashMap<String, AgentIdentity>>,
+    repo: Option<Mutex<Repo>>,
+    error: Option<String>,
+    db_path: Option<PathBuf>,
+    tokens: Mutex<TokenRegistry>,
     port: Mutex<Option<u16>>,
     /// Where generated client config files (Claude's `--mcp-config`) live.
     config_dir: Option<PathBuf>,
     host: Box<dyn McpHost>,
 }
 
-fn new_token() -> String {
-    let mut bytes = [0u8; 32];
-    if getrandom::fill(&mut bytes).is_err() {
-        // getrandom only fails when the OS has no entropy source at all;
-        // refuse to hand out a guessable token in that case.
-        panic!("no OS randomness available for MCP tokens");
-    }
-    bytes.iter().map(|byte| format!("{:02x}", byte)).collect()
+fn guard<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|error| error.into_inner())
 }
 
 impl McpHub {
-    pub fn new(store: McpStore, config_dir: Option<PathBuf>, host: Box<dyn McpHost>) -> Self {
+    /// Open `mcp.db`. When it cannot be opened or migrated the app keeps
+    /// running with the MCP server off, and Settings shows why.
+    pub fn open(db_path: PathBuf, config_dir: Option<PathBuf>, host: Box<dyn McpHost>) -> Self {
+        let (repo, error) = match db::open(&db_path) {
+            Ok(conn) => (Some(Mutex::new(Repo::new(conn))), None),
+            Err(error) => {
+                eprintln!("MCP disabled: cannot open {}: {}", db_path.display(), error);
+                (None, Some(error))
+            }
+        };
         Self {
-            store: Mutex::new(store),
-            tokens: Mutex::new(HashMap::new()),
+            repo,
+            error,
+            db_path: Some(db_path),
+            tokens: Mutex::new(TokenRegistry::default()),
             port: Mutex::new(None),
             config_dir,
             host,
         }
     }
 
-    pub fn store(&self) -> MutexGuard<'_, McpStore> {
-        self.store.lock().unwrap_or_else(|error| error.into_inner())
+    #[cfg(test)]
+    pub fn with_repo(repo: Repo, config_dir: Option<PathBuf>, host: Box<dyn McpHost>) -> Self {
+        Self {
+            repo: Some(Mutex::new(repo)),
+            error: None,
+            db_path: None,
+            tokens: Mutex::new(TokenRegistry::default()),
+            port: Mutex::new(None),
+            config_dir,
+            host,
+        }
     }
 
-    fn tokens(&self) -> MutexGuard<'_, HashMap<String, AgentIdentity>> {
-        self.tokens.lock().unwrap_or_else(|error| error.into_inner())
+    pub fn available(&self) -> bool {
+        self.repo.is_some()
+    }
+
+    pub fn repo(&self) -> StoreResult<MutexGuard<'_, Repo>> {
+        match &self.repo {
+            Some(repo) => Ok(guard(repo)),
+            None => Err(StoreError::Unavailable(
+                self.error.clone().unwrap_or_else(|| "not initialized".into()),
+            )),
+        }
     }
 
     pub fn set_port(&self, port: u16) {
-        *self.port.lock().unwrap_or_else(|error| error.into_inner()) = Some(port);
+        *guard(&self.port) = Some(port);
     }
 
     pub fn port(&self) -> Option<u16> {
-        *self.port.lock().unwrap_or_else(|error| error.into_inner())
+        *guard(&self.port)
     }
 
     pub fn url(&self) -> Option<String> {
@@ -109,16 +137,19 @@ impl McpHub {
     }
 
     pub fn enabled(&self) -> bool {
-        self.store().enabled()
+        self.repo().map(|repo| repo.enabled()).unwrap_or(false)
     }
 
     pub fn info(&self) -> ServerInfo {
         let port = self.port();
         ServerInfo {
             enabled: self.enabled(),
+            available: self.available(),
             running: port.is_some(),
             url: self.url(),
             port,
+            db_path: self.db_path.as_ref().map(|path| path.display().to_string()),
+            error: self.error.clone(),
         }
     }
 
@@ -126,54 +157,44 @@ impl McpHub {
         self.host.workspace(workspace_id)
     }
 
-    /// Hand out a fresh token for a terminal. Any older token of the same
-    /// terminal stops working, so a restarted pane never keeps two.
+    pub fn workspace_terminals(&self, workspace_id: &str) -> Vec<String> {
+        self.host.terminals(workspace_id)
+    }
+
+    // ----- tokens ---------------------------------------------------------
+
     pub fn issue(&self, identity: AgentIdentity) -> String {
-        let token = new_token();
-        let mut tokens = self.tokens();
-        tokens.retain(|_, existing| existing.terminal_id != identity.terminal_id);
-        tokens.insert(token.clone(), identity);
-        token
+        guard(&self.tokens).issue(identity)
     }
 
     pub fn identify(&self, token: &str) -> Option<AgentIdentity> {
-        self.tokens().get(token).cloned()
+        guard(&self.tokens).identify(token)
     }
 
-    /// Revoke one token. The terminal's status goes away with its last token.
+    /// The terminal's status goes away with its last token.
     pub fn revoke_token(&self, token: &str) {
-        let removed = {
-            let mut tokens = self.tokens();
-            tokens.remove(token).filter(|identity| {
-                !tokens
-                    .values()
-                    .any(|other| other.terminal_id == identity.terminal_id)
-            })
-        };
-        if let Some(identity) = removed {
+        let gone = guard(&self.tokens).revoke_token(token);
+        if let Some(identity) = gone {
             self.forget_agent(&identity);
         }
     }
 
     #[cfg(test)]
     pub fn revoke_terminal(&self, terminal_id: &str) {
-        let removed: Vec<AgentIdentity> = {
-            let mut tokens = self.tokens();
-            let removed = tokens
-                .values()
-                .filter(|identity| identity.terminal_id == terminal_id)
-                .cloned()
-                .collect();
-            tokens.retain(|_, identity| identity.terminal_id != terminal_id);
-            removed
-        };
-        if let Some(identity) = removed.into_iter().next() {
+        let gone = guard(&self.tokens).revoke_terminal(terminal_id);
+        if let Some(identity) = gone {
             self.forget_agent(&identity);
         }
     }
 
+    pub fn peers(&self, workspace_id: &str) -> Vec<AgentIdentity> {
+        guard(&self.tokens).peers(workspace_id)
+    }
+
     fn forget_agent(&self, identity: &AgentIdentity) {
-        self.store().forget_status(&identity.terminal_id);
+        if let Ok(mut repo) = self.repo() {
+            repo.forget_status(&identity.terminal_id);
+        }
         self.host.emit(
             EVENT_AGENT_STATUS,
             serde_json::json!({
@@ -184,18 +205,23 @@ impl McpHub {
         );
     }
 
-    /// Terminals of a workspace that currently hold a token, by id.
-    pub fn peers(&self, workspace_id: &str) -> Vec<AgentIdentity> {
-        let mut peers: Vec<AgentIdentity> = self
-            .tokens()
-            .values()
-            .filter(|identity| identity.workspace_id == workspace_id)
-            .cloned()
-            .collect();
-        peers.sort_by(|a, b| terminal_order(&a.terminal_id).cmp(&terminal_order(&b.terminal_id)));
-        peers.dedup_by(|a, b| a.terminal_id == b.terminal_id);
-        peers
+    // ----- workspace lifecycle --------------------------------------------
+
+    /// Delete a closed workspace's board, messages, notes and statuses.
+    pub fn purge_workspace(&self, workspace_id: &str) {
+        guard(&self.tokens).revoke_workspace(workspace_id);
+        match self.repo() {
+            Ok(mut repo) => {
+                if let Err(error) = repo.purge_workspace(workspace_id) {
+                    eprintln!("failed to purge MCP data of {}: {}", workspace_id, error);
+                }
+            }
+            Err(_) => return,
+        }
+        self.emit_tasks_changed(workspace_id);
     }
+
+    // ----- events ---------------------------------------------------------
 
     pub fn emit_tasks_changed(&self, workspace_id: &str) {
         self.host.emit(
@@ -223,43 +249,29 @@ impl McpHub {
     }
 }
 
-/// `t-2` sorts before `t-10`.
-fn terminal_order(id: &str) -> (u64, String) {
-    let number = id
-        .strip_prefix("t-")
-        .and_then(|rest| rest.parse::<u64>().ok())
-        .unwrap_or(u64::MAX);
-    (number, id.to_string())
-}
-
-/// Revokes its token when dropped. A PTY entry owns one, so every way a
-/// terminal goes away (kill, stop, exit, app shutdown) also closes its
-/// access to the MCP server.
-pub struct McpLease {
-    hub: std::sync::Weak<McpHub>,
-    token: String,
-}
-
-impl McpLease {
-    pub fn new(hub: &Arc<McpHub>, token: String) -> Self {
-        Self {
-            hub: Arc::downgrade(hub),
-            token,
-        }
-    }
-}
-
-impl Drop for McpLease {
-    fn drop(&mut self) {
-        if let Some(hub) = self.hub.upgrade() {
-            hub.revoke_token(&self.token);
-        }
+/// Called by `close_workspace`: workspaces live in `workspaces.json`, so
+/// their MCP data has no foreign key to cascade from.
+pub fn purge_workspace<R: tauri::Runtime>(app: &tauri::AppHandle<R>, workspace_id: &str) {
+    use tauri::Manager;
+    if let Some(hub) = app.try_state::<Arc<McpHub>>() {
+        hub.purge_workspace(workspace_id);
     }
 }
 
 /// Tauri side of [`McpHost`].
 pub struct TauriHost<R: tauri::Runtime> {
     pub app: tauri::AppHandle<R>,
+}
+
+impl<R: tauri::Runtime> TauriHost<R> {
+    fn with_workspace<T>(&self, workspace_id: &str, read: impl FnOnce(&crate::workspace::Workspace) -> T) -> Option<T> {
+        use tauri::Manager;
+        let store = self
+            .app
+            .try_state::<Mutex<crate::workspace::WorkspaceStore>>()?;
+        let store = store.lock().ok()?;
+        store.get(workspace_id).map(read)
+    }
 }
 
 impl<R: tauri::Runtime> McpHost for TauriHost<R> {
@@ -269,15 +281,17 @@ impl<R: tauri::Runtime> McpHost for TauriHost<R> {
     }
 
     fn workspace(&self, workspace_id: &str) -> Option<WorkspaceInfo> {
-        use tauri::Manager;
-        let store = self
-            .app
-            .try_state::<Mutex<crate::workspace::WorkspaceStore>>()?;
-        let store = store.lock().ok()?;
-        store.get(workspace_id).map(|workspace| WorkspaceInfo {
+        self.with_workspace(workspace_id, |workspace| WorkspaceInfo {
             name: workspace.name.clone(),
             cwd: workspace.cwd.clone(),
         })
+    }
+
+    fn terminals(&self, workspace_id: &str) -> Vec<String> {
+        self.with_workspace(workspace_id, |workspace| {
+            workspace.terminals.iter().map(|terminal| terminal.id.clone()).collect()
+        })
+        .unwrap_or_default()
     }
 }
 
@@ -285,18 +299,17 @@ impl<R: tauri::Runtime> McpHost for TauriHost<R> {
 pub mod test_support {
     use super::*;
 
-    /// Records emitted events and serves a fixed workspace list.
+    pub type Events = Arc<Mutex<Vec<(String, serde_json::Value)>>>;
+
+    /// Records emitted events; knows no terminals beyond the live tokens.
     #[derive(Default)]
     pub struct RecordingHost {
-        pub events: Arc<Mutex<Vec<(String, serde_json::Value)>>>,
+        pub events: Events,
     }
 
     impl McpHost for RecordingHost {
         fn emit(&self, event: &str, payload: serde_json::Value) {
-            self.events
-                .lock()
-                .unwrap()
-                .push((event.to_string(), payload));
+            self.events.lock().unwrap().push((event.to_string(), payload));
         }
 
         fn workspace(&self, workspace_id: &str) -> Option<WorkspaceInfo> {
@@ -305,13 +318,17 @@ pub mod test_support {
                 cwd: format!("/tmp/{}", workspace_id),
             })
         }
+
+        fn terminals(&self, _workspace_id: &str) -> Vec<String> {
+            Vec::new()
+        }
     }
 
-    pub fn hub() -> (Arc<McpHub>, Arc<Mutex<Vec<(String, serde_json::Value)>>>) {
+    pub fn hub() -> (Arc<McpHub>, Events) {
         let host = RecordingHost::default();
         let events = Arc::clone(&host.events);
         (
-            Arc::new(McpHub::new(McpStore::in_memory(), None, Box::new(host))),
+            Arc::new(McpHub::with_repo(Repo::in_memory(), None, Box::new(host))),
             events,
         )
     }
@@ -329,17 +346,6 @@ pub mod test_support {
 mod tests {
     use super::test_support::*;
     use super::*;
-
-    #[test]
-    fn tokens_are_unique_and_replaced_per_terminal() {
-        let (hub, _) = hub();
-        let first = hub.issue(identity("t-1", "ws-1", "claude"));
-        let second = hub.issue(identity("t-1", "ws-1", "claude"));
-        assert_ne!(first, second);
-        assert_eq!(first.len(), 64);
-        assert!(hub.identify(&first).is_none());
-        assert_eq!(hub.identify(&second).unwrap().terminal_id, "t-1");
-    }
 
     #[test]
     fn dropping_a_lease_revokes_its_token_only() {
@@ -361,18 +367,36 @@ mod tests {
     }
 
     #[test]
-    fn peers_are_per_workspace_and_ordered() {
-        let (hub, _) = hub();
-        hub.issue(identity("t-10", "ws-1", "codex"));
-        hub.issue(identity("t-2", "ws-1", "claude"));
-        hub.issue(identity("t-3", "ws-2", "claude"));
-        let peers: Vec<String> = hub
-            .peers("ws-1")
-            .into_iter()
-            .map(|peer| peer.terminal_id)
-            .collect();
-        assert_eq!(peers, vec!["t-2", "t-10"]);
-        hub.revoke_terminal("t-2");
-        assert_eq!(hub.peers("ws-1").len(), 1);
+    fn purge_revokes_tokens_and_clears_data() {
+        let (hub, events) = hub();
+        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        hub.repo()
+            .unwrap()
+            .create_task("ws-1", "t-1", repo::NewTask { title: "x".into(), ..Default::default() })
+            .unwrap();
+        hub.purge_workspace("ws-1");
+        assert!(hub.identify(&token).is_none());
+        assert!(hub.repo().unwrap().list_tasks("ws-1", None, None, None).unwrap().is_empty());
+        assert!(events.lock().unwrap().iter().any(|(e, p)| e == EVENT_TASKS_CHANGED && p["workspace_id"] == "ws-1"));
+    }
+
+    #[test]
+    fn an_unreadable_database_turns_the_server_off() {
+        let dir = std::env::temp_dir().join(format!("terra-mcp-hub-{}", repo::now_millis()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(db::DB_FILE);
+        std::fs::write(&path, b"this is not a sqlite database, not even close").unwrap();
+        let hub = Arc::new(McpHub::open(path.clone(), None, Box::new(RecordingHost::default())));
+        hub.set_port(4100);
+        let info = hub.info();
+        assert!(!info.available);
+        assert!(!info.enabled);
+        assert!(info.error.is_some());
+        assert_eq!(info.db_path.as_deref(), Some(path.display().to_string().as_str()));
+        assert!(matches!(hub.repo(), Err(StoreError::Unavailable(_))));
+        assert!(hub
+            .launch("t-1", "ws-1", "claude", launch::Quoting::Posix)
+            .is_none());
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

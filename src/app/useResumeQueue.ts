@@ -123,7 +123,7 @@ export function useResumeQueue(sessions: TerminalSessions, refresh: () => Promis
     if (!autoPending || !items || items.length === 0) return;
     setAutoPending(false);
     void resumeAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Keyed on the queue loading only: resumeAll changes every render and reads the latest state itself.
   }, [autoPending, items]);
 
   return {

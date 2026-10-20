@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { useT } from "../../i18n";
 import { AlertCircle, Check, ChevronUp, CircleStop, LoaderCircle, Mic, X } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
@@ -62,6 +62,7 @@ function clamp(value: number, min = 0, max = 1): number {
 }
 
 function Waveform({ level = 0, samples = FALLBACK_SAMPLES }: Pick<VoiceCapsuleProps, "level" | "samples">) {
+  const t = useT();
   const amplitude = clamp(level);
   const values = samples.length > 0 ? samples : FALLBACK_SAMPLES;
 
@@ -132,6 +133,7 @@ export function VoiceCapsule({
   transcript,
   finalTranscript,
 }: VoiceCapsuleProps) {
+  const t = useT();
   const safeIntent = intentPayload(intent);
   const currentTranscript = resolvedTranscript({ transcript, finalTranscript, partialTranscript });
   const destructive = isDestructiveVoiceIntent(safeIntent);

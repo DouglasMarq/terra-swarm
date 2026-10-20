@@ -12,7 +12,7 @@ import {
   createTerminalResizeQueue,
 } from "../lib/terminalFitScheduler";
 import { Maximize2, Minimize2, GitBranch } from "lucide-react";
-import { useT } from "../i18n";
+import { t as translateNow, useT } from "../i18n";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { terminalFontStack } from "../lib/terminalFonts";
 import { PaneActionsMenu, type PaneMenuGroups } from "./workbench/PaneActionsMenu";
@@ -228,7 +228,7 @@ export function TerminalPane(props: Props) {
       if (writeBuf.length + data.length > MAX_BUFFERED) {
         writeBuf =
           writeBuf.slice(-Math.floor(MAX_BUFFERED / 4)) +
-          "\r\n\x1b[33m[...output dropped...]\x1b[0m\r\n";
+          `\r\n\x1b[33m${translateNow("pane.outputDropped")}\x1b[0m\r\n`;
       }
       writeBuf += data;
       drain();
@@ -398,7 +398,7 @@ export function TerminalPane(props: Props) {
           <button
             type="button"
             className="terra-tag pane-worktree"
-            title={`${t("pane.worktree", { branch: props.worktreeBranch })} · ${t("review.open")}`}
+            title={t("pane.worktree", { branch: props.worktreeBranch })}
             disabled={!props.onOpenReview}
             onClick={(event) => {
               event.stopPropagation();

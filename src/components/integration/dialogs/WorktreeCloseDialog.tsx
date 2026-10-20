@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { t } from "../../../i18n";
+import { useT } from "../../../i18n";
 import type { WorktreeStatus } from "../../../types";
 import { DialogFooter, TerraDialog } from "../../overlays/Dialog";
 import { Button } from "../../ui/Button";
@@ -17,6 +17,7 @@ export interface WorktreeCloseDialogProps {
 
 /** Closing an isolated agent whose work is not merged anywhere yet. */
 export function WorktreeCloseDialog({ target, onKeep, onDelete, onCancel, onReview }: WorktreeCloseDialogProps) {
+  const t = useT();
   const [deleteBranch, setDeleteBranch] = useState(false);
   const status = target?.status;
   return (

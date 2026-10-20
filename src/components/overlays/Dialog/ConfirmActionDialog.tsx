@@ -1,4 +1,4 @@
-import { t } from "../../../i18n";
+import { useT } from "../../../i18n";
 import { AlertTriangle } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -29,7 +29,7 @@ export interface ConfirmActionDialogProps {
  */
 export function ConfirmActionDialog({
   busy = false,
-  cancelLabel = t("common.cancel"),
+  cancelLabel,
   confirmLabel,
   description,
   intent = "destructive",
@@ -38,6 +38,7 @@ export function ConfirmActionDialog({
   open,
   title,
 }: ConfirmActionDialogProps) {
+  const t = useT();
   const [submitting, setSubmitting] = useState(false);
   const copy = getConfirmationCopy(intent);
   const isBusy = busy || submitting;
@@ -72,7 +73,7 @@ export function ConfirmActionDialog({
       <DialogFooter>
         <DialogClose asChild>
           <Button type="button" variant="ghost" disabled={isBusy}>
-            {cancelLabel}
+            {cancelLabel ?? t("common.cancel")}
           </Button>
         </DialogClose>
         <Button

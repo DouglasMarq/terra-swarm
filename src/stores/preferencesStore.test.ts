@@ -2,11 +2,23 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_HOTKEYS,
   formatHotkey,
+  hotkeyActionLabel,
   matchHotkey,
   normalizeHotkeyForPlatform,
   parseEnvLines,
   usePreferencesStore,
 } from "./preferencesStore";
+
+describe("hotkeyActionLabel", () => {
+  it("given a numbered action, names it with its number", () => {
+    expect(hotkeyActionLabel("selectWorkspace3")).toBe("Ir para o workspace 3");
+    expect(hotkeyActionLabel("selectTerminal9")).toBe("Focar o agente 9");
+  });
+
+  it("given a plain action, uses its own label", () => {
+    expect(hotkeyActionLabel("newTerminal")).toBe("Novo agente");
+  });
+});
 
 describe("preferences store", () => {
   afterEach(() => {

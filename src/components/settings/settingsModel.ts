@@ -8,7 +8,7 @@ import {
   SquareTerminal,
   type LucideIcon,
 } from "lucide-react";
-import { t, type MessageKey } from "../../i18n";
+import { t } from "../../i18n";
 
 export const SETTINGS_SECTION_IDS = [
   "general",
@@ -41,10 +41,10 @@ function section(
     icon,
     keywords,
     get label() {
-      return t(`settings.sections.${id}.label` as MessageKey);
+      return t(`settings.sections.${id}.label` as const);
     },
     get description() {
-      return t(`settings.sections.${id}.description` as MessageKey);
+      return t(`settings.sections.${id}.description` as const);
     },
   };
 }

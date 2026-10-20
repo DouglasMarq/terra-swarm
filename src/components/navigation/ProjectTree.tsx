@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { useT } from "../../i18n";
 import { Folder, Plus } from "../../components/icons";
 import type { ReactNode } from "react";
 import { AgentNode } from "./AgentNode";
@@ -116,6 +116,7 @@ function renderNode(node: NavigatorNode, props: ProjectTreeViewProps, actions: N
 
 /** Tree renderer kept separate so the panel can own headers and actions. */
 export function ProjectTree({ tree, expandedIds, onToggle, onCreateGroup, ...props }: ProjectTreeViewProps) {
+  const t = useT();
   const viewProps: ProjectTreeViewProps = { tree, expandedIds, onToggle, onCreateGroup, ...props };
   const actions = actionSet(viewProps);
   const groups = tree.roots.filter((node): node is NavigatorGroupNode => node.kind === "group");

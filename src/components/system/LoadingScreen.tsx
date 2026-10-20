@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { useT, type MessageKey } from "../../i18n";
 import { CheckCircle2, LoaderCircle, Orbit } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
@@ -17,11 +17,11 @@ export interface LoadingScreenProps {
   className?: string;
 }
 
-const PHASE_LABELS: Record<LoadingScreenPhase, string> = {
-  get booting() { return t("system.booting"); },
-  get hydrating() { return t("system.hydrating"); },
-  get connecting() { return t("system.connecting"); },
-  get ready() { return t("system.ready"); },
+const PHASE_LABELS: Record<LoadingScreenPhase, MessageKey> = {
+  booting: "system.booting",
+  hydrating: "system.hydrating",
+  connecting: "system.connecting",
+  ready: "system.ready",
 };
 
 function clampProgress(progress: number) {
@@ -37,9 +37,10 @@ export function LoadingScreen({
   phase = "booting",
   progress,
   status,
-  subtitle = t("system.subtitle"),
-  title = "Terra Swarm",
+  subtitle,
+  title,
 }: LoadingScreenProps) {
+  const t = useT();
   const progressValue = progress === undefined ? undefined : clampProgress(progress);
   const rootClassName = [styles.loadingScreen, className].filter(Boolean).join(" ");
   const progressStyle = (
@@ -54,8 +55,8 @@ export function LoadingScreen({
         </div>
         <div className={styles.loadingCopy}>
           <p className={styles.loadingKicker}>terra / swarm</p>
-          <h1 className={styles.loadingTitle}>{title}</h1>
-          <p className={styles.loadingSubtitle}>{subtitle}</p>
+          <h1 className={styles.loadingTitle}>{title ?? t("common.appName")}</h1>
+          <p className={styles.loadingSubtitle}>{subtitle ?? t("system.subtitle")}</p>
         </div>
         <div className={styles.loadingStatus} role="status" aria-live="polite">
           {phase === "ready" ? (
@@ -63,7 +64,7 @@ export function LoadingScreen({
           ) : (
             <LoaderCircle className={styles.loadingSpinner} size={13} aria-hidden="true" />
           )}
-          <span>{status ?? PHASE_LABELS[phase]}</span>
+          <span>{status ?? t(PHASE_LABELS[phase])}</span>
         </div>
         {progressValue === undefined ? null : (
           <div

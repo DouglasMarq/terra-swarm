@@ -1,19 +1,15 @@
 import { DEFAULT_NAME_LIST, NAME_SETS, type NameSetId, type NamesExhaustedStrategy } from "../domain/agentNames";
 import { create } from "zustand";
-import { t, type MessageKey } from "../i18n";
+import { t } from "../i18n";
+import { DEFAULT_VOICE_LANGUAGE, isVoiceLanguage, type VoiceLanguage } from "../domain/voiceLanguages";
 import {
   detectShortcutPlatform,
   formatShortcut,
+  type ShortcutDefinition,
   type ShortcutPlatform,
 } from "../lib/platform/shortcuts";
 
-export interface Hotkey {
-  key: string;
-  meta: boolean;
-  shift: boolean;
-  ctrl: boolean;
-  alt: boolean;
-}
+export type Hotkey = ShortcutDefinition;
 
 const mk = (
   key: string,
@@ -34,7 +30,7 @@ const termSelect = (n: number): Hotkey =>
 // On Windows the meta key is the Win key: Win+W opens Widgets, Win+Enter
 // launches Narrator, Win+= drives the Magnifier, etc. Use Ctrl+Shift / Alt
 // combos there; keep Cmd combos on macOS.
-export const DEFAULT_HOTKEYS: Record<string, Hotkey> = {
+export const DEFAULT_HOTKEYS: Readonly<Record<HotkeyActionId, Hotkey>> = {
   newWorkspace: IS_MAC ? mk("n", true, true) : mk("n", false, true, true),
   renameWorkspace: IS_MAC ? mk("r", true, true) : mk("r", false, true, true),
   deleteWorkspace: IS_MAC
@@ -104,13 +100,19 @@ export const HOTKEY_ACTIONS = [
   { id: "selectTerminal9" },
 ] as const;
 
+export type HotkeyActionId = (typeof HOTKEY_ACTIONS)[number]["id"];
+
+type NumberedHotkeyActionId = Extract<HotkeyActionId, `selectWorkspace${string}` | `selectTerminal${string}`>;
+
+function isNumberedHotkeyAction(id: HotkeyActionId): id is NumberedHotkeyActionId {
+  return id.startsWith("selectWorkspace") || id.startsWith("selectTerminal");
+}
+
 /** The action's name in the current language. */
-export function hotkeyActionLabel(id: string): string {
-  const workspace = /^selectWorkspace(\d)$/.exec(id);
-  if (workspace) return t("hotkeys.selectWorkspace", { n: workspace[1] });
-  const terminal = /^selectTerminal(\d)$/.exec(id);
-  if (terminal) return t("hotkeys.selectTerminal", { n: terminal[1] });
-  return t(`hotkeys.${id}` as MessageKey);
+export function hotkeyActionLabel(id: HotkeyActionId): string {
+  if (!isNumberedHotkeyAction(id)) return t(`hotkeys.${id}` as const);
+  const n = id.slice(-1);
+  return id.startsWith("selectWorkspace") ? t("hotkeys.selectWorkspace", { n }) : t("hotkeys.selectTerminal", { n });
 }
 
 /** Keep persisted shortcuts executable when a profile moves between OSes. */
@@ -233,13 +235,13 @@ const storageRemove = (key: string): void => {
   }
 };
 
-function loadHotkeys(): Record<string, Hotkey> {
+function loadHotkeys(): Record<HotkeyActionId, Hotkey> {
   try {
     const raw = storageGet("hotkeys");
     if (raw) {
       const parsed: unknown = JSON.parse(raw);
-      const clean: Record<string, Hotkey> = {};
-      for (const [action, def] of Object.entries(DEFAULT_HOTKEYS)) {
+      const clean: Record<HotkeyActionId, Hotkey> = { ...DEFAULT_HOTKEYS };
+      for (const { id: action } of HOTKEY_ACTIONS) {
         const value = (parsed as Record<string, unknown>)?.[action];
         if (
           value &&
@@ -260,8 +262,6 @@ function loadHotkeys(): Record<string, Hotkey> {
             ctrl: hotkey.ctrl,
             alt: hotkey.alt,
           });
-        } else {
-          clean[action] = def;
         }
       }
       return clean;
@@ -286,6 +286,12 @@ export function matchHotkey(event: KeyboardEvent, hotkey: Hotkey): boolean {
   );
 }
 
+/** Unknown persisted values (an older or edited preference) fall back to auto-detection. */
+function loadVoiceLanguage(): VoiceLanguage {
+  const stored = storageGet("voiceLanguage");
+  return isVoiceLanguage(stored) ? stored : DEFAULT_VOICE_LANGUAGE;
+}
+
 function loadFontSize(): number {
   const raw = Number(storageGet("termFontSize"));
   return Number.isFinite(raw) && raw >= MIN_FONT_SIZE && raw <= MAX_FONT_SIZE
@@ -302,7 +308,7 @@ function loadGridCols(): number {
 
 export type PreferencesState = {
   defaultAgent: string | null;
-  hotkeys: Record<string, Hotkey>;
+  hotkeys: Record<HotkeyActionId, Hotkey>;
   sidebarCollapsed: boolean;
   fontSize: number;
   /** Terminal font family name; empty means the default stack. */
@@ -327,11 +333,11 @@ export type PreferencesState = {
   agentLaunch: Record<string, AgentLaunchSettings>;
   gridCols: number;
   voiceEnabled: boolean;
-  voiceLang: string;
+  voiceLang: VoiceLanguage;
   voiceModel: string | null;
   voiceInputDevice: string | null;
   setDefaultAgent: (agent: string | null) => void;
-  setHotkeys: (hotkeys: Record<string, Hotkey>) => void;
+  setHotkeys: (hotkeys: Record<HotkeyActionId, Hotkey>) => void;
   resetHotkeys: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
@@ -353,7 +359,7 @@ export type PreferencesState = {
   setAgentLaunch: (agentId: string, settings: AgentLaunchSettings) => void;
   setGridCols: (cols: number) => void;
   setVoiceEnabled: (enabled: boolean) => void;
-  setVoiceLang: (lang: string) => void;
+  setVoiceLang: (lang: VoiceLanguage) => void;
   setVoiceModel: (model: string | null) => void;
   setVoiceInputDevice: (device: string | null) => void;
 };
@@ -378,7 +384,7 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   agentLaunch: loadAgentLaunch(),
   gridCols: loadGridCols(),
   voiceEnabled: storageGet("voiceEnabled") === "1",
-  voiceLang: storageGet("voiceLanguage") ?? "auto",
+  voiceLang: loadVoiceLanguage(),
   voiceModel: storageGet("voiceModel"),
   voiceInputDevice: storageGet("voiceInputDevice"),
 

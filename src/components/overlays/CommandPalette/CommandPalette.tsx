@@ -124,7 +124,6 @@ export function CommandPalette({
         exitedTerminalIds,
       }),
     // `locale` re-runs the model so labels follow a language switch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [locale, agentLabels, resumeCount, exitedTerminalIds, agents, dockOpen, focusedGroupId, focusedTerminalId, focusedWorkspaceId, groups, hasDetachedTabs, hasRecentlyClosedTabs, recentCommandIds, voiceEnabled, voiceRecording, workspaces],
   );
   const visibleCommands = useMemo(() => filterCommands(commands, query), [commands, query]);

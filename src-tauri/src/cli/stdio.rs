@@ -84,7 +84,7 @@ impl Endpoint {
                 body.trim()
             ));
         }
-        let messages = parse_messages(&body, headers.contains("text/event-stream"));
+        let messages = parse_messages(&body, headers.contains("text/event-stream"))?;
         // Later requests carry the version the server agreed to.
         for reply in &messages {
             if let Some(version) = reply
@@ -140,17 +140,24 @@ fn dechunk(mut data: &[u8]) -> Vec<u8> {
     out
 }
 
-fn parse_messages(body: &str, event_stream: bool) -> Vec<Value> {
+/// The JSON-RPC messages of a reply body. A body that is not JSON is an
+/// error, so the request still gets an answer instead of none.
+fn parse_messages(body: &str, event_stream: bool) -> Result<Vec<Value>, String> {
     if !event_stream {
         return match serde_json::from_str::<Value>(body) {
-            Ok(Value::Array(items)) => items,
-            Ok(value) => vec![value],
-            Err(_) => Vec::new(),
+            Ok(Value::Array(items)) => Ok(items),
+            Ok(value) => Ok(vec![value]),
+            Err(error) => Err(format!("the Terra MCP server sent invalid JSON: {}", error)),
         };
     }
     body.lines()
         .filter_map(|line| line.strip_prefix("data:"))
-        .filter_map(|data| serde_json::from_str::<Value>(data.trim()).ok())
+        .map(str::trim)
+        .filter(|data| !data.is_empty())
+        .map(|data| {
+            serde_json::from_str::<Value>(data)
+                .map_err(|error| format!("the Terra MCP server sent invalid JSON: {}", error))
+        })
         .collect()
 }
 
@@ -236,8 +243,66 @@ mod tests {
         let (status, headers, body) = split_response(raw).unwrap();
         assert_eq!(status, 200);
         assert_eq!(
-            parse_messages(&body, headers.contains("text/event-stream")),
+            parse_messages(&body, headers.contains("text/event-stream")).unwrap(),
             vec![json!({ "id": 1, "a": true })]
+        );
+    }
+
+    /// A one-shot HTTP server on loopback that answers every request with
+    /// `response`, for replies the real MCP server never sends.
+    fn serve_once(response: &'static str) -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = std::io::BufReader::new(stream.try_clone().unwrap());
+            let mut body_length = 0;
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                if line == "\r\n" {
+                    break;
+                }
+                if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                    body_length = value.trim().parse().unwrap();
+                }
+            }
+            reader.read_exact(&mut vec![0; body_length]).unwrap();
+            stream.write_all(response.as_bytes()).unwrap();
+        });
+        format!("http://127.0.0.1:{}/mcp", port)
+    }
+
+    #[test]
+    fn given_a_reply_that_is_not_json_answers_the_request_with_an_error() {
+        let url = serve_once(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 8\r\nConnection: close\r\n\r\nnot json",
+        );
+        let ask = json!({ "jsonrpc": "2.0", "id": 9, "method": "tools/list" }).to_string();
+        let mut output = Vec::new();
+
+        bridge(
+            &mut Endpoint::new(&url, "token-1").unwrap(),
+            ask.as_bytes(),
+            &mut output,
+        )
+        .unwrap();
+
+        let reply: Value = serde_json::from_slice(output.trim_ascii()).unwrap();
+        assert_eq!(reply["id"], 9);
+        assert_eq!(reply["error"]["code"], -32603);
+        assert!(reply["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("invalid JSON"));
+    }
+
+    #[test]
+    fn given_an_event_stream_with_invalid_data_reports_an_error() {
+        assert!(parse_messages("data: {\"id\":1}\n\ndata: oops\n", true).is_err());
+        assert_eq!(
+            parse_messages("data:\n\ndata: {\"id\":1}\n", true).unwrap(),
+            vec![json!({ "id": 1 })]
         );
     }
 

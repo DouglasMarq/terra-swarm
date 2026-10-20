@@ -116,7 +116,7 @@ pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
         patch.truncate(cut);
     }
     Ok(WorktreeDiff {
-        status: status(info),
+        status: status(info)?,
         files,
         patch,
         truncated,
@@ -136,14 +136,13 @@ pub fn commit(info: &WorktreeInfo, message: &str) -> Result<WorktreeStatus, Stri
         return Err("there is nothing to commit".into());
     }
     git(dir, &["commit", "-q", "-m", message])?;
-    Ok(status(info))
+    status(info)
 }
 
 /// Merge the branch into its base, in the main checkout. The main checkout
 /// must have the base checked out, and the worktree must be committed.
 pub fn merge(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
-    info.check()?;
-    let current = status(info);
+    let current = status(info)?;
     if !current.dirty.is_empty() {
         return Err("commit or discard the agent's uncommitted changes first".into());
     }
@@ -179,14 +178,21 @@ pub fn merge(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
         repo,
         &["merge", "--no-ff", "--no-edit", "-m", &message, &branch_ref],
     ) {
-        // Leave the main checkout exactly as it was.
-        let _ = git(repo, &["merge", "--abort"]);
+        let is_merging = git(repo, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok();
+        if is_merging {
+            if let Err(abort_error) = git(repo, &["merge", "--abort"]) {
+                return Err(format!(
+                    "the merge did not apply cleanly ({}) and could not be aborted, so the main checkout is still mid-merge: {}",
+                    error, abort_error
+                ));
+            }
+        }
         return Err(format!(
             "the merge did not apply cleanly, nothing was changed: {}",
             error
         ));
     }
-    Ok(status(info))
+    status(info)
 }
 
 fn run(program: &str, dir: &Path, args: &[&str]) -> Result<String, String> {
@@ -216,8 +222,7 @@ pub fn open_pull_request(info: &WorktreeInfo, title: &str, body: &str) -> Result
     if title.is_empty() {
         return Err("a title is required".into());
     }
-    info.check()?;
-    let current = status(info);
+    let current = status(info)?;
     if !current.dirty.is_empty() {
         return Err("commit the agent's changes before opening a pull request".into());
     }
@@ -331,6 +336,59 @@ mod tests {
         assert!(merge(&info).unwrap_err().contains("did not apply cleanly"));
         assert_eq!(git(&repo, &["rev-parse", "HEAD"]).unwrap(), before);
         assert_eq!(git(&repo, &["status", "--porcelain"]).unwrap(), "");
+        cleanup(&repo, &root);
+    }
+
+    #[test]
+    fn given_a_worktree_whose_status_fails_refuses_to_merge_or_open_a_pull_request() {
+        let repo = init("guard");
+        let root = repo.with_extension("worktrees");
+        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        std::fs::write(Path::new(&info.path).join("feature.txt"), "done\n").unwrap();
+        commit(&info, "Add the feature").unwrap();
+        std::fs::write(Path::new(&info.path).join("draft.txt"), "unsaved\n").unwrap();
+        std::fs::write(Path::new(&info.path).join(".git"), "gitdir: /missing\n").unwrap();
+        let before = git(&repo, &["rev-parse", "HEAD"]).unwrap();
+
+        assert!(merge(&info).unwrap_err().contains("worktree status"));
+        assert!(open_pull_request(&info, "Title", "")
+            .unwrap_err()
+            .contains("worktree status"));
+        assert_eq!(git(&repo, &["rev-parse", "HEAD"]).unwrap(), before);
+        cleanup(&repo, &root);
+    }
+
+    #[test]
+    fn given_a_merge_that_cannot_start_reports_that_nothing_changed() {
+        let repo = init("blocked");
+        let root = repo.with_extension("worktrees");
+        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        std::fs::write(Path::new(&info.path).join("feature.txt"), "agent\n").unwrap();
+        commit(&info, "Add the feature").unwrap();
+        std::fs::write(repo.join("feature.txt"), "human, untracked\n").unwrap();
+
+        let error = merge(&info).unwrap_err();
+        assert!(error.contains("nothing was changed"), "{error}");
+        assert!(git(&repo, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err());
+        cleanup(&repo, &root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn given_a_merge_that_cannot_be_aborted_reports_the_checkout_is_mid_merge() {
+        use std::os::unix::fs::PermissionsExt;
+        let repo = init("abort");
+        let root = repo.with_extension("worktrees");
+        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        std::fs::write(Path::new(&info.path).join("feature.txt"), "done\n").unwrap();
+        commit(&info, "Add the feature").unwrap();
+        let hook = repo.join(".git/hooks/commit-msg");
+        std::fs::write(&hook, "#!/bin/sh\ntouch .git/index.lock\nexit 1\n").unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let error = merge(&info).unwrap_err();
+        assert!(error.contains("could not be aborted"), "{error}");
+        assert!(!error.contains("nothing was changed"), "{error}");
         cleanup(&repo, &root);
     }
 

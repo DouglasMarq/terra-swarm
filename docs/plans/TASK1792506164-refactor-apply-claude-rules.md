@@ -95,9 +95,9 @@ Agents: **W0** runs first in this checkout; then **B1**, **B2**, **B3**, **F1**,
 
 **F2 — shared helpers and purity (`src/lib/`, `src/domain/`, `*Model.ts`, callers)**
 
-- [ ] 5.1 One `CONTEXT_ATTENTION_PERCENT` in `domain/agentStatus.ts` (7 copies of `85`); reuse `agentKind` (6 copies), `promptPayload`, one accent-folding `normalizeSearchText` in `src/lib/text/` (7 copies), one `errorMessage(unknown)` (10 copies), `taskNumber`, `STATUS_PRIORITY`, `byId`, `fallbackProfile`.
-- [ ] 5.2 Purity: `lib/terminalFonts.ts` keeps `terminalFontStack`/`filterFonts`, the IPC + canvas probe move to an app hook; `lib/session/sendPrompt.ts` keeps `promptPayload`, `sendPromptToTerminal` moves to `src/app/`; `settingsModel.ts` keeps icon ids, not components; clock passed in instead of `Date.now()` defaults.
-- [ ] 5.3 Magic numbers → named constants with units (timeouts, poll intervals, `maxLength`s, scrollback, sizes listed in the audit).
+- [x] 5.1 One `CONTEXT_ATTENTION_PERCENT` in `domain/agentStatus.ts` (7 copies of `85`); reuse `agentKind` (6 copies), `promptPayload`, one accent-folding `normalizeSearchText` in `src/lib/text/` (7 copies), one `errorMessage(unknown)` (10 copies), `taskNumber`, `STATUS_PRIORITY`, `byId`, `fallbackProfile`.
+- [x] 5.2 Purity: `lib/terminalFonts.ts` keeps `terminalFontStack`/`filterFonts`, the IPC + canvas probe move to an app hook; `lib/session/sendPrompt.ts` keeps `promptPayload`, `sendPromptToTerminal` moves to `src/app/`; `settingsModel.ts` keeps icon ids, not components; clock passed in instead of `Date.now()` defaults.
+- [x] 5.3 Magic numbers → named constants with units (timeouts, poll intervals, `maxLength`s, scrollback, sizes listed in the audit).
 
 **C1 — stylesheets only (`src/**/*.css`, `src/styles/tokens.css`, `.impeccable/design.json`, `src/styles/README.md`)**
 
@@ -150,4 +150,5 @@ Agents: **W0** runs first in this checkout; then **B1**, **B2**, **B3**, **F1**,
 - 2026-10-20: 0.2 — `spawn_terminal_inner` takes a `SpawnRequest`, `spawn_output_pump` a `DurableScrollback`; the `spawn_terminal` Tauri command keeps its arguments (they are the IPC contract) with a commented `#[allow(clippy::too_many_arguments)]`.
 - 2026-10-20: wave 1 merged: B3 (pty/voice), C1 (stylesheets), B2 (mcp), F1 (frontend). Deviations: B3 refuses non-catalog ids in `command_available` instead of quoting (`mcp::launch::quote` is private to `mcp/`); C1 also neutralized the idle agent chip in `inspector.css` (same green-for-non-running bug) and added `--terra-success` and `--terra-pane-focus-ring`; B2 keeps the literal defaults inside the `read_inbox`/`search_notes` descriptions (`&'static str`); F1 leaves the `Changes from {name}` commit/PR title in English and keeps `App.tsx`'s `useLocale()` workaround until App's logic moves out.
 - 2026-10-20: B1 merged. 1.1 deviation: a store that is not UTF-8 is backed up like corrupt JSON; any other read error (permissions, I/O) leaves the file in place unbacked and turns saving off, so the next launch retries instead of finding no store. Extra fix: the startup scrollback sweep is skipped when the store could not be read, so transcripts aren't deleted as orphans. Backend gate: fmt ok, clippy 0, 165 tests.
+- 2026-10-20: F2 merged (306 frontend tests). Kept apart on purpose: `profileForCommand` (raw first token picks the user's profile and its resume command), `agentLabelFromCommand` (display label), `groupTasksByStatus` vs `boardColumns` (different order and sorting); `settingsModel`/`commandModel` keep the store-backed `t` (would ripple widely). `sendPromptToTerminal` and `loadSystemFonts` moved to `src/app/`.
 

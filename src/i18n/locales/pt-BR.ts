@@ -12,6 +12,7 @@ export const ptBR: Dictionary<typeof en> = {
     settings: "Configurações",
     workbench: "Workbench",
     fleet: "Frota",
+    board: "Quadro",
     appName: "Terra Swarm",
   },
   status: {
@@ -412,6 +413,8 @@ export const ptBR: Dictionary<typeof en> = {
     goWorkbenchDesc: "Abrir o espaço de trabalho e os terminais",
     openFleet: "Abrir a Frota",
     openFleetDesc: "Ver todos os agentes e seus estados",
+    openBoard: "Abrir o Quadro",
+    openBoardDesc: "O Kanban das tarefas do projeto ativo",
     openSettings: "Abrir Configurações",
     openSettingsDesc: "Preferências, recursos e atalhos",
     openGroup: "Abrir grupo {name}",
@@ -750,6 +753,15 @@ export const ptBR: Dictionary<typeof en> = {
       medium: "Média",
       high: "Alta",
       urgent: "Urgente",
+    },
+    board: {
+      label: "Quadro de {name}",
+      agents: "Agentes",
+      agentsHint: "Solte um cartão sobre um agente para entregar a tarefa a ele.",
+      noAgents: "Nenhum agente rodando neste projeto.",
+      handedOff: "{id} enviada para {agent}",
+      handoffFailed: "Não foi possível enviar {id} para {agent}",
+      prompt: "A tarefa {id} do quadro do Terra é sua: \"{title}\". Ela já está atribuída a você e em andamento: leia com a ferramenta get_task, faça o trabalho e entregue com complete_task e um resumo curto.",
     },
     agentState: {
       working: "trabalhando",

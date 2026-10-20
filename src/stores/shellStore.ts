@@ -9,6 +9,7 @@ export type ShellPanelLayout = Record<string, number>;
 export type ShellSurface =
   | "workbench"
   | "fleet"
+  | "board"
   | "settings";
 
 /** The right dock hosts the agent inspector and the shared task board. */
@@ -82,6 +83,7 @@ const DEFAULT_SURFACE: ShellSurface = "workbench";
 const SURFACES: readonly ShellSurface[] = [
   "workbench",
   "fleet",
+  "board",
   "settings",
 ];
 

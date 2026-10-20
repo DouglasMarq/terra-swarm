@@ -326,8 +326,9 @@
 
 .pane-worktree {
   display: inline-flex;
-  flex: 0 4 auto;
-  min-width: 0;
+  flex: 0 1 auto;
+  /* Shrinks after the title, and never to an empty box. */
+  min-width: 56px;
   align-items: center;
   gap: 4px;
   max-width: 140px;
@@ -337,10 +338,9 @@
   white-space: nowrap;
 }
 
+/* A button that keeps the tag's look. */
 button.pane-worktree {
-  border: 0;
-  color: inherit;
-  font-size: inherit;
+  background: transparent;
   cursor: pointer;
 }
 

@@ -1,0 +1,42 @@
+import { useEffect } from "react";
+import { api } from "../api";
+import type { Workspace } from "../types";
+import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
+
+const BRANCH_POLL_MS = 10000;
+
+/**
+ * Poll the git branch of every workspace folder. Keyed off the id:cwd
+ * signature so terminal spawns and resizes don't restart the interval.
+ */
+export function useBranchPolling(workspaces: readonly Workspace[]) {
+  const signature = workspaces.map((workspace) => `${workspace.id}:${workspace.cwd}`).join("|");
+  useEffect(() => {
+    const targets = signature
+      ? signature.split("|").map((entry) => {
+          const separator = entry.indexOf(":");
+          return { id: entry.slice(0, separator), cwd: entry.slice(separator + 1) };
+        })
+      : [];
+    let cancelled = false;
+    const poll = async () => {
+      const entries = await Promise.all(
+        targets.map(async (target) => [target.id, await api.gitBranch(target.cwd).catch(() => null)] as const),
+      );
+      if (cancelled) return;
+      useTerminalRuntimeStore.getState().setBranches((previous) => {
+        const next: Record<string, string> = {};
+        for (const [id, branch] of entries) if (branch) next[id] = branch;
+        const keys = Object.keys(next);
+        const same = keys.length === Object.keys(previous).length && keys.every((key) => previous[key] === next[key]);
+        return same ? previous : next;
+      });
+    };
+    void poll();
+    const interval = setInterval(poll, BRANCH_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [signature]);
+}

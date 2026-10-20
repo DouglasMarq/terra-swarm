@@ -3,18 +3,16 @@ import { MotionConfig } from "motion/react";
 import { useShallow } from "zustand/react/shallow";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { getVersion } from "@tauri-apps/api/app";
 import { api } from "./api";
-import { checkForUpdate, installPendingUpdate } from "./updater";
+import { useBranchPolling } from "./app/useBranchPolling";
+import { useFocusTracking } from "./app/useFocusTracking";
+import { useResumeQueue } from "./app/useResumeQueue";
+import { resumeCommandFor, useTerminalSessions } from "./app/useTerminalSessions";
+import { useUpdater } from "./app/useUpdater";
 import type {
   AgentInfo,
-  ContextPayload,
-  ExitPayload,
   NotificationItem,
-  NotificationPayload,
   ResumeItem,
-  SpawnedTerminal,
-  TitlePayload,
   VoiceDownloadProgress,
   VoiceModelInfo,
   VoiceStatus,
@@ -38,7 +36,6 @@ import {
   type VoiceSendPayload,
 } from "./components/voice";
 import { getTerminal } from "./terminalRegistry";
-import { createDebouncedTask } from "./lib/async/debounce";
 import {
   GRID_COL_OPTIONS,
   HOTKEY_ACTIONS,
@@ -54,12 +51,7 @@ import { useOrchestrationStore } from "./stores/orchestrationStore";
 import { planResume } from "./lib/session/resumePlanner";
 import { agentLabelText, buildAgentLabels } from "./domain/agentLabels";
 import { t, useLocale } from "./i18n";
-import { pickAgentName } from "./domain/agentNames";
-import { createSpawnQueue } from "./lib/session/spawnQueue";
 import { createInitializationGate, type InitializationGate } from "./lib/session/initializationGate";
-import { dismissResumeItems } from "./lib/session/resumeDismiss";
-import { isCurrentSpawnedTerminalRunning } from "./lib/session/terminalLifecycle";
-import { workspaceIdForTerminal } from "./lib/session/terminalOwnership";
 import { selectWorkspaceContainerId } from "./lib/session/workspaceContainerSelection";
 import {
   isTerminalSuspended,
@@ -77,9 +69,6 @@ import type {
   SnapshotOperation,
 } from "./components/integration/settings/SettingsPanels";
 import "./App.css";
-
-const BRANCH_POLL_MS = 10000;
-const UPDATE_CHECK_MS = 60 * 60 * 1000;
 
 const LazyResumeDialog = lazy(async () => {
   const module = await import("./components/ResumeDialog");
@@ -107,11 +96,6 @@ function AppLoadingSurface(_props: { label?: string }) {
       <span>{t("shell.loading")}</span>
     </div>
   );
-}
-
-function resumeCommandFor(command: string): string {
-  const profile = profileForCommand(command);
-  return resolveResumeCommand(profile, command);
 }
 
 /** Compare spoken labels without making callers know about locale accents. */
@@ -169,8 +153,6 @@ function App() {
     if (open) shell.navigate("settings", shell.activeWorkspaceId);
     else if (shell.activeSurface === "settings") shell.navigate("workbench", shell.activeWorkspaceId);
   };
-  const [autoResumePending, setAutoResumePending] = useState(false);
-  const [showResumeQueue, setShowResumeQueue] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const [initializationRunning, setInitializationRunning] = useState(false);
   const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
@@ -202,7 +184,6 @@ function App() {
     setFeatureFlag,
     setContainerVisible,
     setGroupSuspended,
-    setActivePane: setActivePaneSnapshot,
     persistenceError: orchestrationPersistenceError,
     clearPersistenceError,
     detachedTerminalIds,
@@ -217,7 +198,6 @@ function App() {
       setFeatureFlag: state.setFeatureFlag,
       setContainerVisible: state.setContainerVisible,
       setGroupSuspended: state.setGroupSuspended,
-      setActivePane: state.setActivePane,
       persistenceError: state.persistenceError,
       clearPersistenceError: state.clearPersistenceError,
       detachedTerminalIds: state.detachedTerminalIds,
@@ -237,17 +217,13 @@ function App() {
     setExited,
     setContextUsage,
     setTitles,
-    addNotification,
     clearNotificationCount,
     markTerminalRead,
     markAllRead,
     clearAllNotifications,
     pushSystemNotification,
-    notifyUpdateAvailable,
-    setBranches,
     setResumeItems,
     setResumeSavedAt,
-    dropResumeItem,
     clearTerminal,
     clearTerminals,
   } = useTerminalRuntimeStore(
@@ -263,17 +239,13 @@ function App() {
       setExited: state.setExited,
       setContextUsage: state.setContextUsage,
       setTitles: state.setTitles,
-      addNotification: state.addNotification,
       clearNotificationCount: state.clearNotificationCount,
       markTerminalRead: state.markTerminalRead,
       markAllRead: state.markAllRead,
       clearAllNotifications: state.clearAllNotifications,
       pushSystemNotification: state.pushSystemNotification,
-      notifyUpdateAvailable: state.notifyUpdateAvailable,
-      setBranches: state.setBranches,
       setResumeItems: state.setResumeItems,
       setResumeSavedAt: state.setResumeSavedAt,
-      dropResumeItem: state.dropResumeItem,
       clearTerminal: state.clearTerminal,
       clearTerminals: state.clearTerminals,
     })),
@@ -391,70 +363,16 @@ function App() {
     percent: number;
   } | null>(null);
   const [micAvailable, setMicAvailable] = useState<boolean | null>(null);
-  const [appVersion, setAppVersion] = useState<string>("");
   const [snapshotOperation, setSnapshotOperation] =
     useState<SnapshotOperation | null>(null);
   const [snapshotFeedback, setSnapshotFeedback] =
     useState<SnapshotFeedback | null>(null);
-  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
-  const [updateInstalling, setUpdateInstalling] = useState(false);
-  const [updateCheckState, setUpdateCheckState] = useState<
-    "idle" | "checking" | "uptodate" | "error"
-  >("idle");
+  const { appVersion, updateVersion, updateInstalling, updateCheckState, manualUpdateCheck, installUpdate } = useUpdater();
   const inited = useRef(false);
   const initializationGateRef = useRef<InitializationGate | null>(null);
   if (!initializationGateRef.current) {
     initializationGateRef.current = createInitializationGate();
   }
-  // Authoritative set of terminal ids the UI tracks; mutated only by
-  // spawn/close paths (never rebuilt from `workspaces`, which would race
-  // with pending refreshes and silently drop live ids).
-  const liveIdsRef = useRef<Set<string>>(new Set());
-  const spawnSeqRef = useRef<Record<string, number>>({});
-  const lastFocusByWs = useRef<Record<string, string>>({});
-  const prevActiveId = useRef<string | null>(null);
-  const persistedPaneSelectionRef = useRef<string | null>(null);
-  const resumingTerminalIdsRef = useRef<Set<string>>(new Set());
-  const resumeQueueMutationRef = useRef(false);
-
-  /**
-   * `spawn_terminal` can resolve after a short-lived child has already been
-   * reaped and its exit event emitted. Register the id before the query, then
-   * reconcile the returned generation with the backend's live snapshot so a
-   * missed event cannot leave dead metadata rendered as an active terminal.
-   */
-  const registerSpawnedTerminal = async (result: SpawnedTerminal) => {
-    const id = result.meta.id;
-    liveIdsRef.current.add(id);
-    spawnSeqRef.current[id] = result.seq;
-    try {
-      const running = await api.runningTerminals();
-      const isRunning = isCurrentSpawnedTerminalRunning(id, result.seq, running);
-      setExited((previous) => {
-        const next = { ...previous };
-        if (isRunning) {
-          delete next[id];
-        } else if (!(id in next)) {
-          // The exit event may have been emitted before liveIdsRef was
-          // registered. Preserve a code received by a concurrent listener;
-          // otherwise null is the intentional unknown-code marker.
-          next[id] = null;
-        }
-        return next;
-      });
-      if (!isRunning) {
-        setContextUsage((previous) => {
-          const next = { ...previous };
-          delete next[id];
-          return next;
-        });
-      }
-    } catch (error) {
-      // Registration remains authoritative even when this best-effort
-      // reconciliation cannot query an older native binary.
-      console.warn(`failed to reconcile spawned terminal ${id}:`, error);
-    }
-  };
 
   const refresh = useCallback(async () => {
     try {
@@ -477,6 +395,9 @@ function App() {
       console.error("failed to list workspaces:", err);
     }
   }, [syncOrchestration]);
+
+  const sessions = useTerminalSessions({ workspaces, snapshot: orchestrationSnapshot, refresh });
+  const resumeQueue = useResumeQueue(sessions, refresh);
 
   // Load workspaces and offer to resume terminals that were running at last
   // close. The gate coalesces StrictMode/concurrent attempts, while a failed
@@ -504,12 +425,7 @@ function App() {
 
     const running = await api.runningTerminals();
     const runningIds = new Set(running.map((r) => r.id));
-    for (const ws of list) {
-      for (const t of ws.terminals) liveIdsRef.current.add(t.id);
-    }
-    for (const r of running) {
-      spawnSeqRef.current[r.id] = r.seq;
-    }
+    sessions.track(list.flatMap((ws) => ws.terminals.map((terminal) => terminal.id)), running);
     const suspendedGroups = suspendedGroupIds(loadedGroups);
     const suspendedProjects = new Set(
       loadedGroups
@@ -551,10 +467,7 @@ function App() {
         for (const id of deadIds) next[id] = null;
         return next;
       });
-      setResumeItems(items);
-      if (usePreferencesStore.getState().autoResume) setAutoResumePending(true);
-      else setShowResumeQueue(true);
-      api.storeSavedAt().then(setResumeSavedAt).catch(() => {});
+      resumeQueue.offer(items);
     }
 
     const agentsReady = api
@@ -566,10 +479,6 @@ function App() {
       .catch(() => {});
     agentsReadyRef.current = agentsReady;
     await agentsReady;
-
-    getVersion()
-      .then(setAppVersion)
-      .catch(() => {});
 
     // Push persisted voice settings into the backend (model load is async).
     // If the mic is gone while the feature was left enabled, disable it.
@@ -613,59 +522,8 @@ function App() {
     startInitialization();
   }, []);
 
-  // Global backend event listeners. Registered in a dedicated effect (no
-  // one-time guard) so StrictMode's unmount/remount cycle re-registers them.
-  useEffect(() => {
-    const unlisten = listen<ExitPayload>("terminal-exit", (e) => {
-      if (!liveIdsRef.current.has(e.payload.id)) return;
-      // Ignore exit events from a previous process generation (e.g. the old
-      // PTY's death arriving right after a restart respawned the id).
-      const known = spawnSeqRef.current[e.payload.id];
-      if (known != null && e.payload.seq !== known) return;
-      setExited((prev) => ({ ...prev, [e.payload.id]: e.payload.code }));
-      setContextUsage((prev) => {
-        const next = { ...prev };
-        delete next[e.payload.id];
-        return next;
-      });
-    });
-    const unlistenNotif = listen<NotificationPayload>(
-      "terminal-notification",
-      (e) => {
-        if (!liveIdsRef.current.has(e.payload.id)) return;
-        addNotification(e.payload);
-      },
-    );
-    const unlistenCtx = listen<ContextPayload>("terminal-context", (e) => {
-      if (!liveIdsRef.current.has(e.payload.id)) return;
-      setContextUsage((prev) => ({ ...prev, [e.payload.id]: e.payload.used }));
-    });
-    const unlistenTitle = listen<TitlePayload>("terminal-title", (e) => {
-      if (!liveIdsRef.current.has(e.payload.id)) return;
-      setTitles((prev) => ({ ...prev, [e.payload.id]: e.payload.title }));
-    });
-    const refreshWorkspaces = createDebouncedTask(() => {
-      void refresh();
-    }, 75);
-    const unlistenWs = listen("workspaces-changed", () => {
-      // Layout drags and group updates can emit several events in one turn;
-      // rearming a short debounce keeps secondary windows current without
-      // issuing a request per intermediate frame.
-      refreshWorkspaces.schedule();
-    });
-    return () => {
-      refreshWorkspaces.cancel();
-      unlisten.then((u) => u());
-      unlistenNotif.then((u) => u());
-      unlistenCtx.then((u) => u());
-      unlistenTitle.then((u) => u());
-      unlistenWs.then((u) => u());
-    };
-  }, [refresh]);
-
   const active = workspaces.find((w) => w.id === activeId) ?? null;
-  const showResume =
-    showResumeQueue && resumeItems !== null && resumeItems.length > 0;
+  const showResume = resumeQueue.open;
   const modalOpen =
     showNewWs ||
     showAgentPicker ||
@@ -675,177 +533,15 @@ function App() {
     showNewGroup ||
     pendingImportPath !== null;
 
-  // Poll git branches for all workspace directories. Keyed off the id:cwd
-  // signature so terminal spawns/resizes don't restart the interval.
-  const wsCwdSig = workspaces.map((w) => `${w.id}:${w.cwd}`).join("|");
-  useEffect(() => {
-    const targets = workspaces.map((w) => ({ id: w.id, cwd: w.cwd }));
-    let cancelled = false;
-    const poll = async () => {
-      const entries = await Promise.all(
-        targets.map(
-          async (t) =>
-            [t.id, await api.gitBranch(t.cwd).catch(() => null)] as const,
-        ),
-      );
-      if (cancelled) return;
-      setBranches((prev) => {
-        const next: Record<string, string> = {};
-        for (const [id, b] of entries) if (b) next[id] = b;
-        const keys = Object.keys(next);
-        const same =
-          keys.length === Object.keys(prev).length &&
-          keys.every((k) => prev[k] === next[k]);
-        return same ? prev : next;
-      });
-    };
-    poll();
-    const iv = setInterval(poll, BRANCH_POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(iv);
-    };
-  }, [wsCwdSig]);
+  useBranchPolling(workspaces);
 
-  useEffect(() => {
-    if (!activeId || !focusedId) return;
-    const ws = workspaces.find((w) => w.id === activeId);
-    if (ws?.terminals.some((t) => t.id === focusedId)) {
-      lastFocusByWs.current[activeId] = focusedId;
-    }
-  }, [activeId, focusedId, workspaces]);
-
-  useEffect(() => {
-    if (prevActiveId.current === activeId) return;
-    prevActiveId.current = activeId;
-    if (!activeId) return;
-    const ws = workspaces.find((w) => w.id === activeId);
-    if (!ws) return;
-    const saved = lastFocusByWs.current[activeId];
-    setFocusedId((cur) => {
-      if (cur && ws.terminals.some((t) => t.id === cur)) return cur;
-      return saved && ws.terminals.some((t) => t.id === saved) ? saved : null;
-    });
-  }, [activeId, workspaces]);
-
-  // Persist the selected pane whenever the workspace or focused tab changes.
-  // The backend API currently stores the pane; including the focused terminal
-  // in the dedupe key keeps the local active-tab projection in step without
-  // issuing a request for every workspace refresh or terminal event.
-  useEffect(() => {
-    if (!activeId || !orchestrationSnapshot) return;
-    const workspace = workspaces.find((candidate) => candidate.id === activeId);
-    if (!workspace) return;
-    const focused = focusedId
-      ? workspace.terminals.find((terminal) => terminal.id === focusedId)
-      : undefined;
-    const snapshotTab = focusedId
-      ? orchestrationSnapshot.tabs.find(
-          (tab) => tab.ptyId === focusedId || tab.id === focused?.tabId,
-        )
-      : undefined;
-    const project = orchestrationSnapshot.projects.find(
-      (candidate) => candidate.id === activeId,
-    );
-    // A migrated legacy workspace may have a synthetic pane in the frontend
-    // snapshot while the Rust store still has no pane metadata. Only persist
-    // a selection when there is a focused terminal, and materialize that
-    // terminal's placement before selecting a synthetic pane backend-side.
-    if (!focused) return;
-    const paneId = focused.paneId ?? snapshotTab?.paneId ?? project?.activePaneId ?? null;
-    if (!paneId) return;
-    const tabId = focused.tabId ?? snapshotTab?.id ?? `tab-${focused.id}`;
-    const selectionKey = `${activeId}:${paneId ?? ""}:${focusedId ?? ""}`;
-    if (persistedPaneSelectionRef.current === selectionKey) return;
-    // Set the key before the async boundary: a failed IPC call should be
-    // visible in logs but must not create a retry storm during refreshes.
-    persistedPaneSelectionRef.current = selectionKey;
-    const timer = window.setTimeout(() => {
-      // setTerminalPlacement is also the backend's authoritative way to mark
-      // the active tab inside a pane, so call it on a deduped focus change
-      // even when the terminal already has placement metadata.
-      api.setTerminalPlacement({
-        workspaceId: activeId,
-        terminalId: focused.id,
-        paneId,
-        tabId,
-      })
-        .then(() => api.setActivePane({ workspaceId: activeId, paneId }))
-        .then(() => setActivePaneSnapshot(paneId))
-        .catch((error) => {
-          console.warn("failed to persist active pane/tab:", error);
-        });
-    }, 100);
-    return () => window.clearTimeout(timer);
-  }, [
+  const { forgetWorkspace } = useFocusTracking({
+    workspaces,
     activeId,
     focusedId,
-    workspaces,
-    orchestrationSnapshot,
-    setActivePaneSnapshot,
-  ]);
-
-  useEffect(() => {
-    if (!focusedId || !activeId || modalOpen) return;
-    const ae = document.activeElement as HTMLElement | null;
-    if (ae && (ae.tagName === "INPUT" || ae.tagName === "SELECT")) return;
-    const raf = requestAnimationFrame(() => getTerminal(focusedId)?.focus());
-    return () => cancelAnimationFrame(raf);
-  }, [activeId, focusedId, modalOpen]);
-
-  // Optional automatic names: a fresh agent gets the next free name.
-  const nameNewAgent = (terminalId: string) => {
-    const prefs = usePreferencesStore.getState();
-    if (!prefs.agentAutoNames || prefs.agentNames[terminalId]) return;
-    const openIds = new Set(workspaces.flatMap((workspace) => workspace.terminals.map((terminal) => terminal.id)));
-    const inUse = Object.entries(prefs.agentNames).filter(([id]) => openIds.has(id)).map(([, name]) => name);
-    const name = pickAgentName(inUse, prefs.agentNameList, { avoidSimilar: prefs.avoidSimilarNames, exhausted: prefs.namesExhausted });
-    if (name) prefs.setAgentName(terminalId, name);
-  };
-
-  const spawnTerminalInto = async (
-    wsId: string,
-    command: string,
-    placement?: { paneId: string; tabId?: string },
-  ) => {
-    // Spawn at an existing pane's size when possible: the PTY otherwise
-    // starts at 80x24 and the child draws its first frame at the wrong size
-    // before the pane's fit can correct it (worst on Windows/ConPTY).
-    const sibling = workspaces
-      .find((w) => w.id === wsId)
-      ?.terminals.map((t) => getTerminal(t.id))
-      .find((t) => t && t.cols > 0 && t.rows > 0);
-    const res = await api.spawnTerminal(
-      wsId,
-      command,
-      undefined,
-      sibling?.cols,
-      sibling?.rows,
-      defaultShell || undefined,
-    );
-    await registerSpawnedTerminal(res);
-    nameNewAgent(res.meta.id);
-    if (placement?.paneId) {
-      await api
-        .setTerminalPlacement({
-          workspaceId: wsId,
-          terminalId: res.meta.id,
-          paneId: placement.paneId,
-          tabId: placement.tabId ?? `tab-${res.meta.id}`,
-        })
-        .catch((err) => {
-          console.error("failed to persist terminal placement:", err);
-          pushSystemNotification(t("app.placementNotSaved"));
-        });
-    }
-    setFocusedId(res.meta.id);
-    await refresh();
-  };
-
-  const reportSpawnError = (err: unknown) => {
-    console.error("failed to spawn terminal:", err);
-    pushSystemNotification(t("app.spawnFailed", { detail: String(err) }));
-  };
+    snapshot: orchestrationSnapshot,
+    modalOpen,
+  });
 
   const quickNewTerminal = async (wsId: string, paneId: string | null = null) => {
     setActiveId(wsId);
@@ -857,7 +553,7 @@ function App() {
       defaultAgent &&
       agentsRef.current.some((a) => a.id === defaultAgent && a.available);
     if (defAvailable) {
-      spawnTerminalInto(wsId, defaultAgent, paneId ? { paneId } : undefined).catch(reportSpawnError);
+      sessions.spawnInto(wsId, defaultAgent, paneId ? { paneId } : undefined).catch(sessions.reportSpawnError);
     } else {
       setPickerTarget(wsId);
       setPickerTargetPane(paneId);
@@ -893,214 +589,11 @@ function App() {
     setPickerTargetPane(null);
     setPickerSaveDefault(false);
     if (target) {
-      await spawnTerminalInto(
+      await sessions.spawnInto(
         target,
         agentId,
         targetPane ? { paneId: targetPane } : undefined,
-      ).catch(reportSpawnError);
-    }
-  };
-
-  const closeTerminal = async (id: string) => {
-    liveIdsRef.current.delete(id);
-    delete spawnSeqRef.current[id];
-    // Free its name for the next agent.
-    setAgentName(id, null);
-    await api.killTerminal(id).catch(() => {});
-    clearTerminal(id);
-    if (expandedId === id) setExpandedId(null);
-    if (focusedId === id) {
-      const ws = workspaces.find((w) => w.terminals.some((t) => t.id === id));
-      const idx = ws ? ws.terminals.findIndex((t) => t.id === id) : -1;
-      const next = ws?.terminals[idx - 1] ?? ws?.terminals[idx + 1] ?? null;
-      setFocusedId(next ? next.id : null);
-    }
-    await refresh();
-  };
-
-  const restartTerminal = async (id: string, command: string) => {
-    const ownerWorkspaceId = workspaceIdForTerminal(workspaces, orchestrationSnapshot, id);
-    if (!ownerWorkspaceId) {
-      console.warn(`cannot restart terminal ${id}: workspace owner is unknown`);
-      return;
-    }
-    liveIdsRef.current.add(id);
-    try {
-      // Kill the old PTY first (store entry is kept so position/width are
-      // preserved), then respawn. Spawning onto a live id would leak the old
-      // process and double-emit output. Spawn at the xterm's current size:
-      // it fitted to the pane long ago, so nothing would re-send the real
-      // dimensions and the new PTY would stay stuck at the 80x24 default.
-      const term = getTerminal(id);
-      await api.stopTerminal(id);
-      const res = await api.spawnTerminal(
-        ownerWorkspaceId,
-        command,
-        id,
-        term?.cols,
-        term?.rows,
-        defaultShell || undefined,
-      );
-      await registerSpawnedTerminal(res);
-    } catch (err) {
-      console.error(`failed to restart terminal ${id}:`, err);
-      setExited((prev) => ({ ...prev, [id]: null }));
-      await refresh();
-      return;
-    }
-    clearTerminal(id);
-    await refresh();
-  };
-
-  const spawnResumed = async (item: ResumeItem) => {
-    try {
-      // Respawn onto the persisted id so position/width are kept; the store
-      // entry's command is updated to the resume variant backend-side. Spawn
-      // at the xterm's current size: the pane mounted (and fitted) while the
-      // old process was dead, so no resize would be sent after the respawn
-      // and the PTY would stay at the 80x24 default under a full-width pane.
-      const term = getTerminal(item.terminalId);
-      const res = await api.spawnTerminal(
-        item.wsId,
-        item.resumeCommand,
-        item.terminalId,
-        term?.cols,
-        term?.rows,
-        defaultShell || undefined,
-      );
-      await registerSpawnedTerminal(res);
-    } catch (err) {
-      console.error(`failed to resume terminal ${item.terminalId}:`, err);
-      setExited((prev) => ({ ...prev, [item.terminalId]: null }));
-      throw err;
-    }
-  };
-
-  const resumeItemsWithQueue = async (items: readonly ResumeItem[]) => {
-    const queue = createSpawnQueue<ResumeItem, void>({
-      concurrency: 2,
-      run: (item) => spawnResumed(item),
-    });
-    const pending = items.map((item) =>
-      queue.enqueue({ id: item.terminalId, input: item }),
-    );
-    await queue.whenIdle();
-    return Promise.all(pending);
-  };
-
-  const notifyResumeFailures = (
-    results: ReadonlyArray<Awaited<ReturnType<typeof resumeItemsWithQueue>>[number]>,
-    labels: ReadonlyMap<string, string>,
-  ) => {
-    for (const result of results) {
-      if (result.status === "succeeded") continue;
-      const detail =
-        result.error instanceof Error
-          ? result.error.message
-          : String(result.error ?? result.status);
-      const label = labels.get(result.id) ?? result.id;
-      pushSystemNotification(t("app.resumeFailed", { name: label, detail }));
-    }
-  };
-
-  const resumeOne = async (item: ResumeItem) => {
-    if (resumeQueueMutationRef.current || resumingTerminalIdsRef.current.has(item.terminalId)) return;
-    resumeQueueMutationRef.current = true;
-    resumingTerminalIdsRef.current.add(item.terminalId);
-    try {
-      await spawnResumed(item);
-      dropResumeItem(item.terminalId);
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      pushSystemNotification(t("app.resumeFailed", { name: item.wsName, detail }));
-    } finally {
-      resumingTerminalIdsRef.current.delete(item.terminalId);
-      resumeQueueMutationRef.current = false;
-    }
-    await refresh();
-  };
-
-  const dismissOne = async (item: ResumeItem) => {
-    if (resumeQueueMutationRef.current) return;
-    resumeQueueMutationRef.current = true;
-    try {
-      // Only clear local ownership after the backend confirms deletion. A
-      // rejected kill must leave the item retryable and the runtime refs intact.
-      const [result] = await dismissResumeItems([item], (candidate) => api.killTerminal(candidate.terminalId));
-      if (result?.status === "failed") {
-        const detail = result.error instanceof Error ? result.error.message : String(result.error);
-        console.error(`failed to dismiss resume item ${item.terminalId}:`, result.error);
-        pushSystemNotification(
-          t("app.dismissFailed", { name: item.wsName, detail }),
-        );
-        return;
-      }
-      liveIdsRef.current.delete(item.terminalId);
-      delete spawnSeqRef.current[item.terminalId];
-      setAgentName(item.terminalId, null);
-      dropResumeItem(item.terminalId);
-      await refresh();
-    } finally {
-      resumeQueueMutationRef.current = false;
-    }
-  };
-
-  const resumeAll = async () => {
-    const items = resumeItems ?? [];
-    if (items.length === 0 || resumeQueueMutationRef.current) return;
-    resumeQueueMutationRef.current = true;
-    try {
-      // Close the modal while the bounded queue owns these stable terminal IDs;
-      // failed items are put back below for an explicit retry.
-      setResumeItems(null);
-      const results = await resumeItemsWithQueue(items);
-      const labels = new Map(items.map((item) => [item.terminalId, item.wsName]));
-      notifyResumeFailures(results, labels);
-      const failed = new Set(
-        results
-          .filter((result) => result.status !== "succeeded")
-          .map((result) => result.id),
-      );
-      setResumeItems(failed.size > 0 ? items.filter((item) => failed.has(item.terminalId)) : null);
-      await refresh();
-    } finally {
-      resumeQueueMutationRef.current = false;
-    }
-  };
-
-  // "Always resume without asking": run the queue once it is loaded.
-  useEffect(() => {
-    if (!autoResumePending || !resumeItems || resumeItems.length === 0) return;
-    setAutoResumePending(false);
-    void resumeAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoResumePending, resumeItems]);
-
-  const dismissAll = async () => {
-    const items = resumeItems ?? [];
-    if (items.length === 0 || resumeQueueMutationRef.current) return;
-    resumeQueueMutationRef.current = true;
-    try {
-      const results = await dismissResumeItems(items, (item) => api.killTerminal(item.terminalId));
-      const failed: ResumeItem[] = [];
-      for (const result of results) {
-        if (result.status === "failed") {
-          failed.push(result.item);
-          const detail = result.error instanceof Error ? result.error.message : String(result.error);
-          console.error(`failed to dismiss resume item ${result.item.terminalId}:`, result.error);
-          pushSystemNotification(
-            t("app.dismissFailed", { name: result.item.wsName, detail }),
-          );
-          continue;
-        }
-        liveIdsRef.current.delete(result.item.terminalId);
-        delete spawnSeqRef.current[result.item.terminalId];
-        setAgentName(result.item.terminalId, null);
-      }
-      setResumeItems(failed.length > 0 ? failed : null);
-      await refresh();
-    } finally {
-      resumeQueueMutationRef.current = false;
+      ).catch(sessions.reportSpawnError);
     }
   };
 
@@ -1275,9 +768,9 @@ function App() {
       agentId: candidate.agentId ?? candidate.command?.trim().split(/\s+/)[0] ?? "shell",
       resumeCommand: candidate.resumeCommand ?? candidate.command ?? "shell",
     }));
-    const results = await resumeItemsWithQueue(resumeItems);
+    const results = await sessions.resumeItems(resumeItems);
     const labels = new Map(resumeItems.map((item) => [item.terminalId, groupName]));
-    notifyResumeFailures(results, labels);
+    sessions.notifyResumeFailures(results, labels);
     const failed = results.filter((result) => result.status !== "succeeded");
     if (failed.length > 0) {
       // Restore the group-wide suspended invariant. Successful spawns are
@@ -1399,7 +892,7 @@ function App() {
       pushSystemNotification(t("app.agentUnavailable", { name: agentTarget }));
       return;
     }
-    await spawnTerminalInto(active.id, agent.id);
+    await sessions.spawnInto(active.id, agent.id);
   };
 
   const executeVoiceIntent = async (
@@ -1456,7 +949,7 @@ function App() {
             setVoiceFeedback(intent.target ? t("app.voice.terminalNotFound", { name: intent.target }) : t("app.voice.whichStop"));
             return false;
           }
-          await closeTerminal(match.terminal.id);
+          await sessions.close(match.terminal.id);
           setVoiceFeedback(`Terminal ${intent.target} parado.`);
           return true;
         }
@@ -1478,52 +971,6 @@ function App() {
       pushSystemNotification(t("app.stopSomeFailed"));
       await refresh();
     }
-  };
-
-  const resumeFleetTerminals = async (ids: string[]) => {
-    const entries = ids.flatMap((id) => {
-      for (const workspace of workspaces) {
-        const terminal = workspace.terminals.find((candidate) => candidate.id === id);
-        // Only exited or suspended agents: the backend refuses to spawn over
-        // a live process, which used to raise one error per running agent.
-        if (terminal && (terminal.id in exitedRef.current || terminal.suspended)) return [{ workspace, terminal }];
-      }
-      return [];
-    });
-    if (entries.length === 0) return;
-    const queue = createSpawnQueue<(typeof entries)[number], void>({
-      concurrency: 2,
-      run: async ({ workspace, terminal }) => {
-        const term = getTerminal(terminal.id);
-        const result = await api.spawnTerminal(
-          workspace.id,
-          resolveResumeCommand(profileForCommand(terminal.command), terminal.command),
-          terminal.id,
-          term?.cols,
-          term?.rows,
-          defaultShell || undefined,
-        );
-        await registerSpawnedTerminal(result);
-      },
-    });
-    const pending = entries.map(({ workspace, terminal }) =>
-      queue.enqueue({
-        id: terminal.id,
-        input: { workspace, terminal },
-      }),
-    );
-    await queue.whenIdle();
-    const results = await Promise.all(pending);
-    for (const result of results) {
-      if (result.status === "succeeded") continue;
-      const detail =
-        result.error instanceof Error
-          ? result.error.message
-          : String(result.error ?? result.status);
-      const name = buildAgentLabels(workspaces, { titles, names: usePreferencesStore.getState().agentNames })[result.id];
-      pushSystemNotification(t("app.resumeAgentFailed", { name: name ? agentLabelText(name) : result.id, detail }));
-    }
-    await refresh();
   };
 
   /** Detaching is visual-only and durable; the PTY remains alive for re-open. */
@@ -1590,9 +1037,7 @@ function App() {
       // Import is metadata-only and the backend stops every PTY before the
       // store is replaced. Drop stale runtime references without respawning
       // imported sessions implicitly; the user can resume them explicitly.
-      const previousTerminalIds = [...liveIdsRef.current];
-      liveIdsRef.current.clear();
-      spawnSeqRef.current = {};
+      const previousTerminalIds = sessions.forgetAll();
       clearTerminals(previousTerminalIds);
       clearAllNotifications();
       setExited({});
@@ -1675,11 +1120,8 @@ function App() {
       pushSystemNotification(t("app.deleteFailed", { detail: String(err) }));
       return false;
     }
-    for (const t of terms) {
-      liveIdsRef.current.delete(t.id);
-      delete spawnSeqRef.current[t.id];
-    }
-    delete lastFocusByWs.current[id];
+    sessions.forget(terms.map((term) => term.id));
+    forgetWorkspace(id);
     clearTerminals(terms.map((term) => term.id));
     if (activeId === id) {
       setExpandedId(null);
@@ -1722,51 +1164,6 @@ function App() {
       .voiceToggleRecording()
       .catch((err) => console.error("voice toggle failed:", err));
   }, [voiceEnabled]);
-
-  const handleUpdateAvailable = useCallback((version: string, current: string) => {
-    setUpdateVersion(version);
-    notifyUpdateAvailable(version, current);
-  }, [notifyUpdateAvailable]);
-
-  const runUpdateCheck = useCallback(() => {
-    void checkForUpdate()
-      .then((result) => {
-        if (result.kind === "update") {
-          handleUpdateAvailable(result.version, result.current);
-        }
-      })
-      .catch((error) => {
-        console.warn("update check failed:", error);
-      });
-  }, [handleUpdateAvailable]);
-
-  useEffect(() => {
-    runUpdateCheck();
-    const interval = window.setInterval(runUpdateCheck, UPDATE_CHECK_MS);
-    return () => window.clearInterval(interval);
-  }, [runUpdateCheck]);
-
-  const manualUpdateCheck = () => {
-    setUpdateCheckState("checking");
-    checkForUpdate().then((result) => {
-      if (result.kind === "update") {
-        handleUpdateAvailable(result.version, result.current);
-        setUpdateCheckState("idle");
-      } else {
-        setUpdateCheckState(result.kind === "none" ? "uptodate" : "error");
-      }
-    });
-  };
-
-  const installUpdate = () => {
-    if (updateInstalling) return;
-    setUpdateInstalling(true);
-    installPendingUpdate().catch((err) => {
-      console.error("update install failed:", err);
-      setUpdateInstalling(false);
-      pushSystemNotification(t("app.updateFailed"));
-    });
-  };
 
   const handleVoiceModelLoadError = (err: unknown) => {
     console.error("voice model load failed:", err);
@@ -1868,7 +1265,7 @@ function App() {
     const meta = workspaces.flatMap((workspace) => workspace.terminals).find((candidate) => candidate.id === id);
     if (meta && id in exitedRef.current) {
       setVoiceFeedback(t("app.voice.resuming"));
-      await restartTerminal(id, resolveResumeCommand(profileForCommand(meta.command), meta.command));
+      await sessions.restart(id, resolveResumeCommand(profileForCommand(meta.command), meta.command));
       // Give the agent's CLI a moment to draw its prompt before pasting.
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
@@ -2100,7 +1497,7 @@ function App() {
   const hotkeyActions = useRef({
     closeWorkspace,
     quickNewTerminal,
-    closeTerminal,
+    closeTerminal: sessions.close,
     changeFontSize,
     resetFontSize,
     toggleVoice,
@@ -2108,7 +1505,7 @@ function App() {
   hotkeyActions.current = {
     closeWorkspace,
     quickNewTerminal,
-    closeTerminal,
+    closeTerminal: sessions.close,
     changeFontSize,
     resetFontSize,
     toggleVoice,
@@ -2261,10 +1658,10 @@ function App() {
         await api.writeTerminal(terminal.id, "\u0003").catch(() => {});
         return;
       case "restart":
-        await restartTerminal(terminal.id, terminal.command);
+        await sessions.restart(terminal.id, terminal.command);
         return;
       case "stop":
-        await closeTerminal(terminal.id);
+        await sessions.close(terminal.id);
         return;
       case "clear-scrollback":
         // Clear what the user sees, not only the cached runtime state.
@@ -2272,20 +1669,10 @@ function App() {
         clearTerminal(terminal.id);
         pushSystemNotification(t("app.historyCleared"));
         return;
-      case "resume": {
-        const term = getTerminal(terminal.id);
-        const result = await api.spawnTerminal(
-          workspace.id,
-          resolveResumeCommand(profileForCommand(terminal.command), terminal.command),
-          terminal.id,
-          term?.cols,
-          term?.rows,
-          defaultShell || undefined,
-        );
-        await registerSpawnedTerminal(result);
+      case "resume":
+        await sessions.respawn(workspace.id, terminal.id, resumeCommandFor(terminal.command));
         await refresh();
         return;
-      }
     }
   };
 
@@ -2460,7 +1847,7 @@ function App() {
         notificationItems={notifItems}
         resumeCount={resumeItems?.length ?? 0}
         appVersion={appVersion}
-        onOpenResume={() => setShowResumeQueue(true)}
+        onOpenResume={resumeQueue.show}
         detachedTerminalIds={detachedTerminalIds}
         fontSize={fontSize}
         voiceEnabled={voiceEnabled}
@@ -2487,11 +1874,11 @@ function App() {
         onNewWorkspace={() => openWorkspaceCreator()}
         onNewAgent={(workspaceId, paneId, agentId) => {
           if (agentId) {
-            void spawnTerminalInto(
+            void sessions.spawnInto(
               workspaceId,
               agentId,
               paneId ? { paneId } : undefined,
-            ).catch(reportSpawnError);
+            ).catch(sessions.reportSpawnError);
             return;
           }
           void chooseAgentForPanel(workspaceId, paneId ?? null);
@@ -2501,8 +1888,8 @@ function App() {
         onMarkAllRead={markAllRead}
         onClearAll={clearAllNotifications}
         onJumpToNotification={jumpToNotification}
-        onRestart={restartTerminal}
-        onKill={closeTerminal}
+        onRestart={sessions.restart}
+        onKill={sessions.close}
         onDetach={detachTab}
         onReattach={(id) => {
           reattachTerminal(id);
@@ -2543,7 +1930,7 @@ function App() {
           void stopFleetTerminals(ids);
         }}
         onBatchResume={(ids) => {
-          void resumeFleetTerminals(ids);
+          void sessions.resumeTerminals(ids);
         }}
         onOpenSettings={() => {
           setShowSettings(true);
@@ -2578,13 +1965,13 @@ function App() {
       {showResume ? (
         <Suspense fallback={<AppLoadingSurface label="fila de retomada" />}>
           <LazyResumeDialog
-            items={resumeItems}
+            items={resumeItems ?? []}
             savedAt={resumeSavedAt}
-            onResume={resumeOne}
-            onDismiss={dismissOne}
-            onResumeAll={resumeAll}
-            onDismissAll={dismissAll}
-            onDefer={() => setShowResumeQueue(false)}
+            onResume={resumeQueue.resumeOne}
+            onDismiss={resumeQueue.dismissOne}
+            onResumeAll={resumeQueue.resumeAll}
+            onDismissAll={resumeQueue.dismissAll}
+            onDefer={resumeQueue.defer}
             autoResume={autoResume}
             onAutoResumeChange={setAutoResume}
           />

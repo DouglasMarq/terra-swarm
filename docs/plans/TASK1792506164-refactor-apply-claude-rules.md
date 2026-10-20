@@ -66,32 +66,32 @@ Agents: **W0** runs first in this checkout; then **B1**, **B2**, **B3**, **F1**,
 
 **B2 — `mcp/`**
 
-- [ ] 2.1 Defense in depth: add `AND workspace_id = ?` to the ~15 statements on `tasks`/`messages`/`notes` that filter by id only (`repo.rs` `load_task`, `update_task`, `complete_task`, `delete_task`, `load_message`, `load_note`, dependency join, claim fallback) → verify: tests with another workspace's id for each tool.
-- [ ] 2.2 Move the `claim_task` `blocked_by` check, the `complete_task` owner/status checks and `update_task`'s `before` read inside their transaction.
-- [ ] 2.3 `assign_task`: move the rules and the task-update + message write into `Repo::assign_task` in one transaction → verify: existing orchestrator tests + a non-orchestrator test.
-- [ ] 2.4 Remove N+1 queries in `list_tasks`, `read_inbox`, `search_notes`, dependency lookups (set-based queries) → verify: existing tests unchanged.
-- [ ] 2.5 Replace `mcp::guard` with `lock_or_recover`; log `StoreError`/`JoinError` in `hooks.rs:116-120,162`; keep the cause at `repo.rs:573`; named constants for label/key/summary lengths, busy timeout, worker threads, `/hooks/claude`, and reuse them in the tool JSON schemas (`tools.rs:106,190,222,253`); fix the `assign_task` description missing `\` continuations.
+- [x] 2.1 Defense in depth: add `AND workspace_id = ?` to the ~15 statements on `tasks`/`messages`/`notes` that filter by id only (`repo.rs` `load_task`, `update_task`, `complete_task`, `delete_task`, `load_message`, `load_note`, dependency join, claim fallback) → verify: tests with another workspace's id for each tool.
+- [x] 2.2 Move the `claim_task` `blocked_by` check, the `complete_task` owner/status checks and `update_task`'s `before` read inside their transaction.
+- [x] 2.3 `assign_task`: move the rules and the task-update + message write into `Repo::assign_task` in one transaction → verify: existing orchestrator tests + a non-orchestrator test.
+- [x] 2.4 Remove N+1 queries in `list_tasks`, `read_inbox`, `search_notes`, dependency lookups (set-based queries) → verify: existing tests unchanged.
+- [x] 2.5 Replace `mcp::guard` with `lock_or_recover`; log `StoreError`/`JoinError` in `hooks.rs:116-120,162`; keep the cause at `repo.rs:573`; named constants for label/key/summary lengths, busy timeout, worker threads, `/hooks/claude`, and reuse them in the tool JSON schemas (`tools.rs:106,190,222,253`); fix the `assign_task` description missing `\` continuations.
 
 **B3 — `pty/`, `voice/`, `voice.rs`, `usage.rs`, `fonts.rs`**
 
-- [ ] 3.1 **Bug:** poisoned locks make `kill_terminal_inner`, `kill_terminal_inner_destructive` and `kill_all` return without killing (process leak); use `lock_or_recover` everywhere in `pty/` and `voice/audio.rs`.
-- [ ] 3.2 Blocking I/O: `download_model_impl` (file writes on the async runtime) → `spawn_blocking`/`tokio::fs`; `voice_list_models` → `#[tauri::command(async)]`.
-- [ ] 3.3 `output_scan.rs:338` `unwrap` and `output.rs:98` `Instant` underflow → non-panicking forms.
-- [ ] 3.4 Preserve causes (`audio.rs:271,801`), log where `unwrap_or_default` hides real failures (`agents.rs:100`, `fonts.rs:51`, `pty/mod.rs:517`); named constants (`MIN_PTY_DIMENSION`, channel sizes, buffer sizes with `_BYTES`, flush intervals, `ESC`/`BEL`, dev-server probe, transcriber params, reuse `TARGET_SAMPLE_RATE`); remove explanatory in-body comments; comment the legitimate `cfg_attr(.., allow)`s, remove the stale one on `PtyEntry`, mark `mcp_lease` as RAII.
-- [ ] 3.5 `agents.rs:21`: quote the id in `command -v` (or restrict to catalog ids).
+- [x] 3.1 **Bug:** poisoned locks make `kill_terminal_inner`, `kill_terminal_inner_destructive` and `kill_all` return without killing (process leak); use `lock_or_recover` everywhere in `pty/` and `voice/audio.rs`.
+- [x] 3.2 Blocking I/O: `download_model_impl` (file writes on the async runtime) → `spawn_blocking`/`tokio::fs`; `voice_list_models` → `#[tauri::command(async)]`.
+- [x] 3.3 `output_scan.rs:338` `unwrap` and `output.rs:98` `Instant` underflow → non-panicking forms.
+- [x] 3.4 Preserve causes (`audio.rs:271,801`), log where `unwrap_or_default` hides real failures (`agents.rs:100`, `fonts.rs:51`, `pty/mod.rs:517`); named constants (`MIN_PTY_DIMENSION`, channel sizes, buffer sizes with `_BYTES`, flush intervals, `ESC`/`BEL`, dev-server probe, transcriber params, reuse `TARGET_SAMPLE_RATE`); remove explanatory in-body comments; comment the legitimate `cfg_attr(.., allow)`s, remove the stale one on `PtyEntry`, mark `mcp_lease` as RAII.
+- [x] 3.5 `agents.rs:21`: quote the id in `command -v` (or restrict to catalog ids).
 
 ### Wave 1 — frontend (parallel)
 
 **F1 — correctness, i18n, types (`src/app/`, `src/stores/`, `src/lib/`, `src/domain/`, `src/dev/`, `src/i18n/`, tests, and the component `.tsx` files that only need string/`useT` changes)**
 
-- [ ] 4.1 **Bug:** `useWorktreeClose.ts:43` closes an agent as if it had no worktree when `worktreeStatus` fails; notify and keep it open → verify: test.
-- [ ] 4.2 Report failures instead of swallowing them: workspace creation (`App.tsx:500`), clipboard (`WorktreeReviewDialog.tsx:128`, `VisualShellSurface.tsx:705`), `listSystemFonts` fallback, unlisten catches.
-- [ ] 4.3 i18n: hard-coded PT/EN text (`errorModel.ts:38`, `SettingsDialog.tsx:88-94`, `NavigatorFilesView.tsx:60,61,80`, `App.tsx:486`, `fleet/model.ts:120-126,347-349`, `SubTabLane.tsx:7`, `AgentInspector.tsx:136-143`, "Terra Swarm" → `common.appName`, `"Auto"`, `"[...output dropped...]"`) into `en.ts` + `pt-BR.ts`; the ~22 components using `t()` switch to `useT()`; concatenated fragments become one key with `{placeholders}`; drop the `as MessageKey`/`as never` casts → verify: build + component tests in pt-BR, `i18n.test.ts`.
-- [ ] 4.4 **Bug (Windows/Linux):** hard-coded `⌘`/`⌃` glyphs (`VisualShellSurface.tsx`, `WindowChrome.tsx:49`, `ProjectContainer.tsx:116`) → `formatShortcut` → verify: test per platform.
-- [ ] 4.5 Closed sets: `VoiceStatus`, `RightDock` tab union, `HotkeyActionId` from `HOTKEY_ACTIONS`, `VoiceLanguage` from `VOICE_LANGUAGES`; `Hotkey` reuses `ShortcutDefinition`.
-- [ ] 4.6 `mockBackend.ts`: answers for `create_workspace`, `create_group`, `export/import_workspace_snapshot`, `git_status`; `spawn_terminal` reads `args.terminalId`.
-- [ ] 4.7 Test isolation: reset `useLibraryStore` + localStorage in `libraryStore.test.ts`, `useEditorStore` in `navigation.test.tsx` (`beforeEach`).
-- [ ] 4.8 Remove the 4 `eslint-disable` comments (no ESLint) and replace with a short reason where the dependency choice is intentional.
+- [x] 4.1 **Bug:** `useWorktreeClose.ts:43` closes an agent as if it had no worktree when `worktreeStatus` fails; notify and keep it open → verify: test.
+- [x] 4.2 Report failures instead of swallowing them: workspace creation (`App.tsx:500`), clipboard (`WorktreeReviewDialog.tsx:128`, `VisualShellSurface.tsx:705`), `listSystemFonts` fallback, unlisten catches.
+- [x] 4.3 i18n: hard-coded PT/EN text (`errorModel.ts:38`, `SettingsDialog.tsx:88-94`, `NavigatorFilesView.tsx:60,61,80`, `App.tsx:486`, `fleet/model.ts:120-126,347-349`, `SubTabLane.tsx:7`, `AgentInspector.tsx:136-143`, "Terra Swarm" → `common.appName`, `"Auto"`, `"[...output dropped...]"`) into `en.ts` + `pt-BR.ts`; the ~22 components using `t()` switch to `useT()`; concatenated fragments become one key with `{placeholders}`; drop the `as MessageKey`/`as never` casts → verify: build + component tests in pt-BR, `i18n.test.ts`.
+- [x] 4.4 **Bug (Windows/Linux):** hard-coded `⌘`/`⌃` glyphs (`VisualShellSurface.tsx`, `WindowChrome.tsx:49`, `ProjectContainer.tsx:116`) → `formatShortcut` → verify: test per platform.
+- [x] 4.5 Closed sets: `VoiceStatus`, `RightDock` tab union, `HotkeyActionId` from `HOTKEY_ACTIONS`, `VoiceLanguage` from `VOICE_LANGUAGES`; `Hotkey` reuses `ShortcutDefinition`.
+- [x] 4.6 `mockBackend.ts`: answers for `create_workspace`, `create_group`, `export/import_workspace_snapshot`, `git_status`; `spawn_terminal` reads `args.terminalId`.
+- [x] 4.7 Test isolation: reset `useLibraryStore` + localStorage in `libraryStore.test.ts`, `useEditorStore` in `navigation.test.tsx` (`beforeEach`).
+- [x] 4.8 Remove the 4 `eslint-disable` comments (no ESLint) and replace with a short reason where the dependency choice is intentional.
 
 **F2 — shared helpers and purity (`src/lib/`, `src/domain/`, `*Model.ts`, callers)**
 
@@ -101,12 +101,12 @@ Agents: **W0** runs first in this checkout; then **B1**, **B2**, **B3**, **F1**,
 
 **C1 — stylesheets only (`src/**/*.css`, `src/styles/tokens.css`, `.impeccable/design.json`, `src/styles/README.md`)**
 
-- [ ] 6.1 Point the legacy palette in `App.css` (`--bg`, `--red`, `--green`, `--accent`, ...) at `--terra-*` tokens, or replace its uses.
-- [ ] 6.2 Delete the 258 `var(--terra-x, #literal)` fallbacks (tokens always load; 18 of them don't even match the token).
-- [ ] 6.3 Replace the 64 literals that map to existing tokens (or `color-mix` over a token); define `--terra-shell-popover` or use `--terra-shadow-popover`.
-- [ ] 6.4 Add the missing tokens (`--terra-red-line`, `--terra-red-line-strong`, `--terra-scrim`, `--terra-amber-wash`, `--terra-border-hover`, `--terra-bg-menu-hover`, `--terra-wash-subtle`, ...) to `tokens.css` and `design.json`; single-use variants use `color-mix`.
-- [ ] 6.5 Status-colour misuse, per Q2/Q3: focused pane amber ring → neutral focus ring (design.json); green "available/active/level" chips and amber "selected/in progress" → neutral or accent; priority, diff and destructive red per the answer.
-- [ ] 6.6 Delete the dead Navigator rules overridden by the v3 block (`Navigator.module.css:544-638`).
+- [x] 6.1 Point the legacy palette in `App.css` (`--bg`, `--red`, `--green`, `--accent`, ...) at `--terra-*` tokens, or replace its uses.
+- [x] 6.2 Delete the 258 `var(--terra-x, #literal)` fallbacks (tokens always load; 18 of them don't even match the token).
+- [x] 6.3 Replace the 64 literals that map to existing tokens (or `color-mix` over a token); define `--terra-shell-popover` or use `--terra-shadow-popover`.
+- [x] 6.4 Add the missing tokens (`--terra-red-line`, `--terra-red-line-strong`, `--terra-scrim`, `--terra-amber-wash`, `--terra-border-hover`, `--terra-bg-menu-hover`, `--terra-wash-subtle`, ...) to `tokens.css` and `design.json`; single-use variants use `color-mix`.
+- [x] 6.5 Status-colour misuse, per Q2/Q3: focused pane amber ring → neutral focus ring (design.json); green "available/active/level" chips and amber "selected/in progress" → neutral or accent; priority, diff and destructive red per the answer.
+- [x] 6.6 Delete the dead Navigator rules overridden by the v3 block (`Navigator.module.css:544-638`).
 → verify: `?mock` preview screenshots of Workbench, Fleet, Settings, Navigator, dialogs before/after; no visual change except 6.5.
 
 ### Wave 2 — frontend structure (F3, after F1/F2 merge)
@@ -148,3 +148,5 @@ Agents: **W0** runs first in this checkout; then **B1**, **B2**, **B3**, **F1**,
 - 2026-10-20: plan drafted from the audit.
 - 2026-10-20: approved by the user. Q1 = full plan (waves 0–3, App.tsx refactor stays out). Q2 = status colours outside status keep their hue through dedicated tokens (`--terra-diff-add`, `--terra-diff-del`, `--terra-priority-urgent`, `--terra-priority-high`, `--terra-danger*`) documented in `design.json`; the other misuses become neutral. Q3 = the voice blue becomes accent/neutrals. Q4 = remove the listed dead code. Q5 = typed IPC errors (step 7.5) are in. Q6 = out.
 - 2026-10-20: 0.2 — `spawn_terminal_inner` takes a `SpawnRequest`, `spawn_output_pump` a `DurableScrollback`; the `spawn_terminal` Tauri command keeps its arguments (they are the IPC contract) with a commented `#[allow(clippy::too_many_arguments)]`.
+- 2026-10-20: wave 1 merged: B3 (pty/voice), C1 (stylesheets), B2 (mcp), F1 (frontend). Deviations: B3 refuses non-catalog ids in `command_available` instead of quoting (`mcp::launch::quote` is private to `mcp/`); C1 also neutralized the idle agent chip in `inspector.css` (same green-for-non-running bug) and added `--terra-success` and `--terra-pane-focus-ring`; B2 keeps the literal defaults inside the `read_inbox`/`search_notes` descriptions (`&'static str`); F1 leaves the `Changes from {name}` commit/PR title in English and keeps `App.tsx`'s `useLocale()` workaround until App's logic moves out.
+

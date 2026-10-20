@@ -1,4 +1,5 @@
 import { deriveAgentStatus } from "../../domain/agentStatus";
+import { normalizeSearchText } from "../../lib/text/normalizeSearchText";
 import type { McpAgentState } from "../../types";
 import type {
   Pane,
@@ -491,10 +492,6 @@ export function buildNavigatorTree(
   };
   setDepth(roots, null, 0);
   return indexTree(roots);
-}
-
-export function normalizeSearchText(value: string): string {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
 }
 
 function searchableText(node: NavigatorNode): string {

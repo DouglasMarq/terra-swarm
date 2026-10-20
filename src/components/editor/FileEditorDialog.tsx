@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { FileText, RotateCw, Save } from "lucide-react";
 import { api } from "../../api";
 import { useT } from "../../i18n";
+import { errorMessage } from "../../lib/errors/errorMessage";
 import { formatShortcut, type ShortcutDefinition } from "../../lib/platform/shortcuts";
 import { useEditorStore } from "../../stores/editorStore";
 import type { WorkspaceFileContent } from "../../types";
@@ -14,9 +15,7 @@ const SAVE_SHORTCUT: ShortcutDefinition = { key: "s", meta: true, shift: false, 
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
 
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+const BYTES_PER_KIB = 1024;
 
 /**
  * A light editor for one project file, opened from the Files view. Saving
@@ -49,7 +48,7 @@ export function FileEditorDialog() {
       setText(next.content);
       setGeneration((value) => value + 1);
     } catch (error) {
-      setLoadError(describe(error));
+      setLoadError(errorMessage(error));
     }
   }, [target]);
 
@@ -68,7 +67,7 @@ export function FileEditorDialog() {
       // Nothing is left to lose, so the close warning no longer applies.
       setConfirmDiscard(false);
     } catch (error) {
-      const message = describe(error);
+      const message = errorMessage(error);
       setConflict(message.includes("changed on disk"));
       setSaveError(message);
     } finally {
@@ -98,7 +97,7 @@ export function FileEditorDialog() {
           {dirty ? <span className="terra-editor-dirty" aria-label={t("editor.unsaved")} title={t("editor.unsaved")}>●</span> : null}
         </span>
       }
-      description={file ? t("editor.meta", { size: Math.max(1, Math.round(file.size / 1024)), shortcut: formatShortcut(SAVE_SHORTCUT) }) : t("editor.loading")}
+      description={file ? t("editor.meta", { size: Math.max(1, Math.round(file.size / BYTES_PER_KIB)), shortcut: formatShortcut(SAVE_SHORTCUT) }) : t("editor.loading")}
     >
       <div className="terra-editor-body">
         {loadError ? (

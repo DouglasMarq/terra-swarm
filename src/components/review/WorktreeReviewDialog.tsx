@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Copy, GitBranch, GitMerge, GitPullRequest, RefreshCw } from "lucide-react";
 import { api } from "../../api";
 import { useT } from "../../i18n";
+import { errorMessage } from "../../lib/errors/errorMessage";
 import { useMcpStore } from "../../stores/mcpStore";
 import { useReviewStore } from "../../stores/reviewStore";
 import type { WorktreeDiff } from "../../types";
@@ -12,9 +13,10 @@ import "./review.css";
 
 type Busy = "load" | "commit" | "merge" | "pr" | null;
 
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+/** How long the "copied" check stays on the copy button. */
+const COPIED_FEEDBACK_MS = 1500;
+const MAX_COMMIT_MESSAGE_CHARS = 300;
+const MAX_PR_TITLE_CHARS = 200;
 
 /**
  * Review what an isolated agent changed on its branch, then commit it, merge
@@ -48,7 +50,7 @@ export function WorktreeReviewDialog() {
       setDiff(next);
       setSelected((current) => (current && next.files.some((file) => file.path === current) ? current : next.files[0]?.path ?? null));
     } catch (failure) {
-      setError(describe(failure));
+      setError(errorMessage(failure));
     } finally {
       setBusy(null);
     }
@@ -87,7 +89,7 @@ export function WorktreeReviewDialog() {
       if (done) setNotice(done);
       await load();
     } catch (failure) {
-      setError(describe(failure));
+      setError(errorMessage(failure));
     } finally {
       setBusy(null);
     }
@@ -124,7 +126,7 @@ export function WorktreeReviewDialog() {
     try {
       await navigator.clipboard.writeText(prUrl);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
+      window.setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS);
     } catch (error) {
       console.warn("failed to copy the pull request URL:", error);
       setCopied(false);
@@ -231,7 +233,7 @@ export function WorktreeReviewDialog() {
             onChange={(event) => setMessage(event.target.value)}
             placeholder={t("review.commitPlaceholder")}
             aria-label={t("review.commitMessage")}
-            maxLength={300}
+            maxLength={MAX_COMMIT_MESSAGE_CHARS}
           />
           <Button type="submit" disabled={busy !== null || !message.trim()}>
             {busy === "commit" ? t("review.working") : t("review.commit")}
@@ -241,7 +243,7 @@ export function WorktreeReviewDialog() {
 
       {prOpen ? (
         <div className="terra-review-pr">
-          <input value={prTitle} onChange={(event) => setPrTitle(event.target.value)} aria-label={t("review.prTitle")} placeholder={t("review.prTitle")} maxLength={200} />
+          <input value={prTitle} onChange={(event) => setPrTitle(event.target.value)} aria-label={t("review.prTitle")} placeholder={t("review.prTitle")} maxLength={MAX_PR_TITLE_CHARS} />
           <textarea value={prBody} onChange={(event) => setPrBody(event.target.value)} aria-label={t("review.prBody")} placeholder={t("review.prBody")} rows={4} />
           <p className="terra-review-hint">{t("review.prHint", { branch: status?.branch ?? "", base: status?.base ?? "" })}</p>
         </div>

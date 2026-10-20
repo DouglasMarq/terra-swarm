@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from "zustand/middleware";
 
 export const SHELL_STORAGE_KEY = "terra-shell-state";
 export const SHELL_STATE_VERSION = 3;
+/** Back/forward navigation entries kept. */
+const MAX_HISTORY_ENTRIES = 100;
 
 export type ShellPanelLayout = Record<string, number>;
 
@@ -304,8 +306,8 @@ export const useShellStore = create<ShellState>()(
           return {
             activeSurface: surface,
             activeWorkspaceId: safeWorkspaceId,
-            history: [...branch, nextEntry].slice(-100),
-            historyIndex: Math.min(branch.length, 99),
+            history: [...branch, nextEntry].slice(-MAX_HISTORY_ENTRIES),
+            historyIndex: Math.min(branch.length, MAX_HISTORY_ENTRIES - 1),
           };
         });
       },

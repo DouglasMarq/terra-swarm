@@ -6,9 +6,9 @@ import {
   filterCommands,
   groupCommands,
   isDestructiveCommand,
-  normalizeCommandQuery,
   type CommandPaletteCallbacks,
 } from "./commandModel";
+import { normalizeSearchText } from "../../../lib/text/normalizeSearchText";
 
 const workspaces: Workspace[] = [
   {
@@ -40,8 +40,8 @@ const agents: AgentInfo[] = [
 
 describe("command palette model", () => {
   it("normalizes Portuguese accents and whitespace", () => {
-    expect(normalizeCommandQuery("  Configurações  ")).toBe("configuracoes");
-    expect(normalizeCommandQuery("AÇÃO rápida")).toBe("acao rapida");
+    expect(normalizeSearchText("  Configurações  ")).toBe("configuracoes");
+    expect(normalizeSearchText("AÇÃO rápida")).toBe("acao rapida");
   });
 
   it("matches all normalized query tokens across labels and keywords", () => {

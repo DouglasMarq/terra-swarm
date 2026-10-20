@@ -14,6 +14,7 @@ export const ptBR: Dictionary<typeof en> = {
     fleet: "Frota",
     board: "Quadro",
     appName: "Terra Swarm",
+    withShortcut: "{label} ({shortcut})",
   },
   status: {
     working: "Trabalhando",
@@ -385,8 +386,8 @@ export const ptBR: Dictionary<typeof en> = {
     importing: "Importando…",
     importSnapshot: "Importar snapshot",
     importHint: "A importação substitui os metadados após uma confirmação explícita e cria um backup recuperável.",
-    backup: "Backup",
-    file: "Arquivo",
+    backupPath: "Backup: {path}",
+    filePath: "Arquivo: {path}",
     installedVersion: "Versão instalada",
     unknown: "desconhecida",
     localHint: "Preferências e sessões ficam neste computador.",

@@ -8,6 +8,7 @@ import type {
 } from "../../../types";
 import {
   DEFAULT_AGENT_PROFILES,
+  fallbackProfile,
   type AgentProfile,
 } from "../../../lib/features/agentProfiles";
 import {
@@ -35,7 +36,8 @@ import { pickAgentName, type NameSetId } from "../../../domain/agentNames";
 import { isVoiceLanguage, VOICE_LANGUAGE_ENDONYMS, VOICE_LANGUAGES, type VoiceLanguage } from "../../../domain/voiceLanguages";
 import { useMcpStore } from "../../../stores/mcpStore";
 import { usePreferencesStore } from "../../../stores/preferencesStore";
-import { DEFAULT_TERMINAL_FONT_STACK, filterFonts, loadSystemFonts, terminalFontStack, type SystemFont } from "../../../lib/terminalFonts";
+import { DEFAULT_TERMINAL_FONT_STACK, filterFonts, terminalFontStack, type SystemFont } from "../../../lib/terminalFonts";
+import { loadSystemFonts } from "../../../app/systemFonts";
 import styles from "./SettingsPanels.module.css";
 
 export type SnapshotOperation = "exporting" | "importing";
@@ -110,6 +112,9 @@ export interface SettingsPanelsProps {
 const LAB_FEATURE_FLAG_IDS = ["durableScrollback", "voiceCommands"] as const;
 
 const PROFILE_BY_ID = new Map(DEFAULT_AGENT_PROFILES.map((profile) => [profile.id, profile]));
+
+/** Speech levels are low; the meter scales them up so normal speech fills it. */
+const MIC_LEVEL_GAIN = 10;
 
 export interface SettingsPanelsProps {
   section: SettingsSectionDefinition;
@@ -203,7 +208,7 @@ function MicLevelMeter({ active }: { active: boolean }) {
     const unlisten = listen<number>("voice-audio-level", (event) => {
       const element = fillRef.current;
       if (!element) return;
-      element.style.transform = `scaleX(${Math.min(1, event.payload * 10)})`;
+      element.style.transform = `scaleX(${Math.min(1, event.payload * MIC_LEVEL_GAIN)})`;
     });
     return () => {
       void unlisten.then((cleanup) => cleanup());
@@ -576,13 +581,7 @@ function AgentPanel({
   const t = useT();
   const newAgentHotkey = usePreferencesStore((state) => state.hotkeys.newTerminal ?? DEFAULT_HOTKEYS.newTerminal);
   const profiles: AgentProfile[] = agents.map((agent) =>
-    PROFILE_BY_ID.get(agent.id) ?? {
-      id: agent.id,
-      label: agent.label,
-      command: agent.id,
-      resumeCommandStrategy: { kind: "original" },
-      voicePromptBehavior: { enabled: true, mode: "append", prefix: "", suffix: "" },
-    },
+    PROFILE_BY_ID.get(agent.id) ?? { ...fallbackProfile(agent.id), label: agent.label },
   );
   return (
     <div className={styles.stack}>
@@ -876,7 +875,7 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
             <button className={styles.button} disabled={snapshotOperation !== null} onClick={onImportSnapshot}>{snapshotOperation === "importing" ? t("settingsPanels.importing") : t("settingsPanels.importSnapshot")}</button>
           </div>
           <p className={styles.hint}>{t("settingsPanels.importHint")}</p>
-          {snapshotFeedback ? <div className={`${styles.feedback} ${snapshotFeedback.kind === "error" ? styles.feedbackError : styles.feedbackSuccess}`} role={snapshotFeedback.kind === "error" ? "alert" : "status"} aria-live="polite"><span>{snapshotFeedback.message}</span>{snapshotFeedback.backupPath ? <span className={styles.path}>{snapshotFeedback.pathKind === "backup" ? t("settingsPanels.backup") : t("settingsPanels.file")}: {snapshotFeedback.backupPath}</span> : null}</div> : null}
+          {snapshotFeedback ? <div className={`${styles.feedback} ${snapshotFeedback.kind === "error" ? styles.feedbackError : styles.feedbackSuccess}`} role={snapshotFeedback.kind === "error" ? "alert" : "status"} aria-live="polite"><span>{snapshotFeedback.message}</span>{snapshotFeedback.backupPath ? <span className={styles.path}>{t(snapshotFeedback.pathKind === "backup" ? "settingsPanels.backupPath" : "settingsPanels.filePath", { path: snapshotFeedback.backupPath })}</span> : null}</div> : null}
         </div>
       )}
 

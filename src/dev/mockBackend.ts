@@ -54,7 +54,7 @@ const agents: AgentInfo[] = [
 ];
 
 const now = Date.now();
-let nextTaskNumber = 5;
+let nextTaskNumber = 6;
 const mockTask = (id: number, title: string, extra: Partial<McpTask> = {}): McpTask => ({
   id: `T-${id}`,
   workspace_id: "ws-terra",
@@ -65,10 +65,12 @@ const mockTask = (id: number, title: string, extra: Partial<McpTask> = {}): McpT
   created_by: "pty-claude-1",
   priority: "medium",
   labels: [],
+  position: id,
   depends_on: [],
+  blocked_by: [],
   created_at: now - (10 - id) * 60_000,
   updated_at: now - (10 - id) * 30_000,
-  notes: [],
+  events: [{ actor: "pty-claude-1", kind: "created", body: "", created_at: now - (10 - id) * 60_000 }],
   ...extra,
 });
 const mcpTasks: McpTask[] = [
@@ -77,24 +79,44 @@ const mcpTasks: McpTask[] = [
     assignee: "pty-claude-1",
     priority: "high",
     description: "Aceitar grupos suspensos sem perder a ordem das abas.",
-    notes: [{ author: "pty-claude-1", body: "claimed the task", created_at: now - 400_000 }],
+    events: [
+      { actor: "pty-claude-1", kind: "created", body: "", created_at: now - 500_000 },
+      { actor: "pty-claude-1", kind: "claimed", body: "", created_at: now - 400_000 },
+    ],
   }),
   mockTask(2, "Cobrir layout.ts com testes", { status: "in_progress", assignee: "pty-codex" }),
   mockTask(3, "Revisar animações do Workbench", { status: "review", assignee: "pty-claude-2", labels: ["ui"] }),
   mockTask(4, "Documentar atalhos de voz", { priority: "low" }),
+  mockTask(5, "Publicar a documentação", { depends_on: ["T-4"], blocked_by: ["T-4"] }),
 ];
 const mcpStatuses: McpAgentStatus[] = [
   { terminal_id: "pty-claude-1", workspace_id: "ws-terra", state: "working", summary: "Editando resumePlanner.ts", updated_at: now },
   { terminal_id: "pty-codex", workspace_id: "ws-terra", state: "needs_input", summary: "Posso rodar npm test?", updated_at: now },
 ];
 let mcpEnabled = true;
-const mcpInfo = () => ({ enabled: mcpEnabled, running: true, url: "http://127.0.0.1:52817/mcp", port: 52817 });
+const mcpInfo = () => ({
+  enabled: mcpEnabled,
+  available: true,
+  running: true,
+  url: "http://127.0.0.1:52817/mcp",
+  port: 52817,
+  db_path: "~/Library/Application Support/com.terra-swarm.app/mcp.db",
+  error: null,
+});
 
 function mcpUpdate(id: string, patch: McpTaskPatch): McpTask {
   const task = mcpTasks.find((candidate) => candidate.id === id);
   if (!task) throw new Error(`task ${id} not found in this workspace`);
-  Object.assign(task, Object.fromEntries(Object.entries(patch).filter(([key]) => key !== "note")), { updated_at: Date.now() });
-  if (patch.note) task.notes.push({ author: "user", body: patch.note, created_at: Date.now() });
+  const at = Date.now();
+  const events = task.events ?? (task.events = []);
+  if (patch.status && patch.status !== task.status) {
+    events.push({ actor: "user", kind: "status", body: `${task.status} → ${patch.status}`, created_at: at });
+  }
+  if (patch.assignee !== undefined && patch.assignee !== task.assignee) {
+    events.push({ actor: "user", kind: "assigned", body: patch.assignee ?? "", created_at: at });
+  }
+  if (patch.note) events.push({ actor: "user", kind: "note", body: patch.note, created_at: at });
+  Object.assign(task, Object.fromEntries(Object.entries(patch).filter(([key]) => key !== "note")), { updated_at: at });
   return task;
 }
 
@@ -187,7 +209,7 @@ export function installMockBackend(): void {
     const task = mcpTasks.find((candidate) => candidate.id === "T-4");
     if (task && !task.assignee) {
       Object.assign(task, { assignee: "pty-claude-2", status: "in_progress", updated_at: Date.now() });
-      task.notes.push({ author: "pty-claude-2", body: "claimed the task", created_at: Date.now() });
+      task.events?.push({ actor: "pty-claude-2", kind: "claimed", body: "", created_at: Date.now() });
       void emit("mcp-tasks-changed", { workspace_id: "ws-terra" });
     }
   }, 5000);

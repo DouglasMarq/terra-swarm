@@ -26,7 +26,7 @@ function taskNumber(id: string): number {
   return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
 }
 
-/** Tasks bucketed by status, each bucket sorted by priority, then age. */
+/** Tasks bucketed by status, each bucket sorted by priority, then board position. */
 export function groupTasksByStatus(tasks: readonly McpTask[]): Record<McpTaskStatus, McpTask[]> {
   const groups = Object.fromEntries(TASK_STATUS_ORDER.map((status) => [status, [] as McpTask[]])) as Record<
     McpTaskStatus,
@@ -35,7 +35,10 @@ export function groupTasksByStatus(tasks: readonly McpTask[]): Record<McpTaskSta
   for (const task of tasks) (groups[task.status] ?? groups.todo).push(task);
   for (const status of TASK_STATUS_ORDER) {
     groups[status].sort(
-      (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || taskNumber(a.id) - taskNumber(b.id),
+      (a, b) =>
+        PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
+        a.position - b.position ||
+        taskNumber(a.id) - taskNumber(b.id),
     );
   }
   return groups;

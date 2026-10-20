@@ -9,6 +9,8 @@ use std::path::Path;
 use std::time::Duration;
 
 pub const DB_FILE: &str = "mcp.db";
+/// How long a connection waits for another one's write lock.
+const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 const MIGRATION_1: &str = r#"
 CREATE TABLE settings (
@@ -108,7 +110,7 @@ pub fn schema_version() -> u32 {
 }
 
 fn configure(conn: &Connection, file_backed: bool) -> rusqlite::Result<()> {
-    conn.busy_timeout(Duration::from_secs(5))?;
+    conn.busy_timeout(BUSY_TIMEOUT)?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
     if file_backed {
         conn.pragma_update(None, "journal_mode", "WAL")?;

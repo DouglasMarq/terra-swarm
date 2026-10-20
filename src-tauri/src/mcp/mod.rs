@@ -8,6 +8,7 @@
 //! - `server`: Streamable HTTP transport on 127.0.0.1 (rmcp + axum).
 //! - `launch`: how a terminal gets its token, environment and CLI flags.
 //! - `commands`: Tauri commands used by the Tasks panel and Settings.
+//! - `tauri_host`: the Tauri side of [`McpHost`].
 
 pub mod auth;
 pub mod commands;
@@ -17,15 +18,19 @@ pub mod launch;
 pub mod repo;
 pub mod roles;
 pub mod server;
+mod tauri_host;
 pub mod tools;
 
 use serde::Serialize;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard};
 
 use auth::TokenRegistry;
 pub use auth::{AgentIdentity, McpLease};
 use repo::{AgentStatus, Message, Repo, StoreError, StoreResult};
+pub use tauri_host::{purge_workspace, TauriHost};
+
+use crate::sync::LockExt;
 
 pub const EVENT_TASKS_CHANGED: &str = "mcp-tasks-changed";
 pub const EVENT_MESSAGE: &str = "mcp-message";
@@ -76,10 +81,6 @@ pub struct McpHub {
     host: Box<dyn McpHost>,
 }
 
-fn guard<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|error| error.into_inner())
-}
-
 impl McpHub {
     /// Open `mcp.db`. When it cannot be opened or migrated the app keeps
     /// running with the MCP server off, and Settings shows why.
@@ -125,7 +126,7 @@ impl McpHub {
 
     pub fn repo(&self) -> StoreResult<MutexGuard<'_, Repo>> {
         match &self.repo {
-            Some(repo) => Ok(guard(repo)),
+            Some(repo) => Ok(repo.lock_or_recover()),
             None => Err(StoreError::Unavailable(
                 self.error
                     .clone()
@@ -135,11 +136,11 @@ impl McpHub {
     }
 
     pub fn set_port(&self, port: u16) {
-        *guard(&self.port) = Some(port);
+        *self.port.lock_or_recover() = Some(port);
     }
 
     pub fn port(&self) -> Option<u16> {
-        *guard(&self.port)
+        *self.port.lock_or_recover()
     }
 
     pub fn url(&self) -> Option<String> {
@@ -148,11 +149,11 @@ impl McpHub {
     }
 
     pub fn set_hook_program(&self, program: PathBuf) {
-        *guard(&self.hook_program) = Some(program);
+        *self.hook_program.lock_or_recover() = Some(program);
     }
 
     pub fn hook_program(&self) -> Option<PathBuf> {
-        guard(&self.hook_program).clone()
+        self.hook_program.lock_or_recover().clone()
     }
 
     pub fn config_dir(&self) -> Option<&PathBuf> {
@@ -187,16 +188,16 @@ impl McpHub {
     // ----- tokens ---------------------------------------------------------
 
     pub fn issue(&self, identity: AgentIdentity) -> String {
-        guard(&self.tokens).issue(identity)
+        self.tokens.lock_or_recover().issue(identity)
     }
 
     pub fn identify(&self, token: &str) -> Option<AgentIdentity> {
-        guard(&self.tokens).identify(token)
+        self.tokens.lock_or_recover().identify(token)
     }
 
     /// The terminal's status goes away with its last token.
     pub fn revoke_token(&self, token: &str) {
-        let gone = guard(&self.tokens).revoke_token(token);
+        let gone = self.tokens.lock_or_recover().revoke_token(token);
         if let Some(identity) = gone {
             self.forget_agent(&identity);
         }
@@ -204,14 +205,14 @@ impl McpHub {
 
     #[cfg(test)]
     pub fn revoke_terminal(&self, terminal_id: &str) {
-        let gone = guard(&self.tokens).revoke_terminal(terminal_id);
+        let gone = self.tokens.lock_or_recover().revoke_terminal(terminal_id);
         if let Some(identity) = gone {
             self.forget_agent(&identity);
         }
     }
 
     pub fn peers(&self, workspace_id: &str) -> Vec<AgentIdentity> {
-        guard(&self.tokens).peers(workspace_id)
+        self.tokens.lock_or_recover().peers(workspace_id)
     }
 
     fn forget_agent(&self, identity: &AgentIdentity) {
@@ -232,7 +233,7 @@ impl McpHub {
 
     /// Delete a closed workspace's board, messages, notes and statuses.
     pub fn purge_workspace(&self, workspace_id: &str) {
-        guard(&self.tokens).revoke_workspace(workspace_id);
+        self.tokens.lock_or_recover().revoke_workspace(workspace_id);
         match self.repo() {
             Ok(mut repo) => {
                 if let Err(error) = repo.purge_workspace(workspace_id) {
@@ -254,11 +255,16 @@ impl McpHub {
     }
 
     pub fn set_session_log(&self, terminal_id: &str, log: crate::usage::SessionLog) {
-        guard(&self.session_logs).insert(terminal_id.to_string(), log);
+        self.session_logs
+            .lock_or_recover()
+            .insert(terminal_id.to_string(), log);
     }
 
     pub fn session_log(&self, terminal_id: &str) -> Option<crate::usage::SessionLog> {
-        guard(&self.session_logs).get(terminal_id).cloned()
+        self.session_logs
+            .lock_or_recover()
+            .get(terminal_id)
+            .cloned()
     }
 
     pub fn emit_nudge(&self, workspace_id: &str, terminal_id: &str, prompt: &str) {
@@ -271,7 +277,10 @@ impl McpHub {
     pub fn emit_message(&self, message: &Message) {
         self.host.emit(
             EVENT_MESSAGE,
-            serde_json::to_value(message).unwrap_or(serde_json::Value::Null),
+            serde_json::to_value(message).unwrap_or_else(|error| {
+                eprintln!("cannot serialize message {}: {}", message.id, error);
+                serde_json::Value::Null
+            }),
         );
     }
 
@@ -301,63 +310,10 @@ impl McpHub {
     }
 }
 
-/// Called by `close_workspace`: workspaces live in `workspaces.json`, so
-/// their MCP data has no foreign key to cascade from.
-pub fn purge_workspace<R: tauri::Runtime>(app: &tauri::AppHandle<R>, workspace_id: &str) {
-    use tauri::Manager;
-    if let Some(hub) = app.try_state::<Arc<McpHub>>() {
-        hub.purge_workspace(workspace_id);
-    }
-}
-
-/// Tauri side of [`McpHost`].
-pub struct TauriHost<R: tauri::Runtime> {
-    pub app: tauri::AppHandle<R>,
-}
-
-impl<R: tauri::Runtime> TauriHost<R> {
-    fn with_workspace<T>(
-        &self,
-        workspace_id: &str,
-        read: impl FnOnce(&crate::workspace::Workspace) -> T,
-    ) -> Option<T> {
-        use tauri::Manager;
-        let store = self
-            .app
-            .try_state::<Mutex<crate::workspace::WorkspaceStore>>()?;
-        let store = store.lock().ok()?;
-        store.get(workspace_id).map(read)
-    }
-}
-
-impl<R: tauri::Runtime> McpHost for TauriHost<R> {
-    fn emit(&self, event: &str, payload: serde_json::Value) {
-        use tauri::Emitter;
-        let _ = self.app.emit(event, payload);
-    }
-
-    fn workspace(&self, workspace_id: &str) -> Option<WorkspaceInfo> {
-        self.with_workspace(workspace_id, |workspace| WorkspaceInfo {
-            name: workspace.name.clone(),
-            cwd: workspace.cwd.clone(),
-        })
-    }
-
-    fn terminals(&self, workspace_id: &str) -> Vec<String> {
-        self.with_workspace(workspace_id, |workspace| {
-            workspace
-                .terminals
-                .iter()
-                .map(|terminal| terminal.id.clone())
-                .collect()
-        })
-        .unwrap_or_default()
-    }
-}
-
 #[cfg(test)]
 pub mod test_support {
     use super::*;
+    use std::sync::Arc;
 
     pub type Events = Arc<Mutex<Vec<(String, serde_json::Value)>>>;
 
@@ -410,6 +366,7 @@ pub mod test_support {
 mod tests {
     use super::test_support::*;
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn dropping_a_lease_revokes_its_token_only() {

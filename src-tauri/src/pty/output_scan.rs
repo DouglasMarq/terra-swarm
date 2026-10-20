@@ -2,6 +2,19 @@
 //! OSC 9/99/777), window titles (OSC 0/1/2), ANSI stripping, context-window
 //! usage shown by agent CLIs, and UTF-8 chunking of the PTY stream.
 
+const ESC: u8 = 0x1b;
+const BEL: u8 = 0x07;
+/// Longest notification message kept, in characters.
+const MAX_NOTIFICATION_CHARS: usize = 200;
+/// An unterminated title sequence longer than this is skipped as malformed.
+const MAX_TITLE_SEQUENCE_BYTES: usize = 4096;
+/// Text read on each side of "context" when looking for its percentage.
+const CONTEXT_WINDOW_BYTES: usize = 48;
+/// Text read before "token" when looking for an `a / b` ratio.
+const TOKEN_LOOKBEHIND_BYTES: usize = 90;
+/// Widest `(NN%)` footer accepted, from the `(` to the `%`.
+const MAX_FOOTER_PERCENT_BYTES: usize = 5;
+
 /// Counts attention signals in a terminal output chunk and extracts a
 /// human-readable message for each: BEL characters and OSC 9 / 99 / 777
 /// notification sequences (ESC ] N ; ... terminated by BEL or ST). OSC bodies
@@ -14,7 +27,7 @@ pub(super) fn extract_notifications(data: &[u8], tail: &[u8]) -> (usize, Vec<Str
     let mut bels = 0;
     let mut i = 0;
     while i < data.len() {
-        if data[i] == 0x1b && i + 1 < data.len() && data[i + 1] == b']' {
+        if data[i] == ESC && i + 1 < data.len() && data[i + 1] == b']' {
             let mut j = i + 2;
             let mut num: u32 = 0;
             let mut digits = 0;
@@ -30,12 +43,12 @@ pub(super) fn extract_notifications(data: &[u8], tail: &[u8]) -> (usize, Vec<Str
                 let mut end = data.len();
                 let mut k = body_start;
                 while k < data.len() {
-                    if data[k] == 0x07 {
+                    if data[k] == BEL {
                         end = k;
                         k += 1;
                         break;
                     }
-                    if data[k] == 0x1b && k + 1 < data.len() && data[k + 1] == b'\\' {
+                    if data[k] == ESC && k + 1 < data.len() && data[k + 1] == b'\\' {
                         end = k;
                         k += 2;
                         break;
@@ -68,7 +81,7 @@ pub(super) fn extract_notifications(data: &[u8], tail: &[u8]) -> (usize, Vec<Str
                         _ => body,
                     };
                     if !msg.is_empty() {
-                        messages.push(msg.chars().take(200).collect());
+                        messages.push(msg.chars().take(MAX_NOTIFICATION_CHARS).collect());
                     }
                 }
                 i = k;
@@ -76,7 +89,7 @@ pub(super) fn extract_notifications(data: &[u8], tail: &[u8]) -> (usize, Vec<Str
             }
             i += 2;
         } else {
-            if data[i] == 0x07 {
+            if data[i] == BEL {
                 count += 1;
                 bels += 1;
             }
@@ -91,7 +104,7 @@ pub(super) fn extract_notifications(data: &[u8], tail: &[u8]) -> (usize, Vec<Str
             .map(|l| l.chars().filter(|c| !c.is_control()).collect::<String>())
             .map(|l| l.trim().to_string())
             .find(|l| !l.is_empty())
-            .map(|l| l.chars().take(200).collect::<String>())
+            .map(|l| l.chars().take(MAX_NOTIFICATION_CHARS).collect::<String>())
             .unwrap_or_else(|| "Terminal notification".to_string());
         messages.push(fallback);
     }
@@ -105,22 +118,22 @@ pub(super) fn extract_notifications(data: &[u8], tail: &[u8]) -> (usize, Vec<Str
 pub(super) fn scan_titles(buf: &mut Vec<u8>, out: &mut Vec<String>) {
     let mut i = 0;
     while i < buf.len() {
-        if buf[i] == 0x1b && i + 1 < buf.len() && buf[i + 1] == b']' {
+        if buf[i] == ESC && i + 1 < buf.len() && buf[i + 1] == b']' {
             let mut j = i + 2;
             let mut term: Option<(usize, usize)> = None;
             while j < buf.len() {
-                if buf[j] == 0x07 {
+                if buf[j] == BEL {
                     term = Some((j, 1));
                     break;
                 }
-                if buf[j] == 0x1b && j + 1 < buf.len() && buf[j + 1] == b'\\' {
+                if buf[j] == ESC && j + 1 < buf.len() && buf[j + 1] == b'\\' {
                     term = Some((j, 2));
                     break;
                 }
                 j += 1;
             }
             let Some((end, tlen)) = term else {
-                if buf.len() - i > 4096 {
+                if buf.len() - i > MAX_TITLE_SEQUENCE_BYTES {
                     i += 2;
                     continue;
                 }
@@ -153,7 +166,7 @@ pub(super) fn strip_ansi(s: &str) -> String {
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == 0x1b && i + 1 < bytes.len() {
+        if bytes[i] == ESC && i + 1 < bytes.len() {
             match bytes[i + 1] {
                 b'[' => {
                     i += 2;
@@ -168,11 +181,11 @@ pub(super) fn strip_ansi(s: &str) -> String {
                 b']' => {
                     i += 2;
                     while i < bytes.len() {
-                        if bytes[i] == 0x07 {
+                        if bytes[i] == BEL {
                             i += 1;
                             break;
                         }
-                        if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'\\' {
+                        if bytes[i] == ESC && i + 1 < bytes.len() && bytes[i + 1] == b'\\' {
                             i += 2;
                             break;
                         }
@@ -284,8 +297,8 @@ pub(super) fn detect_context_used(text: &str) -> Option<u8> {
     let mut start = 0;
     while let Some(off) = lower[start..].find("context") {
         let idx = start + off;
-        let lo = floor_boundary(&lower, idx.saturating_sub(48));
-        let hi = ceil_boundary(&lower, idx + 48);
+        let lo = floor_boundary(&lower, idx.saturating_sub(CONTEXT_WINDOW_BYTES));
+        let hi = ceil_boundary(&lower, idx + CONTEXT_WINDOW_BYTES);
         let window = &lower[lo..hi];
         // The percent belongs to the keyword, so take the one closest before
         // it; an earlier '%' in the window may belong to a stale indicator.
@@ -303,13 +316,13 @@ pub(super) fn detect_context_used(text: &str) -> Option<u8> {
                 consider(idx, used, &mut best);
             }
         }
-        start = idx + 7;
+        start = idx + "context".len();
     }
 
     let mut start = 0;
     while let Some(off) = lower[start..].find("token") {
         let idx = start + off;
-        let lo = floor_boundary(&lower, idx.saturating_sub(90));
+        let lo = floor_boundary(&lower, idx.saturating_sub(TOKEN_LOOKBEHIND_BYTES));
         let window = &lower[lo..idx];
         if let Some(slash) = window.rfind('/') {
             if let (Some(a), Some(b)) = (
@@ -321,7 +334,7 @@ pub(super) fn detect_context_used(text: &str) -> Option<u8> {
                 }
             }
         }
-        start = idx + 5;
+        start = idx + "token".len();
     }
 
     // OpenCode footer: "12.3K (42%)" - a bare parenthesized percent right
@@ -330,12 +343,14 @@ pub(super) fn detect_context_used(text: &str) -> Option<u8> {
     while let Some(off) = lower[start..].find("%)") {
         let pct = start + off;
         if let Some(open) = lower[..pct].rfind('(') {
-            if pct - open <= 5 {
+            if pct - open <= MAX_FOOTER_PERCENT_BYTES {
                 let inside = &lower[open + 1..pct];
                 if !inside.is_empty() && inside.bytes().all(|b| b.is_ascii_digit()) {
                     let before = lower[..open].trim_end();
-                    if parse_trailing_number(before).is_some() {
-                        consider(pct, inside.parse::<f64>().unwrap(), &mut best);
+                    if let (Some(_), Ok(used)) =
+                        (parse_trailing_number(before), inside.parse::<f64>())
+                    {
+                        consider(pct, used, &mut best);
                     }
                 }
             }

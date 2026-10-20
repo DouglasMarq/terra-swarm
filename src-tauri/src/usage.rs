@@ -38,6 +38,9 @@ pub struct AgentUsage {
     pub usage: TokenUsage,
 }
 
+/// How deep the Codex sessions folder is searched (`YYYY/MM/DD/<log>`).
+const MAX_CODEX_LOG_DEPTH: usize = 4;
+
 fn number(value: &Value, key: &str) -> u64 {
     value.get(key).and_then(Value::as_u64).unwrap_or(0)
 }
@@ -139,7 +142,7 @@ pub fn find_codex_log(sessions: &Path, thread_id: &str) -> Option<PathBuf> {
         entries.sort();
         entries.reverse();
         for path in entries {
-            if path.is_dir() && depth < 4 {
+            if path.is_dir() && depth < MAX_CODEX_LOG_DEPTH {
                 if let Some(found) = walk(&path, thread_id, depth + 1) {
                     return Some(found);
                 }
@@ -190,12 +193,13 @@ pub fn claude_transcript_from_hook(path: &str) -> Option<PathBuf> {
 }
 
 pub fn usage_of(log: &SessionLog) -> Option<TokenUsage> {
-    match log {
-        SessionLog::Claude(path) => claude_usage(path).ok(),
-        SessionLog::Codex(thread) => {
-            codex_usage(&find_codex_log(&codex_sessions_dir()?, thread)?).ok()
-        }
-    }
+    let usage = match log {
+        SessionLog::Claude(path) => claude_usage(path),
+        SessionLog::Codex(thread) => codex_usage(&find_codex_log(&codex_sessions_dir()?, thread)?),
+    };
+    usage
+        .map_err(|error| eprintln!("failed to read an agent session log: {}", error))
+        .ok()
 }
 
 #[cfg(test)]

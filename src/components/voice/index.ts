@@ -1,7 +1,6 @@
 export {
   VoiceCapsule,
   type VoiceCapsuleProps,
-  type VoiceSendPayload,
 } from "./VoiceCapsule";
 export {
   createInitialVoiceCapsuleModel,
@@ -12,4 +11,5 @@ export {
   type VoiceCapsuleIntent,
   type VoiceCapsuleModel,
   type VoiceCapsuleState,
+  type VoiceSendPayload,
 } from "./voiceModel";

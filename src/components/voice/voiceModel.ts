@@ -20,6 +20,12 @@ export type VoiceCapsuleState =
  */
 export type VoiceCapsuleIntent = VoiceIntent | { type: "stop"; target?: string };
 
+export interface VoiceSendPayload {
+  transcript: string;
+  intent: VoiceCapsuleIntent | null;
+  agent: string | null;
+}
+
 export interface VoiceCapsuleModel {
   state: VoiceCapsuleState;
   partialTranscript: string;

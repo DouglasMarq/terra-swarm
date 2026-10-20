@@ -11,14 +11,9 @@ import {
   voiceStateLabel,
   type VoiceCapsuleIntent,
   type VoiceCapsuleState,
+  type VoiceSendPayload,
 } from "./voiceModel";
 import styles from "./voice.module.css";
-
-export interface VoiceSendPayload {
-  transcript: string;
-  intent: VoiceCapsuleIntent | null;
-  agent: string | null;
-}
 
 export interface VoiceCapsuleProps {
   state: VoiceCapsuleState;

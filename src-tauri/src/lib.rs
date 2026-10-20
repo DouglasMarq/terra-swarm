@@ -10,6 +10,7 @@ mod workspace;
 mod worktree;
 
 use std::sync::{Arc, Mutex};
+use sync::LockExt;
 use tauri::{Listener, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -180,9 +181,9 @@ pub fn run() {
                 tauri::RunEvent::ExitRequested { .. } => {
                     // Flush the workspace store synchronously; the debounced
                     // background writer may not fire before the process exits.
-                    if let Ok(store) = app.state::<Mutex<workspace::WorkspaceStore>>().lock() {
-                        store.save_now();
-                    }
+                    app.state::<Mutex<workspace::WorkspaceStore>>()
+                        .lock_or_recover()
+                        .save_now();
                     pty::kill_all(&app.state::<Mutex<pty::PtyManager>>());
                 }
                 tauri::RunEvent::Exit => {

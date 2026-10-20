@@ -4,6 +4,7 @@
 //! (agents edit the same files).
 
 use super::{safe_relative_path, WorkspaceStore};
+use crate::sync::LockExt;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -115,7 +116,7 @@ pub(crate) fn write_file(
 }
 
 fn workspace_cwd(store: &Mutex<WorkspaceStore>, workspace_id: &str) -> Result<String, String> {
-    let store = store.lock().map_err(|error| error.to_string())?;
+    let store = store.lock_or_recover();
     Ok(store.workspace(workspace_id)?.cwd.clone())
 }
 

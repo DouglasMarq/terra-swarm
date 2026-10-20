@@ -1,6 +1,7 @@
 //! Explicit import and export of the whole workspace store.
 
 use super::*;
+use crate::sync::LockExt;
 use serde::{Deserialize, Serialize};
 use std::path::{Component, PathBuf};
 use std::sync::atomic::Ordering;
@@ -154,7 +155,7 @@ pub(crate) fn transfer_counts(store: &WorkspaceStore) -> (usize, usize, usize, u
 /// previous session ended; the startup resume dialog shows it as "X ago".
 #[tauri::command(async)]
 pub fn store_saved_at(store: State<'_, Mutex<WorkspaceStore>>) -> Result<Option<u64>, String> {
-    let store = store.lock().map_err(|e| e.to_string())?;
+    let store = store.lock_or_recover();
     let Some(path) = &store.save_path else {
         return Ok(None);
     };
@@ -176,7 +177,7 @@ pub fn export_workspace_snapshot(
 ) -> Result<WorkspaceSnapshotTransfer, String> {
     let target = validate_explicit_path(&path)?;
     let (json, counts) = {
-        let store = store.lock().map_err(|e| e.to_string())?;
+        let store = store.lock_or_recover();
         (
             store
                 .serialized_snapshot()
@@ -227,7 +228,7 @@ pub fn import_workspace_snapshot(
         .map_err(|error| format!("failed to serialize imported workspace snapshot: {}", error))?;
 
     let state = app.state::<Mutex<WorkspaceStore>>();
-    let mut current = state.lock().map_err(|e| e.to_string())?;
+    let mut current = state.lock_or_recover();
     let target = current
         .save_path
         .clone()

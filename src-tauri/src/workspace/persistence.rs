@@ -2,6 +2,7 @@
 //! debounced atomic writes and `.bak` copies of anything it had to drop.
 
 use super::*;
+use crate::sync::LockExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -164,9 +165,9 @@ pub(crate) fn write_guarded(path: &std::path::Path, json: &str, seq: u64) {
 /// import/export must return the failure to the caller instead.
 pub(crate) fn write_guarded_result(path: &Path, json: &str, seq: u64) -> std::io::Result<()> {
     let lock = WRITE_LOCK.get_or_init(|| Mutex::new(()));
-    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = lock.lock_or_recover();
     let last_written = LAST_WRITTEN.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut last_written = last_written.lock().unwrap_or_else(|e| e.into_inner());
+    let mut last_written = last_written.lock_or_recover();
     if last_written
         .get(path)
         .is_some_and(|last_seq| seq < *last_seq)
@@ -241,7 +242,7 @@ pub(crate) fn backup_store(path: &std::path::Path) -> std::io::Result<Option<Pat
 /// the rollback path restores the backup if the atomic write fails.
 pub(crate) fn replace_store_file(path: &Path, json: &str) -> Result<Option<PathBuf>, String> {
     let lock = WRITE_LOCK.get_or_init(|| Mutex::new(()));
-    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = lock.lock_or_recover();
     let backup = backup_store(path).map_err(|error| {
         format!(
             "failed to back up the current workspace store {}: {}",
@@ -267,8 +268,7 @@ pub(crate) fn replace_store_file(path: &Path, json: &str) -> Result<Option<PathB
     let seq = SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
     LAST_WRITTEN
         .get_or_init(|| Mutex::new(HashMap::new()))
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .lock_or_recover()
         .insert(path.to_path_buf(), seq);
     Ok(backup)
 }

@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
+use crate::sync::LockExt;
+
 /// A terminal's durable log is intentionally smaller than an unbounded
 /// transcript.  The in-memory PTY backlog uses the same cap.
 pub const SCROLLBACK_CAP: usize = 256 * 1024;
@@ -111,10 +113,7 @@ impl ScrollbackStore {
             return Ok(());
         }
 
-        let _guard = self
-            .write_lock
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let _guard = self.write_lock.lock_or_recover();
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -154,10 +153,7 @@ impl ScrollbackStore {
         let Some(path) = self.path_for(id) else {
             return Ok(false);
         };
-        let _guard = self
-            .write_lock
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let _guard = self.write_lock.lock_or_recover();
         match fs::remove_file(path) {
             Ok(()) => Ok(true),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),

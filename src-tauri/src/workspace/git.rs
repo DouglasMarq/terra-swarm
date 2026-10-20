@@ -1,6 +1,7 @@
 //! Branch and `git status` summary for a workspace folder.
 
 use super::*;
+use crate::sync::LockExt;
 use serde::Serialize;
 use std::path::Path;
 use std::sync::Mutex;
@@ -142,7 +143,7 @@ pub fn git_status(
     workspace_id: String,
 ) -> Result<WorkspaceGitStatus, String> {
     let cwd = {
-        let store = store.lock().map_err(|error| error.to_string())?;
+        let store = store.lock_or_recover();
         store.workspace(&workspace_id)?.cwd.clone()
     };
     git_status_for_directory(Path::new(&cwd))

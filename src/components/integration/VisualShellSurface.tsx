@@ -19,6 +19,8 @@ import { NotificationCenter } from "../notifications/NotificationCenter";
 import { buildAgentLabels } from "../../domain/agentLabels";
 import { t as translateNow, useT } from "../../i18n";
 import { AgentInspector } from "../inspector/AgentInspector";
+import { TasksPanel } from "../tasks/TasksPanel";
+import { startMcpEventBridge } from "../../stores/mcpStore";
 import { NavigatorPanel } from "../navigation/NavigatorPanel";
 import type { ActivityTab, NavigatorFilesLoader, NavigatorGitLoader, NavigatorNodeRef } from "../navigation/types";
 import type { WorkbenchLocation, WorkbenchTabRenderContext } from "../workbench/types";
@@ -320,6 +322,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   })));
 
   const inspectorActive = shell.dock.open && shell.dock.activeTab === "inspector";
+  useEffect(() => startMcpEventBridge(), []);
   useEffect(() => {
     const terminalId = props.focusedId;
     const requestId = ++runtimeRequestIdRef.current;
@@ -526,6 +529,20 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     .filter((terminal) => !terminal.suspended && !(terminal.id in props.exited) && (props.contextUsage[terminal.id] ?? 0) >= 85)
     .map((terminal) => ({ terminalId: terminal.id, workspaceId: workspace.id, used: props.contextUsage[terminal.id] ?? 0 })));
   const activeWorkspace = props.workspaces.find((workspace) => workspace.id === props.activeId) ?? null;
+  const tasksPanel = (
+    <TasksPanel
+      workspaceId={activeWorkspace?.id ?? null}
+      workspaceName={activeWorkspace?.name ?? null}
+      agents={(activeWorkspace?.terminals ?? []).map((terminal) => ({
+        id: terminal.id,
+        label: agentLabels[terminal.id]?.primary ?? terminal.command,
+      }))}
+    />
+  );
+  const dockTabs = [
+    { id: "inspector", label: t("shell.dock.inspector") },
+    { id: "tasks", label: t("shell.dock.tasks") },
+  ] as const;
   const focusedLabel = props.focusedId ? agentLabels[props.focusedId] ?? null : null;
   const muted = muteUntil > Date.now();
   // Re-render when the hour is up so the badge comes back on its own.
@@ -735,7 +752,15 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         onToggleInspector: () => shell.setDockOpen(!shell.dock.open),
         inspectorShortcut: "⌘I",
       }}
-      rightDock={{ open: shell.dock.open, onOpen: () => shell.setDockOpen(true), onClose: () => shell.setDockOpen(false), content: inspectorPanel }}
+      rightDock={{
+        open: shell.dock.open,
+        onOpen: () => shell.setDockOpen(true),
+        onClose: () => shell.setDockOpen(false),
+        tabs: dockTabs,
+        activeTab: shell.dock.activeTab,
+        onTabChange: (tab) => shell.setDockTab(tab === "tasks" ? "tasks" : "inspector"),
+        content: shell.dock.activeTab === "tasks" ? tasksPanel : inspectorPanel,
+      }}
       overlay={voiceOverlay}
     >
       {content}

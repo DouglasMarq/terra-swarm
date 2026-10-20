@@ -11,8 +11,8 @@ export type ShellSurface =
   | "fleet"
   | "settings";
 
-/** The right dock only hosts the agent inspector since the v3 shell. */
-export type DockTab = "inspector";
+/** The right dock hosts the agent inspector and the shared task board. */
+export type DockTab = "inspector" | "tasks";
 
 export interface ShellWorkspaceTab {
   id: string;
@@ -91,7 +91,7 @@ const LEGACY_SURFACES: Readonly<Record<string, ShellSurface>> = {
   events: "fleet",
 };
 
-const DOCK_TABS: readonly DockTab[] = ["inspector"];
+const DOCK_TABS: readonly DockTab[] = ["inspector", "tasks"];
 
 const NOOP_STORAGE: Storage = {
   getItem: () => null,

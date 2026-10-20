@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::repo::AgentState;
+use crate::usage::SessionLog;
 use super::{AgentIdentity, McpHub};
 
 pub const HOOKS_PATH: &str = "/hooks";
@@ -75,8 +76,31 @@ pub fn interpret(call: &HookCall) -> Option<(AgentState, String)> {
     }
 }
 
+/// The session log a hook event points at, for token usage.
+pub fn session_log(call: &HookCall) -> Option<SessionLog> {
+    match call.agent.as_str() {
+        "claude" => call
+            .payload
+            .get("transcript_path")
+            .and_then(Value::as_str)
+            .and_then(crate::usage::claude_transcript_from_hook)
+            .map(SessionLog::Claude),
+        "codex" => call
+            .payload
+            .get("thread-id")
+            .or_else(|| call.payload.get("thread_id"))
+            .and_then(Value::as_str)
+            .filter(|thread| !thread.is_empty())
+            .map(|thread| SessionLog::Codex(thread.to_string())),
+        _ => None,
+    }
+}
+
 /// Apply a hook call for `who`. Returns the state it set, if any.
 pub fn apply(hub: &McpHub, who: &AgentIdentity, call: &HookCall) -> Option<AgentState> {
+    if let Some(log) = session_log(call) {
+        hub.set_session_log(&who.terminal_id, log);
+    }
     let (state, summary) = interpret(call)?;
     let status = hub
         .repo()
@@ -175,6 +199,14 @@ mod tests {
         assert_eq!(state, AgentState::Idle);
         assert_eq!(summary, "Done. Tests pass.");
         assert_eq!(interpret(&call("codex", "notify", json!({ "type": "other" }))), None);
+    }
+
+    #[test]
+    fn codex_hooks_name_their_session() {
+        let log = session_log(&call("codex", "notify", json!({ "type": "agent-turn-complete", "thread-id": "0199-abc" })));
+        assert_eq!(log, Some(SessionLog::Codex("0199-abc".into())));
+        // A Claude transcript outside Claude's own folder is ignored.
+        assert_eq!(session_log(&call("claude", "Stop", json!({ "transcript_path": "/etc/passwd" }))), None);
     }
 
     #[test]

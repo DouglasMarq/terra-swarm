@@ -2,6 +2,7 @@ mod fonts;
 mod mcp;
 mod pty;
 mod scrollback;
+mod sync;
 mod voice;
 mod workspace;
 

@@ -6,6 +6,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
+use crate::mcp::launch::Quoting;
+use crate::mcp::{McpHub, McpLease};
 use crate::scrollback::ScrollbackStore;
 use crate::workspace::{TerminalMeta, WorkspaceStore};
 
@@ -63,6 +65,9 @@ pub struct PtyEntry {
     /// Cleared before an explicit kill so a late reader flush cannot recreate
     /// a scrollback file that the user intentionally deleted.
     pub scrollback_enabled: Arc<AtomicBool>,
+    /// The terminal's MCP token; dropping the entry revokes it.
+    #[allow(dead_code)]
+    pub mcp_lease: Option<McpLease>,
 }
 
 fn kill_entry(entry: PtyEntry, disable_scrollback: bool) {
@@ -875,11 +880,28 @@ pub fn spawn_terminal_inner<R: Runtime>(
     let mut cmd = CommandBuilder::new(&shell);
     let interactive = command.is_empty() || command == "shell";
     #[cfg(unix)]
+    let quoting = Quoting::Posix;
+    #[cfg(windows)]
+    let quoting = match shell_flavor(&shell) {
+        ShellFlavor::Posix => Quoting::Posix,
+        _ => Quoting::Windows,
+    };
+    // Issued only after the duplicate checks above: a fresh token for an id
+    // that is already running would log the live terminal out.
+    let mut mcp_launch = app
+        .try_state::<Arc<McpHub>>()
+        .and_then(|hub| hub.launch(&id, &workspace_id, &command, quoting));
+    // Only the spawned process sees the MCP flags; `command` (persisted in
+    // the workspace store) stays as the user typed it.
+    let run_command = mcp_launch
+        .as_ref()
+        .map_or_else(|| command.clone(), |launch| launch.command.clone());
+    #[cfg(unix)]
     {
         if interactive {
             cmd.args(["-l", "-i"]);
         } else {
-            cmd.args(["-l", "-c", &format!("exec {}", command)]);
+            cmd.args(["-l", "-c", &format!("exec {}", run_command)]);
         }
     }
     #[cfg(windows)]
@@ -888,19 +910,19 @@ pub fn spawn_terminal_inner<R: Runtime>(
             if interactive {
                 cmd.args(["-NoLogo"]);
             } else {
-                cmd.args(["-NoLogo", "-Command", &command]);
+                cmd.args(["-NoLogo", "-Command", &run_command]);
             }
         }
         ShellFlavor::Cmd => {
             if !interactive {
-                cmd.args(["/C", &command]);
+                cmd.args(["/C", &run_command]);
             }
         }
         ShellFlavor::Posix => {
             if interactive {
                 cmd.args(["-l", "-i"]);
             } else {
-                cmd.args(["-l", "-c", &format!("exec {}", command)]);
+                cmd.args(["-l", "-c", &format!("exec {}", run_command)]);
             }
         }
     }
@@ -908,6 +930,11 @@ pub fn spawn_terminal_inner<R: Runtime>(
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "terra-swarm");
+    if let Some(launch) = &mcp_launch {
+        for (key, value) in &launch.env {
+            cmd.env(key, value);
+        }
+    }
 
     let pair = native_pty_system()
         .openpty(PtySize {
@@ -1143,6 +1170,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
         reaped,
         backlog,
         scrollback_enabled,
+        mcp_lease: mcp_launch.take().map(|launch| launch.lease),
     };
     manager
         .lock()
@@ -1676,7 +1704,9 @@ mod ctx_tests {
 #[cfg(test)]
 mod scrollback_flag_tests {
     use super::PtyManager;
-    use crate::scrollback::ScrollbackStore;
+    use crate::mcp::launch::Quoting;
+use crate::mcp::{McpHub, McpLease};
+use crate::scrollback::ScrollbackStore;
     use std::fs;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};

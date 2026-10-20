@@ -155,6 +155,7 @@ impl McpHub {
         }
     }
 
+    #[cfg(test)]
     pub fn revoke_terminal(&self, terminal_id: &str) {
         let removed: Vec<AgentIdentity> = {
             let mut tokens = self.tokens();

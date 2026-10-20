@@ -24,6 +24,7 @@ pub enum Quoting {
     /// `sh -c`: single quotes.
     Posix,
     /// PowerShell `-Command` / `cmd /C`: double quotes.
+    #[cfg_attr(unix, allow(dead_code))]
     Windows,
 }
 

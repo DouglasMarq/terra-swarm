@@ -38,6 +38,16 @@ const MIN_TERMINAL_WIDTH: f64 = 15.0;
 
 const MAX_TERMINAL_WIDTH: f64 = 100.0;
 
+/// A container's share of the workspace, in percent.
+const MIN_CONTAINER_SIZE_PERCENT: f64 = 0.0;
+
+const MAX_CONTAINER_SIZE_PERCENT: f64 = 100.0;
+
+/// Bounds for the column and row counts a layout may ask for.
+const MIN_LAYOUT_TRACKS: u32 = 1;
+
+const MAX_LAYOUT_TRACKS: u32 = 128;
+
 /// Broadcast durable workspace metadata changes to every Tauri window. The
 /// frontend already coalesces/refreshes this event; keeping emission at the
 /// command boundary also covers secondary windows that did not initiate the
@@ -274,8 +284,12 @@ fn normalize_layout_state(layout: &mut WorkspaceLayout) {
         "auto" | "grid" | "horizontal" | "vertical" | "stack" | "spotlight" => normalized_mode,
         _ => default_layout_mode(),
     };
-    layout.columns = layout.columns.map(|value| value.clamp(1, 128));
-    layout.rows = layout.rows.map(|value| value.clamp(1, 128));
+    layout.columns = layout
+        .columns
+        .map(|value| value.clamp(MIN_LAYOUT_TRACKS, MAX_LAYOUT_TRACKS));
+    layout.rows = layout
+        .rows
+        .map(|value| value.clamp(MIN_LAYOUT_TRACKS, MAX_LAYOUT_TRACKS));
     let mut seen = std::collections::HashSet::new();
     layout.item_ids.retain_mut(|id| {
         let trimmed = id.trim();

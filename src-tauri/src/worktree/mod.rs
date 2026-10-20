@@ -116,7 +116,8 @@ fn branch_exists(repo: &Path, branch: &str) -> bool {
 }
 
 /// Create a worktree for `terminal_id` of the project at `project_cwd`,
-/// under `<root>/<workspace_id>/<terminal_id>`.
+/// under `<root>/<workspace_id>/<terminal_id>`. The agent starts in the
+/// same subfolder of the checkout that the project points at.
 pub fn create(
     project_cwd: &Path,
     root: &Path,
@@ -129,7 +130,6 @@ pub fn create(
         }
     }
     let repo = repo_root(project_cwd).ok_or("this project is not inside a git repository")?;
-    // Keep the agent in the same subfolder the project points at.
     let canonical_cwd =
         std::fs::canonicalize(project_cwd).unwrap_or_else(|_| project_cwd.to_path_buf());
     let canonical_repo = std::fs::canonicalize(&repo).unwrap_or_else(|_| repo.clone());
@@ -140,7 +140,7 @@ pub fn create(
     let base = match git(&repo, &["symbolic-ref", "--quiet", "--short", "HEAD"]) {
         Ok(branch) if !branch.is_empty() => branch,
         _ => git(&repo, &["rev-parse", "--short", "HEAD"])
-            .map_err(|_| "the repository has no commits yet")?,
+            .map_err(|error| format!("the repository has no commits yet: {}", error))?,
     };
     let mut branch = format!("{}{}", BRANCH_PREFIX, terminal_id);
     let mut suffix = 2;
@@ -228,15 +228,15 @@ fn divergence(info: &WorktreeInfo) -> Result<(u32, u32), String> {
 }
 
 /// Remove the checkout (discarding uncommitted changes) and, when asked,
-/// the branch with its commits.
+/// the branch with its commits. A checkout already gone from disk only
+/// has git's record of it pruned.
 pub fn remove(info: &WorktreeInfo, delete_branch: bool) -> Result<(), String> {
     info.check()?;
     let repo = Path::new(&info.repo);
     if Path::new(&info.path).exists() {
         git(repo, &["worktree", "remove", "--force", "--", &info.path])?;
-    } else {
-        // Already gone from disk: drop git's record of it.
-        let _ = git(repo, &["worktree", "prune"]);
+    } else if let Err(error) = git(repo, &["worktree", "prune"]) {
+        eprintln!("failed to prune worktrees of {}: {}", info.repo, error);
     }
     if delete_branch && branch_exists(repo, &info.branch) {
         git(repo, &["branch", "-D", "--", &info.branch])?;

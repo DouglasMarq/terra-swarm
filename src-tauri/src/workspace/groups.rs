@@ -32,11 +32,7 @@ impl WorkspaceStore {
                 .retain(|project_id| project_id != workspace_id);
         }
         if let Some(group_id) = group_id.as_deref() {
-            let group = self
-                .groups
-                .iter_mut()
-                .find(|group| group.id == group_id)
-                .expect("group was checked above");
+            let group = self.group_mut(group_id)?;
             if !group
                 .project_ids
                 .iter()
@@ -45,19 +41,10 @@ impl WorkspaceStore {
                 group.project_ids.push(workspace_id.to_string());
             }
         }
-        self.workspaces
-            .iter_mut()
-            .find(|workspace| workspace.id == workspace_id)
-            .expect("workspace was checked above")
-            .group_id = group_id.clone();
-        if let Some(workspace) = self
-            .workspaces
-            .iter_mut()
-            .find(|workspace| workspace.id == workspace_id)
-        {
-            for terminal in &mut workspace.terminals {
-                terminal.group_id = group_id.clone();
-            }
+        let workspace = self.workspace_mut(workspace_id)?;
+        workspace.group_id = group_id.clone();
+        for terminal in &mut workspace.terminals {
+            terminal.group_id = group_id.clone();
         }
         self.save();
         Ok(())

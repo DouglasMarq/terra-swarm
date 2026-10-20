@@ -148,7 +148,9 @@ impl WorkspaceStore {
                     suffix += 1;
                 }
                 container.id = candidate;
-                container.size = container.size.clamp(0.0, 100.0);
+                container.size = container
+                    .size
+                    .clamp(MIN_CONTAINER_SIZE_PERCENT, MAX_CONTAINER_SIZE_PERCENT);
                 let valid_panes = container
                     .pane_ids
                     .iter()

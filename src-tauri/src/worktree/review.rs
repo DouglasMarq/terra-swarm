@@ -49,12 +49,18 @@ fn change_kind(code: &str) -> &'static str {
 }
 
 /// `git diff --no-index` exits 1 when the files differ, which is the point.
+/// A file git cannot diff shows as empty.
 fn diff_new_file(dir: &Path, file: &str) -> String {
-    git_command(dir)
+    match git_command(dir)
         .args(["diff", "--no-index", "--", "/dev/null", file])
         .output()
-        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
-        .unwrap_or_default()
+    {
+        Ok(output) => String::from_utf8_lossy(&output.stdout).into_owned(),
+        Err(error) => {
+            eprintln!("could not run git to diff {}: {}", file, error);
+            String::new()
+        }
+    }
 }
 
 pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
@@ -151,11 +157,12 @@ pub fn merge(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
         ));
     }
     let repo = Path::new(&info.repo);
-    let head = git(repo, &["symbolic-ref", "--quiet", "--short", "HEAD"]).unwrap_or_default();
+    let head = git(repo, &["rev-parse", "--abbrev-ref", "HEAD"])
+        .map_err(|error| format!("could not read the main checkout's branch: {}", error))?;
     if head != info.base {
         return Err(format!(
             "the main checkout is on {}, not {}; switch it to {} to merge",
-            if head.is_empty() {
+            if head == "HEAD" {
                 "a detached HEAD"
             } else {
                 &head
@@ -353,6 +360,20 @@ mod tests {
             .unwrap_err()
             .contains("worktree status"));
         assert_eq!(git(&repo, &["rev-parse", "HEAD"]).unwrap(), before);
+        cleanup(&repo, &root);
+    }
+
+    #[test]
+    fn given_a_main_checkout_on_a_detached_head_refuses_to_merge() {
+        let repo = init("detached");
+        let root = repo.with_extension("worktrees");
+        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        std::fs::write(Path::new(&info.path).join("feature.txt"), "done\n").unwrap();
+        commit(&info, "Add the feature").unwrap();
+        git(&repo, &["checkout", "-q", "--detach"]).unwrap();
+
+        let error = merge(&info).unwrap_err();
+        assert!(error.contains("a detached HEAD"), "{error}");
         cleanup(&repo, &root);
     }
 

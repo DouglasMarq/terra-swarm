@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   Copy,
@@ -19,7 +19,6 @@ import { CollapsedSidebar, Sidebar, SurfaceSwitch, type CollapsedSidebarProject 
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import { buildAgentLabels } from "../../domain/agentLabels";
 import { useT } from "../../i18n";
-import { errorMessage } from "../../lib/errors/errorMessage";
 import { AgentInspector } from "../inspector/AgentInspector";
 import { TasksPanel } from "../tasks/TasksPanel";
 import { TaskBoard } from "../tasks/TaskBoard";
@@ -27,7 +26,8 @@ import { sendPromptToTerminal } from "../../app/sendPromptToTerminal";
 import { startMcpEventBridge, useReportedStates } from "../../stores/mcpStore";
 import { useReviewStore } from "../../stores/reviewStore";
 import { useLibraryStore } from "../../stores/libraryStore";
-import { useAgentUsage } from "../../stores/usageStore";
+import { useAgentUsage } from "../../app/useAgentUsage";
+import { useInspectorRuntime } from "../../app/useInspectorRuntime";
 import { startPreviewBridge } from "../../stores/previewStore";
 import { PreviewPanel } from "../preview/PreviewPanel";
 import { CONTEXT_ATTENTION_PERCENT, deriveAgentStatus } from "../../domain/agentStatus";
@@ -56,18 +56,13 @@ import { useOrchestrationStore } from "../../stores/orchestrationStore";
 import { DEFAULT_HOTKEYS, formatHotkey, usePreferencesStore } from "../../stores/preferencesStore";
 import { useShallow as useOrchestrationShallow } from "zustand/react/shallow";
 import { selectWorkspaceContainerId } from "../../lib/session/workspaceContainerSelection";
-import { ptyApi } from "../../lib/tauri/pty";
 import { formatShortcut, type ShortcutDefinition, type ShortcutPlatform } from "../../lib/platform/shortcuts";
 import {
   inspectorActionRequiresConfirmation,
   resolveInspectorTarget,
   type InspectorActionKind,
   type InspectorTarget,
-} from "./inspectorModel";
-import {
-  INITIAL_INSPECTOR_RUNTIME_STATE,
-  reduceInspectorRuntime,
-} from "./inspectorRuntime";
+} from "../inspector/inspectorModel";
 import "./visual-shell.css";
 
 const LazyFleetCommandCenter = lazy(async () => {
@@ -137,9 +132,6 @@ function shellShortcut(event: KeyboardEvent): "sidebar" | "inspector" | null {
 }
 
 const NO_MODIFIERS = { meta: false, shift: false, ctrl: false, alt: false } as const;
-
-/** How often the inspector refreshes the focused agent's runtime info. */
-const INSPECTOR_RUNTIME_POLL_MS = 1500;
 
 /** How long "mute notifications" lasts. */
 const NOTIFICATIONS_MUTE_MS = 60 * 60 * 1000;
@@ -312,11 +304,6 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const [pendingCommandConfirmation, setPendingCommandConfirmation] = useState<CommandConfirmRequest | null>(null);
   const hotkeys = usePreferencesStore((state) => state.hotkeys);
   const [pendingInspectorAction, setPendingInspectorAction] = useState<PendingInspectorAction | null>(null);
-  const [inspectorRuntime, dispatchInspectorRuntime] = useReducer(
-    reduceInspectorRuntime,
-    INITIAL_INSPECTOR_RUNTIME_STATE,
-  );
-  const runtimeRequestIdRef = useRef(0);
   const orchestrationActions = useOrchestrationStore(useOrchestrationShallow((state) => ({
     hydrated: state.hydrated,
     setContainerState: state.setContainerState,
@@ -362,38 +349,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const inspectorActive = shell.dock.open && shell.dock.activeTab === "inspector";
   useEffect(() => startMcpEventBridge(), []);
   useEffect(() => startPreviewBridge(), []);
-  useEffect(() => {
-    const terminalId = props.focusedId;
-    const requestId = ++runtimeRequestIdRef.current;
-    if (!inspectorActive || !terminalId) {
-      dispatchInspectorRuntime({ type: "reset", requestId });
-      return;
-    }
-
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    dispatchInspectorRuntime({ type: "request", terminalId, requestId });
-
-    const poll = async () => {
-      try {
-        const info = await ptyApi.terminalRuntimeInfo(terminalId);
-        if (!cancelled) {
-          dispatchInspectorRuntime({ type: "success", terminalId, requestId, info });
-        }
-      } catch (error) {
-        if (!cancelled) {
-          dispatchInspectorRuntime({ type: "failure", terminalId, requestId, error: errorMessage(error, t("inspector.unavailable")) });
-        }
-      }
-      if (!cancelled) timer = setTimeout(() => void poll(), INSPECTOR_RUNTIME_POLL_MS);
-    };
-
-    void poll();
-    return () => {
-      cancelled = true;
-      if (timer !== null) clearTimeout(timer);
-    };
-  }, [inspectorActive, props.focusedId]);
+  const inspectorRuntime = useInspectorRuntime(props.focusedId, inspectorActive);
 
   const toggleSidebar = shell.toggleSidebar;
   const setDockOpen = shell.setDockOpen;

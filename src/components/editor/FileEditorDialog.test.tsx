@@ -13,6 +13,7 @@ vi.mock("./CodeEditor", () => ({
   ),
 }));
 
+import { IpcError } from "../../lib/tauri/errors";
 import { useEditorStore } from "../../stores/editorStore";
 import { FileEditorDialog } from "./FileEditorDialog";
 
@@ -26,7 +27,7 @@ describe("FileEditorDialog", () => {
   afterEach(() => act(() => useEditorStore.getState().close()));
 
   it("saves with the read time, and offers overwrite when an agent changed the file", async () => {
-    api.writeWorkspaceFile.mockRejectedValueOnce(new Error("the file changed on disk since it was opened"));
+    api.writeWorkspaceFile.mockRejectedValueOnce(new IpcError({ code: "changedOnDisk", message: "the file changed on disk since it was opened" }));
     api.writeWorkspaceFile.mockResolvedValueOnce({ size: 3, modified: 20 });
     render(<FileEditorDialog />);
     act(() => useEditorStore.getState().open({ workspaceId: "ws", path: "src/a.ts" }));
@@ -37,6 +38,17 @@ describe("FileEditorDialog", () => {
     await userEvent.click(await screen.findByRole("button", { name: /sobrescrever/i }));
     expect(api.writeWorkspaceFile).toHaveBeenLastCalledWith("ws", "src/a.ts", "two", null);
     expect(await screen.findByRole("button", { name: /salvar/i })).toBeTruthy();
+  });
+
+  it("given a save that fails for another reason, shows the error without offering overwrite", async () => {
+    api.writeWorkspaceFile.mockRejectedValueOnce(new IpcError({ code: "other", message: "cannot save the file: disk full" }));
+    render(<FileEditorDialog />);
+    act(() => useEditorStore.getState().open({ workspaceId: "ws", path: "src/a.ts" }));
+
+    fireEvent.change(await screen.findByLabelText("code"), { target: { value: "two" } });
+    await userEvent.click(screen.getByRole("button", { name: /salvar/i }));
+    expect(await screen.findByText("cannot save the file: disk full")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /sobrescrever/i })).toBeNull();
   });
 
   it("does not open binary files", async () => {

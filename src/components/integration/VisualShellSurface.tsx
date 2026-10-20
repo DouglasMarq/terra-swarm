@@ -22,7 +22,7 @@ import { useT } from "../../i18n";
 import { AgentInspector } from "../inspector/AgentInspector";
 import { TasksPanel } from "../tasks/TasksPanel";
 import { TaskBoard } from "../tasks/TaskBoard";
-import { sendPromptToTerminal } from "../../app/sendPromptToTerminal";
+import { nudgeAgent, sendPromptToTerminal } from "../../app/sendPromptToTerminal";
 import { startMcpEventBridge, useReportedStates } from "../../stores/mcpStore";
 import { useReviewStore } from "../../stores/reviewStore";
 import { useLibraryStore } from "../../stores/libraryStore";
@@ -326,7 +326,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   })));
 
   const inspectorActive = shell.dock.open && shell.dock.activeTab === "inspector";
-  useEffect(() => startMcpEventBridge(), []);
+  useEffect(() => startMcpEventBridge(nudgeAgent), []);
   useEffect(() => startPreviewBridge(), []);
   const inspectorRuntime = useInspectorRuntime(props.focusedId, inspectorActive);
 

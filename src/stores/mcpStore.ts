@@ -8,7 +8,6 @@ import {
   type McpNudgePayload,
   type McpTasksChangedPayload,
 } from "../lib/tauri/mcp";
-import { sendPromptToTerminal } from "../app/sendPromptToTerminal";
 import { taskNumber } from "../domain/tasks";
 import { errorMessage } from "../lib/errors/errorMessage";
 import type {
@@ -177,13 +176,7 @@ export function useReportedStates(): Record<string, McpAgentState> {
  * Keep the store in step with agent activity. A board is refetched only for
  * workspaces that have been opened, so idle projects cost nothing.
  */
-export function startMcpEventBridge(
-  onNudge: (payload: McpNudgePayload) => void = (payload) => {
-    void sendPromptToTerminal(payload.terminal_id, payload.prompt).catch((error) =>
-      console.warn(`failed to wake ${payload.terminal_id}:`, error),
-    );
-  },
-): () => void {
+export function startMcpEventBridge(onNudge: (payload: McpNudgePayload) => void): () => void {
   const pending = [
     listen<McpTasksChangedPayload>(MCP_EVENTS.tasksChanged, (event) => {
       const workspaceId = event.payload?.workspace_id;

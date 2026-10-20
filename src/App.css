@@ -1,52 +1,6 @@
 :root {
   color-scheme: dark;
   font-family: var(--terra-font-sans);
-
-  --bg: #101013;
-  --bg-sidebar: #131316;
-  --bg-panel: #17171b;
-  --bg-elevated: #1d1d22;
-  --bg-hover: #232329;
-  --border: #26262c;
-  --border-strong: #34343c;
-  --text: #e4e4e7;
-  --text-muted: #8e8e96;
-  --text-faint: #5b5b64;
-  --accent: #fafafa;
-  --red: #e5636f;
-  --green: #4ade80;
-  --green-dim: rgba(74, 222, 128, 0.1);
-  --amber: #e0b45c;
-
-  /* radius scale */
-  --r-sm: 4px;
-  --r-md: 6px;
-  --r-lg: 8px;
-  --r-xl: 10px;
-  --r-modal: 14px;
-  --r-pill: 999px;
-
-  /* motion */
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-press: 0.08s;
-  --dur-hover: 0.14s;
-  --dur-med: 0.2s;
-
-  /* keyboard-only focus halo — zinc, never a colored glow */
-  --focus-ring: 0 0 0 3px rgba(113, 113, 122, 0.18);
-
-  /* semantic stacking layers */
-  --z-dropdown: 100;
-  --z-popover: 200;
-  --z-sticky: 300;
-  --z-modal-backdrop: 400;
-  --z-modal: 500;
-  --z-toast: 600;
-  --z-tooltip: 700;
-
-  /* scrollbars */
-  --scrollbar-thumb: #2c2c33;
-  --scrollbar-thumb-hover: #3a3a42;
 }
 
 * {
@@ -59,8 +13,8 @@ body,
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--terra-bg);
+  color: var(--terra-text);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -69,8 +23,8 @@ body,
   height: 100%;
   min-height: 180px;
   place-items: center;
-  background: var(--bg);
-  color: var(--text-muted);
+  background: var(--terra-bg);
+  color: var(--terra-text-muted);
   font-size: 12px;
 }
 
@@ -78,7 +32,7 @@ body,
   position: fixed;
   top: 12px;
   left: 50%;
-  z-index: var(--z-toast);
+  z-index: var(--terra-z-toast);
   display: flex;
   align-items: center;
   gap: 16px;
@@ -87,9 +41,9 @@ body,
   transform: translateX(-50%);
   background: #2b1c20;
   border: 1px solid rgba(229, 99, 111, 0.55);
-  border-radius: var(--r-lg);
+  border-radius: var(--terra-radius-lg);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
-  color: var(--text);
+  color: var(--terra-text);
 }
 
 .terra-initialization-error > div {
@@ -125,14 +79,14 @@ body,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: var(--r-md);
+  background: var(--terra-scrollbar-thumb);
+  border-radius: var(--terra-radius-md);
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
+  background: var(--terra-scrollbar-thumb-hover);
   background-clip: content-box;
   border: 2px solid transparent;
 }
@@ -193,12 +147,12 @@ textarea {
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border-radius: var(--r-xl);
+  border-radius: var(--terra-radius-xl);
   text-align: left;
   transition:
-    background var(--dur-hover) ease,
-    border-color var(--dur-hover) ease,
-    opacity var(--dur-hover) ease;
+    background var(--terra-duration-hover) ease,
+    border-color var(--terra-duration-hover) ease,
+    opacity var(--terra-duration-hover) ease;
 }
 
 .agent-option:disabled {
@@ -207,8 +161,8 @@ textarea {
 }
 
 .agent-option:not(:disabled):hover {
-  background: var(--green-dim);
-  border-color: var(--green);
+  background: var(--terra-green-dim);
+  border-color: var(--terra-green);
 }
 
 .agent-option-label {
@@ -218,7 +172,7 @@ textarea {
 
 .agent-option-missing {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--terra-text-muted);
 }
 
 .picker-default {
@@ -227,12 +181,12 @@ textarea {
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--terra-text-muted);
   cursor: pointer;
 }
 
 .picker-default input {
-  accent-color: var(--green);
+  accent-color: var(--terra-green);
   margin: 0;
 }
 

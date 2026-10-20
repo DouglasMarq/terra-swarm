@@ -280,11 +280,9 @@ pub(crate) fn save_channel() -> &'static Sender<SaveRequest> {
         let (tx, rx) = channel::<SaveRequest>();
         std::thread::spawn(move || {
             while let Ok(mut req) = rx.recv() {
-                loop {
-                    match rx.recv_timeout(Duration::from_millis(150)) {
-                        Ok(newer) => req = newer,
-                        Err(_) => break,
-                    }
+                // Coalesce a burst of saves into the newest one.
+                while let Ok(newer) = rx.recv_timeout(Duration::from_millis(150)) {
+                    req = newer;
                 }
                 write_guarded(&req.path, &req.json, req.seq);
             }

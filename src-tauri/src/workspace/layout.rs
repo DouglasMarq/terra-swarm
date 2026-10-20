@@ -31,8 +31,8 @@ impl WorkspaceStore {
             .position(|container| container.id == container_id)
     }
 
-    pub(crate) fn ensure_container<'a>(
-        workspace: &'a mut Workspace,
+    pub(crate) fn ensure_container(
+        workspace: &mut Workspace,
         container_id: &str,
     ) -> Result<usize, String> {
         let container_id = container_id.trim();

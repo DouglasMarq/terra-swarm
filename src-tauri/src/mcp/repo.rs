@@ -387,7 +387,7 @@ impl Repo {
             .optional()
             .ok()
             .flatten()
-            .map_or(true, |value| value != "0")
+            .is_none_or(|value| value != "0")
     }
 
     pub fn set_enabled(&self, enabled: bool) -> StoreResult<()> {

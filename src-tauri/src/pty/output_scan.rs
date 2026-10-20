@@ -276,10 +276,8 @@ pub(super) fn detect_context_used(text: &str) -> Option<u8> {
     let lower = text.to_lowercase();
     let mut best: Option<(usize, f64)> = None;
     let consider = |pos: usize, used: f64, best: &mut Option<(usize, f64)>| {
-        if used.is_finite() && (0.0..=100.0).contains(&used) {
-            if best.map_or(true, |(p, _)| pos >= p) {
-                *best = Some((pos, used));
-            }
+        if used.is_finite() && (0.0..=100.0).contains(&used) && best.is_none_or(|(p, _)| pos >= p) {
+            *best = Some((pos, used));
         }
     };
 

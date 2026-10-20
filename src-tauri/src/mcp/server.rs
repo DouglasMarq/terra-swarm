@@ -26,6 +26,9 @@ use super::{AgentIdentity, McpHub};
 
 pub const MCP_PATH: &str = "/mcp";
 const MAX_BODY_BYTES: usize = 256 * 1024;
+/// Tokio workers of the server's own runtime; requests are short and the
+/// blocking work runs on `spawn_blocking` threads.
+const SERVER_WORKER_THREADS: usize = 2;
 
 #[derive(Clone)]
 struct TerraServer {
@@ -104,7 +107,10 @@ impl ServerHandler for TerraServer {
                 .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
         Ok(match outcome {
             Ok(value) => CallToolResult::success(vec![ContentBlock::text(
-                serde_json::to_string_pretty(&value).unwrap_or_default(),
+                serde_json::to_string_pretty(&value).unwrap_or_else(|error| {
+                    eprintln!("cannot serialize an MCP tool result: {}", error);
+                    String::new()
+                }),
             )]),
             Err(ToolError::UnknownTool(name)) => {
                 return Err(ErrorData::invalid_params(
@@ -174,7 +180,7 @@ pub fn router(hub: Arc<McpHub>) -> axum::Router {
             axum::routing::post(super::hooks::handle),
         )
         .route(
-            "/hooks/claude",
+            super::hooks::CLAUDE_HOOKS_PATH,
             axum::routing::post(super::hooks::handle_claude),
         )
         .with_state(Arc::clone(&hub))
@@ -195,7 +201,7 @@ pub fn start(hub: Arc<McpHub>) -> std::io::Result<u16> {
     let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
     let port = listener.local_addr()?.port();
     let runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
+        .worker_threads(SERVER_WORKER_THREADS)
         .thread_name("terra-mcp")
         .enable_all()
         .build()?;

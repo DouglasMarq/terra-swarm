@@ -1980,6 +1980,15 @@ mod tests {
     }
 
     #[test]
+    fn given_an_unreadable_setting_the_server_stays_enabled() {
+        let repo = Repo::in_memory();
+        repo.conn
+            .execute_batch("ALTER TABLE settings RENAME TO settings_gone")
+            .unwrap();
+        assert!(repo.enabled());
+    }
+
+    #[test]
     fn data_and_setting_survive_a_reopen() {
         let dir = std::env::temp_dir().join(format!("terra-mcp-reopen-{}", now_millis()));
         let path = dir.join("mcp.db");

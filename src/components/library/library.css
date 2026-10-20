@@ -91,7 +91,7 @@
 
 .terra-library-notice {
   margin: 10px 24px 0;
-  color: var(--terra-green);
+  color: var(--terra-success);
   font-size: var(--terra-font-size-label);
 }
 

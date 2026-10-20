@@ -39,10 +39,10 @@ body,
   max-width: min(680px, calc(100vw - 24px));
   padding: 10px 12px;
   transform: translateX(-50%);
-  background: #2b1c20;
-  border: 1px solid rgba(229, 99, 111, 0.55);
+  background: var(--terra-red-surface);
+  border: 1px solid var(--terra-red-line-strong);
   border-radius: var(--terra-radius-lg);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--terra-shadow-popover);
   color: var(--terra-text);
 }
 
@@ -59,7 +59,7 @@ body,
 
 .terra-initialization-error span {
   overflow: hidden;
-  color: #f2b7bd;
+  color: color-mix(in srgb, var(--terra-red-ink) 50%, var(--terra-text));
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -67,9 +67,9 @@ body,
 
 .terra-initialization-error button {
   flex-shrink: 0;
-  border-color: rgba(229, 99, 111, 0.7);
-  background: rgba(229, 99, 111, 0.16);
-  color: #ffd8dc;
+  border-color: color-mix(in srgb, var(--terra-red) 70%, transparent);
+  background: color-mix(in srgb, var(--terra-red) 16%, transparent);
+  color: color-mix(in srgb, var(--terra-red-ink) 30%, var(--terra-accent));
   font-size: 11px;
 }
 
@@ -161,8 +161,8 @@ textarea {
 }
 
 .agent-option:not(:disabled):hover {
-  background: var(--terra-green-dim);
-  border-color: var(--terra-green);
+  background: var(--terra-bg-hover);
+  border-color: var(--terra-border-hover);
 }
 
 .agent-option-label {
@@ -186,7 +186,7 @@ textarea {
 }
 
 .picker-default input {
-  accent-color: var(--terra-green);
+  accent-color: var(--terra-accent);
   margin: 0;
 }
 

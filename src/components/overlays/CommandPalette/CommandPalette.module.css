@@ -2,7 +2,7 @@
   position: fixed;
   z-index: var(--terra-z-modal-backdrop);
   inset: 0;
-  background: rgb(0 0 0 / 62%);
+  background: var(--terra-scrim);
   backdrop-filter: blur(3px);
   animation: palette-fade-in 140ms ease-out;
 }
@@ -137,8 +137,8 @@
 }
 
 .item.destructive[data-selected="true"] {
-  border-color: rgb(229 99 111 / 38%);
-  background: var(--terra-red-dim);
+  border-color: color-mix(in srgb, var(--terra-danger) 38%, transparent);
+  background: var(--terra-danger-dim);
 }
 
 .itemIcon {

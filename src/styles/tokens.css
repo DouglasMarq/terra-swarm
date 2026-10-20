@@ -14,11 +14,16 @@
   --terra-bg-panel: #17171b;
   --terra-bg-elevated: #1d1d22;
   --terra-bg-hover: #232329;
+  --terra-bg-menu-hover: #2a2a31;
   --terra-terminal-bg: #0c0c0e;
+  --terra-wash-subtle: rgb(255 255 255 / 2%);
+  --terra-scrim: rgb(0 0 0 / 66%);
+  --terra-scrim-soft: rgb(0 0 0 / 32%);
 
   /* borders and ink */
   --terra-border: #26262c;
   --terra-border-strong: #34343c;
+  --terra-border-hover: #40404a;
   --terra-border-focus: #71717a;
   --terra-text: #e4e4e7;
   --terra-text-muted: #8e8e96;
@@ -35,9 +40,35 @@
   --terra-amber-dim: rgb(224 180 92 / 14%);
   --terra-amber-line: rgb(224 180 92 / 40%);
   --terra-amber-ink: #eccf8e;
+  --terra-amber-wash: rgb(224 180 92 / 8%);
   --terra-red: #e5636f;
   --terra-red-dim: rgb(229 99 111 / 14%);
   --terra-red-ink: #ef8f98;
+  --terra-red-line: rgb(229 99 111 / 40%);
+  --terra-red-line-strong: rgb(229 99 111 / 55%);
+  --terra-red-surface: #2b1c20;
+
+  /*
+   * Conventional meanings outside the status vocabulary keep their hue through
+   * these aliases; components reference the alias, never the status token.
+   */
+  --terra-success: var(--terra-green);
+  --terra-danger: var(--terra-red);
+  --terra-danger-ink: var(--terra-red-ink);
+  --terra-danger-dim: var(--terra-red-dim);
+  --terra-danger-line: var(--terra-red-line);
+  --terra-danger-line-strong: var(--terra-red-line-strong);
+  --terra-diff-add: var(--terra-green);
+  --terra-diff-add-dim: var(--terra-green-dim);
+  --terra-diff-del: var(--terra-red-ink);
+  --terra-diff-del-dim: var(--terra-red-dim);
+  --terra-diff-change: var(--terra-amber-ink);
+  --terra-priority-urgent: var(--terra-red);
+  --terra-priority-urgent-ink: var(--terra-red-ink);
+  --terra-priority-urgent-dim: var(--terra-red-dim);
+  --terra-priority-high: var(--terra-amber);
+  --terra-priority-high-ink: var(--terra-amber-ink);
+  --terra-priority-high-dim: var(--terra-amber-dim);
 
   /* typography */
   /* Geist ships with the app (@fontsource-variable/geist), no network needed. */
@@ -74,6 +105,7 @@
   --terra-duration-hover: 140ms;
   --terra-duration-med: 200ms;
   --terra-focus-ring: 0 0 0 3px rgb(113 113 122 / 18%);
+  --terra-pane-focus-ring: 0 0 0 1px #52525b;
 
   /* elevation */
   --terra-shadow-pane: 0 1px 4px rgb(0 0 0 / 35%);

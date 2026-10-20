@@ -8,7 +8,7 @@
   padding: clamp(24px, 7vw, 80px);
   color: var(--terra-text);
   background:
-    radial-gradient(circle at 50% 40%, rgb(113 113 122 / 10%), transparent 34%),
+    radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--terra-border-focus) 10%, transparent), transparent 34%),
     var(--terra-bg);
 }
 
@@ -18,7 +18,7 @@
   z-index: -1;
   width: min(780px, 100vw);
   height: min(780px, 100vw);
-  border: 1px solid rgb(113 113 122 / 14%);
+  border: 1px solid color-mix(in srgb, var(--terra-border-focus) 14%, transparent);
   border-radius: 50%;
   content: "";
   pointer-events: none;
@@ -29,7 +29,7 @@
     repeating-radial-gradient(
       ellipse at 50% 50%,
       transparent 0 27px,
-      rgb(161 161 170 / 8%) 28px 29px,
+      color-mix(in srgb, var(--terra-text-secondary) 8%, transparent) 28px 29px,
       transparent 30px 56px
     );
   transform: rotate(-18deg) scaleX(1.6);
@@ -39,7 +39,7 @@
 .loadingScreen::after {
   width: min(420px, 72vw);
   height: min(420px, 72vw);
-  border-color: rgb(161 161 170 / 10%);
+  border-color: color-mix(in srgb, var(--terra-text-secondary) 10%, transparent);
   transform: rotate(35deg) scaleY(0.72);
 }
 
@@ -60,9 +60,9 @@
   border-radius: 18px;
   color: var(--terra-accent);
   background:
-    linear-gradient(135deg, rgb(250 250 250 / 12%), transparent 58%),
+    linear-gradient(135deg, color-mix(in srgb, var(--terra-accent) 12%, transparent), transparent 58%),
     var(--terra-bg-elevated);
-  box-shadow: 0 16px 42px rgb(0 0 0 / 30%);
+  box-shadow: var(--terra-shadow-popover);
 }
 
 .loadingMark svg {
@@ -113,7 +113,7 @@
   border-radius: var(--terra-radius-pill);
   padding: 6px 12px;
   color: var(--terra-text-muted);
-  background: rgb(29 29 34 / 72%);
+  background: color-mix(in srgb, var(--terra-bg-elevated) 72%, transparent);
   font-family: var(--terra-font-mono);
   font-size: 10px;
 }
@@ -157,7 +157,7 @@
   border-radius: var(--terra-radius-modal);
   padding: clamp(20px, 5vw, 30px);
   background:
-    linear-gradient(135deg, rgb(229 99 111 / 8%), transparent 45%),
+    linear-gradient(135deg, color-mix(in srgb, var(--terra-red) 8%, transparent), transparent 45%),
     var(--terra-bg-panel);
   box-shadow: var(--terra-shadow-modal);
 }
@@ -174,7 +174,7 @@
   height: 34px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid rgb(229 99 111 / 28%);
+  border: 1px solid color-mix(in srgb, var(--terra-red) 28%, transparent);
   border-radius: var(--terra-radius-lg);
   color: var(--terra-red);
   background: var(--terra-red-dim);
@@ -243,8 +243,8 @@
 }
 
 .errorButtonPrimary:hover {
-  border-color: #d4d4d8;
-  background: #d4d4d8;
+  border-color: var(--terra-accent-soft);
+  background: var(--terra-accent-soft);
 }
 
 .errorButton:focus-visible {

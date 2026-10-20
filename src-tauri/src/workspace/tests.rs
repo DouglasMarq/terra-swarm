@@ -56,6 +56,24 @@ fn parses_structured_git_status_categories() {
     assert_eq!(status.conflicted, vec!["conflict.txt"]);
 }
 
+#[test]
+fn given_a_repository_with_changes_git_status_lists_them_by_category() {
+    let repo = crate::worktree::test_repo::init("workspace-status");
+    fs::write(repo.join("app/readme.txt"), "changed\n").expect("edit");
+    fs::write(repo.join("new.txt"), "new\n").expect("new file");
+
+    let status = git_status_for_directory(&repo).expect("git status");
+
+    assert_eq!(status.branch.as_deref(), Some("main"));
+    assert_eq!(status.modified, vec!["app/readme.txt"]);
+    assert_eq!(status.untracked, vec!["new.txt"]);
+    assert_eq!(
+        git_branch(repo.to_string_lossy().into_owned()).as_deref(),
+        Some("main")
+    );
+    crate::worktree::test_repo::cleanup(&repo, &repo.with_extension("worktrees"));
+}
+
 fn workspace(id: &str) -> Workspace {
     Workspace {
         id: id.to_string(),

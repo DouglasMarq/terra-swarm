@@ -67,12 +67,16 @@ pub struct WorktreeStatus {
     pub exists: bool,
 }
 
+/// A git command run in `dir` that never stops to prompt for credentials.
+pub(crate) fn git_command(dir: &Path) -> Command {
+    let mut command = Command::new("git");
+    command.arg("-C").arg(dir).env("GIT_TERMINAL_PROMPT", "0");
+    command
+}
+
 pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
+    let output = git_command(dir)
         .args(args)
-        .env("GIT_TERMINAL_PROMPT", "0")
         .output()
         .map_err(|error| format!("could not run git: {}", error))?;
     if output.status.success() {
@@ -496,6 +500,15 @@ mod tests {
 
         assert!(status(&info).unwrap_err().contains("could not compare"));
         cleanup(&repo, &root);
+    }
+
+    #[test]
+    fn given_any_git_command_disables_terminal_prompts() {
+        let command = git_command(Path::new("/Users/me/project"));
+        assert!(command
+            .get_envs()
+            .any(|(key, value)| key == "GIT_TERMINAL_PROMPT"
+                && value == Some(std::ffi::OsStr::new("0"))));
     }
 
     fn stored_info(branch: &str, base: &str) -> WorktreeInfo {

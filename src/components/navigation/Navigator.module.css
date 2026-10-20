@@ -1,10 +1,4 @@
 .panel {
-  --navigator-bg: var(--bg-panel, #17171b);
-  --navigator-panel: var(--bg, #101013);
-  --navigator-border: var(--border, #29292f);
-  --navigator-text: var(--text, #e4e4e7);
-  --navigator-muted: var(--text-muted, #8e8e96);
-  --navigator-faint: var(--text-faint, #5b5b64);
   display: flex;
   /* The shell's resizable panel can be narrower than the desktop ideal. Keep
    * the navigator within its track so it never pushes the content surface. */
@@ -47,10 +41,10 @@
   width: 23px;
   height: 23px;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--accent, #9fadc8) 42%, var(--navigator-border));
+  border: 1px solid color-mix(in srgb, var(--terra-accent) 42%, var(--navigator-border));
   border-radius: 6px;
-  color: var(--accent, #9fadc8);
-  background: color-mix(in srgb, var(--accent, #9fadc8) 9%, transparent);
+  color: var(--terra-accent);
+  background: color-mix(in srgb, var(--terra-accent) 9%, transparent);
 }
 
 .title {
@@ -93,7 +87,7 @@
 .createButton:focus-visible {
   border-color: var(--navigator-border);
   color: var(--navigator-text);
-  background: var(--bg-hover, #232329);
+  background: var(--terra-bg-hover);
   outline: none;
 }
 
@@ -130,8 +124,8 @@
 }
 
 .tab:focus-visible {
-  border-color: color-mix(in srgb, var(--accent, #9fadc8) 58%, var(--navigator-border));
-  outline: 1px solid color-mix(in srgb, var(--accent, #9fadc8) 58%, transparent);
+  border-color: color-mix(in srgb, var(--terra-accent) 58%, var(--navigator-border));
+  outline: 1px solid color-mix(in srgb, var(--terra-accent) 58%, transparent);
   outline-offset: -2px;
 }
 
@@ -153,7 +147,7 @@
   left: 8px;
   height: 2px;
   border-radius: 2px 2px 0 0;
-  background: var(--accent, #9fadc8);
+  background: var(--terra-accent);
   content: "";
 }
 
@@ -170,7 +164,7 @@
 }
 
 .searchRow:focus-within {
-  border-color: color-mix(in srgb, var(--accent, #9fadc8) 65%, var(--navigator-border));
+  border-color: color-mix(in srgb, var(--terra-accent) 65%, var(--navigator-border));
 }
 
 .searchInput {
@@ -241,7 +235,7 @@
 .integrationSelect:focus-visible,
 .integrationRefresh:focus-visible,
 .integrationError button:focus-visible {
-  border-color: var(--accent, #9fadc8);
+  border-color: var(--terra-accent);
   outline: none;
 }
 
@@ -261,7 +255,7 @@
 .integrationRefresh:hover:not(:disabled),
 .integrationError button:hover {
   color: var(--navigator-text);
-  background: var(--bg-hover, #232329);
+  background: var(--terra-bg-hover);
 }
 
 .integrationRefresh:disabled {
@@ -294,7 +288,7 @@
 .integrationRow:focus-visible {
   border-color: var(--navigator-border);
   color: var(--navigator-text);
-  background: var(--bg-hover, #232329);
+  background: var(--terra-bg-hover);
   outline: none;
 }
 
@@ -320,7 +314,7 @@
   display: inline-grid;
   flex: 0 0 15px;
   place-items: center;
-  color: color-mix(in srgb, var(--accent, #9fadc8) 70%, var(--navigator-muted));
+  color: color-mix(in srgb, var(--terra-accent) 70%, var(--navigator-muted));
 }
 
 .integrationName,
@@ -424,7 +418,7 @@
 }
 
 .treeViewport:focus-visible {
-  outline: 1px solid color-mix(in srgb, var(--accent, #9fadc8) 55%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--terra-accent) 55%, transparent);
   outline-offset: -2px;
 }
 
@@ -487,14 +481,14 @@
 .row:focus-visible {
   border-color: color-mix(in srgb, var(--navigator-border) 82%, transparent);
   color: var(--navigator-text);
-  background: color-mix(in srgb, var(--bg-hover, #232329) 62%, transparent);
+  background: color-mix(in srgb, var(--terra-bg-hover) 62%, transparent);
   outline: none;
 }
 
 .selected {
-  border-color: color-mix(in srgb, var(--accent, #9fadc8) 38%, var(--navigator-border));
+  border-color: color-mix(in srgb, var(--terra-accent) 38%, var(--navigator-border));
   color: var(--navigator-text);
-  background: color-mix(in srgb, var(--accent, #9fadc8) 11%, transparent);
+  background: color-mix(in srgb, var(--terra-accent) 11%, transparent);
 }
 
 .active .nodeName {
@@ -566,7 +560,7 @@
   display: inline-grid;
   flex: 0 0 16px;
   place-items: center;
-  color: color-mix(in srgb, var(--accent, #9fadc8) 70%, var(--navigator-muted));
+  color: color-mix(in srgb, var(--terra-accent) 70%, var(--navigator-muted));
 }
 
 .agent .nodeIcon {

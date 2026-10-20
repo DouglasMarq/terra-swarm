@@ -113,6 +113,9 @@ const LAB_FEATURE_FLAG_IDS = ["durableScrollback", "voiceCommands"] as const;
 
 const PROFILE_BY_ID = new Map(DEFAULT_AGENT_PROFILES.map((profile) => [profile.id, profile]));
 
+/** Speech levels are low; the meter scales them up so normal speech fills it. */
+const MIC_LEVEL_GAIN = 10;
+
 export interface SettingsPanelsProps {
   section: SettingsSectionDefinition;
   agents: readonly AgentInfo[];
@@ -205,7 +208,7 @@ function MicLevelMeter({ active }: { active: boolean }) {
     const unlisten = listen<number>("voice-audio-level", (event) => {
       const element = fillRef.current;
       if (!element) return;
-      element.style.transform = `scaleX(${Math.min(1, event.payload * 10)})`;
+      element.style.transform = `scaleX(${Math.min(1, event.payload * MIC_LEVEL_GAIN)})`;
     });
     return () => {
       void unlisten.then((cleanup) => cleanup());

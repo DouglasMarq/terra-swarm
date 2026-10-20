@@ -15,6 +15,8 @@ const SAVE_SHORTCUT: ShortcutDefinition = { key: "s", meta: true, shift: false, 
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
 
+const BYTES_PER_KIB = 1024;
+
 /**
  * A light editor for one project file, opened from the Files view. Saving
  * refuses to overwrite a file an agent changed meanwhile, unless asked to.
@@ -95,7 +97,7 @@ export function FileEditorDialog() {
           {dirty ? <span className="terra-editor-dirty" aria-label={t("editor.unsaved")} title={t("editor.unsaved")}>●</span> : null}
         </span>
       }
-      description={file ? t("editor.meta", { size: Math.max(1, Math.round(file.size / 1024)), shortcut: formatShortcut(SAVE_SHORTCUT) }) : t("editor.loading")}
+      description={file ? t("editor.meta", { size: Math.max(1, Math.round(file.size / BYTES_PER_KIB)), shortcut: formatShortcut(SAVE_SHORTCUT) }) : t("editor.loading")}
     >
       <div className="terra-editor-body">
         {loadError ? (

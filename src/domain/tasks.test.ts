@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { taskNumber } from "./taskNumber";
+import { taskNumber } from "./tasks";
 
 describe("taskNumber", () => {
   it("given a T- id in any case, returns its number", () => {

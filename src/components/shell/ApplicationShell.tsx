@@ -8,6 +8,11 @@ import { RightDock, type RightDockProps } from "./RightDock";
 import { WindowChrome, type WindowChromeProps } from "./WindowChrome";
 import "./shell.css";
 
+/** The content panel never shrinks below this share of the window, in percent. */
+const MIN_CONTENT_PERCENT = 35;
+const DEFAULT_NAVIGATOR_PERCENT = 18;
+const DEFAULT_DOCK_PERCENT = 22;
+
 export interface ApplicationShellProps {
   chrome?: WindowChromeProps;
   surface?: ShellSurface;
@@ -46,9 +51,9 @@ function useCompactShell(): boolean {
 
 /** Keep only the panels that are mounted; react-resizable-panels rejects unknown ids. */
 function layoutFor(stored: Layout | undefined, withSidebar: boolean, withDock: boolean): Layout {
-  const sidebar = withSidebar ? stored?.navigator ?? 18 : 0;
-  const dock = withDock ? stored?.dock ?? 22 : 0;
-  const layout: Layout = { content: Math.max(35, 100 - sidebar - dock) };
+  const sidebar = withSidebar ? stored?.navigator ?? DEFAULT_NAVIGATOR_PERCENT : 0;
+  const dock = withDock ? stored?.dock ?? DEFAULT_DOCK_PERCENT : 0;
+  const layout: Layout = { content: Math.max(MIN_CONTENT_PERCENT, 100 - sidebar - dock) };
   if (withSidebar) layout.navigator = sidebar;
   if (withDock) layout.dock = dock;
   return layout;
@@ -155,7 +160,7 @@ export function ApplicationShell({
                   <Separator id="navigator-separator" className="terra-shell-separator" aria-label={t("shell.sidebar.resize")} />
                 </>
               ) : null}
-              <Panel id="content" className="terra-shell-panel" data-slot="content" minSize="35%">
+              <Panel id="content" className="terra-shell-panel" data-slot="content" minSize={`${MIN_CONTENT_PERCENT}%`}>
                 <div className="terra-shell-panel-slot" data-slot="content">{children}</div>
               </Panel>
               {dockEnabled ? (

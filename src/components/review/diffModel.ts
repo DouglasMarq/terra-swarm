@@ -71,9 +71,12 @@ export function parsePatch(patch: string): DiffFileSection[] {
   return sections;
 }
 
+/** Longest suggested commit message / PR title, ellipsis included. */
+const MAX_SUGGESTED_TITLE_CHARS = 72;
+
 /** Default commit message / PR title from what the agent was doing. */
 export function suggestTitle(fallbackName: string, summary: string | null | undefined): string {
   const text = (summary ?? "").replace(/\s+/g, " ").trim();
-  if (text) return text.length > 72 ? `${text.slice(0, 71)}…` : text;
+  if (text) return text.length > MAX_SUGGESTED_TITLE_CHARS ? `${text.slice(0, MAX_SUGGESTED_TITLE_CHARS - 1)}…` : text;
   return `Changes from ${fallbackName}`;
 }

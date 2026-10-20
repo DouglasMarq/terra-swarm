@@ -503,6 +503,7 @@ export const en = {
     snapshotImported: "Snapshot imported ({workspaces} workspaces, {terminals} suspended terminals).",
     renameFailed: "Couldn't rename the project: {detail}",
     worktreeRemoveFailed: "Couldn't remove the worktree: {detail}",
+    worktreeStatusFailed: "Couldn't check the agent's worktree, so it stays open: {detail}",
     deleteFailed: "Couldn't delete the project: {detail}",
     historyCleared: "History cleared for the focused agent",
     importTitle: "Import snapshot?",

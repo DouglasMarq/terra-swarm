@@ -11,6 +11,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("../api", () => ({ api }));
 
+import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useWorktreeClose } from "./useWorktreeClose";
 import type { TerminalSessions } from "./useTerminalSessions";
 
@@ -33,6 +34,20 @@ describe("useWorktreeClose", () => {
     api.stopTerminal.mockResolvedValue(undefined);
     api.worktreeRemove.mockResolvedValue(undefined);
     sessions = { close: vi.fn(async () => {}) } as unknown as TerminalSessions;
+    useTerminalRuntimeStore.setState({ notifItems: [] });
+  });
+
+  it("given the worktree status can't be read, notifies and keeps the agent open", async () => {
+    api.worktreeStatus.mockRejectedValue(new Error("status unavailable"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderHook(() => useWorktreeClose(workspaces, sessions));
+    await act(() => result.current.request("t-1"));
+    expect(sessions.close).not.toHaveBeenCalled();
+    expect(api.worktreeRemove).not.toHaveBeenCalled();
+    const [notification] = useTerminalRuntimeStore.getState().notifItems;
+    expect(notification?.message).toContain("status unavailable");
+    expect(notification?.system).toBe(true);
+    consoleError.mockRestore();
   });
 
   it("closes a plain agent directly", async () => {

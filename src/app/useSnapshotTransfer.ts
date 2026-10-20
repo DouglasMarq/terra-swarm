@@ -3,10 +3,19 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { api } from "../api";
 import { t } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
-import type { SnapshotFeedback, SnapshotOperation } from "../components/integration/settings/SettingsPanels";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
 import type { TerminalSessions } from "./useTerminalSessions";
+
+export type SnapshotOperation = "exporting" | "importing";
+
+export interface SnapshotFeedback {
+  kind: "success" | "error";
+  message: string;
+  backupPath?: string | null;
+  /** "backup" after an import (the pre-import copy), "file" after an export. */
+  pathKind?: "backup" | "file";
+}
 
 /** Export and import of the whole workspace store (Settings → Data & backup). */
 export function useSnapshotTransfer(sessions: TerminalSessions, refresh: () => Promise<void>) {

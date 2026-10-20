@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   Copy,
@@ -19,7 +19,6 @@ import { CollapsedSidebar, Sidebar, SurfaceSwitch, type CollapsedSidebarProject 
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import { buildAgentLabels } from "../../domain/agentLabels";
 import { useT } from "../../i18n";
-import { errorMessage } from "../../lib/errors/errorMessage";
 import { AgentInspector } from "../inspector/AgentInspector";
 import { TasksPanel } from "../tasks/TasksPanel";
 import { TaskBoard } from "../tasks/TaskBoard";
@@ -27,10 +26,11 @@ import { sendPromptToTerminal } from "../../app/sendPromptToTerminal";
 import { startMcpEventBridge, useReportedStates } from "../../stores/mcpStore";
 import { useReviewStore } from "../../stores/reviewStore";
 import { useLibraryStore } from "../../stores/libraryStore";
-import { useAgentUsage } from "../../stores/usageStore";
+import { useAgentUsage } from "../../app/useAgentUsage";
+import { useInspectorRuntime } from "../../app/useInspectorRuntime";
 import { startPreviewBridge } from "../../stores/previewStore";
 import { PreviewPanel } from "../preview/PreviewPanel";
-import { CONTEXT_ATTENTION_PERCENT, deriveAgentStatus } from "../../domain/agentStatus";
+import { deriveAgentStatus } from "../../domain/agentStatus";
 import { NavigatorPanel } from "../navigation/NavigatorPanel";
 import type { ActivityTab, NavigatorFilesLoader, NavigatorGitLoader, NavigatorNodeRef } from "../navigation/types";
 import type { WorkbenchLocation, WorkbenchTabRenderContext } from "../workbench/types";
@@ -56,18 +56,22 @@ import { useOrchestrationStore } from "../../stores/orchestrationStore";
 import { DEFAULT_HOTKEYS, formatHotkey, usePreferencesStore } from "../../stores/preferencesStore";
 import { useShallow as useOrchestrationShallow } from "zustand/react/shallow";
 import { selectWorkspaceContainerId } from "../../lib/session/workspaceContainerSelection";
-import { ptyApi } from "../../lib/tauri/pty";
 import { formatShortcut, type ShortcutDefinition, type ShortcutPlatform } from "../../lib/platform/shortcuts";
 import {
   inspectorActionRequiresConfirmation,
   resolveInspectorTarget,
   type InspectorActionKind,
   type InspectorTarget,
-} from "./inspectorModel";
+} from "../inspector/inspectorModel";
 import {
-  INITIAL_INSPECTOR_RUNTIME_STATE,
-  reduceInspectorRuntime,
-} from "./inspectorRuntime";
+  lastActivityByAgent,
+  latestMessageByAgent,
+  nearlyFullContexts,
+  projectStatus,
+  shellVoiceLabel,
+  shellVoiceState,
+  workbenchSnapshot,
+} from "./visualShellModel";
 import "./visual-shell.css";
 
 const LazyFleetCommandCenter = lazy(async () => {
@@ -137,9 +141,6 @@ function shellShortcut(event: KeyboardEvent): "sidebar" | "inspector" | null {
 }
 
 const NO_MODIFIERS = { meta: false, shift: false, ctrl: false, alt: false } as const;
-
-/** How often the inspector refreshes the focused agent's runtime info. */
-const INSPECTOR_RUNTIME_POLL_MS = 1500;
 
 /** How long "mute notifications" lasts. */
 const NOTIFICATIONS_MUTE_MS = 60 * 60 * 1000;
@@ -272,36 +273,6 @@ function toWireGroup(group: Group): WorkspaceGroup {
   };
 }
 
-function visibleSnapshot(
-  snapshot: WorkspaceSnapshotV2 | null,
-  detachedTerminalIds: readonly string[],
-  focusedId: string | null,
-): WorkspaceSnapshotV2 | null {
-  if (!snapshot || (detachedTerminalIds.length === 0 && !focusedId)) return snapshot;
-  const detached = new Set(detachedTerminalIds);
-  const tabs = snapshot.tabs.filter((tab) => !tab.ptyId || !detached.has(tab.ptyId));
-  const tabIds = new Set(tabs.map((tab) => tab.id));
-  const panes = snapshot.panes.map((pane) => {
-    const nextTabIds = pane.tabIds.filter((id) => tabIds.has(id));
-    const focusedTab = focusedId
-      ? pane.tabIds
-        .map((id) => snapshot.tabs.find((tab) => tab.id === id))
-        .find((tab) => tab?.ptyId === focusedId)
-      : undefined;
-    return {
-      ...pane,
-      tabIds: nextTabIds,
-      activeTabId: focusedTab && tabIds.has(focusedTab.id)
-        ? focusedTab.id
-        : pane.activeTabId && tabIds.has(pane.activeTabId)
-          ? pane.activeTabId
-          : nextTabIds[0] ?? null,
-    };
-  });
-  const activeTabId = snapshot.activeTabId && tabIds.has(snapshot.activeTabId) ? snapshot.activeTabId : tabs[0]?.id ?? null;
-  return { ...snapshot, tabs, panes, activeTabId };
-}
-
 export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const t = useT();
   const shortcutLabels = shellShortcutLabels();
@@ -312,11 +283,6 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const [pendingCommandConfirmation, setPendingCommandConfirmation] = useState<CommandConfirmRequest | null>(null);
   const hotkeys = usePreferencesStore((state) => state.hotkeys);
   const [pendingInspectorAction, setPendingInspectorAction] = useState<PendingInspectorAction | null>(null);
-  const [inspectorRuntime, dispatchInspectorRuntime] = useReducer(
-    reduceInspectorRuntime,
-    INITIAL_INSPECTOR_RUNTIME_STATE,
-  );
-  const runtimeRequestIdRef = useRef(0);
   const orchestrationActions = useOrchestrationStore(useOrchestrationShallow((state) => ({
     hydrated: state.hydrated,
     setContainerState: state.setContainerState,
@@ -362,38 +328,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const inspectorActive = shell.dock.open && shell.dock.activeTab === "inspector";
   useEffect(() => startMcpEventBridge(), []);
   useEffect(() => startPreviewBridge(), []);
-  useEffect(() => {
-    const terminalId = props.focusedId;
-    const requestId = ++runtimeRequestIdRef.current;
-    if (!inspectorActive || !terminalId) {
-      dispatchInspectorRuntime({ type: "reset", requestId });
-      return;
-    }
-
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    dispatchInspectorRuntime({ type: "request", terminalId, requestId });
-
-    const poll = async () => {
-      try {
-        const info = await ptyApi.terminalRuntimeInfo(terminalId);
-        if (!cancelled) {
-          dispatchInspectorRuntime({ type: "success", terminalId, requestId, info });
-        }
-      } catch (error) {
-        if (!cancelled) {
-          dispatchInspectorRuntime({ type: "failure", terminalId, requestId, error: errorMessage(error, t("inspector.unavailable")) });
-        }
-      }
-      if (!cancelled) timer = setTimeout(() => void poll(), INSPECTOR_RUNTIME_POLL_MS);
-    };
-
-    void poll();
-    return () => {
-      cancelled = true;
-      if (timer !== null) clearTimeout(timer);
-    };
-  }, [inspectorActive, props.focusedId]);
+  const inspectorRuntime = useInspectorRuntime(props.focusedId, inspectorActive);
 
   const toggleSidebar = shell.toggleSidebar;
   const setDockOpen = shell.setDockOpen;
@@ -426,13 +361,10 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     });
     return [workspace.id, containerId ? props.snapshot?.containers.find((container) => container.id === containerId)?.visible !== false : true];
   })), [props.focusedId, props.snapshot, props.workspaces]);
-  const source = useMemo(() => {
-    const visible = visibleSnapshot(props.snapshot, props.detachedTerminalIds, props.focusedId);
-    // The Workbench shows one project at a time; the sidebar switches between them.
-    if (!visible || !props.activeId) return visible;
-    const containers = visible.containers.filter((container) => container.projectId === props.activeId);
-    return { ...visible, containers };
-  }, [props.activeId, props.detachedTerminalIds, props.focusedId, props.snapshot]);
+  const source = useMemo(
+    () => workbenchSnapshot(props.snapshot, props.detachedTerminalIds, props.focusedId, props.activeId),
+    [props.activeId, props.detachedTerminalIds, props.focusedId, props.snapshot],
+  );
 
   useEffect(() => {
     if (props.workspaces.length === 0 || (!props.loadFiles && !props.loadGitStatus)) {
@@ -498,18 +430,10 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   };
 
   const activeCount = props.workspaces.reduce((count, workspace) => count + workspace.terminals.filter((terminal) => !(terminal.id in props.exited) && !terminal.suspended).length, 0);
-  const visualVoiceState = props.voiceState ?? (props.voiceStatus === "recording" ? "listening" : props.voiceStatus === "transcribing" ? "transcribing" : "idle");
+  const visualVoiceState = shellVoiceState(props.voiceState, props.voiceStatus);
   const voiceActive = visualVoiceState === "listening" || visualVoiceState === "transcribing";
   const voiceRecording = visualVoiceState === "listening";
-  const voiceLabel = visualVoiceState === "listening"
-    ? t("shell.voiceListening")
-    : visualVoiceState === "transcribing"
-      ? t("shell.voiceTranscribing")
-      : visualVoiceState === "preview"
-        ? t("shell.voicePreview")
-        : visualVoiceState === "error"
-          ? t("shell.voiceError")
-          : t("shell.voice");
+  const voiceLabel = shellVoiceLabel(visualVoiceState, t);
 
   const agentNames = usePreferencesStore((state) => state.agentNames);
   const agentLabels = useMemo(() => buildAgentLabels(props.workspaces, { titles: props.titles, names: agentNames }), [agentNames, props.titles, props.workspaces]);
@@ -532,7 +456,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       return { id: terminal.id, label: label?.primary ?? terminal.command, status, detail };
     });
     const suspended = workspace.terminals.length > 0 && workspace.terminals.every((terminal) => terminal.suspended);
-    const status = agents.some((agent) => agent.status === "attention") ? "attention" as const : agents.some((agent) => agent.status === "working") ? "working" as const : "idle" as const;
+    const status = projectStatus(agents.map((agent) => agent.status));
     return { id: workspace.id, name: workspace.name, status, suspended, agents };
   }), [agentLabels, props.contextUsage, props.exited, props.notifications, props.workspaces, reported]);
   const inspectorTarget = resolveInspectorTarget({
@@ -564,9 +488,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       onAction={handleInspectorAction}
     />
   );
-  const contextAlerts = props.workspaces.flatMap((workspace) => workspace.terminals
-    .filter((terminal) => !terminal.suspended && !(terminal.id in props.exited) && (props.contextUsage[terminal.id] ?? 0) >= CONTEXT_ATTENTION_PERCENT)
-    .map((terminal) => ({ terminalId: terminal.id, workspaceId: workspace.id, used: props.contextUsage[terminal.id] ?? 0 })));
+  const contextAlerts = nearlyFullContexts(props.workspaces, props.exited, props.contextUsage);
   const activeWorkspace = props.workspaces.find((workspace) => workspace.id === props.activeId) ?? null;
   const tasksPanel = (
     <TasksPanel
@@ -597,7 +519,6 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   ] as const;
   const focusedLabel = props.focusedId ? agentLabels[props.focusedId] ?? null : null;
   const muted = muteUntil > Date.now();
-  // Re-render when the hour is up so the badge comes back on its own.
   useEffect(() => {
     if (muteUntil <= Date.now()) return;
     const timer = window.setTimeout(() => setMuteUntil(0), muteUntil - Date.now());
@@ -673,24 +594,9 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     focusTerminal(id);
   };
 
-  const attentionMessages = useMemo(() => {
-    const latest: Record<string, { ts: number; message: string }> = {};
-    for (const item of props.notificationItems) {
-      if (item.read || item.system) continue;
-      const current = latest[item.terminalId];
-      if (!current || current.ts < item.ts) latest[item.terminalId] = { ts: item.ts, message: item.message };
-    }
-    return Object.fromEntries(Object.entries(latest).map(([id, value]) => [id, value.message]));
-  }, [props.notificationItems]);
+  const attentionMessages = useMemo(() => latestMessageByAgent(props.notificationItems), [props.notificationItems]);
 
-  const lastActivity = useMemo(() => {
-    const latest: Record<string, number> = {};
-    for (const item of props.notificationItems) {
-      if (item.system) continue;
-      latest[item.terminalId] = Math.max(latest[item.terminalId] ?? 0, item.ts);
-    }
-    return latest;
-  }, [props.notificationItems]);
+  const lastActivity = useMemo(() => lastActivityByAgent(props.notificationItems), [props.notificationItems]);
 
   const workspaceIdFor = (terminalId: string) => props.workspaces.find((workspace) => workspace.terminals.some((terminal) => terminal.id === terminalId))?.id ?? null;
 
@@ -845,7 +751,6 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       focusedWorkspaceId={props.activeId}
       focusedTerminalId={props.focusedId}
       hasDetachedTabs={props.detachedTerminalIds.length > 0}
-      // Workspace tabs are gone from the chrome; nothing to reopen.
       hasRecentlyClosedTabs={false}
       agentLabels={agentLabels}
       resumeCount={props.resumeCount ?? 0}

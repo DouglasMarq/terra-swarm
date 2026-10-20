@@ -1,5 +1,6 @@
 pub mod cli;
 mod fonts;
+mod ipc_error;
 mod mcp;
 mod pty;
 mod scrollback;

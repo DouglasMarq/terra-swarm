@@ -17,6 +17,7 @@ use shell::resolve_shell;
 #[cfg(windows)]
 use shell::{shell_flavor, ShellFlavor};
 
+use crate::ipc_error::{IpcError, IpcErrorCode};
 use crate::mcp::launch::Quoting;
 use crate::mcp::{McpHub, McpLease};
 use crate::scrollback::ScrollbackStore;
@@ -733,7 +734,7 @@ pub fn write_terminal(
     manager: State<'_, Mutex<PtyManager>>,
     id: String,
     data: String,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let input = {
         let manager = manager.lock_or_recover();
         manager
@@ -742,12 +743,25 @@ pub fn write_terminal(
             .map(|e| e.input.clone())
             .ok_or_else(|| format!("terminal {} not found", id))?
     };
+    send_input(&input, &id, data)
+}
+
+/// Queues `data` for the terminal's writer; a full queue reports `Busy`.
+fn send_input(
+    input: &std::sync::mpsc::SyncSender<Vec<u8>>,
+    id: &str,
+    data: String,
+) -> Result<(), IpcError> {
     match input.try_send(data.into_bytes()) {
         Ok(()) => Ok(()),
-        Err(std::sync::mpsc::TrySendError::Full(_)) => Err(format!("terminal {} input busy", id)),
-        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-            Err(format!("terminal {} input closed", id))
-        }
+        Err(std::sync::mpsc::TrySendError::Full(_)) => Err(IpcError::new(
+            IpcErrorCode::Busy,
+            format!("terminal {} input busy", id),
+        )),
+        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => Err(IpcError::new(
+            IpcErrorCode::Other,
+            format!("terminal {} input closed", id),
+        )),
     }
 }
 
@@ -965,6 +979,37 @@ mod scrollback_flag_tests {
             b"existing"
         );
         let _ = fs::remove_dir_all(root);
+    }
+}
+
+#[cfg(test)]
+mod input_tests {
+    use super::send_input;
+    use crate::ipc_error::IpcErrorCode;
+    use std::sync::mpsc::sync_channel;
+
+    #[test]
+    fn given_room_in_the_queue_write_queues_the_bytes() {
+        let (input, output) = sync_channel(1);
+        send_input(&input, "t-1", "ls\n".into()).unwrap();
+        assert_eq!(output.try_recv().unwrap(), b"ls\n");
+    }
+
+    #[test]
+    fn given_a_full_input_queue_write_fails_with_the_busy_code() {
+        let (input, _output) = sync_channel(1);
+        send_input(&input, "t-1", "a".into()).unwrap();
+        let error = send_input(&input, "t-1", "b".into()).unwrap_err();
+        assert_eq!(error.code, IpcErrorCode::Busy);
+    }
+
+    #[test]
+    fn given_a_closed_input_write_fails_with_the_other_code() {
+        let (input, output) = sync_channel::<Vec<u8>>(1);
+        drop(output);
+        let error = send_input(&input, "t-1", "a".into()).unwrap_err();
+        assert_eq!(error.code, IpcErrorCode::Other);
+        assert!(error.message.contains("closed"));
     }
 }
 

@@ -7,8 +7,9 @@ import {
   TASK_STATUS_ORDER,
   useMcpStore,
 } from "../../stores/mcpStore";
-import type { McpAgentStatus, McpTask, McpTaskEvent, McpTaskPatch, McpTaskStatus } from "../../types";
+import type { McpAgentStatus, McpTask, McpTaskPatch } from "../../types";
 import { MAX_TASK_TITLE_CHARS } from "../../domain/tasks";
+import { describeTaskEvent } from "./boardModel";
 import "./tasks.css";
 
 export interface TaskAgentOption {
@@ -139,38 +140,6 @@ export function TasksPanel({ workspaceId, workspaceName, agents }: TasksPanelPro
   );
 }
 
-function statusLabel(value: string, t: ReturnType<typeof useT>): string {
-  return (TASK_STATUS_ORDER as readonly string[]).includes(value)
-    ? t(`tasks.status.${value as McpTaskStatus}`)
-    : value;
-}
-
-/** One history line, in the reader's language. */
-function describeEvent(
-  event: McpTaskEvent,
-  t: ReturnType<typeof useT>,
-  agentLabel: (terminalId: string) => string,
-): string {
-  switch (event.kind) {
-    case "created":
-      return t("tasks.event.created");
-    case "claimed":
-      return t("tasks.event.claimed");
-    case "status": {
-      const [from = "", to = ""] = event.body.split("→").map((part) => part.trim());
-      return t("tasks.event.status", { from: statusLabel(from, t), to: statusLabel(to, t) });
-    }
-    case "assigned":
-      return event.body
-        ? t("tasks.event.assigned", { who: event.body === "user" ? t("tasks.you") : agentLabel(event.body) })
-        : t("tasks.event.unassigned");
-    case "completed":
-      return t("tasks.event.completed", { summary: event.body });
-    default:
-      return event.body;
-  }
-}
-
 export interface TaskCardProps {
   task: McpTask;
   agents: readonly TaskAgentOption[];
@@ -269,7 +238,7 @@ export function TaskCard({ task, agents, agentLabel, status, onChange, onDelete 
               {task.events.map((event, index) => (
                 <li key={`${event.created_at}-${index}`}>
                   <span className="terra-task-log-author">{author(event.actor)}</span>{" "}
-                  {describeEvent(event, t, agentLabel)}
+                  {describeTaskEvent(event, t, agentLabel)}
                 </li>
               ))}
             </ol>

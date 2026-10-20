@@ -38,17 +38,8 @@ import { useMcpStore } from "../../../stores/mcpStore";
 import { usePreferencesStore } from "../../../stores/preferencesStore";
 import { DEFAULT_TERMINAL_FONT_STACK, filterFonts, terminalFontStack, type SystemFont } from "../../../lib/terminalFonts";
 import { loadSystemFonts } from "../../../app/systemFonts";
+import type { SnapshotFeedback, SnapshotOperation } from "../../../app/useSnapshotTransfer";
 import styles from "./SettingsPanels.module.css";
-
-export type SnapshotOperation = "exporting" | "importing";
-
-export interface SnapshotFeedback {
-  kind: "success" | "error";
-  message: string;
-  backupPath?: string | null;
-  /** "backup" after an import (the pre-import copy), "file" after an export. */
-  pathKind?: "backup" | "file";
-}
 
 export type UpdateCheckState = "idle" | "checking" | "uptodate" | "error";
 
@@ -261,7 +252,6 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
     };
   }, []);
 
-  // Bring the current choice into view once the list arrives.
   useEffect(() => {
     if (fonts) selectedRef.current?.scrollIntoView?.({ block: "nearest" });
   }, [fonts]);

@@ -363,7 +363,7 @@
 .terra-board-column[data-over="true"],
 .terra-board-agent[data-over="true"] {
   border-color: var(--terra-accent);
-  background: var(--terra-accent-soft);
+  background: var(--terra-bg-hover);
 }
 
 .terra-board-column-head {
@@ -448,4 +448,22 @@
   .terra-board-agents {
     flex-basis: auto;
   }
+}
+
+.terra-board-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text-secondary);
+  background: transparent;
+  font-size: var(--terra-font-size-label);
+  cursor: pointer;
+}
+
+.terra-board-team:hover {
+  color: var(--terra-text);
+  background: var(--terra-bg-hover);
 }

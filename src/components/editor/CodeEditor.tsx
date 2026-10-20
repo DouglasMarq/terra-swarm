@@ -23,7 +23,7 @@ const theme = EditorView.theme(
     ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--terra-accent)" },
     ".cm-gutters": { backgroundColor: "var(--terra-terminal-bg)", color: "var(--terra-text-faint)", border: "none" },
     ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "var(--terra-bg-hover)" },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "var(--terra-accent-soft)" },
+    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "rgb(250 250 250 / 16%)" },
     ".cm-panels": { backgroundColor: "var(--terra-bg-elevated)", color: "var(--terra-text)" },
     ".cm-searchMatch": { backgroundColor: "var(--terra-amber-dim)" },
   },

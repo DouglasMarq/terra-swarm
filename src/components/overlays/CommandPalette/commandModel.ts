@@ -82,6 +82,8 @@ export interface CommandPaletteCallbacks {
   onReattachTerminal?: () => void;
   onReopenTab?: () => void;
   onOpenResume?: () => void;
+  /** The prompt library or the team templates. */
+  onOpenLibrary?: (dialog: "prompts" | "team") => void;
   onFocusedAgentAction?: (action: FocusedAgentAction, context: FocusedAgentContext) => void;
 }
 
@@ -123,6 +125,7 @@ export type CommandIntent =
   | { kind: "reattach-terminal" }
   | { kind: "reopen-tab" }
   | { kind: "open-resume" }
+  | { kind: "open-library"; dialog: "prompts" | "team" }
   | { kind: "focused-agent-action"; action: FocusedAgentAction; context: FocusedAgentContext };
 
 export interface CommandDescriptor {
@@ -404,6 +407,25 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       icon: "agent",
       disabled: !hasAgentWorkspace,
       intent: { kind: "create-agent", workspaceId: focusedWorkspaceId },
+    }),
+    command({
+      id: "create:team",
+      label: t("palette.startTeam"),
+      description: hasAgentWorkspace ? t("palette.startTeamDesc") : t("palette.pickProjectFirst"),
+      group: "create",
+      keywords: ["time", "team", "orquestrador", "orchestrator", "papéis", "roles", "template"],
+      icon: "agent",
+      disabled: !hasAgentWorkspace,
+      intent: { kind: "open-library", dialog: "team" },
+    }),
+    command({
+      id: "agent:prompts",
+      label: t("palette.promptLibrary"),
+      description: t("palette.promptLibraryDesc"),
+      group: "agent",
+      keywords: ["prompt", "biblioteca", "library", "salvos", "snippets", "enviar"],
+      icon: "agent",
+      intent: { kind: "open-library", dialog: "prompts" },
     }),
   );
 
@@ -757,6 +779,10 @@ export function executeCommand(
     case "reattach-terminal":
       if (!callbacks.onReattachTerminal) return unavailable(command.id);
       callbacks.onReattachTerminal();
+      return { kind: "executed", commandId: command.id };
+    case "open-library":
+      if (!callbacks.onOpenLibrary) return unavailable(command.id);
+      callbacks.onOpenLibrary(intent.dialog);
       return { kind: "executed", commandId: command.id };
     case "open-resume":
       if (!callbacks.onOpenResume) return unavailable(command.id);

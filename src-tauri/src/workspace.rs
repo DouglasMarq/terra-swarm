@@ -2324,6 +2324,7 @@ pub fn close_workspace(app: AppHandle, id: String) -> Result<(), String> {
         let mut store = store.lock().map_err(|e| e.to_string())?;
         store.remove(&id).map(|ws| ws.terminals)
     };
+    crate::mcp::purge_workspace(&app, &id);
     if let Some(terminals) = terminals {
         let manager = app.state::<Mutex<crate::pty::PtyManager>>();
         for t in terminals {

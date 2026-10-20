@@ -8,7 +8,7 @@
  */
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
-import type { AgentInfo, McpAgentStatus, McpTask, McpTaskPatch, Workspace, WorkspaceGroup } from "../types";
+import type { AgentInfo, McpAgentStatus, McpTask, McpTaskPatch, Workspace, WorkspaceGitStatus, WorkspaceGroup, WorkspaceSnapshotTransfer } from "../types";
 
 const workspaces: Workspace[] = [
   {
@@ -122,6 +122,29 @@ function mcpUpdate(id: string, patch: McpTaskPatch): McpTask {
 }
 
 const ESC = "\u001b";
+function snapshotTransfer(path: string, backupPath: string | null): WorkspaceSnapshotTransfer {
+  const terminals = workspaces.flatMap((workspace) => workspace.terminals);
+  return {
+    version: 2,
+    path,
+    backupPath,
+    workspaceCount: workspaces.length,
+    groupCount: groups.length,
+    terminalCount: terminals.length,
+    suspendedTerminalCount: terminals.filter((terminal) => terminal.suspended).length,
+  };
+}
+
+const gitStatus: WorkspaceGitStatus = {
+  branch: "main",
+  ahead: 1,
+  behind: 0,
+  staged: ["src/App.tsx"],
+  modified: ["README.md", "src/styles/motion.css"],
+  untracked: ["notes/todo.md"],
+  conflicted: [],
+};
+
 const backlog: Record<string, string> = {
   "pty-claude-1": `${ESC}[2m> Refatore resumePlanner para aceitar grupos suspensos${ESC}[0m\r\n\r\n● Lendo src/lib/session/resumePlanner.ts\r\n● Lendo src/lib/session/resumeSelection.ts\r\n● Editando resumePlanner.ts  ${ESC}[32m+18${ESC}[0m ${ESC}[31m-6${ESC}[0m\r\n`,
   "pty-claude-2": `● Editando src/styles/motion.css\r\n● Editando src/components/shell/shell.css\r\n${ESC}[2m  12 arquivos verificados${ESC}[0m\r\n`,
@@ -140,6 +163,19 @@ export function installMockBackend(): void {
     switch (cmd) {
       case "list_workspaces": return workspaces;
       case "list_groups": return groups;
+      case "create_workspace": {
+        const workspace: Workspace = { id: `ws-${Date.now()}`, name: String(args.name), cwd: String(args.cwd || "/Users/me/projects/new-project"), terminals: [] };
+        workspaces.push(workspace);
+        return workspace;
+      }
+      case "create_group": {
+        const group: WorkspaceGroup = { id: `group-${Date.now()}`, name: String(args.name), collapsed: false, projectIds: [], parentGroupId: null, suspended: false };
+        groups.push(group);
+        return group;
+      }
+      case "export_workspace_snapshot": return snapshotTransfer(String(args.path), null);
+      case "import_workspace_snapshot": return snapshotTransfer(String(args.path), "/Users/me/.terra-swarm/backups/workspaces.json");
+      case "git_status": return gitStatus;
       case "detect_agents": return agents;
       case "running_terminals": return scenario === "resume" ? [] : workspaces.flatMap((ws) => ws.terminals.filter((t) => !t.suspended).map((t) => ({ id: t.id, seq: 1 })));
       case "terminal_backlog": {
@@ -166,7 +202,7 @@ export function installMockBackend(): void {
       case "voice_mic_available": return true;
       case "plugin:app|version": return "2.1.1";
       case "plugin:updater|check": return null;
-      case "spawn_terminal": return { meta: { id: String(args.id ?? `pty-${Date.now()}`), command: String(args.command ?? "claude"), width: null }, seq: 1 };
+      case "spawn_terminal": return { meta: { id: String(args.terminalId ?? `pty-${Date.now()}`), command: String(args.command ?? "claude"), width: null }, seq: 1 };
       case "worktree_status":
         return args.terminalId === "pty-claude-2"
           ? { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: ["src/styles/motion.css", "src/components/shell/shell.css"], ahead: 1, behind: 0, exists: true }

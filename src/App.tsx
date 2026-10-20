@@ -39,6 +39,7 @@ import { getTerminal } from "./terminalRegistry";
 import {
   GRID_COL_OPTIONS,
   usePreferencesStore,
+  type HotkeyActionId,
 } from "./stores/preferencesStore";
 import { useTerminalRuntimeStore } from "./stores/terminalRuntimeStore";
 import { useUiStore } from "./stores/uiStore";
@@ -119,7 +120,7 @@ function App() {
     setSettingsSection("voice");
     setShowSettings(true);
   }, []);
-  const [capturing, setCapturing] = useState<string | null>(null);
+  const [capturing, setCapturing] = useState<HotkeyActionId | null>(null);
   const voiceSettings = useVoiceSettings({
     settingsOpen: showSettings,
     voiceSectionOpen: showSettings && settingsSection === "voice",

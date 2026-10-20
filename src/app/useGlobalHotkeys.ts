@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Workspace } from "../types";
 import { t } from "../i18n";
-import { HOTKEY_ACTIONS, hotkeyActionLabel, matchHotkey, type Hotkey, usePreferencesStore } from "../stores/preferencesStore";
+import { HOTKEY_ACTIONS, hotkeyActionLabel, matchHotkey, type Hotkey, type HotkeyActionId, usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
 
@@ -9,8 +9,8 @@ interface GlobalHotkeysInput {
   /** A dialog is open: shortcuts stay off. */
   modalOpen: boolean;
   /** The action whose shortcut is being recorded in Settings, if any. */
-  capturing: string | null;
-  setCapturing: (action: string | null) => void;
+  capturing: HotkeyActionId | null;
+  setCapturing: (action: HotkeyActionId | null) => void;
   /** Settings → Shortcuts is on screen; capture ends when it is left. */
   shortcutsSectionOpen: boolean;
   active: Workspace | null;

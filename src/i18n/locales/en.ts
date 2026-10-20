@@ -266,6 +266,7 @@ export const en = {
     },
   },
   settingsPanels: {
+    voiceLanguageAuto: "Auto",
     notificationsTitle: "Notifications",
     systemNotifications: "Notify me when an agent needs me",
     voiceToOrchestrator: "Talk to the orchestrator",

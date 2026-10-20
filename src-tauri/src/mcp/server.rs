@@ -168,6 +168,9 @@ pub fn router(hub: Arc<McpHub>) -> axum::Router {
     );
     axum::Router::new()
         .nest_service(MCP_PATH, service)
+        .route(super::hooks::HOOKS_PATH, axum::routing::post(super::hooks::handle))
+        .route("/hooks/claude", axum::routing::post(super::hooks::handle_claude))
+        .with_state(Arc::clone(&hub))
         .layer(middleware::from_fn_with_state(hub, authenticate))
 }
 

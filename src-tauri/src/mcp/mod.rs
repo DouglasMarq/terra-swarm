@@ -12,6 +12,7 @@
 pub mod auth;
 pub mod commands;
 pub mod db;
+pub mod hooks;
 pub mod launch;
 pub mod repo;
 pub mod server;
@@ -63,6 +64,8 @@ pub struct McpHub {
     db_path: Option<PathBuf>,
     tokens: Mutex<TokenRegistry>,
     port: Mutex<Option<u16>>,
+    /// This app's binary, run by Codex as its `notify` hook.
+    hook_program: Mutex<Option<PathBuf>>,
     /// Where generated client config files (Claude's `--mcp-config`) live.
     config_dir: Option<PathBuf>,
     host: Box<dyn McpHost>,
@@ -89,6 +92,7 @@ impl McpHub {
             db_path: Some(db_path),
             tokens: Mutex::new(TokenRegistry::default()),
             port: Mutex::new(None),
+            hook_program: Mutex::new(None),
             config_dir,
             host,
         }
@@ -102,6 +106,7 @@ impl McpHub {
             db_path: None,
             tokens: Mutex::new(TokenRegistry::default()),
             port: Mutex::new(None),
+            hook_program: Mutex::new(None),
             config_dir,
             host,
         }
@@ -133,6 +138,14 @@ impl McpHub {
     pub fn url(&self) -> Option<String> {
         self.port()
             .map(|port| format!("http://127.0.0.1:{}/mcp", port))
+    }
+
+    pub fn set_hook_program(&self, program: PathBuf) {
+        *guard(&self.hook_program) = Some(program);
+    }
+
+    pub fn hook_program(&self) -> Option<PathBuf> {
+        guard(&self.hook_program).clone()
     }
 
     pub fn config_dir(&self) -> Option<&PathBuf> {
@@ -237,6 +250,20 @@ impl McpHub {
         self.host.emit(
             EVENT_MESSAGE,
             serde_json::to_value(message).unwrap_or(serde_json::Value::Null),
+        );
+    }
+
+    /// An agent is waiting for a human (a permission prompt, a question).
+    pub fn emit_attention(&self, status: &AgentStatus) {
+        let workspace = self.workspace(&status.workspace_id);
+        self.host.emit(
+            hooks::EVENT_AGENT_ATTENTION,
+            serde_json::json!({
+                "workspace_id": status.workspace_id,
+                "workspace_name": workspace.map(|info| info.name),
+                "terminal_id": status.terminal_id,
+                "message": status.summary,
+            }),
         );
     }
 

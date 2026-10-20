@@ -138,3 +138,35 @@ fn trim_trailing_silence(audio: &[f32]) -> &[f32] {
     let padded = (end + CHUNK).min(audio.len());
     &audio[..padded]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{compute_audio_ctx, trim_trailing_silence};
+
+    #[test]
+    fn audio_ctx_scales_with_duration_within_bounds() {
+        assert_eq!(compute_audio_ctx(0), 768);
+        assert_eq!(compute_audio_ctx(16_000 * 30), 1500);
+        assert_eq!(compute_audio_ctx(16_000 * 120), 1500);
+        let mid = compute_audio_ctx(16_000 * 15);
+        assert!(mid > 768 && mid < 1500);
+        assert_eq!(mid % 64, 0);
+    }
+
+    #[test]
+    fn trailing_silence_is_trimmed_with_padding() {
+        let mut audio = vec![0.5f32; 16_000];
+        audio.extend(vec![0.0f32; 16_000]);
+        let trimmed = trim_trailing_silence(&audio);
+        // The loud second plus 100 ms of padding.
+        assert_eq!(trimmed.len(), 16_000 + 1600);
+    }
+
+    #[test]
+    fn short_or_quiet_audio_keeps_its_minimum() {
+        let quiet = vec![0.0f32; 16_000];
+        assert_eq!(trim_trailing_silence(&quiet).len(), 4800 + 1600);
+        let tiny = vec![0.0f32; 1000];
+        assert_eq!(trim_trailing_silence(&tiny).len(), 1000);
+    }
+}

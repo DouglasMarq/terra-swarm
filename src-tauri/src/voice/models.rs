@@ -99,3 +99,39 @@ pub fn downloaded_model_ids(data_dir: &Path) -> Vec<String> {
         .map(|m| m.id.to_string())
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_catalog_has_unique_ids_and_matching_files() {
+        let models = available_models();
+        let mut ids: Vec<&str> = models.iter().map(|model| model.id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), models.len());
+        for model in &models {
+            assert!(model.url.ends_with(model.filename), "{}", model.id);
+            assert!(model.size_bytes > 0, "{}", model.id);
+        }
+        assert_eq!(find_model("base").map(|model| model.filename), Some("ggml-base.bin"));
+        assert!(find_model("nope").is_none());
+    }
+
+    #[test]
+    fn only_present_files_count_as_downloaded() {
+        let dir = std::env::temp_dir().join(format!(
+            "terra-voice-models-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(models_dir(&dir)).unwrap();
+        assert!(downloaded_model_ids(&dir).is_empty());
+        assert!(model_path(&dir, "tiny").is_none());
+        std::fs::write(models_dir(&dir).join("ggml-tiny.bin"), b"x").unwrap();
+        assert_eq!(downloaded_model_ids(&dir), vec!["tiny".to_string()]);
+        assert_eq!(model_path(&dir, "tiny"), Some(models_dir(&dir).join("ggml-tiny.bin")));
+        assert!(model_path(&dir, "unknown").is_none());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

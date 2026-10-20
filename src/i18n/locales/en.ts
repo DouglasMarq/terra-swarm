@@ -81,6 +81,7 @@ export const en = {
     newWorkspace: "New workspace",
   },
   pane: {
+    worktree: "Isolated in a git worktree on {branch}",
     contextUsed: "Context used: {count}%",
     maximize: "Maximize",
     restore: "Back to grid",
@@ -489,6 +490,7 @@ export const en = {
     snapshotExported: "Snapshot exported ({workspaces} workspaces, {terminals} terminals).",
     snapshotImported: "Snapshot imported ({workspaces} workspaces, {terminals} suspended terminals).",
     renameFailed: "Couldn't rename the project: {detail}",
+    worktreeRemoveFailed: "Couldn't remove the worktree: {detail}",
     deleteFailed: "Couldn't delete the project: {detail}",
     historyCleared: "History cleared for the focused agent",
     importTitle: "Import snapshot?",
@@ -670,6 +672,17 @@ export const en = {
       unavailable: "unavailable",
       unavailableNamed: "{name} (unavailable)",
       saveDefault: "Make this the default profile for future agents.",
+      isolate: "Isolate in a git worktree",
+      isolateHint: "The agent works on its own branch in a separate checkout, so it never edits the same files as other agents.",
+    },
+    worktree: {
+      title: "Close {name}?",
+      description: "This agent works in its own git worktree on the branch {branch}.",
+      dirty: { one: "{count} file has changes that were not committed:", other: "{count} files have changes that were not committed:" },
+      ahead: { one: "{count} commit is not in {base} yet.", other: "{count} commits are not in {base} yet." },
+      deleteBranch: "Also delete the branch {branch} and its commits",
+      keep: "Keep the worktree",
+      delete: "Delete the worktree",
     },
   },
   system: {

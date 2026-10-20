@@ -323,3 +323,16 @@
   font-family: var(--terra-font-mono);
   font-size: var(--terra-font-size-micro);
 }
+
+.pane-worktree {
+  display: inline-flex;
+  flex: 0 4 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  max-width: 140px;
+  overflow: hidden;
+  font-family: var(--terra-font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

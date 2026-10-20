@@ -689,6 +689,11 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     ];
   };
 
+  const worktreeBranches = Object.fromEntries(
+    props.workspaces.flatMap((workspace) => workspace.terminals)
+      .filter((terminal) => terminal.worktree)
+      .map((terminal) => [terminal.id, terminal.worktree!.branch]),
+  );
   const renderTab = (context: WorkbenchTabRenderContext) => {
     const project = context.project;
     return (
@@ -703,6 +708,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
           contextUsage={props.contextUsage}
           titles={props.titles}
           branch={project ? props.branches[project.id] : undefined}
+          worktreeBranches={worktreeBranches}
           detachedIds={new Set(props.detachedTerminalIds)}
           labels={agentLabels}
           attentionMessages={attentionMessages}

@@ -14,6 +14,8 @@ export interface TerminalTabSurfaceProps {
   contextUsage: Readonly<Record<string, number>>;
   titles: Readonly<Record<string, string>>;
   branch?: string;
+  /** Worktree branch per terminal id, for isolated agents. */
+  worktreeBranches?: Readonly<Record<string, string>>;
   detachedIds?: ReadonlySet<string>;
   labels?: Readonly<Record<string, { primary: string; tag: string; title?: string | null } | undefined>>;
   attentionMessages?: Readonly<Record<string, string | undefined>>;
@@ -41,6 +43,7 @@ export function TerminalTabSurface({
   contextUsage,
   titles,
   branch,
+  worktreeBranches,
   detachedIds,
   labels,
   attentionMessages,
@@ -84,6 +87,7 @@ export function TerminalTabSurface({
       attentionMessage={attentionMessages?.[ptyId] ?? null}
       menu={buildMenu?.(ptyId, tab.command)}
       branch={branch}
+      worktreeBranch={worktreeBranches?.[ptyId]}
       onClearNotifications={() => onClearNotifications(ptyId)}
       focused={focusedId === ptyId}
       onFocus={() => onFocus(ptyId)}

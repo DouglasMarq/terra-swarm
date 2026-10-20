@@ -11,7 +11,7 @@ import {
   createFitScheduler,
   createTerminalResizeQueue,
 } from "../lib/terminalFitScheduler";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2, Minimize2, GitBranch } from "lucide-react";
 import { useT } from "../i18n";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { terminalFontStack } from "../lib/terminalFonts";
@@ -33,6 +33,8 @@ interface Props {
   contextUsed?: number;
   title?: string;
   branch?: string;
+  /** Branch of the agent's own git worktree, when it is isolated. */
+  worktreeBranch?: string;
   /** Task title (or name) shown first; falls back to the command. */
   label?: string;
   /** "claude 2" / "Lyra · claude" under or beside the label. */
@@ -387,6 +389,12 @@ export function TerminalPane(props: Props) {
         <span className="terra-dot pane-dot" data-status={status} aria-hidden="true" />
         <span className="pane-name" title={command}>{primary}</span>
         {secondary ? <span className="terra-tag pane-tag">{secondary}</span> : null}
+        {props.worktreeBranch ? (
+          <span className="terra-tag pane-worktree" title={t("pane.worktree", { branch: props.worktreeBranch })}>
+            <GitBranch size={11} aria-hidden="true" />
+            {props.worktreeBranch}
+          </span>
+        ) : null}
         {title && title !== primary ? (
           <span className="pane-title" title={title}>
             {title}

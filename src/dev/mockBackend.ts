@@ -17,7 +17,7 @@ const workspaces: Workspace[] = [
     cwd: "~/Documents/projects/terra-swarm",
     terminals: [
       { id: "pty-claude-1", command: "claude", width: null },
-      { id: "pty-claude-2", command: "claude", width: null },
+      { id: "pty-claude-2", command: "claude", width: null, worktree: { path: "/tmp/wt/pty-claude-2", cwd: "/tmp/wt/pty-claude-2", branch: "terra/pty-claude-2", base: "main", repo: "~/Documents/projects/terra-swarm" } },
       { id: "pty-codex", command: "codex", width: null },
       { id: "pty-shell", command: "zsh", width: null },
     ],
@@ -166,6 +166,11 @@ export function installMockBackend(): void {
       case "plugin:app|version": return "2.1.1";
       case "plugin:updater|check": return null;
       case "spawn_terminal": return { meta: { id: String(args.id ?? `pty-${Date.now()}`), command: String(args.command ?? "claude"), width: null }, seq: 1 };
+      case "worktree_status":
+        return args.terminalId === "pty-claude-2"
+          ? { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: ["src/styles/motion.css", "src/components/shell/shell.css"], ahead: 1, behind: 0, exists: true }
+          : null;
+      case "worktree_remove": return undefined;
       case "mcp_server_info": return mcpInfo();
       case "mcp_set_enabled": mcpEnabled = Boolean(args.enabled); return mcpInfo();
       case "mcp_list_tasks": return mcpTasks.filter((task) => task.workspace_id === args.workspaceId);

@@ -42,6 +42,7 @@ import { createDebouncedTask } from "./lib/async/debounce";
 import {
   GRID_COL_OPTIONS,
   HOTKEY_ACTIONS,
+  hotkeyActionLabel,
   matchHotkey,
   type Hotkey,
   usePreferencesStore,
@@ -834,7 +835,7 @@ function App() {
         })
         .catch((err) => {
           console.error("failed to persist terminal placement:", err);
-          pushSystemNotification("Terminal started, but its tab placement was not saved");
+          pushSystemNotification(t("app.placementNotSaved"));
         });
     }
     setFocusedId(res.meta.id);
@@ -998,7 +999,7 @@ function App() {
           ? result.error.message
           : String(result.error ?? result.status);
       const label = labels.get(result.id) ?? result.id;
-      pushSystemNotification(`Failed to resume ${label}: ${detail}`);
+      pushSystemNotification(t("app.resumeFailed", { name: label, detail }));
     }
   };
 
@@ -1011,7 +1012,7 @@ function App() {
       dropResumeItem(item.terminalId);
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
-      pushSystemNotification(`Failed to resume ${item.wsName}: ${detail}`);
+      pushSystemNotification(t("app.resumeFailed", { name: item.wsName, detail }));
     } finally {
       resumingTerminalIdsRef.current.delete(item.terminalId);
       resumeQueueMutationRef.current = false;
@@ -1286,7 +1287,7 @@ function App() {
       });
       setGroupSuspended(groupId, true);
       pushSystemNotification(
-        `${failed.length} agent${failed.length === 1 ? "" : "s"} in ${groupName} could not be resumed; the group remains suspended`,
+        t("app.groupResumePartial", { count: failed.length, group: groupName }),
       );
       await refresh();
       return;
@@ -1300,7 +1301,7 @@ function App() {
         console.error(`failed to restore suspended group ${groupId}:`, restoreError);
       });
       setGroupSuspended(groupId, true);
-      pushSystemNotification(`Could not activate group ${groupName}`);
+      pushSystemNotification(t("app.groupActivateFailed", { group: groupName }));
     }
     await refresh();
   };
@@ -1380,7 +1381,7 @@ function App() {
 
   const startVoiceAgent = async (agentTarget?: string) => {
     if (!active) {
-      pushSystemNotification("Select a workspace before starting an agent");
+      pushSystemNotification(t("app.pickWorkspaceFirst"));
       return;
     }
     if (!agentTarget) {
@@ -1395,7 +1396,7 @@ function App() {
           normalizeVoiceLookup(candidate.label) === needle),
     );
     if (!agent) {
-      pushSystemNotification(`Agent not available: ${agentTarget}`);
+      pushSystemNotification(t("app.agentUnavailable", { name: agentTarget }));
       return;
     }
     await spawnTerminalInto(active.id, agent.id);
@@ -1421,7 +1422,7 @@ function App() {
             setVoiceFeedback(t("app.voice.terminalNotFound", { name: intent.target }));
             return false;
           }
-          setVoiceFeedback(`Foco alterado para ${intent.target}.`);
+          setVoiceFeedback(t("app.voice.focusChanged", { name: intent.target }));
           return true;
         case "suspend-group": {
           const groupId = resolveVoiceGroup(intent.group);
@@ -1474,7 +1475,7 @@ function App() {
       await refresh();
     } catch (err) {
       console.error("failed to stop fleet terminals:", err);
-      pushSystemNotification("Could not stop all selected agents");
+      pushSystemNotification(t("app.stopSomeFailed"));
       await refresh();
     }
   };
@@ -1624,7 +1625,7 @@ function App() {
     if (snapshotOperation || pendingImportPath) return;
     try {
       const path = await openDialog({
-        title: "Importar snapshot do Terra Swarm",
+        title: t("app.importDialogTitle"),
         multiple: false,
         directory: false,
         filters: [{ name: "Snapshot Terra Swarm", extensions: ["json"] }],
@@ -1763,7 +1764,7 @@ function App() {
     installPendingUpdate().catch((err) => {
       console.error("update install failed:", err);
       setUpdateInstalling(false);
-      pushSystemNotification("Update failed to install — try again later");
+      pushSystemNotification(t("app.updateFailed"));
     });
   };
 
@@ -1771,13 +1772,13 @@ function App() {
     console.error("voice model load failed:", err);
     setVoiceModel(null);
     refreshVoiceModels();
-    pushSystemNotification("Voice model failed to load — select it again");
+    pushSystemNotification(t("app.voice.modelLoadFailed"));
   };
 
   const disableVoiceInput = (notify: boolean) => {
     setVoiceEnabled(false);
     if (notify) {
-      pushSystemNotification("Microphone disconnected — voice input disabled");
+      pushSystemNotification(t("app.voice.micDisconnected"));
     }
   };
 
@@ -1835,7 +1836,7 @@ function App() {
       .then(() => setMicTesting(true))
       .catch((err) => {
         console.error("mic test failed:", err);
-        const detail = typeof err === "string" ? err : "Could not start microphone test";
+        const detail = typeof err === "string" ? err : t("app.voice.micTestFailed");
         pushSystemNotification(detail);
       });
   };
@@ -1984,8 +1985,8 @@ function App() {
     });
     const unRecErr = listen<string>("voice-recording-error", (e) => {
       setVoiceStatus("idle");
-      dispatchVoiceCapsule({ type: "fail", message: e.payload || "Falha ao capturar o microfone." });
-      setVoiceFeedback(e.payload || "Falha ao capturar o microfone.");
+      dispatchVoiceCapsule({ type: "fail", message: e.payload || t("app.voice.captureFailed") });
+      setVoiceFeedback(e.payload || t("app.voice.captureFailed"));
       console.error("voice recording error:", e.payload);
       if (isVoiceModelError(e.payload)) {
         setSettingsSection("voice");
@@ -2234,7 +2235,7 @@ function App() {
       );
       if (conflict) {
         pushSystemNotification(
-          `Shortcut already assigned to "${conflict.label}"`,
+          t("app.shortcutTaken", { action: hotkeyActionLabel(conflict.id) }),
         );
         setCapturing(null);
         return;

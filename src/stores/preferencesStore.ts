@@ -1,5 +1,6 @@
 import { DEFAULT_NAME_LIST, NAME_SETS, type NameSetId, type NamesExhaustedStrategy } from "../domain/agentNames";
 import { create } from "zustand";
+import { t, type MessageKey } from "../i18n";
 import {
   detectShortcutPlatform,
   formatShortcut,
@@ -72,36 +73,45 @@ export const DEFAULT_HOTKEYS: Record<string, Hotkey> = {
 };
 
 export const HOTKEY_ACTIONS = [
-  { id: "newWorkspace", label: "Novo workspace" },
-  { id: "renameWorkspace", label: "Renomear workspace" },
-  { id: "deleteWorkspace", label: "Excluir workspace" },
-  { id: "newTerminal", label: "Novo agente" },
-  { id: "closeTerminal", label: "Fechar agente em foco" },
-  { id: "maximizeTerminal", label: "Maximizar pane (alternar)" },
-  { id: "minimizeTerminal", label: "Voltar à grade" },
-  { id: "increaseFontSize", label: "Aumentar fonte do terminal" },
-  { id: "decreaseFontSize", label: "Diminuir fonte do terminal" },
-  { id: "resetFontSize", label: "Restaurar fonte do terminal" },
-  { id: "toggleVoice", label: "Abrir ou fechar a voz" },
-  { id: "selectWorkspace1", label: "Ir para o workspace 1" },
-  { id: "selectWorkspace2", label: "Ir para o workspace 2" },
-  { id: "selectWorkspace3", label: "Ir para o workspace 3" },
-  { id: "selectWorkspace4", label: "Ir para o workspace 4" },
-  { id: "selectWorkspace5", label: "Ir para o workspace 5" },
-  { id: "selectWorkspace6", label: "Ir para o workspace 6" },
-  { id: "selectWorkspace7", label: "Ir para o workspace 7" },
-  { id: "selectWorkspace8", label: "Ir para o workspace 8" },
-  { id: "selectWorkspace9", label: "Ir para o workspace 9" },
-  { id: "selectTerminal1", label: "Focar o agente 1" },
-  { id: "selectTerminal2", label: "Focar o agente 2" },
-  { id: "selectTerminal3", label: "Focar o agente 3" },
-  { id: "selectTerminal4", label: "Focar o agente 4" },
-  { id: "selectTerminal5", label: "Focar o agente 5" },
-  { id: "selectTerminal6", label: "Focar o agente 6" },
-  { id: "selectTerminal7", label: "Focar o agente 7" },
-  { id: "selectTerminal8", label: "Focar o agente 8" },
-  { id: "selectTerminal9", label: "Focar o agente 9" },
+  { id: "newWorkspace" },
+  { id: "renameWorkspace" },
+  { id: "deleteWorkspace" },
+  { id: "newTerminal" },
+  { id: "closeTerminal" },
+  { id: "maximizeTerminal" },
+  { id: "minimizeTerminal" },
+  { id: "increaseFontSize" },
+  { id: "decreaseFontSize" },
+  { id: "resetFontSize" },
+  { id: "toggleVoice" },
+  { id: "selectWorkspace1" },
+  { id: "selectWorkspace2" },
+  { id: "selectWorkspace3" },
+  { id: "selectWorkspace4" },
+  { id: "selectWorkspace5" },
+  { id: "selectWorkspace6" },
+  { id: "selectWorkspace7" },
+  { id: "selectWorkspace8" },
+  { id: "selectWorkspace9" },
+  { id: "selectTerminal1" },
+  { id: "selectTerminal2" },
+  { id: "selectTerminal3" },
+  { id: "selectTerminal4" },
+  { id: "selectTerminal5" },
+  { id: "selectTerminal6" },
+  { id: "selectTerminal7" },
+  { id: "selectTerminal8" },
+  { id: "selectTerminal9" },
 ] as const;
+
+/** The action's name in the current language. */
+export function hotkeyActionLabel(id: string): string {
+  const workspace = /^selectWorkspace(\d)$/.exec(id);
+  if (workspace) return t("hotkeys.selectWorkspace", { n: workspace[1] });
+  const terminal = /^selectTerminal(\d)$/.exec(id);
+  if (terminal) return t("hotkeys.selectTerminal", { n: terminal[1] });
+  return t(`hotkeys.${id}` as MessageKey);
+}
 
 /** Keep persisted shortcuts executable when a profile moves between OSes. */
 export function normalizeHotkeyForPlatform(

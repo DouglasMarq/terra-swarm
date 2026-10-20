@@ -20,7 +20,7 @@ function errorMessage(error: unknown): string {
 
 const sections: ReadonlyArray<{ key: keyof Pick<WorkspaceGitStatus, "conflicted" | "staged" | "modified" | "untracked">; label: string }> = [
   { key: "conflicted", get label() { return t("nav.git.conflicted"); } },
-  { key: "staged", label: "Staged" },
+  { key: "staged", get label() { return t("nav.git.staged"); } },
   { key: "modified", get label() { return t("nav.git.modified"); } },
   { key: "untracked", get label() { return t("nav.git.untracked"); } },
 ];

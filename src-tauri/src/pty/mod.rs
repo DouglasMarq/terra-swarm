@@ -329,23 +329,35 @@ pub fn spawn_terminal_inner<R: Runtime>(
         .get(&workspace_id)
         .and_then(|ws| ws.terminals.iter().find(|terminal| terminal.id == id))
         .map_or((None, None, None), |terminal| {
-            (terminal.worktree.clone(), terminal.role, Some(terminal.command.clone()))
+            (
+                terminal.worktree.clone(),
+                terminal.role,
+                Some(terminal.command.clone()),
+            )
         });
     let role = existing_role.or(options.role);
     let mut created_worktree = CreatedWorktree(None);
     let worktree = match existing_worktree {
         Some(existing) => {
             if !std::path::Path::new(&existing.cwd).is_dir() {
-                return Err(format!("the agent's worktree {} no longer exists", existing.path));
+                return Err(format!(
+                    "the agent's worktree {} no longer exists",
+                    existing.path
+                ));
             }
             Some(existing)
         }
         None if options.worktree => {
             let root = match &options.worktree_root {
                 Some(root) => root.clone(),
-                None => app.path().app_data_dir().map_err(|e| e.to_string())?.join("worktrees"),
+                None => app
+                    .path()
+                    .app_data_dir()
+                    .map_err(|e| e.to_string())?
+                    .join("worktrees"),
             };
-            let info = crate::worktree::create(std::path::Path::new(&cwd), &root, &workspace_id, &id)?;
+            let info =
+                crate::worktree::create(std::path::Path::new(&cwd), &root, &workspace_id, &id)?;
             created_worktree = CreatedWorktree(Some(info.clone()));
             Some(info)
         }
@@ -556,7 +568,11 @@ pub fn spawn_terminal_inner<R: Runtime>(
     // Resuming runs the continuation command but keeps the agent's own
     // command on record, so a later restart starts it fresh.
     let recorded_command = match existing_command {
-        Some(original) if agents::is_resume_command(&command) && !agents::is_resume_command(&original) => original,
+        Some(original)
+            if agents::is_resume_command(&command) && !agents::is_resume_command(&original) =>
+        {
+            original
+        }
         _ if command.is_empty() => "shell".into(),
         _ => command,
     };
@@ -659,7 +675,17 @@ pub fn demo_seed(app: &AppHandle) {
         .map(|mut s| s.create("agents".into(), String::new()));
     if let Ok(ws1) = ws1 {
         for c in picked {
-            let _ = spawn_terminal_inner(app, &manager, &store, &ws1.id, c, 100, 30, None, &SpawnOptions::default());
+            let _ = spawn_terminal_inner(
+                app,
+                &manager,
+                &store,
+                &ws1.id,
+                c,
+                100,
+                30,
+                None,
+                &SpawnOptions::default(),
+            );
         }
     }
     let ws2 = store
@@ -667,8 +693,28 @@ pub fn demo_seed(app: &AppHandle) {
         .map(|mut s| s.create("scratch".into(), String::new()));
     if let Ok(ws2) = ws2 {
         #[cfg(unix)]
-        let _ = spawn_terminal_inner(app, &manager, &store, &ws2.id, "top", 100, 30, None, &SpawnOptions::default());
-        let _ = spawn_terminal_inner(app, &manager, &store, &ws2.id, "shell", 100, 30, None, &SpawnOptions::default());
+        let _ = spawn_terminal_inner(
+            app,
+            &manager,
+            &store,
+            &ws2.id,
+            "top",
+            100,
+            30,
+            None,
+            &SpawnOptions::default(),
+        );
+        let _ = spawn_terminal_inner(
+            app,
+            &manager,
+            &store,
+            &ws2.id,
+            "shell",
+            100,
+            30,
+            None,
+            &SpawnOptions::default(),
+        );
     }
     let _ = app.emit("workspaces-changed", ());
 }
@@ -1094,10 +1140,10 @@ mod spawn_lifecycle_tests {
         let repo = crate::worktree::test_repo::init("spawn");
         let root = repo.with_extension("worktrees");
         let store = app.state::<Mutex<WorkspaceStore>>();
-        let workspace = store
-            .lock()
-            .unwrap()
-            .create("repo".into(), repo.join("app").to_string_lossy().into_owned());
+        let workspace = store.lock().unwrap().create(
+            "repo".into(),
+            repo.join("app").to_string_lossy().into_owned(),
+        );
         let manager = app.state::<Mutex<PtyManager>>();
         let options = SpawnOptions {
             shell: Some("/bin/sh".into()),
@@ -1105,22 +1151,48 @@ mod spawn_lifecycle_tests {
             worktree_root: Some(root.clone()),
             ..SpawnOptions::default()
         };
-        let first = spawn_terminal_inner(app.handle(), manager.inner(), store.inner(), &workspace.id, "pwd > where.txt", 80, 24, None, &options)
-            .expect("spawn isolated agent");
+        let first = spawn_terminal_inner(
+            app.handle(),
+            manager.inner(),
+            store.inner(),
+            &workspace.id,
+            "pwd > where.txt",
+            80,
+            24,
+            None,
+            &options,
+        )
+        .expect("spawn isolated agent");
         let info = first.meta.worktree.clone().expect("worktree recorded");
         assert_eq!(info.branch, format!("terra/{}", first.meta.id));
         let written = std::path::Path::new(&info.cwd).join("where.txt");
         let deadline = Instant::now() + Duration::from_secs(3);
         while !written.exists() {
-            assert!(Instant::now() < deadline, "the agent did not start in its worktree");
+            assert!(
+                Instant::now() < deadline,
+                "the agent did not start in its worktree"
+            );
             std::thread::sleep(Duration::from_millis(20));
         }
         // Respawning the same id (resume) goes back to the same worktree,
         // even without asking for isolation again.
-        let plain = SpawnOptions { shell: Some("/bin/sh".into()), ..SpawnOptions::default() };
+        let plain = SpawnOptions {
+            shell: Some("/bin/sh".into()),
+            ..SpawnOptions::default()
+        };
         std::thread::sleep(Duration::from_millis(200));
-        let again = spawn_terminal_inner(app.handle(), manager.inner(), store.inner(), &workspace.id, "true", 80, 24, Some(&first.meta.id), &plain)
-            .expect("respawn isolated agent");
+        let again = spawn_terminal_inner(
+            app.handle(),
+            manager.inner(),
+            store.inner(),
+            &workspace.id,
+            "true",
+            80,
+            24,
+            Some(&first.meta.id),
+            &plain,
+        )
+        .expect("respawn isolated agent");
         assert_eq!(again.meta.worktree.as_ref(), Some(&info));
         crate::worktree::remove(&info, true).unwrap();
         crate::worktree::test_repo::cleanup(&repo, &root);

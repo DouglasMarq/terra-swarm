@@ -9,10 +9,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Runtime};
 
+use super::dev_server::{detect_dev_server_urls, DevServerPayload};
 use super::output_scan::{
     detect_context_used, extract_notifications, scan_titles, strip_ansi, take_decodable,
 };
-use super::dev_server::{detect_dev_server_urls, DevServerPayload};
 use super::Backlog;
 use crate::scrollback::ScrollbackStore;
 

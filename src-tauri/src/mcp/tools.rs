@@ -532,7 +532,9 @@ pub fn call(
             }
             let to = args.to.trim();
             if to == me {
-                return Err(ToolError::InvalidArguments("assign tasks to teammates, not to yourself".into()));
+                return Err(ToolError::InvalidArguments(
+                    "assign tasks to teammates, not to yourself".into(),
+                ));
             }
             if !hub.peers(ws).iter().any(|peer| peer.terminal_id == to) {
                 return Err(ToolError::InvalidArguments(format!(
@@ -550,7 +552,10 @@ pub fn call(
                 ))));
             }
             if current.status == TaskStatus::Done {
-                return Err(ToolError::Store(StoreError::Conflict(format!("task {} is already done", current.id))));
+                return Err(ToolError::Store(StoreError::Conflict(format!(
+                    "task {} is already done",
+                    current.id
+                ))));
             }
             let task = repo.update_task(
                 ws,
@@ -562,7 +567,11 @@ pub fn call(
                     ..TaskPatch::default()
                 },
             )?;
-            let note = args.note.as_deref().map(str::trim).filter(|note| !note.is_empty());
+            let note = args
+                .note
+                .as_deref()
+                .map(str::trim)
+                .filter(|note| !note.is_empty());
             let body = match note {
                 Some(note) => format!("I assigned you {}: {}. {}", task.id, task.title, note),
                 None => format!("I assigned you {}: {}.", task.id, task.title),
@@ -570,7 +579,9 @@ pub fn call(
             let message = repo.send_message(ws, me, to, &body)?;
             // Typing into a terminal that is busy or waiting on a human could
             // answer a prompt by accident, so only idle agents are woken.
-            let idle = repo.status_of(to).is_some_and(|status| status.state == AgentState::Idle);
+            let idle = repo
+                .status_of(to)
+                .is_some_and(|status| status.state == AgentState::Idle);
             drop(repo);
             hub.emit_tasks_changed(ws);
             hub.emit_message(&message);
@@ -619,8 +630,8 @@ pub fn call(
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{hub, identity};
     use super::super::roles::Role;
+    use super::super::test_support::{hub, identity};
     use super::super::{EVENT_AGENT_STATUS, EVENT_MESSAGE, EVENT_NUDGE, EVENT_TASKS_CHANGED};
     use super::*;
 
@@ -851,44 +862,122 @@ mod tests {
     #[test]
     fn the_orchestrator_assigns_and_wakes_idle_teammates() {
         let (hub, events) = hub();
-        let lead = AgentIdentity { role: Some(Role::Orchestrator), ..identity("t-1", "ws-1", "claude") };
-        let dev = AgentIdentity { role: Some(Role::Executor), ..identity("t-2", "ws-1", "claude") };
+        let lead = AgentIdentity {
+            role: Some(Role::Orchestrator),
+            ..identity("t-1", "ws-1", "claude")
+        };
+        let dev = AgentIdentity {
+            role: Some(Role::Executor),
+            ..identity("t-2", "ws-1", "claude")
+        };
         hub.issue(lead.clone());
         hub.issue(dev.clone());
         hub.issue(identity("t-3", "ws-1", "codex"));
 
         let me = call(&hub, &dev, "whoami", json!({})).unwrap();
         assert_eq!(me["role"], "executor");
-        assert!(me["role_instructions"].as_str().unwrap().contains("implement"));
+        assert!(me["role_instructions"]
+            .as_str()
+            .unwrap()
+            .contains("implement"));
         let peers = me["peers"].as_array().unwrap();
-        assert!(peers.iter().any(|peer| peer["terminal_id"] == "t-1" && peer["role"] == "orchestrator"));
+        assert!(peers
+            .iter()
+            .any(|peer| peer["terminal_id"] == "t-1" && peer["role"] == "orchestrator"));
 
-        let first = call(&hub, &lead, "create_task", json!({ "title": "Build the API" })).unwrap();
-        let second = call(&hub, &lead, "create_task", json!({ "title": "Test the API", "depends_on": [first["id"]] })).unwrap();
+        let first = call(
+            &hub,
+            &lead,
+            "create_task",
+            json!({ "title": "Build the API" }),
+        )
+        .unwrap();
+        let second = call(
+            &hub,
+            &lead,
+            "create_task",
+            json!({ "title": "Test the API", "depends_on": [first["id"]] }),
+        )
+        .unwrap();
 
         // Only the orchestrator assigns.
-        let refused = call(&hub, &dev, "assign_task", json!({ "id": first["id"], "to": "t-3" }));
-        assert!(matches!(refused, Err(ToolError::InvalidArguments(message)) if message.contains("orchestrator")));
+        let refused = call(
+            &hub,
+            &dev,
+            "assign_task",
+            json!({ "id": first["id"], "to": "t-3" }),
+        );
+        assert!(
+            matches!(refused, Err(ToolError::InvalidArguments(message)) if message.contains("orchestrator"))
+        );
         // Dependencies come first, and the target must be a running teammate.
-        assert!(matches!(call(&hub, &lead, "assign_task", json!({ "id": second["id"], "to": "t-2" })), Err(ToolError::Store(StoreError::Conflict(_)))));
-        assert!(call(&hub, &lead, "assign_task", json!({ "id": first["id"], "to": "t-9" })).is_err());
+        assert!(matches!(
+            call(
+                &hub,
+                &lead,
+                "assign_task",
+                json!({ "id": second["id"], "to": "t-2" })
+            ),
+            Err(ToolError::Store(StoreError::Conflict(_)))
+        ));
+        assert!(call(
+            &hub,
+            &lead,
+            "assign_task",
+            json!({ "id": first["id"], "to": "t-9" })
+        )
+        .is_err());
 
         // A busy agent gets the task and a message, but nothing typed.
-        call(&hub, &dev, "report_status", json!({ "state": "working", "summary": "other work" })).unwrap();
-        let busy = call(&hub, &lead, "assign_task", json!({ "id": first["id"], "to": "t-2", "note": "Use axum." })).unwrap();
+        call(
+            &hub,
+            &dev,
+            "report_status",
+            json!({ "state": "working", "summary": "other work" }),
+        )
+        .unwrap();
+        let busy = call(
+            &hub,
+            &lead,
+            "assign_task",
+            json!({ "id": first["id"], "to": "t-2", "note": "Use axum." }),
+        )
+        .unwrap();
         assert_eq!(busy["woken"], false);
         assert_eq!(busy["task"]["assignee"], "t-2");
         assert_eq!(busy["task"]["status"], "in_progress");
         let inbox = call(&hub, &dev, "read_inbox", json!({})).unwrap();
-        assert!(inbox["messages"][0]["body"].as_str().unwrap().ends_with("Use axum."));
-        assert!(!events.lock().unwrap().iter().any(|(event, _)| event == EVENT_NUDGE));
+        assert!(inbox["messages"][0]["body"]
+            .as_str()
+            .unwrap()
+            .ends_with("Use axum."));
+        assert!(!events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(event, _)| event == EVENT_NUDGE));
 
         // An idle one is woken with a prompt.
-        call(&hub, &dev, "report_status", json!({ "state": "idle", "summary": "" })).unwrap();
-        let idle = call(&hub, &lead, "assign_task", json!({ "id": first["id"], "to": "t-2" })).unwrap();
+        call(
+            &hub,
+            &dev,
+            "report_status",
+            json!({ "state": "idle", "summary": "" }),
+        )
+        .unwrap();
+        let idle = call(
+            &hub,
+            &lead,
+            "assign_task",
+            json!({ "id": first["id"], "to": "t-2" }),
+        )
+        .unwrap();
         assert_eq!(idle["woken"], true);
         let events = events.lock().unwrap();
-        let nudge = events.iter().find(|(event, _)| event == EVENT_NUDGE).expect("nudge sent");
+        let nudge = events
+            .iter()
+            .find(|(event, _)| event == EVENT_NUDGE)
+            .expect("nudge sent");
         assert_eq!(nudge.1["terminal_id"], "t-2");
         assert!(nudge.1["prompt"].as_str().unwrap().contains("get_task"));
     }

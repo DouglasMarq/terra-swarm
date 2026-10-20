@@ -1,3 +1,4 @@
+use crate::sync::LockExt;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use rubato::audioadapter::Adapter;
 use rubato::{Fft, FixedSync, Resampler};
@@ -6,7 +7,6 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tauri::Emitter;
-use crate::sync::LockExt;
 
 const TARGET_SAMPLE_RATE: u32 = 16000;
 const RESAMPLE_CHUNK_SIZE: usize = 1024;
@@ -182,7 +182,8 @@ impl AudioController {
                                 let _ = reply.send(Ok(()));
                             }
                             Err(e) => {
-                                let _ = reply.send(Err(format!("Failed to start audio stream: {e}")));
+                                let _ =
+                                    reply.send(Err(format!("Failed to start audio stream: {e}")));
                             }
                         }
                     }
@@ -266,9 +267,9 @@ fn build_stream(
     let device = resolve_input_device(&host, &device_name)
         .ok_or("No microphone found. Please connect a microphone and try again.")?;
 
-    let config = device
-        .default_input_config()
-        .map_err(|_| "Microphone is not available. Please check your audio input settings.".to_string())?;
+    let config = device.default_input_config().map_err(|_| {
+        "Microphone is not available. Please check your audio input settings.".to_string()
+    })?;
 
     let source_sample_rate = config.sample_rate();
     let source_channels = config.channels() as usize;
@@ -796,9 +797,9 @@ fn build_test_streams(
     let host = cpal::default_host();
     let device = resolve_input_device(&host, &device_name)
         .ok_or("No microphone found. Please connect a microphone and try again.")?;
-    let in_config = device
-        .default_input_config()
-        .map_err(|_| "Microphone is not available. Please check your audio input settings.".to_string())?;
+    let in_config = device.default_input_config().map_err(|_| {
+        "Microphone is not available. Please check your audio input settings.".to_string()
+    })?;
     let in_channels = in_config.channels() as usize;
     let in_rate = in_config.sample_rate();
 

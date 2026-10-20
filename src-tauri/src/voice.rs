@@ -2,12 +2,12 @@ pub mod audio;
 pub mod models;
 pub mod transcriber;
 
+use crate::sync::LockExt;
 use audio::AudioController;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
 use transcriber::Transcriber;
-use crate::sync::LockExt;
 
 pub struct VoiceState {
     pub recording: Mutex<bool>,
@@ -129,12 +129,11 @@ pub fn stop_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
     let app_handle = app.clone();
     std::thread::spawn(move || {
         let _ = app_handle.emit("voice-transcription-started", ());
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            match &transcriber {
+        let result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match &transcriber {
                 Some(t) => t.transcribe(&audio_data, &language),
                 None => Err("No model loaded".into()),
-            }
-        }));
+            }));
         match result {
             Ok(Ok(text)) => {
                 let _ = app_handle.emit("voice-transcription-complete", text);
@@ -207,11 +206,9 @@ pub async fn voice_test_mic_start(
 
 #[tauri::command]
 pub async fn voice_test_mic_stop(app: tauri::AppHandle) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        app.state::<audio::MicTestController>().stop()
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || app.state::<audio::MicTestController>().stop())
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Check the current mic state and, when it changed, emit `voice-mic-changed`.
@@ -225,7 +222,10 @@ fn emit_if_mic_changed(app: &tauri::AppHandle, last: &mut Option<bool>) {
     let _ = app.emit("voice-mic-changed", available);
     if !available && *app.state::<VoiceState>().recording.lock_or_recover() {
         if let Err(error) = stop_recording_impl(app) {
-            eprintln!("failed to stop recording after the mic disappeared: {}", error);
+            eprintln!(
+                "failed to stop recording after the mic disappeared: {}",
+                error
+            );
         }
     }
 }
@@ -245,7 +245,11 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
             return;
         };
         let wd = unsafe {
-            libc::inotify_add_watch(fd, path.as_ptr(), (libc::IN_CREATE | libc::IN_DELETE) as u32)
+            libc::inotify_add_watch(
+                fd,
+                path.as_ptr(),
+                (libc::IN_CREATE | libc::IN_DELETE) as u32,
+            )
         };
         if wd < 0 {
             unsafe { libc::close(fd) };
@@ -318,8 +322,7 @@ pub async fn voice_set_model(model_id: String, app: tauri::AppHandle) -> Result<
             .path()
             .app_data_dir()
             .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-        let path = models::model_path(&data_dir, &model_id)
-            .ok_or("Model is not downloaded yet")?;
+        let path = models::model_path(&data_dir, &model_id).ok_or("Model is not downloaded yet")?;
         activate_model(&app, &model_id, path)
     })
     .await

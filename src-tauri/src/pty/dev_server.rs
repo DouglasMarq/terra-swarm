@@ -27,7 +27,10 @@ pub fn detect_dev_server_urls(text: &str) -> Vec<String> {
             let at = start + offset;
             start = at + scheme.len();
             let rest = &text[start..];
-            let Some(host) = HOSTS.iter().find(|host| rest.starts_with(&format!("{}:", host))) else {
+            let Some(host) = HOSTS
+                .iter()
+                .find(|host| rest.starts_with(&format!("{}:", host)))
+            else {
                 continue;
             };
             let after = &rest[host.len() + 1..];
@@ -40,7 +43,9 @@ pub fn detect_dev_server_urls(text: &str) -> Vec<String> {
             }
             let path: String = after[digits.len()..]
                 .chars()
-                .take_while(|c| !c.is_whitespace() && !matches!(c, '"' | '\'' | ')' | '>' | '\u{1b}'))
+                .take_while(|c| {
+                    !c.is_whitespace() && !matches!(c, '"' | '\'' | ')' | '>' | '\u{1b}')
+                })
                 .collect();
             if OWN_PATHS.iter().any(|own| path.starts_with(own)) {
                 continue;
@@ -60,7 +65,9 @@ pub fn probe(ports: &[u16], timeout: Duration) -> Vec<u16> {
         .iter()
         .copied()
         .filter(|port| *port != 0)
-        .filter(|port| TcpStream::connect_timeout(&SocketAddr::from(([127, 0, 0, 1], *port)), timeout).is_ok())
+        .filter(|port| {
+            TcpStream::connect_timeout(&SocketAddr::from(([127, 0, 0, 1], *port)), timeout).is_ok()
+        })
         .collect()
 }
 
@@ -86,12 +93,18 @@ mod tests {
         let next = "- Local:        http://127.0.0.1:3000\n- Network:      http://192.168.1.4:3000";
         assert_eq!(detect_dev_server_urls(next), vec!["http://localhost:3000/"]);
         let many = "Serving on http://0.0.0.0:8000/docs and https://[::1]:8443, again http://localhost:8000";
-        assert_eq!(detect_dev_server_urls(many), vec!["http://localhost:8000/", "https://localhost:8443/"]);
+        assert_eq!(
+            detect_dev_server_urls(many),
+            vec!["http://localhost:8000/", "https://localhost:8443/"]
+        );
     }
 
     #[test]
     fn ignores_remote_hosts_bad_ports_and_terra_itself() {
-        assert!(detect_dev_server_urls("see https://example.com:443/x and http://localhost:99999").is_empty());
+        assert!(
+            detect_dev_server_urls("see https://example.com:443/x and http://localhost:99999")
+                .is_empty()
+        );
         assert!(detect_dev_server_urls("TERRA_MCP_URL=http://127.0.0.1:4100/mcp").is_empty());
         assert!(detect_dev_server_urls("http://localhost:/nope http://localhost").is_empty());
     }
@@ -104,6 +117,9 @@ mod tests {
             let spare = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
             spare.local_addr().unwrap().port()
         };
-        assert_eq!(probe(&[closed, open, 0], Duration::from_millis(200)), vec![open]);
+        assert_eq!(
+            probe(&[closed, open, 0], Duration::from_millis(200)),
+            vec![open]
+        );
     }
 }

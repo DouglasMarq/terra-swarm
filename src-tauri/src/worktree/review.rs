@@ -68,7 +68,11 @@ pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
     for (kind_line, count_line) in kinds.lines().zip(counts.lines()) {
         let code = kind_line.split('\t').next().unwrap_or("M");
         // A rename lists the old and the new path; the new one is last.
-        let path = kind_line.rsplit('\t').next().unwrap_or_default().to_string();
+        let path = kind_line
+            .rsplit('\t')
+            .next()
+            .unwrap_or_default()
+            .to_string();
         let mut numbers = count_line.split('\t');
         let additions = numbers.next().and_then(|n| n.parse().ok());
         let deletions = numbers.next().and_then(|n| n.parse().ok());
@@ -83,7 +87,10 @@ pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
     let untracked = git(dir, &["ls-files", "--others", "--exclude-standard"])?;
     for file in untracked.lines().filter(|line| !line.is_empty()) {
         let text = diff_new_file(dir, file);
-        let additions = text.lines().filter(|line| line.starts_with('+') && !line.starts_with("+++")).count() as u32;
+        let additions = text
+            .lines()
+            .filter(|line| line.starts_with('+') && !line.starts_with("+++"))
+            .count() as u32;
         let binary = text.contains("Binary files");
         files.push(ChangedFile {
             path: file.to_string(),
@@ -135,27 +142,49 @@ pub fn merge(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
         return Err("commit or discard the agent's uncommitted changes first".into());
     }
     if current.ahead == 0 {
-        return Err(format!("{} has nothing that {} lacks", info.branch, info.base));
+        return Err(format!(
+            "{} has nothing that {} lacks",
+            info.branch, info.base
+        ));
     }
     let repo = Path::new(&info.repo);
     let head = git(repo, &["symbolic-ref", "--quiet", "--short", "HEAD"]).unwrap_or_default();
     if head != info.base {
         return Err(format!(
             "the main checkout is on {}, not {}; switch it to {} to merge",
-            if head.is_empty() { "a detached HEAD" } else { &head },
+            if head.is_empty() {
+                "a detached HEAD"
+            } else {
+                &head
+            },
             info.base,
             info.base
         ));
     }
     // Never touch a merge the user has in progress there.
     if git(repo, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok() {
-        return Err("the main checkout is in the middle of a merge; finish or abort it first".into());
+        return Err(
+            "the main checkout is in the middle of a merge; finish or abort it first".into(),
+        );
     }
     let message = format!("Merge {} into {}", info.branch, info.base);
-    if let Err(error) = git(repo, &["merge", "--no-ff", "--no-edit", "-m", &message, &info.branch]) {
+    if let Err(error) = git(
+        repo,
+        &[
+            "merge",
+            "--no-ff",
+            "--no-edit",
+            "-m",
+            &message,
+            &info.branch,
+        ],
+    ) {
         // Leave the main checkout exactly as it was.
         let _ = git(repo, &["merge", "--abort"]);
-        return Err(format!("the merge did not apply cleanly, nothing was changed: {}", error));
+        return Err(format!(
+            "the merge did not apply cleanly, nothing was changed: {}",
+            error
+        ));
     }
     Ok(status(info))
 }
@@ -172,7 +201,11 @@ fn run(program: &str, dir: &Path, args: &[&str]) -> Result<String, String> {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(if stderr.is_empty() { format!("{} failed", program) } else { stderr })
+        Err(if stderr.is_empty() {
+            format!("{} failed", program)
+        } else {
+            stderr
+        })
     }
 }
 
@@ -195,7 +228,18 @@ pub fn open_pull_request(info: &WorktreeInfo, title: &str, body: &str) -> Result
     run(
         "gh",
         dir,
-        &["pr", "create", "--base", &info.base, "--head", &info.branch, "--title", title, "--body", body],
+        &[
+            "pr",
+            "create",
+            "--base",
+            &info.base,
+            "--head",
+            &info.branch,
+            "--title",
+            title,
+            "--body",
+            body,
+        ],
     )
     .map(|out| out.lines().last().unwrap_or_default().to_string())
 }
@@ -224,8 +268,18 @@ mod tests {
         assert_eq!(
             diff.files,
             vec![
-                ChangedFile { path: "app/readme.txt".into(), change: "modified".into(), additions: Some(1), deletions: Some(0) },
-                ChangedFile { path: "app/notes.md".into(), change: "untracked".into(), additions: Some(2), deletions: Some(0) },
+                ChangedFile {
+                    path: "app/readme.txt".into(),
+                    change: "modified".into(),
+                    additions: Some(1),
+                    deletions: Some(0)
+                },
+                ChangedFile {
+                    path: "app/notes.md".into(),
+                    change: "untracked".into(),
+                    additions: Some(2),
+                    deletions: Some(0)
+                },
             ]
         );
         assert!(diff.patch.contains("+world"));
@@ -240,7 +294,9 @@ mod tests {
         let repo = init("merge");
         let root = repo.with_extension("worktrees");
         let info = create(&repo, &root, "ws", "t-2").unwrap();
-        assert!(commit(&info, "nothing").unwrap_err().contains("nothing to commit"));
+        assert!(commit(&info, "nothing")
+            .unwrap_err()
+            .contains("nothing to commit"));
         std::fs::write(Path::new(&info.path).join("feature.txt"), "done\n").unwrap();
         assert!(merge(&info).unwrap_err().contains("uncommitted"));
         let after = commit(&info, "Add the feature").unwrap();

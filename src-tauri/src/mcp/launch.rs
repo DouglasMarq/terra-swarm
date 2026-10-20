@@ -76,21 +76,35 @@ pub struct Registration<'a> {
 
 /// Insert the flags that register the server (and the state hooks) with a
 /// known agent CLI. Commands of other agents come back unchanged.
-pub fn rewrite_command(command: &str, agent: &str, registration: Registration<'_>, quoting: Quoting) -> String {
+pub fn rewrite_command(
+    command: &str,
+    agent: &str,
+    registration: Registration<'_>,
+    quoting: Quoting,
+) -> String {
     let command = command.trim();
     match crate::pty::agents::integration_of(agent) {
         Some("claude") => {
             let mut flags = String::new();
             if let Some(path) = registration.claude_settings {
-                flags.push_str(&format!(" --settings {}", quote(&path.to_string_lossy(), quoting)));
+                flags.push_str(&format!(
+                    " --settings {}",
+                    quote(&path.to_string_lossy(), quoting)
+                ));
             }
             if let Some(prompt) = registration.system_prompt {
-                flags.push_str(&format!(" --append-system-prompt {}", quote(prompt, quoting)));
+                flags.push_str(&format!(
+                    " --append-system-prompt {}",
+                    quote(prompt, quoting)
+                ));
             }
             // `--mcp-config` takes several values, so it goes last: placed
             // before a prompt argument it would swallow the prompt as a file.
             if let Some(path) = registration.claude_mcp {
-                flags.push_str(&format!(" --mcp-config {}", quote(&path.to_string_lossy(), quoting)));
+                flags.push_str(&format!(
+                    " --mcp-config {}",
+                    quote(&path.to_string_lossy(), quoting)
+                ));
             }
             format!("{}{}", command, flags)
         }
@@ -127,7 +141,10 @@ pub fn rewrite_command(command: &str, agent: &str, registration: Registration<'_
                 let program = serde_json::to_string(&program.to_string_lossy()).unwrap_or_default();
                 overrides.push_str(&format!(
                     " -c {}",
-                    quote(&format!("notify=[{},\"hook\",\"codex\",\"notify\"]", program), quoting)
+                    quote(
+                        &format!("notify=[{},\"hook\",\"codex\",\"notify\"]", program),
+                        quoting
+                    )
                 ));
             }
             if rest.is_empty() {
@@ -174,7 +191,9 @@ pub fn claude_settings_json(hook_url: &str, session_start_command: Option<&str>)
 pub fn user_has_codex_notify() -> bool {
     let Some(home) = std::env::var_os("CODEX_HOME")
         .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".codex")))
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".codex"))
+        })
     else {
         return false;
     };
@@ -230,9 +249,16 @@ pub fn write_claude_config(dir: &Path) -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
-pub fn write_claude_settings(dir: &Path, hook_url: &str, session_start_command: Option<&str>) -> std::io::Result<PathBuf> {
+pub fn write_claude_settings(
+    dir: &Path,
+    hook_url: &str,
+    session_start_command: Option<&str>,
+) -> std::io::Result<PathBuf> {
     let path = dir.join(CLAUDE_SETTINGS_FILE);
-    write_if_changed(&path, &claude_settings_json(hook_url, session_start_command))?;
+    write_if_changed(
+        &path,
+        &claude_settings_json(hook_url, session_start_command),
+    )?;
     Ok(path)
 }
 
@@ -259,7 +285,8 @@ impl McpHub {
             role,
         });
         let lease = McpLease::new(self, token.clone());
-        let hook_url = url.trim_end_matches(super::server::MCP_PATH).to_string() + super::hooks::HOOKS_PATH;
+        let hook_url =
+            url.trim_end_matches(super::server::MCP_PATH).to_string() + super::hooks::HOOKS_PATH;
         let integration = crate::pty::agents::integration_of(&agent);
         let written = |what: &str, result: std::io::Result<PathBuf>| match result {
             Ok(path) => Some(path),
@@ -268,9 +295,12 @@ impl McpHub {
                 None
             }
         };
-        let session_start = self
-            .hook_program()
-            .map(|program| format!("{} hook claude SessionStart", quote(&program.to_string_lossy(), quoting)));
+        let session_start = self.hook_program().map(|program| {
+            format!(
+                "{} hook claude SessionStart",
+                quote(&program.to_string_lossy(), quoting)
+            )
+        });
         let (claude_mcp, claude_settings) = match (integration, self.config_dir()) {
             (Some("claude"), Some(dir)) => (
                 written("Claude MCP config", write_claude_config(dir)),
@@ -332,30 +362,56 @@ mod tests {
     fn claude_gets_hooks_and_its_config_file_last() {
         let mcp = Path::new("/Users/me/Library/Application Support/x/claude-mcp.json");
         let hooks = Path::new("/Users/me/Library/Application Support/x/claude-hooks.json");
-        let registration = Registration { url: URL, claude_mcp: Some(mcp), claude_settings: Some(hooks), ..Registration::default() };
+        let registration = Registration {
+            url: URL,
+            claude_mcp: Some(mcp),
+            claude_settings: Some(hooks),
+            ..Registration::default()
+        };
         assert_eq!(
             rewrite_command("claude --continue", "claude", registration, Quoting::Posix),
             "claude --continue --settings '/Users/me/Library/Application Support/x/claude-hooks.json' \
              --mcp-config '/Users/me/Library/Application Support/x/claude-mcp.json'"
         );
-        let windows = Registration { url: URL, claude_mcp: Some(Path::new("C:\\a b\\c.json")), ..Registration::default() };
+        let windows = Registration {
+            url: URL,
+            claude_mcp: Some(Path::new("C:\\a b\\c.json")),
+            ..Registration::default()
+        };
         assert_eq!(
             rewrite_command("claude", "claude", windows, Quoting::Windows),
             "claude --mcp-config \"C:\\a b\\c.json\""
         );
-        let bare = Registration { url: URL, ..Registration::default() };
-        assert_eq!(rewrite_command("claude", "claude", bare, Quoting::Posix), "claude");
+        let bare = Registration {
+            url: URL,
+            ..Registration::default()
+        };
+        assert_eq!(
+            rewrite_command("claude", "claude", bare, Quoting::Posix),
+            "claude"
+        );
         let brief = Role::Tester.brief();
-        let role = Registration { url: URL, system_prompt: Some(&brief), claude_mcp: Some(Path::new("/m.json")), ..Registration::default() };
+        let role = Registration {
+            url: URL,
+            system_prompt: Some(&brief),
+            claude_mcp: Some(Path::new("/m.json")),
+            ..Registration::default()
+        };
         assert_eq!(
             rewrite_command("claude", "claude", role, Quoting::Posix),
-            format!("claude --append-system-prompt '{}' --mcp-config '/m.json'", brief)
+            format!(
+                "claude --append-system-prompt '{}' --mcp-config '/m.json'",
+                brief
+            )
         );
     }
 
     #[test]
     fn codex_gets_overrides_before_its_subcommand() {
-        let registration = Registration { url: URL, ..Registration::default() };
+        let registration = Registration {
+            url: URL,
+            ..Registration::default()
+        };
         assert_eq!(
             rewrite_command("codex resume --last", "codex", registration, Quoting::Posix),
             "codex -c 'mcp_servers.terra.url=\"http://127.0.0.1:4100/mcp\"' \
@@ -371,18 +427,28 @@ mod tests {
     #[test]
     fn codex_notify_runs_this_app_as_a_hook_on_posix_only() {
         let program = Path::new("/Applications/Terra Swarm.app/Contents/MacOS/terra-swarm");
-        let registration = Registration { url: URL, codex_notify: Some(program), ..Registration::default() };
+        let registration = Registration {
+            url: URL,
+            codex_notify: Some(program),
+            ..Registration::default()
+        };
         let posix = rewrite_command("codex", "codex", registration, Quoting::Posix);
         assert!(posix.ends_with(
             "-c 'notify=[\"/Applications/Terra Swarm.app/Contents/MacOS/terra-swarm\",\"hook\",\"codex\",\"notify\"]'"
         ), "{}", posix);
-        assert!(!rewrite_command("codex", "codex", registration, Quoting::Windows).contains("notify"));
+        assert!(
+            !rewrite_command("codex", "codex", registration, Quoting::Windows).contains("notify")
+        );
     }
 
     #[test]
     fn an_existing_codex_notify_is_detected() {
-        assert!(codex_config_sets_notify("model = \"o3\"\nnotify = [\"say\", \"done\"]\n"));
-        assert!(!codex_config_sets_notify("model = \"o3\"\n[tui]\nnotify = true\n"));
+        assert!(codex_config_sets_notify(
+            "model = \"o3\"\nnotify = [\"say\", \"done\"]\n"
+        ));
+        assert!(!codex_config_sets_notify(
+            "model = \"o3\"\n[tui]\nnotify = true\n"
+        ));
         assert!(!codex_config_sets_notify(""));
     }
 
@@ -396,21 +462,38 @@ mod tests {
         // SessionStart accepts only command hooks: it runs this app's binary.
         let start = &json["hooks"]["SessionStart"][0]["hooks"][0];
         assert_eq!(start["type"], "command");
-        assert!(start["command"].as_str().unwrap().ends_with("hook claude SessionStart"));
+        assert!(start["command"]
+            .as_str()
+            .unwrap()
+            .ends_with("hook claude SessionStart"));
         for event in ["UserPromptSubmit", "PreToolUse", "Notification", "Stop"] {
             let handler = &json["hooks"][event][0]["hooks"][0];
             assert_eq!(handler["type"], "http", "{}", event);
             assert_eq!(handler["url"], "http://127.0.0.1:4100/hooks/claude");
-            assert_eq!(handler["headers"]["Authorization"], "Bearer ${TERRA_MCP_TOKEN}");
-            assert_eq!(handler["allowedEnvVars"], serde_json::json!(["TERRA_MCP_TOKEN"]));
+            assert_eq!(
+                handler["headers"]["Authorization"],
+                "Bearer ${TERRA_MCP_TOKEN}"
+            );
+            assert_eq!(
+                handler["allowedEnvVars"],
+                serde_json::json!(["TERRA_MCP_TOKEN"])
+            );
         }
     }
 
     #[test]
     fn other_commands_are_left_alone() {
-        let registration = Registration { url: URL, ..Registration::default() };
+        let registration = Registration {
+            url: URL,
+            ..Registration::default()
+        };
         assert_eq!(
-            rewrite_command("opencode --continue", "opencode", registration, Quoting::Posix),
+            rewrite_command(
+                "opencode --continue",
+                "opencode",
+                registration,
+                Quoting::Posix
+            ),
             "opencode --continue"
         );
     }
@@ -439,7 +522,9 @@ mod tests {
             .launch("t-1", "ws-1", "claude", None, Quoting::Posix)
             .is_none());
         hub.set_port(4100);
-        let launch = hub.launch("t-1", "ws-1", "shell", None, Quoting::Posix).unwrap();
+        let launch = hub
+            .launch("t-1", "ws-1", "shell", None, Quoting::Posix)
+            .unwrap();
         let env: std::collections::HashMap<_, _> = launch.env.iter().cloned().collect();
         assert_eq!(env[ENV_URL], URL);
         assert_eq!(env[ENV_HOOK_URL], "http://127.0.0.1:4100/hooks");

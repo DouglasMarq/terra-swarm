@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::repo::AgentState;
-use crate::usage::SessionLog;
 use super::{AgentIdentity, McpHub};
+use crate::usage::SessionLog;
 
 pub const HOOKS_PATH: &str = "/hooks";
 pub const EVENT_AGENT_ATTENTION: &str = "agent-attention";
@@ -76,10 +76,18 @@ pub fn interpret(call: &HookCall) -> Option<(AgentState, String)> {
             }
         }
         ("claude", "Stop") | ("claude", "SessionStart") => Some((AgentState::Idle, String::new())),
-        ("codex", _) => match payload.get("type").and_then(Value::as_str).unwrap_or(call.event.as_str()) {
+        ("codex", _) => match payload
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or(call.event.as_str())
+        {
             "agent-turn-complete" => Some((
                 AgentState::Idle,
-                text_field(payload, &["last-assistant-message", "last_assistant_message"]).unwrap_or_default(),
+                text_field(
+                    payload,
+                    &["last-assistant-message", "last_assistant_message"],
+                )
+                .unwrap_or_default(),
             )),
             _ => None,
         },
@@ -127,7 +135,10 @@ pub fn apply(hub: &McpHub, who: &AgentIdentity, call: &HookCall) -> Option<Agent
 
 /// `POST /hooks`: `terra-swarm hook` sends `{ agent, event, payload }`.
 pub async fn handle(State(hub): State<Arc<McpHub>>, request: Request) -> Response {
-    receive(hub, request, |body| serde_json::from_slice::<HookCall>(body).ok()).await
+    receive(hub, request, |body| {
+        serde_json::from_slice::<HookCall>(body).ok()
+    })
+    .await
 }
 
 /// `POST /hooks/claude`: a Claude Code HTTP hook posts its event JSON as is.
@@ -145,7 +156,11 @@ pub async fn handle_claude(State(hub): State<Arc<McpHub>>, request: Request) -> 
 }
 
 /// Both routes sit behind the same token check as the MCP endpoint.
-async fn receive(hub: Arc<McpHub>, request: Request, parse: impl FnOnce(&[u8]) -> Option<HookCall>) -> Response {
+async fn receive(
+    hub: Arc<McpHub>,
+    request: Request,
+    parse: impl FnOnce(&[u8]) -> Option<HookCall>,
+) -> Response {
     // Hooks come from CLIs, never from a browser page.
     if request.headers().contains_key(header::ORIGIN) {
         return StatusCode::FORBIDDEN.into_response();
@@ -183,28 +198,61 @@ mod tests {
     #[test]
     fn claude_events_map_to_states() {
         assert_eq!(
-            interpret(&call("claude", "UserPromptSubmit", json!({ "prompt": "fix   the\nbug" }))),
+            interpret(&call(
+                "claude",
+                "UserPromptSubmit",
+                json!({ "prompt": "fix   the\nbug" })
+            )),
             Some((AgentState::Working, "fix the bug".into()))
         );
         assert_eq!(
-            interpret(&call("claude", "PreToolUse", json!({ "tool_name": "Bash" }))),
+            interpret(&call(
+                "claude",
+                "PreToolUse",
+                json!({ "tool_name": "Bash" })
+            )),
             Some((AgentState::Working, "Bash".into()))
         );
         assert_eq!(
-            interpret(&call("claude", "Notification", json!({ "message": "Claude needs your permission to use Bash" }))),
-            Some((AgentState::NeedsInput, "Claude needs your permission to use Bash".into()))
+            interpret(&call(
+                "claude",
+                "Notification",
+                json!({ "message": "Claude needs your permission to use Bash" })
+            )),
+            Some((
+                AgentState::NeedsInput,
+                "Claude needs your permission to use Bash".into()
+            ))
         );
         assert_eq!(
-            interpret(&call("claude", "Notification", json!({ "notification_type": "permission_prompt", "message": "Allow Bash?" }))),
+            interpret(&call(
+                "claude",
+                "Notification",
+                json!({ "notification_type": "permission_prompt", "message": "Allow Bash?" })
+            )),
             Some((AgentState::NeedsInput, "Allow Bash?".into()))
         );
         // Finishing a turn and sitting quietly is not "needs you".
         assert_eq!(
-            interpret(&call("claude", "Notification", json!({ "notification_type": "idle_prompt", "message": "Claude is waiting for your input" }))),
+            interpret(&call(
+                "claude",
+                "Notification",
+                json!({ "notification_type": "idle_prompt", "message": "Claude is waiting for your input" })
+            )),
             Some((AgentState::Idle, String::new()))
         );
-        assert_eq!(interpret(&call("claude", "Notification", json!({ "notification_type": "auth_success" }))), None);
-        assert_eq!(interpret(&call("claude", "Stop", json!({}))), Some((AgentState::Idle, String::new())));
+        assert_eq!(
+            interpret(&call(
+                "claude",
+                "Notification",
+                json!({ "notification_type": "auth_success" })
+            )),
+            None
+        );
+        assert_eq!(
+            interpret(&call("claude", "Stop", json!({}))),
+            Some((AgentState::Idle, String::new()))
+        );
         assert_eq!(interpret(&call("claude", "PostToolUse", json!({}))), None);
         assert_eq!(interpret(&call("opencode", "Stop", json!({}))), None);
     }
@@ -219,20 +267,39 @@ mod tests {
         .unwrap();
         assert_eq!(state, AgentState::Idle);
         assert_eq!(summary, "Done. Tests pass.");
-        assert_eq!(interpret(&call("codex", "notify", json!({ "type": "other" }))), None);
+        assert_eq!(
+            interpret(&call("codex", "notify", json!({ "type": "other" }))),
+            None
+        );
     }
 
     #[test]
     fn codex_hooks_name_their_session() {
-        let log = session_log(&call("codex", "notify", json!({ "type": "agent-turn-complete", "thread-id": "0199-abc" })));
+        let log = session_log(&call(
+            "codex",
+            "notify",
+            json!({ "type": "agent-turn-complete", "thread-id": "0199-abc" }),
+        ));
         assert_eq!(log, Some(SessionLog::Codex("0199-abc".into())));
         // A Claude transcript outside Claude's own folder is ignored.
-        assert_eq!(session_log(&call("claude", "Stop", json!({ "transcript_path": "/etc/passwd" }))), None);
+        assert_eq!(
+            session_log(&call(
+                "claude",
+                "Stop",
+                json!({ "transcript_path": "/etc/passwd" })
+            )),
+            None
+        );
     }
 
     #[test]
     fn long_summaries_are_cut() {
-        let (_, summary) = interpret(&call("claude", "Notification", json!({ "message": "x".repeat(500) }))).unwrap();
+        let (_, summary) = interpret(&call(
+            "claude",
+            "Notification",
+            json!({ "message": "x".repeat(500) }),
+        ))
+        .unwrap();
         assert_eq!(summary.chars().count(), MAX_SUMMARY_CHARS);
         assert!(summary.ends_with('…'));
     }
@@ -241,12 +308,19 @@ mod tests {
     fn applying_a_hook_updates_status_and_raises_attention() {
         let (hub, events) = hub();
         let who = identity("t-1", "ws-1", "claude");
-        let state = apply(&hub, &who, &call("claude", "Notification", json!({ "message": "Approve?" })));
+        let state = apply(
+            &hub,
+            &who,
+            &call("claude", "Notification", json!({ "message": "Approve?" })),
+        );
         assert_eq!(state, Some(AgentState::NeedsInput));
         let status = hub.repo().unwrap().status_of("t-1").cloned().unwrap();
         assert_eq!(status.summary, "Approve?");
         let events = events.lock().unwrap();
         assert!(events.iter().any(|(event, _)| event == EVENT_AGENT_STATUS));
-        assert!(events.iter().any(|(event, payload)| event == EVENT_AGENT_ATTENTION && payload["terminal_id"] == "t-1"));
+        assert!(events
+            .iter()
+            .any(|(event, payload)| event == EVENT_AGENT_ATTENTION
+                && payload["terminal_id"] == "t-1"));
     }
 }

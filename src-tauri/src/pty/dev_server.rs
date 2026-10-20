@@ -9,6 +9,10 @@ use std::time::Duration;
 const HOSTS: [&str; 4] = ["localhost", "127.0.0.1", "0.0.0.0", "[::1]"];
 /// Paths that belong to Terra's own MCP server, never to a dev server.
 const OWN_PATHS: [&str; 2] = ["/mcp", "/hooks"];
+/// Most ports one `probe_dev_servers` call checks.
+const MAX_PROBED_PORTS: usize = 32;
+/// How long each probed port gets to accept the connection.
+const PROBE_TIMEOUT: Duration = Duration::from_millis(150);
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct DevServerPayload {
@@ -78,8 +82,8 @@ pub fn probe_dev_servers(ports: Vec<u16>) -> Vec<u16> {
     let mut ports = ports;
     ports.sort_unstable();
     ports.dedup();
-    ports.truncate(32);
-    probe(&ports, Duration::from_millis(150))
+    ports.truncate(MAX_PROBED_PORTS);
+    probe(&ports, PROBE_TIMEOUT)
 }
 
 #[cfg(test)]

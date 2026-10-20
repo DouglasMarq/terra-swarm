@@ -17,6 +17,7 @@ import {
 import {
   GRID_COL_OPTIONS,
   HOTKEY_ACTIONS,
+  hotkeyActionLabel,
   MAX_FONT_SIZE,
   MIN_FONT_SIZE,
   formatHotkey,
@@ -26,7 +27,7 @@ import type {
   SettingsSectionDefinition,
   SettingsSectionId,
 } from "../../settings";
-import { LOCALES, useLocaleStore, useT, type Locale, type MessageKey } from "../../../i18n";
+import { LOCALES, useLocaleStore, useT, type Locale } from "../../../i18n";
 import { pickAgentName, type NameSetId } from "../../../domain/agentNames";
 import { useMcpStore } from "../../../stores/mcpStore";
 import { usePreferencesStore } from "../../../stores/preferencesStore";
@@ -126,14 +127,6 @@ const VOICE_LANGUAGES = [
 const LAB_FEATURE_FLAG_IDS = ["durableScrollback", "voiceCommands"] as const;
 
 const PROFILE_BY_ID = new Map(DEFAULT_AGENT_PROFILES.map((profile) => [profile.id, profile]));
-
-function hotkeyLabel(id: string, t: ReturnType<typeof useT>): string {
-  const workspace = /^selectWorkspace(\d)$/.exec(id);
-  if (workspace) return t("hotkeys.selectWorkspace", { n: workspace[1] });
-  const terminal = /^selectTerminal(\d)$/.exec(id);
-  if (terminal) return t("hotkeys.selectTerminal", { n: terminal[1] });
-  return t(`hotkeys.${id}` as MessageKey);
-}
 
 export interface SettingsPanelsProps {
   section: SettingsSectionDefinition;
@@ -783,7 +776,7 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
           <div className={styles.shortcutList}>
             {HOTKEY_ACTIONS.map((action) => (
               <div className={styles.shortcutRow} key={action.id}>
-                <span className={styles.shortcutIdentity}><span className={styles.shortcutName}>{hotkeyLabel(action.id, t)}</span></span>
+                <span className={styles.shortcutIdentity}><span className={styles.shortcutName}>{hotkeyActionLabel(action.id)}</span></span>
                 {capturing === action.id ? <span className={styles.status}>{t("settingsPanels.pressShortcut")}</span> : <button className={styles.chip} onClick={() => onCaptureHotkey(action.id)}>{formatHotkey(hotkeys[action.id])}</button>}
               </div>
             ))}

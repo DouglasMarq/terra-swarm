@@ -1,3 +1,4 @@
+pub mod cli;
 mod fonts;
 mod mcp;
 mod pty;
@@ -64,6 +65,9 @@ pub fn run() {
             }
             // Without a database there is nothing to serve: the server stays
             // off and Settings explains why.
+            if let Ok(program) = std::env::current_exe() {
+                hub.set_hook_program(program);
+            }
             if hub.available() {
                 if let Err(error) = mcp::server::start(Arc::clone(&hub)) {
                     eprintln!("failed to start the MCP server: {}", error);

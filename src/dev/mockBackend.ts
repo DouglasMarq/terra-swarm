@@ -171,6 +171,7 @@ export function installMockBackend(): void {
           ? { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: ["src/styles/motion.css", "src/components/shell/shell.css"], ahead: 1, behind: 0, exists: true }
           : null;
       case "worktree_remove": return undefined;
+      case "probe_dev_servers": return (args.ports as number[]).filter((port) => port === 5174);
       case "worktree_diff":
         return {
           status: { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: ["src/styles/motion.css"], ahead: 1, behind: 0, exists: true },

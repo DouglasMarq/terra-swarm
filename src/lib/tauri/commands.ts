@@ -195,6 +195,10 @@ export interface IpcCommandContract {
     args: undefined;
     result: AgentInfo[];
   };
+  probeDevServers: {
+    args: { ports: number[] };
+    result: number[];
+  };
   gitBranch: {
     args: { cwd: string };
     result: string | null;
@@ -347,6 +351,7 @@ const IPC_COMMANDS = {
   reorderWorkspaces: "reorder_workspaces",
   setTerminalWidth: "set_terminal_width",
   detectAgents: "detect_agents",
+  probeDevServers: "probe_dev_servers",
   gitBranch: "git_branch",
   listWorkspaceFiles: "list_workspace_files",
   gitStatus: "git_status",

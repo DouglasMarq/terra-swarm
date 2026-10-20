@@ -25,6 +25,8 @@ import { TaskBoard } from "../tasks/TaskBoard";
 import { sendPromptToTerminal } from "../../lib/session/sendPrompt";
 import { startMcpEventBridge, useReportedStates } from "../../stores/mcpStore";
 import { useReviewStore } from "../../stores/reviewStore";
+import { startPreviewBridge } from "../../stores/previewStore";
+import { PreviewPanel } from "../preview/PreviewPanel";
 import { deriveAgentStatus } from "../../domain/agentStatus";
 import { NavigatorPanel } from "../navigation/NavigatorPanel";
 import type { ActivityTab, NavigatorFilesLoader, NavigatorGitLoader, NavigatorNodeRef } from "../navigation/types";
@@ -328,6 +330,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
 
   const inspectorActive = shell.dock.open && shell.dock.activeTab === "inspector";
   useEffect(() => startMcpEventBridge(), []);
+  useEffect(() => startPreviewBridge(), []);
   useEffect(() => {
     const terminalId = props.focusedId;
     const requestId = ++runtimeRequestIdRef.current;
@@ -560,6 +563,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const dockTabs = [
     { id: "inspector", label: t("shell.dock.inspector") },
     { id: "tasks", label: t("shell.dock.tasks") },
+    { id: "preview", label: t("shell.dock.preview") },
   ] as const;
   const focusedLabel = props.focusedId ? agentLabels[props.focusedId] ?? null : null;
   const muted = muteUntil > Date.now();
@@ -795,8 +799,8 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         onClose: () => shell.setDockOpen(false),
         tabs: dockTabs,
         activeTab: shell.dock.activeTab,
-        onTabChange: (tab) => shell.setDockTab(tab === "tasks" ? "tasks" : "inspector"),
-        content: shell.dock.activeTab === "tasks" ? tasksPanel : inspectorPanel,
+        onTabChange: (tab) => shell.setDockTab(tab === "tasks" || tab === "preview" ? tab : "inspector"),
+        content: shell.dock.activeTab === "tasks" ? tasksPanel : shell.dock.activeTab === "preview" ? <PreviewPanel workspaceId={activeWorkspace?.id ?? null} /> : inspectorPanel,
       }}
       overlay={voiceOverlay}
     >

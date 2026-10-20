@@ -1,6 +1,7 @@
 //! Moves a terminal's output from the PTY to the window: one thread drains
 //! the PTY, another coalesces chunks into paced `pty-output-<id>` events and
-//! runs the side-channel scans (notifications, titles, context usage).
+//! runs the side-channel scans (notifications, titles, context usage, dev
+//! server URLs).
 
 use serde::Serialize;
 use std::io::Read;
@@ -11,6 +12,7 @@ use tauri::{AppHandle, Emitter, Runtime};
 use super::output_scan::{
     detect_context_used, extract_notifications, scan_titles, strip_ansi, take_decodable,
 };
+use super::dev_server::{detect_dev_server_urls, DevServerPayload};
 use super::Backlog;
 use crate::scrollback::ScrollbackStore;
 
@@ -88,6 +90,7 @@ pub(super) fn spawn_output_pump<R: Runtime>(
         let mut title_buf: Vec<u8> = Vec::new();
         let mut title_last: Option<String> = None;
         let mut ctx_last: Option<u8> = None;
+        let mut dev_servers_seen: Vec<String> = Vec::new();
         let mut ctx_last_check = std::time::Instant::now();
         let flush_interval = std::time::Duration::from_millis(16);
         let ctx_interval = std::time::Duration::from_millis(250);
@@ -132,6 +135,19 @@ pub(super) fn spawn_output_pump<R: Runtime>(
             if ctx_last_check.elapsed() >= ctx_interval {
                 ctx_last_check = std::time::Instant::now();
                 let plain = strip_ansi(&String::from_utf8_lossy(&raw_tail));
+                for url in detect_dev_server_urls(&plain) {
+                    if !dev_servers_seen.contains(&url) {
+                        dev_servers_seen.push(url.clone());
+                        let _ = app.emit(
+                            "terminal-dev-server",
+                            DevServerPayload {
+                                id: notif_id.clone(),
+                                workspace_id: notif_ws.clone(),
+                                url,
+                            },
+                        );
+                    }
+                }
                 if let Some(used) = detect_context_used(&plain) {
                     if ctx_last != Some(used) {
                         ctx_last = Some(used);

@@ -1,0 +1,81 @@
+.terra-preview {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.terra-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--terra-border);
+}
+
+.terra-preview-bar input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text);
+  background: var(--terra-bg-elevated);
+  font-family: var(--terra-font-mono);
+  font-size: var(--terra-font-size-label);
+}
+
+.terra-preview-bar input[aria-invalid="true"] {
+  border-color: var(--terra-red);
+}
+
+.terra-preview-icon {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: var(--terra-radius-sm);
+  color: var(--terra-text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.terra-preview-icon:hover:not(:disabled) {
+  color: var(--terra-text);
+  background: var(--terra-bg-hover);
+}
+
+.terra-preview-icon:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.terra-preview-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  /* Pages without a background would otherwise show the dark shell through. */
+  background: #fff;
+}
+
+.terra-preview-hint {
+  margin: 6px 8px 0;
+  color: var(--terra-red-ink);
+  font-size: var(--terra-font-size-label);
+}
+
+.terra-preview-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--terra-text-muted);
+  font-size: var(--terra-font-size-label);
+  text-align: center;
+}

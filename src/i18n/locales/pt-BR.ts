@@ -75,6 +75,7 @@ export const ptBR: Dictionary<typeof en> = {
       resize: "Redimensionar inspetor",
     },
     dock: {
+      preview: "Preview",
       tabs: "Painel lateral",
       inspector: "Inspetor",
       tasks: "Tarefas",
@@ -821,6 +822,17 @@ export const ptBR: Dictionary<typeof en> = {
     executor: "Executor",
     reviewer: "Revisor",
     tester: "Testador",
+  },
+  preview: {
+    noWorkspace: "Abra um projeto para ver o servidor de desenvolvimento dele.",
+    address: "Endereço da página local",
+    placeholder: "localhost:5173 ou uma porta",
+    reload: "Recarregar",
+    scan: "Procurar servidores locais",
+    scanning: "Procurando um servidor de desenvolvimento nesta máquina…",
+    none: "Nenhum servidor encontrado. Inicie um num terminal (ele é detectado pela saída) ou digite a porta.",
+    onlyLocal: "Só páginas desta máquina (localhost) abrem aqui.",
+    frameTitle: "Preview de {url}",
   },
   notifications: {
     needsYouTitle: "{name} precisa de você",

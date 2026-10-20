@@ -14,7 +14,9 @@ use std::io::{IsTerminal, Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
-const MAX_PAYLOAD: u64 = 256 * 1024;
+const MAX_PAYLOAD_BYTES: u64 = 256 * 1024;
+/// Only the status line of the hook route's answer is read.
+const MAX_HOOK_RESPONSE_BYTES: u64 = 4096;
 const TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Run a CLI subcommand when the arguments name one; `None` starts the app.
@@ -60,7 +62,7 @@ fn read_stdin_json() -> serde_json::Value {
     let mut text = String::new();
     if stdin
         .lock()
-        .take(MAX_PAYLOAD)
+        .take(MAX_PAYLOAD_BYTES)
         .read_to_string(&mut text)
         .is_err()
     {
@@ -104,15 +106,15 @@ fn post_hook(url: &str, token: &str, body: &str) -> Result<(), String> {
         .write_all(request.as_bytes())
         .map_err(|error| error.to_string())?;
     let mut response = String::new();
-    let _ = stream.take(4096).read_to_string(&mut response);
+    let read = stream
+        .take(MAX_HOOK_RESPONSE_BYTES)
+        .read_to_string(&mut response);
     let status = response.split_whitespace().nth(1).unwrap_or("");
-    if status == "200" {
-        Ok(())
-    } else {
-        Err(format!(
-            "server answered {}",
-            if status.is_empty() { "nothing" } else { status }
-        ))
+    match (status, read) {
+        ("200", _) => Ok(()),
+        ("", Err(error)) => Err(format!("could not read the server's answer: {}", error)),
+        ("", Ok(_)) => Err("server answered nothing".to_string()),
+        (status, _) => Err(format!("server answered {}", status)),
     }
 }
 

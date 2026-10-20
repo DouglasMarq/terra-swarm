@@ -8,16 +8,21 @@ use std::io::{BufRead, Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
-use super::loopback_authority;
+use super::{loopback_authority, TIMEOUT as CONNECT_TIMEOUT};
 
 /// Tool calls can wait on the database; give them room.
-const TIMEOUT: Duration = Duration::from_secs(60);
-const MAX_RESPONSE: u64 = 16 * 1024 * 1024;
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+const MAX_RESPONSE_BYTES: u64 = 16 * 1024 * 1024;
+
+/// JSON-RPC 2.0 error codes.
+const JSONRPC_PARSE_ERROR: i64 = -32700;
+const JSONRPC_INTERNAL_ERROR: i64 = -32603;
 
 pub struct Endpoint {
     authority: String,
     path: String,
     token: String,
+    /// The version the server agreed to; later requests carry it.
     protocol_version: Option<String>,
 }
 
@@ -43,13 +48,13 @@ impl Endpoint {
             .authority
             .parse()
             .map_err(|error| format!("bad address: {}", error))?;
-        let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(2))
+        let mut stream = TcpStream::connect_timeout(&address, CONNECT_TIMEOUT)
             .map_err(|error| error.to_string())?;
         stream
-            .set_read_timeout(Some(TIMEOUT))
+            .set_read_timeout(Some(REQUEST_TIMEOUT))
             .map_err(|error| error.to_string())?;
         stream
-            .set_write_timeout(Some(TIMEOUT))
+            .set_write_timeout(Some(REQUEST_TIMEOUT))
             .map_err(|error| error.to_string())?;
         let version = self
             .protocol_version
@@ -70,7 +75,7 @@ impl Endpoint {
             .map_err(|error| error.to_string())?;
         let mut raw = Vec::new();
         stream
-            .take(MAX_RESPONSE)
+            .take(MAX_RESPONSE_BYTES)
             .read_to_end(&mut raw)
             .map_err(|error| error.to_string())?;
         let (status, headers, body) = split_response(&raw)?;
@@ -85,7 +90,6 @@ impl Endpoint {
             ));
         }
         let messages = parse_messages(&body, headers.contains("text/event-stream"))?;
-        // Later requests carry the version the server agreed to.
         for reply in &messages {
             if let Some(version) = reply
                 .pointer("/result/protocolVersion")
@@ -180,7 +184,7 @@ pub fn bridge(
                 writeln!(
                     output,
                     "{}",
-                    json!({ "jsonrpc": "2.0", "id": null, "error": { "code": -32700, "message": format!("parse error: {}", error) } })
+                    json!({ "jsonrpc": "2.0", "id": null, "error": { "code": JSONRPC_PARSE_ERROR, "message": format!("parse error: {}", error) } })
                 )?;
                 output.flush()?;
                 continue;
@@ -190,7 +194,7 @@ pub fn bridge(
             Ok(replies) => replies,
             Err(error) => match message.get("id") {
                 Some(id) if !id.is_null() => vec![
-                    json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32603, "message": error } }),
+                    json!({ "jsonrpc": "2.0", "id": id, "error": { "code": JSONRPC_INTERNAL_ERROR, "message": error } }),
                 ],
                 _ => {
                     eprintln!("terra-swarm mcp-stdio: {}", error);
@@ -290,7 +294,7 @@ mod tests {
 
         let reply: Value = serde_json::from_slice(output.trim_ascii()).unwrap();
         assert_eq!(reply["id"], 9);
-        assert_eq!(reply["error"]["code"], -32603);
+        assert_eq!(reply["error"]["code"], JSONRPC_INTERNAL_ERROR);
         assert!(reply["error"]["message"]
             .as_str()
             .unwrap()
@@ -352,7 +356,7 @@ mod tests {
             "{}",
             text
         );
-        assert_eq!(replies[2]["error"]["code"], -32700);
+        assert_eq!(replies[2]["error"]["code"], JSONRPC_PARSE_ERROR);
 
         // A bad token still answers the request, with an error.
         let mut output = Vec::new();

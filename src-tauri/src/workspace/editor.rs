@@ -14,6 +14,9 @@ use tauri::State;
 /// Larger files are not opened in the editor.
 pub(crate) const MAX_EDIT_BYTES: u64 = 2 * 1024 * 1024;
 
+/// A NUL byte within this many leading bytes marks the file as binary.
+const BINARY_SNIFF_BYTES: usize = 8192;
+
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceFileContent {
@@ -79,7 +82,7 @@ pub(crate) fn read_file(root: &Path, relative: &str) -> Result<WorkspaceFileCont
     }
     let bytes =
         std::fs::read(&target).map_err(|error| format!("cannot read the file: {}", error))?;
-    let text = if bytes.iter().take(8192).any(|byte| *byte == 0) {
+    let text = if bytes.iter().take(BINARY_SNIFF_BYTES).any(|byte| *byte == 0) {
         None
     } else {
         String::from_utf8(bytes).ok()

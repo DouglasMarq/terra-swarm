@@ -420,7 +420,7 @@ impl WorkspaceStore {
             }
         }
         if let Some(size) = patch.size.filter(|size| size.is_finite()) {
-            container.size = size.clamp(0.0, 100.0);
+            container.size = size.clamp(MIN_CONTAINER_SIZE_PERCENT, MAX_CONTAINER_SIZE_PERCENT);
         }
         if let Some(mut layout) = patch.layout {
             normalize_layout_state(&mut layout);

@@ -28,6 +28,9 @@ pub(crate) static WRITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 pub(crate) static ATOMIC_TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
+/// Quiet time after the last change before the debounced save writes.
+const SAVE_DEBOUNCE: Duration = Duration::from_millis(150);
+
 /// Version of the on-disk workspace envelope.  The contents of the envelope
 /// are intentionally kept separate from `WorkspaceStore`: the latter also
 /// carries runtime-only state such as the save path.
@@ -201,7 +204,12 @@ pub(crate) fn write_atomic(path: &std::path::Path, json: &str) -> std::io::Resul
         std::fs::rename(&tmp, path)
     })();
     if result.is_err() {
-        let _ = std::fs::remove_file(&tmp);
+        match std::fs::remove_file(&tmp) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                eprintln!("failed to remove {}: {}", tmp.display(), error);
+            }
+            _ => {}
+        }
     }
     result
 }
@@ -273,15 +281,15 @@ pub(crate) fn replace_store_file(path: &Path, json: &str) -> Result<Option<PathB
     Ok(backup)
 }
 
-/// Background writer: coalesces save requests and flushes to disk 150ms after
-/// the last change, so mutations never do blocking disk I/O on a caller thread.
+/// Background writer: coalesces a burst of save requests into the newest one
+/// and flushes it to disk `SAVE_DEBOUNCE` after the last change, so mutations
+/// never do blocking disk I/O on a caller thread.
 pub(crate) fn save_channel() -> &'static Sender<SaveRequest> {
     SAVE_TX.get_or_init(|| {
         let (tx, rx) = channel::<SaveRequest>();
         std::thread::spawn(move || {
             while let Ok(mut req) = rx.recv() {
-                // Coalesce a burst of saves into the newest one.
-                while let Ok(newer) = rx.recv_timeout(Duration::from_millis(150)) {
+                while let Ok(newer) = rx.recv_timeout(SAVE_DEBOUNCE) {
                     req = newer;
                 }
                 write_guarded(&req.path, &req.json, req.seq);
@@ -408,7 +416,7 @@ impl WorkspaceStore {
     }
 
     /// Synchronous, un-debounced save for shutdown, so the final state is
-    /// never lost when the app exits within the 150ms debounce window.
+    /// never lost when the app exits within the `SAVE_DEBOUNCE` window.
     pub fn save_now(&self) {
         let Some(path) = &self.save_path else { return };
         match self.serialized_snapshot() {

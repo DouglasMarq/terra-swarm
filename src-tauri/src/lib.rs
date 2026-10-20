@@ -10,8 +10,12 @@ mod workspace;
 mod worktree;
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use sync::LockExt;
 use tauri::{Listener, Manager};
+
+/// How long `SWARM_DEMO=1` waits for the window before seeding terminals.
+const DEMO_SEED_DELAY: Duration = Duration::from_millis(800);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -67,11 +71,15 @@ pub fn run() {
                     eprintln!("failed to clean orphaned MCP data: {}", error);
                 }
             }
+            match std::env::current_exe() {
+                Ok(program) => hub.set_hook_program(program),
+                Err(error) => eprintln!(
+                    "agent state hooks are off: cannot locate the app binary: {}",
+                    error
+                ),
+            }
             // Without a database there is nothing to serve: the server stays
             // off and Settings explains why.
-            if let Ok(program) = std::env::current_exe() {
-                hub.set_hook_program(program);
-            }
             if hub.available() {
                 if let Err(error) = mcp::server::start(Arc::clone(&hub)) {
                     eprintln!("failed to start the MCP server: {}", error);
@@ -86,7 +94,6 @@ pub fn run() {
             app.manage(voice::audio::AudioController::new());
             app.manage(voice::audio::MicTestController::new());
 
-            // Auto-stop voice recording when the user finishes talking
             let handle = app.handle().clone();
             app.listen("voice-silence-detected", move |_| {
                 if let Err(error) = voice::stop_recording_impl(&handle) {
@@ -94,13 +101,12 @@ pub fn run() {
                 }
             });
 
-            // Watch for microphone plug/unplug so the UI can react
             voice::watch_input_devices(app.handle().clone());
 
             if std::env::var("SWARM_DEMO").is_ok() {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(800));
+                    std::thread::sleep(DEMO_SEED_DELAY);
                     pty::demo_seed(&handle);
                 });
             }

@@ -10,7 +10,36 @@ mod workspace;
 mod worktree;
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use sync::LockExt;
 use tauri::{Listener, Manager};
+
+/// How long `SWARM_DEMO=1` waits for the window before seeding terminals.
+const DEMO_SEED_DELAY: Duration = Duration::from_millis(800);
+
+/// Remove the old scrollback of terminals the store no longer knows. A
+/// store that could not be read knows no terminals, so it keeps them all.
+fn clean_orphaned_scrollback(
+    store: &workspace::WorkspaceStore,
+    scrollback_store: &scrollback::ScrollbackStore,
+) {
+    if store.save_path.is_none() {
+        return;
+    }
+    let known_terminals = store
+        .workspaces
+        .iter()
+        .flat_map(|workspace| {
+            workspace
+                .terminals
+                .iter()
+                .map(|terminal| terminal.id.clone())
+        })
+        .collect::<std::collections::HashSet<_>>();
+    if let Err(error) = scrollback_store.cleanup_orphans(&known_terminals) {
+        eprintln!("failed to clean orphaned scrollback: {}", error);
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -28,21 +57,11 @@ pub fn run() {
                     pty::bump_next_terminal_id(&t.id);
                 }
             }
-            let known_terminals = store
-                .workspaces
-                .iter()
-                .flat_map(|workspace| {
-                    workspace
-                        .terminals
-                        .iter()
-                        .map(|terminal| terminal.id.clone())
-                })
-                .collect::<std::collections::HashSet<_>>();
             let scrollback_dir = dir.join("scrollback");
-            let scrollback_store = scrollback::ScrollbackStore::from_root(scrollback_dir.clone());
-            if let Err(error) = scrollback_store.cleanup_orphans(&known_terminals) {
-                eprintln!("failed to clean orphaned scrollback: {}", error);
-            }
+            clean_orphaned_scrollback(
+                &store,
+                &scrollback::ScrollbackStore::from_root(scrollback_dir.clone()),
+            );
             let hub = Arc::new(mcp::McpHub::open(
                 dir.join(mcp::db::DB_FILE),
                 Some(dir.join("mcp")),
@@ -66,11 +85,15 @@ pub fn run() {
                     eprintln!("failed to clean orphaned MCP data: {}", error);
                 }
             }
+            match std::env::current_exe() {
+                Ok(program) => hub.set_hook_program(program),
+                Err(error) => eprintln!(
+                    "agent state hooks are off: cannot locate the app binary: {}",
+                    error
+                ),
+            }
             // Without a database there is nothing to serve: the server stays
             // off and Settings explains why.
-            if let Ok(program) = std::env::current_exe() {
-                hub.set_hook_program(program);
-            }
             if hub.available() {
                 if let Err(error) = mcp::server::start(Arc::clone(&hub)) {
                     eprintln!("failed to start the MCP server: {}", error);
@@ -85,7 +108,6 @@ pub fn run() {
             app.manage(voice::audio::AudioController::new());
             app.manage(voice::audio::MicTestController::new());
 
-            // Auto-stop voice recording when the user finishes talking
             let handle = app.handle().clone();
             app.listen("voice-silence-detected", move |_| {
                 if let Err(error) = voice::stop_recording_impl(&handle) {
@@ -93,13 +115,12 @@ pub fn run() {
                 }
             });
 
-            // Watch for microphone plug/unplug so the UI can react
             voice::watch_input_devices(app.handle().clone());
 
             if std::env::var("SWARM_DEMO").is_ok() {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(800));
+                    std::thread::sleep(DEMO_SEED_DELAY);
                     pty::demo_seed(&handle);
                 });
             }
@@ -180,9 +201,9 @@ pub fn run() {
                 tauri::RunEvent::ExitRequested { .. } => {
                     // Flush the workspace store synchronously; the debounced
                     // background writer may not fire before the process exits.
-                    if let Ok(store) = app.state::<Mutex<workspace::WorkspaceStore>>().lock() {
-                        store.save_now();
-                    }
+                    app.state::<Mutex<workspace::WorkspaceStore>>()
+                        .lock_or_recover()
+                        .save_now();
                     pty::kill_all(&app.state::<Mutex<pty::PtyManager>>());
                 }
                 tauri::RunEvent::Exit => {
@@ -191,4 +212,60 @@ pub fn run() {
                 _ => {}
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::SystemTime;
+
+    const OLDER_THAN_ORPHAN_AGE: Duration = Duration::from_secs(60 * 24 * 60 * 60);
+
+    fn old_transcript(label: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let root = std::env::temp_dir().join(format!(
+            "terra-swarm-orphans-{label}-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let transcript = root.join("t-1.scrollback");
+        std::fs::write(&transcript, "output").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&transcript)
+            .unwrap()
+            .set_modified(SystemTime::now() - OLDER_THAN_ORPHAN_AGE)
+            .unwrap();
+        (root, transcript)
+    }
+
+    #[test]
+    fn given_a_store_that_could_not_be_read_keeps_every_transcript() {
+        let (root, transcript) = old_transcript("unread");
+        let store = workspace::WorkspaceStore::default();
+
+        clean_orphaned_scrollback(
+            &store,
+            &scrollback::ScrollbackStore::from_root(root.clone()),
+        );
+
+        assert!(transcript.exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn given_a_loaded_store_removes_old_transcripts_it_does_not_know() {
+        let (root, transcript) = old_transcript("loaded");
+        let store = workspace::WorkspaceStore {
+            save_path: Some(root.join("workspaces.json")),
+            ..workspace::WorkspaceStore::default()
+        };
+
+        clean_orphaned_scrollback(
+            &store,
+            &scrollback::ScrollbackStore::from_root(root.clone()),
+        );
+
+        assert!(!transcript.exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
 }

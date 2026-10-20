@@ -4,6 +4,7 @@
 //! (agents edit the same files).
 
 use super::{safe_relative_path, WorkspaceStore};
+use crate::sync::LockExt;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -12,6 +13,9 @@ use tauri::State;
 
 /// Larger files are not opened in the editor.
 pub(crate) const MAX_EDIT_BYTES: u64 = 2 * 1024 * 1024;
+
+/// A NUL byte within this many leading bytes marks the file as binary.
+const BINARY_SNIFF_BYTES: usize = 8192;
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -78,7 +82,7 @@ pub(crate) fn read_file(root: &Path, relative: &str) -> Result<WorkspaceFileCont
     }
     let bytes =
         std::fs::read(&target).map_err(|error| format!("cannot read the file: {}", error))?;
-    let text = if bytes.iter().take(8192).any(|byte| *byte == 0) {
+    let text = if bytes.iter().take(BINARY_SNIFF_BYTES).any(|byte| *byte == 0) {
         None
     } else {
         String::from_utf8(bytes).ok()
@@ -115,7 +119,7 @@ pub(crate) fn write_file(
 }
 
 fn workspace_cwd(store: &Mutex<WorkspaceStore>, workspace_id: &str) -> Result<String, String> {
-    let store = store.lock().map_err(|error| error.to_string())?;
+    let store = store.lock_or_recover();
     Ok(store.workspace(workspace_id)?.cwd.clone())
 }
 

@@ -1,6 +1,7 @@
 //! Read-only, workspace-relative directory listing for the Files view.
 
 use super::*;
+use crate::sync::LockExt;
 use serde::Serialize;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
@@ -146,7 +147,7 @@ pub fn list_workspace_files(
     limit: Option<usize>,
 ) -> Result<WorkspaceFileListing, String> {
     let cwd = {
-        let store = store.lock().map_err(|error| error.to_string())?;
+        let store = store.lock_or_recover();
         store.workspace(&workspace_id)?.cwd.clone()
     };
     list_directory_entries(Path::new(&cwd), relative_path.as_deref(), limit)

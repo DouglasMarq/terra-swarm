@@ -28,6 +28,7 @@ import type {
 } from "../../settings";
 import { LOCALES, useLocaleStore, useT, type Locale, type MessageKey } from "../../../i18n";
 import { pickAgentName, type NameSetId } from "../../../domain/agentNames";
+import { useMcpStore } from "../../../stores/mcpStore";
 import { usePreferencesStore } from "../../../stores/preferencesStore";
 import { DEFAULT_TERMINAL_FONT_STACK, filterFonts, loadSystemFonts, terminalFontStack, type SystemFont } from "../../../lib/terminalFonts";
 import styles from "./SettingsPanels.module.css";
@@ -360,6 +361,45 @@ function useNamesInUse(): string[] {
   return useMemo(() => Object.values(agentNames), [agentNames]);
 }
 
+/** The embedded MCP server: the on/off switch and where it listens. */
+function McpCard() {
+  const t = useT();
+  const server = useMcpStore((state) => state.server);
+  const loadServer = useMcpStore((state) => state.loadServer);
+  const setEnabled = useMcpStore((state) => state.setEnabled);
+  useEffect(() => {
+    void loadServer();
+  }, [loadServer]);
+  return (
+    <div className={styles.card}>
+      <span className={styles.cardTitle}>{t("settingsPanels.mcpTitle")}</span>
+      <p className={styles.cardDescription}>{t("settingsPanels.mcpHint")}</p>
+      <div className={styles.row}>
+        <div className={styles.rowLabel}>
+          <span className={styles.label}>{t("settingsPanels.mcpExpose")}</span>
+          <span className={styles.rowHint}>{t("settingsPanels.mcpExposeHint")}</span>
+        </div>
+        <Toggle
+          checked={server?.enabled ?? true}
+          disabled={!server}
+          label={t("settingsPanels.mcpExpose")}
+          onChange={(enabled) => void setEnabled(enabled)}
+        />
+      </div>
+      {server ? (
+        server.running && server.url ? (
+          <p className={styles.hint}>
+            {t("settingsPanels.mcpUrl")}: <code className={styles.agentCommand}>{server.url}</code>
+            {server.port ? ` · ${t("settingsPanels.mcpPort", { port: server.port })}` : null}
+          </p>
+        ) : (
+          <p className={styles.hint}>{t("settingsPanels.mcpNotRunning")}</p>
+        )
+      ) : null}
+    </div>
+  );
+}
+
 function AgentNamesCard() {
   const t = useT();
   const prefs = usePreferencesStore();
@@ -486,6 +526,7 @@ function AgentPanel({
           </select>
         </label>
       </div>
+      <McpCard />
       <div className={styles.card}>
         <span className={styles.cardTitle}>{t("settingsPanels.detectedTitle")}</span>
         <p className={styles.cardDescription}>{t("settingsPanels.detectedHint")}</p>

@@ -19,7 +19,9 @@ import type {
   WorkspaceSnapshotTransfer,
   WorkspaceContainerPatch,
   WorkspaceLayout,
+  WorkspaceFileContent,
   WorkspaceFileListing,
+  WorkspaceFileSaved,
   WorkspaceGitStatus,
   WorktreeDiff,
   WorktreeStatus,
@@ -207,6 +209,14 @@ export interface IpcCommandContract {
     args: { workspaceId: string; relativePath?: string; limit?: number };
     result: WorkspaceFileListing;
   };
+  readWorkspaceFile: {
+    args: { workspaceId: string; relativePath: string };
+    result: WorkspaceFileContent;
+  };
+  writeWorkspaceFile: {
+    args: { workspaceId: string; relativePath: string; content: string; expectedModified: number | null };
+    result: WorkspaceFileSaved;
+  };
   gitStatus: {
     args: { workspaceId: string };
     result: WorkspaceGitStatus;
@@ -354,6 +364,8 @@ const IPC_COMMANDS = {
   probeDevServers: "probe_dev_servers",
   gitBranch: "git_branch",
   listWorkspaceFiles: "list_workspace_files",
+  readWorkspaceFile: "read_workspace_file",
+  writeWorkspaceFile: "write_workspace_file",
   gitStatus: "git_status",
   mcpServerInfo: "mcp_server_info",
   mcpSetEnabled: "mcp_set_enabled",

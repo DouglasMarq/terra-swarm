@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type ChangeEvent, type MouseEvent } from "react";
 import { ProjectTree } from "./ProjectTree";
 import { NavigatorFilesView } from "./NavigatorFilesView";
+import { useEditorStore } from "../../stores/editorStore";
 import { NavigatorGitView } from "./NavigatorGitView";
 import {
   buildNavigatorTree,
@@ -312,7 +313,7 @@ export function NavigatorPanel({
           </div>
         ) : null}
         {emptyState && workspaces.length === 0 ? emptyState : null}
-      </div> : selectedActivity === "files" && loadFiles ? <NavigatorFilesView activeWorkspaceId={activeWorkspaceId} loadFiles={loadFiles} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} /> : selectedActivity === "git" && loadGitStatus ? <NavigatorGitView activeWorkspaceId={activeWorkspaceId} loadGitStatus={loadGitStatus} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} /> : <div className={styles.integrationView}><div className={styles.integrationEmpty}>{t("nav.unavailable")}</div></div>}
+      </div> : selectedActivity === "files" && loadFiles ? <NavigatorFilesView activeWorkspaceId={activeWorkspaceId} loadFiles={loadFiles} onSelectWorkspace={onOpenWorkspace} onOpenFile={(workspaceId, path) => useEditorStore.getState().open({ workspaceId, path })} workspaces={workspaces} /> : selectedActivity === "git" && loadGitStatus ? <NavigatorGitView activeWorkspaceId={activeWorkspaceId} loadGitStatus={loadGitStatus} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} /> : <div className={styles.integrationView}><div className={styles.integrationEmpty}>{t("nav.unavailable")}</div></div>}
       <footer className={styles.footer}>
         <span>{t("nav.projectCount", { count: projectCount })}</span>
         {createProject ? <button className={styles.footerAction} onClick={() => createProject(null)} type="button"><Plus aria-hidden="true" size={12} /> {t("palette.newProject")}</button> : null}

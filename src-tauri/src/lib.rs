@@ -130,6 +130,8 @@ pub fn run() {
             workspace::reorder_workspaces,
             workspace::set_terminal_width,
             workspace::list_workspace_files,
+            workspace::read_workspace_file,
+            workspace::write_workspace_file,
             workspace::git_status,
             workspace::git_branch,
             pty::spawn_terminal,

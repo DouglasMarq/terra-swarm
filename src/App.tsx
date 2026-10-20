@@ -18,6 +18,7 @@ import { useWorkspaceNavigation } from "./app/useWorkspaceNavigation";
 import { useWorkspaces } from "./app/useWorkspaces";
 import { useWorktreeClose } from "./app/useWorktreeClose";
 import { WorktreeReviewDialog } from "./components/review/WorktreeReviewDialog";
+import { FileEditorDialog } from "./components/editor/FileEditorDialog";
 import { resumeCommandFor, useTerminalSessions } from "./app/useTerminalSessions";
 import { useUpdater } from "./app/useUpdater";
 import type { AgentRole, NotificationItem } from "./types";
@@ -863,6 +864,7 @@ function App() {
 
       <WorktreeCloseDialog {...worktreeClose.dialog} />
       <WorktreeReviewDialog />
+      <FileEditorDialog />
 
       <RenameDialog
         kind={renameTarget?.kind ?? "workspace"}

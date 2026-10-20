@@ -80,6 +80,22 @@ export interface WorkspaceFileEntry {
   size: number | null;
 }
 
+/** One text file opened in the built-in editor. */
+export interface WorkspaceFileContent {
+  path: string;
+  /** Empty for binary files. */
+  content: string;
+  binary: boolean;
+  size: number;
+  /** Modification time (ms), passed back on save to detect outside edits. */
+  modified: number;
+}
+
+export interface WorkspaceFileSaved {
+  size: number;
+  modified: number;
+}
+
 export interface WorkspaceFileListing {
   path: string;
   entries: WorkspaceFileEntry[];

@@ -96,7 +96,3 @@ export function agentLabelText(label: Pick<AgentLabel, "primary" | "tag">): stri
   return `${label.primary} · ${label.tag}`;
 }
 
-/** Fallback for ids that are not (or no longer) in the workspace list. */
-export function fallbackAgentLabel(terminalId: string, workspaceId = ""): AgentLabel {
-  return { terminalId, workspaceId, kind: "agente", tag: "agente", title: null, name: null, primary: "agente" };
-}

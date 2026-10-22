@@ -14,6 +14,10 @@ export interface TerminalTabSurfaceProps {
   contextUsage: Readonly<Record<string, number>>;
   titles: Readonly<Record<string, string>>;
   branch?: string;
+  /** Worktree branch per terminal id, for isolated agents. */
+  worktreeBranches?: Readonly<Record<string, string>>;
+  /** Translated team role per terminal id. */
+  roleLabels?: Readonly<Record<string, string>>;
   detachedIds?: ReadonlySet<string>;
   labels?: Readonly<Record<string, { primary: string; tag: string; title?: string | null } | undefined>>;
   attentionMessages?: Readonly<Record<string, string | undefined>>;
@@ -24,6 +28,7 @@ export interface TerminalTabSurfaceProps {
   onRestart: (id: string, command: string) => void;
   onDetach?: (id: string) => void;
   onKill: (id: string) => void;
+  onOpenReview?: (id: string) => void;
 }
 
 /**
@@ -41,6 +46,8 @@ export function TerminalTabSurface({
   contextUsage,
   titles,
   branch,
+  worktreeBranches,
+  roleLabels,
   detachedIds,
   labels,
   attentionMessages,
@@ -51,6 +58,7 @@ export function TerminalTabSurface({
   onRestart,
   onDetach,
   onKill,
+  onOpenReview,
 }: TerminalTabSurfaceProps): ReactNode {
   const t = useT();
   const { tab } = context;
@@ -84,6 +92,9 @@ export function TerminalTabSurface({
       attentionMessage={attentionMessages?.[ptyId] ?? null}
       menu={buildMenu?.(ptyId, tab.command)}
       branch={branch}
+      worktreeBranch={worktreeBranches?.[ptyId]}
+      roleLabel={roleLabels?.[ptyId]}
+      onOpenReview={onOpenReview ? () => onOpenReview(ptyId) : undefined}
       onClearNotifications={() => onClearNotifications(ptyId)}
       focused={focusedId === ptyId}
       onFocus={() => onFocus(ptyId)}

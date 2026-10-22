@@ -1,4 +1,5 @@
 import { migrateLegacyWorkspaces } from "../../domain/migration";
+import { byId } from "../../domain/selectors";
 import type {
   Group,
   Pane,
@@ -13,11 +14,6 @@ import type {
   WorkbenchProjection,
   WorkbenchSource,
 } from "./types";
-
-function byId<T extends { id: string }>(items: readonly T[], id: string | null | undefined): T | null {
-  if (!id) return null;
-  return items.find((item) => item.id === id) ?? null;
-}
 
 function uniqueIds(ids: readonly string[]): string[] {
   const seen = new Set<string>();
@@ -100,34 +96,4 @@ export function projectWorkbench(source: WorkbenchSource): WorkbenchProjection {
     containerProjection(snapshot, container),
   );
   return { source: snapshot, containers };
-}
-
-export function projectContainer(
-  source: WorkbenchSource,
-  containerId: string,
-): WorkbenchContainerProjection | null {
-  return projectWorkbench(source).containers.find(({ container }) => container.id === containerId) ?? null;
-}
-
-export function projectPane(
-  source: WorkbenchSource,
-  paneId: string,
-): WorkbenchPaneProjection | null {
-  for (const container of projectWorkbench(source).containers) {
-    const pane = container.panes.find((candidate) => candidate.pane.id === paneId);
-    if (pane) return pane;
-  }
-  return null;
-}
-
-export function containerIds(projection: WorkbenchProjection): string[] {
-  return projection.containers.map(({ container }) => container.id);
-}
-
-export function paneIds(projection: WorkbenchContainerProjection): string[] {
-  return projection.panes.map(({ pane }) => pane.id);
-}
-
-export function tabIds(projection: WorkbenchPaneProjection): string[] {
-  return projection.tabs.map((tab) => tab.id);
 }

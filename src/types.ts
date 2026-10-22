@@ -6,6 +6,61 @@ export interface TerminalMeta {
   tabId?: string | null;
   groupId?: string | null;
   suspended?: boolean;
+  /** The git worktree the agent is isolated in, if any. */
+  worktree?: WorktreeInfo | null;
+  /** The agent's team role, if it was started with one. */
+  role?: AgentRole | null;
+}
+
+/** Tokens an agent used, from its CLI's own session log. */
+export interface AgentTokenUsage {
+  terminal_id: string;
+  agent: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  turns: number;
+  model: string | null;
+}
+
+/** Team roles agents can be started with (see the MCP `whoami` tool). */
+export type AgentRole = "orchestrator" | "planner" | "executor" | "reviewer" | "tester";
+
+export interface WorktreeInfo {
+  path: string;
+  cwd: string;
+  branch: string;
+  base: string;
+  repo: string;
+}
+
+export interface WorktreeChangedFile {
+  path: string;
+  change: "added" | "modified" | "deleted" | "renamed" | "untracked";
+  /** `null` for binary files. */
+  additions: number | null;
+  deletions: number | null;
+}
+
+/** What an isolated agent changed since its branch left the base. */
+export interface WorktreeDiff {
+  status: WorktreeStatus;
+  files: WorktreeChangedFile[];
+  patch: string;
+  truncated: boolean;
+}
+
+export interface WorktreeStatus {
+  branch: string;
+  base: string;
+  path: string;
+  /** Files with uncommitted changes. */
+  dirty: string[];
+  /** Commits on the agent's branch that the base does not have. */
+  ahead: number;
+  behind: number;
+  exists: boolean;
 }
 
 export interface Workspace {
@@ -35,6 +90,32 @@ export interface WorkspaceFileEntry {
   path: string;
   kind: WorkspaceFileKind;
   size: number | null;
+}
+
+/** One text file opened in the built-in editor. */
+export interface WorkspaceFileContent {
+  path: string;
+  /** Empty for binary files. */
+  content: string;
+  binary: boolean;
+  size: number;
+  /** Modification time (ms), passed back on save to detect outside edits. */
+  modified: number;
+}
+
+export interface WorkspaceFileSaved {
+  size: number;
+  modified: number;
+}
+
+/** Failures a command tells apart by code (`IpcErrorCode` in `src-tauri/src/ipc_error.rs`). */
+export type IpcErrorCode = "changedOnDisk" | "busy" | "other";
+
+/** What `write_workspace_file` and `write_terminal` reject with, instead of a plain message. */
+export interface IpcErrorPayload {
+  code: IpcErrorCode;
+  /** Short English message the UI can show. */
+  message: string;
 }
 
 export interface WorkspaceFileListing {
@@ -370,4 +451,92 @@ export interface VoiceDownloadProgress {
   downloaded: number;
   total: number;
   percent: number;
+}
+
+/** Agent coordination (MCP) — mirrors `src-tauri/src/mcp/store.rs`. */
+export type McpTaskStatus = "todo" | "in_progress" | "review" | "done" | "blocked";
+export type McpTaskPriority = "low" | "medium" | "high" | "urgent";
+export type McpAgentState = "working" | "idle" | "needs_input" | "blocked";
+
+export type McpTaskEventKind = "created" | "claimed" | "status" | "assigned" | "note" | "completed";
+
+export interface McpTaskEvent {
+  actor: string;
+  kind: McpTaskEventKind;
+  body: string;
+  created_at: number;
+}
+
+export interface McpTask {
+  id: string;
+  workspace_id: string;
+  title: string;
+  description: string;
+  status: McpTaskStatus;
+  /** Terminal id of the agent working on it, if any. */
+  assignee: string | null;
+  /** Terminal id of the creating agent, or "user" for the Tasks panel. */
+  created_by: string;
+  priority: McpTaskPriority;
+  labels: string[];
+  /** Order inside its status column. */
+  position: number;
+  depends_on: string[];
+  /** Dependencies that are not done yet. */
+  blocked_by: string[];
+  created_at: number;
+  updated_at: number;
+  /** Latest history entries, oldest first. */
+  events?: McpTaskEvent[];
+}
+
+export interface McpTaskPatch {
+  title?: string;
+  description?: string;
+  status?: McpTaskStatus;
+  priority?: McpTaskPriority;
+  /** `null` unassigns the task. */
+  assignee?: string | null;
+  position?: number;
+  note?: string;
+}
+
+export interface McpMessage {
+  id: number;
+  workspace_id: string;
+  from: string;
+  to: string;
+  body: string;
+  created_at: number;
+  read_by: string[];
+}
+
+export interface McpAgentStatus {
+  terminal_id: string;
+  workspace_id: string;
+  state: McpAgentState;
+  summary: string;
+  updated_at: number;
+}
+
+export interface McpServerInfo {
+  /** The "Expose Terra MCP to agents" preference. */
+  enabled: boolean;
+  /** False when mcp.db could not be opened or migrated. */
+  available: boolean;
+  running: boolean;
+  url: string | null;
+  port: number | null;
+  db_path: string | null;
+  error: string | null;
+}
+
+/** Per-agent launch settings applied on every spawn, never stored with the terminal. */
+export interface AgentLaunchExtras {
+  args?: string;
+  env?: Record<string, string>;
+  /** Isolate a new agent in its own git worktree. */
+  worktree?: boolean;
+  /** Team role for a new agent. */
+  role?: AgentRole;
 }

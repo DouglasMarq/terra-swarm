@@ -1,5 +1,7 @@
 /** Configurable agent launch/resume/voice behavior, kept independent of UI. */
 
+import agentCatalog from "./agents.json";
+
 export type AgentResumeCommandStrategy =
   | { kind: "original" }
   | { kind: "fixed"; command: string }
@@ -38,6 +40,20 @@ const DEFAULT_VOICE_BEHAVIOR: AgentVoicePromptBehavior = {
   suffix: "",
 };
 
+/** One entry of the shared agent catalog (`agents.json`). */
+export interface AgentCatalogEntry {
+  id: string;
+  label: string;
+  /** Command that continues the last session; absent when unsupported. */
+  resume?: string;
+  /** How Terra connects the agent to its MCP server and state hooks. */
+  integration?: "claude" | "codex";
+}
+
+export const AGENT_CATALOG: readonly AgentCatalogEntry[] = Object.freeze(
+  (agentCatalog as { agents: AgentCatalogEntry[] }).agents,
+);
+
 export const DEFAULT_AGENT_PROFILES: readonly AgentProfile[] = Object.freeze([
   {
     id: "shell",
@@ -46,67 +62,13 @@ export const DEFAULT_AGENT_PROFILES: readonly AgentProfile[] = Object.freeze([
     resumeCommandStrategy: { kind: "original" },
     voicePromptBehavior: { ...DEFAULT_VOICE_BEHAVIOR },
   },
-  {
-    id: "claude",
-    label: "Claude Code",
-    command: "claude",
-    resumeCommandStrategy: { kind: "fixed", command: "claude --continue" },
-    voicePromptBehavior: { ...DEFAULT_VOICE_BEHAVIOR },
-  },
-  {
-    id: "codex",
-    label: "Codex",
-    command: "codex",
-    resumeCommandStrategy: { kind: "fixed", command: "codex resume --last" },
-    voicePromptBehavior: { ...DEFAULT_VOICE_BEHAVIOR },
-  },
-  {
-    id: "opencode",
-    label: "OpenCode",
-    command: "opencode",
-    resumeCommandStrategy: { kind: "fixed", command: "opencode --continue" },
-    voicePromptBehavior: { ...DEFAULT_VOICE_BEHAVIOR },
-  },
-  {
-    id: "kimi",
-    label: "Kimi",
-    command: "kimi",
-    resumeCommandStrategy: { kind: "fixed", command: "kimi --continue" },
-    voicePromptBehavior: { ...DEFAULT_VOICE_BEHAVIOR },
-  },
-  {
-    id: "copilot",
-    label: "GitHub Copilot",
-    command: "copilot",
-    resumeCommandStrategy: { kind: "fixed", command: "copilot --continue" },
-    voicePromptBehavior: { ...DEFAULT_VOICE_BEHAVIOR },
-  },
-  {
-    id: "aider",
-    label: "Aider",
-    command: "aider",
-    resumeCommandStrategy: { kind: "fixed", command: "aider --restore-chat-history" },
-    voicePromptBehavior: { ...DEFAULT_VOICE_BEHAVIOR },
-  },
-  // Agents below reopen with their original command: their CLIs either have
-  // no stable "continue last session" flag or it varies between versions.
-  ...([
-    ["gemini", "Gemini"],
-    ["grok", "Grok"],
-    ["qwen", "Qwen Code"],
-    ["deepseek", "DeepSeek"],
-    ["cursor-agent", "Cursor"],
-    ["amp", "Amp"],
-    ["goose", "Goose"],
-    ["crush", "Crush"],
-    ["droid", "Droid"],
-    ["cline", "Cline"],
-    ["auggie", "Auggie"],
-  ] as const).map(([id, label]): AgentProfile => ({
-    id,
-    label,
-    command: id,
-    resumeCommandStrategy: { kind: "original" },
+  // Agents without a stable "continue last session" flag reopen with their
+  // original command.
+  ...AGENT_CATALOG.map((agent): AgentProfile => ({
+    id: agent.id,
+    label: agent.label,
+    command: agent.id,
+    resumeCommandStrategy: agent.resume ? { kind: "fixed", command: agent.resume } : { kind: "original" },
     voicePromptBehavior: { ...DEFAULT_VOICE_BEHAVIOR },
   })),
 ]);
@@ -180,23 +142,8 @@ function voiceFrom(raw: unknown, fallback: AgentVoicePromptBehavior): AgentVoice
   };
 }
 
-/** Public normalizer for integrations that store strategy separately. */
-export function normalizeResumeCommandStrategy(
-  raw: unknown,
-  fallback: AgentResumeCommandStrategy = { kind: "original" },
-): AgentResumeCommandStrategy {
-  return strategyFrom(raw, fallback);
-}
-
-/** Public normalizer for integrations that store voice behavior separately. */
-export function normalizeVoicePromptBehavior(
-  raw: unknown,
-  fallback: AgentVoicePromptBehavior = DEFAULT_VOICE_BEHAVIOR,
-): AgentVoicePromptBehavior {
-  return voiceFrom(raw, fallback);
-}
-
-function fallbackProfile(id: string): AgentProfile {
+/** The built-in profile for `id`, or a plain one that runs `id` and resumes with the original command. */
+export function fallbackProfile(id: string): AgentProfile {
   return (
     DEFAULT_AGENT_PROFILES.find((profile) => profile.id === id) ?? {
       id,
@@ -275,6 +222,18 @@ export function resolveResumeCommand(
   return strategy.template
     .replace(/\{command\}/g, originalCommand)
     .replace(/\{(\w+)\}/g, (_, key: string) => values[key] ?? "");
+}
+
+/**
+ * The command that starts an agent fresh. A continuation command
+ * (`claude --continue`) maps back to the agent's own command, so restarting
+ * an agent with no saved conversation does not fail every time.
+ */
+export function freshCommand(command: string): string {
+  const profile = profileForCommand(command);
+  const strategy = profile.resumeCommandStrategy;
+  const normalized = command.trim().split(/\s+/).join(" ");
+  return strategy.kind === "fixed" && normalized === strategy.command ? profile.command : command;
 }
 
 export function buildVoicePrompt(

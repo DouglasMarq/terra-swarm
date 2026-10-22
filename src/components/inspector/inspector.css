@@ -50,11 +50,16 @@
   flex: 0 0 auto;
   padding: 2px 8px;
   border-radius: var(--terra-radius-pill);
-  color: var(--terra-green);
-  background: var(--terra-green-dim);
+  color: var(--terra-text-secondary);
+  background: var(--terra-bg-hover);
   font-size: var(--terra-font-size-micro);
   font-weight: 600;
   white-space: nowrap;
+}
+
+.terra-status-chip[data-status="working"] {
+  color: var(--terra-green);
+  background: var(--terra-green-dim);
 }
 
 .terra-status-chip[data-status="attention"] {
@@ -65,11 +70,6 @@
 .terra-status-chip[data-status="exited"] {
   color: var(--terra-red-ink);
   background: var(--terra-red-dim);
-}
-
-.terra-status-chip[data-status="suspended"] {
-  color: var(--terra-text-secondary);
-  background: var(--terra-bg-hover);
 }
 
 .terra-inspector-block {
@@ -114,9 +114,9 @@
   flex-direction: column;
   gap: 6px;
   padding: 12px;
-  border: 1px solid rgb(224 180 92 / 30%);
+  border: 1px solid color-mix(in srgb, var(--terra-amber) 30%, transparent);
   border-radius: var(--terra-radius-lg);
-  background: rgb(224 180 92 / 8%);
+  background: var(--terra-amber-wash);
 }
 
 .terra-inspector-request p {

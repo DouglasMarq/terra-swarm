@@ -48,7 +48,10 @@ pub async fn list_system_fonts() -> Vec<FontFamily> {
         families_from(faces.iter().map(|(name, mono)| (name.as_str(), *mono)))
     })
     .await
-    .unwrap_or_default()
+    .unwrap_or_else(|error| {
+        eprintln!("failed to list system fonts: {}", error);
+        Vec::new()
+    })
 }
 
 #[cfg(test)]
@@ -68,8 +71,14 @@ mod tests {
         assert_eq!(
             families,
             vec![
-                FontFamily { name: "Helvetica".into(), monospace: false },
-                FontFamily { name: "JetBrains Mono".into(), monospace: true },
+                FontFamily {
+                    name: "Helvetica".into(),
+                    monospace: false
+                },
+                FontFamily {
+                    name: "JetBrains Mono".into(),
+                    monospace: true
+                },
             ]
         );
     }

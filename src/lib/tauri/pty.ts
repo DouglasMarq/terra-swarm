@@ -1,4 +1,5 @@
 import type {
+  AgentLaunchExtras,
   BacklogSnapshot,
   RunningTerminal,
   SpawnedTerminal,
@@ -6,13 +7,18 @@ import type {
 } from "../../types";
 import { invokeCommand } from "./commands";
 
+/** Size a PTY starts with until its pane is measured. */
+const DEFAULT_TERMINAL_COLUMNS = 80;
+const DEFAULT_TERMINAL_ROWS = 24;
+
 export function spawnTerminal(
   workspaceId: string,
   command: string,
   terminalId?: string,
-  cols = 80,
-  rows = 24,
+  cols = DEFAULT_TERMINAL_COLUMNS,
+  rows = DEFAULT_TERMINAL_ROWS,
   shell?: string,
+  launch?: AgentLaunchExtras,
 ): Promise<SpawnedTerminal> {
   return invokeCommand("spawnTerminal", {
     workspaceId,
@@ -21,9 +27,11 @@ export function spawnTerminal(
     rows,
     terminalId: terminalId ?? null,
     shell: shell ?? null,
+    launch: launch ?? null,
   });
 }
 
+/** Fails with a `busy` `IpcError` while the terminal's input queue is full; the write can be retried. */
 export function writeTerminal(id: string, data: string): Promise<void> {
   return invokeCommand("writeTerminal", { id, data });
 }

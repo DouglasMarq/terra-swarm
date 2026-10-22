@@ -60,7 +60,8 @@ function reasonFor(reason: unknown): unknown {
   return reason ?? new Error("mount/focus effect cancelled");
 }
 
-export function createMountFocusQueue(now: () => number = Date.now): MountFocusQueue {
+/** `now` is the clock for `startedAt` / `finishedAt`, in milliseconds. */
+export function createMountFocusQueue(now: () => number): MountFocusQueue {
   const effects = new Map<string, InternalEffect>();
   const settled = new Map<string, MountFocusResult>();
   let running = 0;

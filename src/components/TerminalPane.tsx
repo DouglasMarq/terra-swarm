@@ -1,21 +1,34 @@
+import { agentKind } from "../domain/agentLabels";
+import { CONTEXT_ATTENTION_PERCENT, CONTEXT_WARNING_PERCENT, deriveAgentStatus } from "../domain/agentStatus";
+import { useMcpStore } from "../stores/mcpStore";
 import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api } from "../api";
+import { isIpcError } from "../lib/tauri/errors";
 import type { OutputChunk } from "../types";
 import { registerTerminal, unregisterTerminal, getTerminal } from "../terminalRegistry";
 import {
   createFitScheduler,
   createTerminalResizeQueue,
 } from "../lib/terminalFitScheduler";
-import { Maximize2, Minimize2 } from "lucide-react";
-import { useT } from "../i18n";
+import { Maximize2, Minimize2, GitBranch } from "lucide-react";
+import { t as translateNow, useT } from "../i18n";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { terminalFontStack } from "../lib/terminalFonts";
 import { PaneActionsMenu, type PaneMenuGroups } from "./workbench/PaneActionsMenu";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal-pane.css";
+
+const SCROLLBACK_LINES = 10_000;
+/** Minimum gap between console warnings for one terminal's failed IPC calls. */
+const WARN_THROTTLE_MS = 2000;
+/** Retries of a keystroke write while the backend input channel is busy. */
+const MAX_WRITE_RETRIES = 30;
+/** Delay between write retries: one step per attempt so far, capped at `MAX_WRITE_RETRY_STEPS` steps. */
+const WRITE_RETRY_STEP_MS = 25;
+const MAX_WRITE_RETRY_STEPS = 10;
 
 interface Props {
   id: string;
@@ -31,6 +44,12 @@ interface Props {
   contextUsed?: number;
   title?: string;
   branch?: string;
+  /** Branch of the agent's own git worktree, when it is isolated. */
+  worktreeBranch?: string;
+  /** The agent's team role, already translated. */
+  roleLabel?: string;
+  /** Opens the review of the worktree's changes. */
+  onOpenReview?: () => void;
   /** Task title (or name) shown first; falls back to the command. */
   label?: string;
   /** "claude 2" / "Lyra · claude" under or beside the label. */
@@ -99,7 +118,7 @@ export function TerminalPane(props: Props) {
       fontSize,
       cursorBlink: true,
       macOptionIsMeta: true,
-      scrollback: 10000,
+      scrollback: SCROLLBACK_LINES,
       theme: {
         background: "#0c0c0e",
         foreground: "#d4d4d8",
@@ -119,7 +138,7 @@ export function TerminalPane(props: Props) {
     let lastWarnAt = 0;
     const warnThrottled = (what: string, err: unknown) => {
       const now = Date.now();
-      if (now - lastWarnAt < 2000) return;
+      if (now - lastWarnAt < WARN_THROTTLE_MS) return;
       lastWarnAt = now;
       console.warn(`[terminal ${id}] ${what} failed:`, err);
     };
@@ -220,7 +239,7 @@ export function TerminalPane(props: Props) {
       if (writeBuf.length + data.length > MAX_BUFFERED) {
         writeBuf =
           writeBuf.slice(-Math.floor(MAX_BUFFERED / 4)) +
-          "\r\n\x1b[33m[...output dropped...]\x1b[0m\r\n";
+          `\r\n\x1b[33m${translateNow("pane.outputDropped")}\x1b[0m\r\n`;
       }
       writeBuf += data;
       drain();
@@ -276,12 +295,12 @@ export function TerminalPane(props: Props) {
             await api.writeTerminal(id, data);
             return;
           } catch (err) {
-            if (!String(err).includes("busy") || attempt >= 30) {
+            if (!isIpcError(err, "busy") || attempt >= MAX_WRITE_RETRIES) {
               warnThrottled("write", err);
               return;
             }
             await new Promise((r) =>
-              setTimeout(r, 25 * Math.min(attempt + 1, 10)),
+              setTimeout(r, WRITE_RETRY_STEP_MS * Math.min(attempt + 1, MAX_WRITE_RETRY_STEPS)),
             );
           }
         }
@@ -334,7 +353,6 @@ export function TerminalPane(props: Props) {
     const term = getTerminal(id);
     if (!term) return;
     term.options.fontFamily = fontFamily;
-    // A new family changes the cell size: refit so cols/rows follow.
     fitRef.current?.();
   }, [fontFamily, id]);
 
@@ -349,15 +367,12 @@ export function TerminalPane(props: Props) {
     fitRef.current?.();
   }, [basis, exited, expanded, focused, height, hidden, id]);
 
-  const kind = command.split(" ")[0] || "shell";
+  const reported = useMcpStore((state) => state.statuses[id]?.state);
+  const kind = agentKind(command);
   const primary = label || kind;
   const secondary = tag && tag !== primary ? tag : null;
   const attention = notifications > 0 && Boolean(attentionMessage);
-  const status = exited
-    ? "exited"
-    : notifications > 0 || (contextUsed ?? 0) >= 85
-      ? "attention"
-      : "working";
+  const status = deriveAgentStatus({ exited, notifications, contextUsed: contextUsed ?? undefined, reported });
 
   return (
     <div
@@ -388,6 +403,22 @@ export function TerminalPane(props: Props) {
         <span className="terra-dot pane-dot" data-status={status} aria-hidden="true" />
         <span className="pane-name" title={command}>{primary}</span>
         {secondary ? <span className="terra-tag pane-tag">{secondary}</span> : null}
+        {props.roleLabel ? <span className="terra-tag pane-role">{props.roleLabel}</span> : null}
+        {props.worktreeBranch ? (
+          <button
+            type="button"
+            className="terra-tag pane-worktree"
+            title={t("pane.worktree", { branch: props.worktreeBranch })}
+            disabled={!props.onOpenReview}
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onOpenReview?.();
+            }}
+          >
+            <GitBranch size={11} aria-hidden="true" />
+            {props.worktreeBranch}
+          </button>
+        ) : null}
         {title && title !== primary ? (
           <span className="pane-title" title={title}>
             {title}
@@ -395,7 +426,7 @@ export function TerminalPane(props: Props) {
         ) : <span className="pane-title" />}
         {contextUsed != null && !exited && (
           <span
-            className={`pane-ctx ${contextUsed >= 85 ? "high" : contextUsed >= 60 ? "mid" : ""}`}
+            className={`pane-ctx ${contextUsed >= CONTEXT_ATTENTION_PERCENT ? "high" : contextUsed >= CONTEXT_WARNING_PERCENT ? "mid" : ""}`}
             title={t("pane.contextUsed", { count: contextUsed })}
           >
             <span className="pane-ctx-bar">

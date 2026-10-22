@@ -7,6 +7,6 @@
 .warningIcon {
   flex: 0 0 auto;
   margin-top: 1px;
-  color: var(--terra-amber, #e0b45c);
+  color: var(--terra-amber);
 }
 

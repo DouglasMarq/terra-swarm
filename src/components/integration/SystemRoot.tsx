@@ -1,7 +1,10 @@
-import { t } from "../../i18n";
+import { useT } from "../../i18n";
 import { lazy, Suspense, useMemo, useState } from "react";
 
 import { AppErrorBoundary, LoadingScreen } from "../system";
+
+/** Progress shown while the app bundle loads: the shell is up, the workspace is not. */
+const LOADING_SURFACE_PROGRESS_PERCENT = 30;
 
 interface LazyAppProps {
   attempt: number;
@@ -14,6 +17,7 @@ interface LazyAppProps {
  * forever.
  */
 function LazyApp({ attempt }: LazyAppProps) {
+  const t = useT();
   const App = useMemo(() => lazy(() => import("../../App")), [attempt]);
 
   return (
@@ -22,7 +26,7 @@ function LazyApp({ attempt }: LazyAppProps) {
       fallback={
         <LoadingScreen
           phase="booting"
-          progress={30}
+          progress={LOADING_SURFACE_PROGRESS_PERCENT}
           status={t("system.loadingSurface")}
         />
       }

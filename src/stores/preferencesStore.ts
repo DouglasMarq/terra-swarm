@@ -1,18 +1,15 @@
 import { DEFAULT_NAME_LIST, NAME_SETS, type NameSetId, type NamesExhaustedStrategy } from "../domain/agentNames";
 import { create } from "zustand";
+import { t } from "../i18n";
+import { DEFAULT_VOICE_LANGUAGE, isVoiceLanguage, type VoiceLanguage } from "../domain/voiceLanguages";
 import {
   detectShortcutPlatform,
   formatShortcut,
+  type ShortcutDefinition,
   type ShortcutPlatform,
 } from "../lib/platform/shortcuts";
 
-export interface Hotkey {
-  key: string;
-  meta: boolean;
-  shift: boolean;
-  ctrl: boolean;
-  alt: boolean;
-}
+export type Hotkey = ShortcutDefinition;
 
 const mk = (
   key: string,
@@ -33,7 +30,7 @@ const termSelect = (n: number): Hotkey =>
 // On Windows the meta key is the Win key: Win+W opens Widgets, Win+Enter
 // launches Narrator, Win+= drives the Magnifier, etc. Use Ctrl+Shift / Alt
 // combos there; keep Cmd combos on macOS.
-export const DEFAULT_HOTKEYS: Record<string, Hotkey> = {
+export const DEFAULT_HOTKEYS: Readonly<Record<HotkeyActionId, Hotkey>> = {
   newWorkspace: IS_MAC ? mk("n", true, true) : mk("n", false, true, true),
   renameWorkspace: IS_MAC ? mk("r", true, true) : mk("r", false, true, true),
   deleteWorkspace: IS_MAC
@@ -72,36 +69,51 @@ export const DEFAULT_HOTKEYS: Record<string, Hotkey> = {
 };
 
 export const HOTKEY_ACTIONS = [
-  { id: "newWorkspace", label: "Novo workspace" },
-  { id: "renameWorkspace", label: "Renomear workspace" },
-  { id: "deleteWorkspace", label: "Excluir workspace" },
-  { id: "newTerminal", label: "Novo agente" },
-  { id: "closeTerminal", label: "Fechar agente em foco" },
-  { id: "maximizeTerminal", label: "Maximizar pane (alternar)" },
-  { id: "minimizeTerminal", label: "Voltar à grade" },
-  { id: "increaseFontSize", label: "Aumentar fonte do terminal" },
-  { id: "decreaseFontSize", label: "Diminuir fonte do terminal" },
-  { id: "resetFontSize", label: "Restaurar fonte do terminal" },
-  { id: "toggleVoice", label: "Abrir ou fechar a voz" },
-  { id: "selectWorkspace1", label: "Ir para o workspace 1" },
-  { id: "selectWorkspace2", label: "Ir para o workspace 2" },
-  { id: "selectWorkspace3", label: "Ir para o workspace 3" },
-  { id: "selectWorkspace4", label: "Ir para o workspace 4" },
-  { id: "selectWorkspace5", label: "Ir para o workspace 5" },
-  { id: "selectWorkspace6", label: "Ir para o workspace 6" },
-  { id: "selectWorkspace7", label: "Ir para o workspace 7" },
-  { id: "selectWorkspace8", label: "Ir para o workspace 8" },
-  { id: "selectWorkspace9", label: "Ir para o workspace 9" },
-  { id: "selectTerminal1", label: "Focar o agente 1" },
-  { id: "selectTerminal2", label: "Focar o agente 2" },
-  { id: "selectTerminal3", label: "Focar o agente 3" },
-  { id: "selectTerminal4", label: "Focar o agente 4" },
-  { id: "selectTerminal5", label: "Focar o agente 5" },
-  { id: "selectTerminal6", label: "Focar o agente 6" },
-  { id: "selectTerminal7", label: "Focar o agente 7" },
-  { id: "selectTerminal8", label: "Focar o agente 8" },
-  { id: "selectTerminal9", label: "Focar o agente 9" },
+  { id: "newWorkspace" },
+  { id: "renameWorkspace" },
+  { id: "deleteWorkspace" },
+  { id: "newTerminal" },
+  { id: "closeTerminal" },
+  { id: "maximizeTerminal" },
+  { id: "minimizeTerminal" },
+  { id: "increaseFontSize" },
+  { id: "decreaseFontSize" },
+  { id: "resetFontSize" },
+  { id: "toggleVoice" },
+  { id: "selectWorkspace1" },
+  { id: "selectWorkspace2" },
+  { id: "selectWorkspace3" },
+  { id: "selectWorkspace4" },
+  { id: "selectWorkspace5" },
+  { id: "selectWorkspace6" },
+  { id: "selectWorkspace7" },
+  { id: "selectWorkspace8" },
+  { id: "selectWorkspace9" },
+  { id: "selectTerminal1" },
+  { id: "selectTerminal2" },
+  { id: "selectTerminal3" },
+  { id: "selectTerminal4" },
+  { id: "selectTerminal5" },
+  { id: "selectTerminal6" },
+  { id: "selectTerminal7" },
+  { id: "selectTerminal8" },
+  { id: "selectTerminal9" },
 ] as const;
+
+export type HotkeyActionId = (typeof HOTKEY_ACTIONS)[number]["id"];
+
+type NumberedHotkeyActionId = Extract<HotkeyActionId, `selectWorkspace${string}` | `selectTerminal${string}`>;
+
+function isNumberedHotkeyAction(id: HotkeyActionId): id is NumberedHotkeyActionId {
+  return id.startsWith("selectWorkspace") || id.startsWith("selectTerminal");
+}
+
+/** The action's name in the current language. */
+export function hotkeyActionLabel(id: HotkeyActionId): string {
+  if (!isNumberedHotkeyAction(id)) return t(`hotkeys.${id}` as const);
+  const n = id.slice(-1);
+  return id.startsWith("selectWorkspace") ? t("hotkeys.selectWorkspace", { n }) : t("hotkeys.selectTerminal", { n });
+}
 
 /** Keep persisted shortcuts executable when a profile moves between OSes. */
 export function normalizeHotkeyForPlatform(
@@ -119,7 +131,7 @@ export function normalizeHotkeyForPlatform(
 
 export const MIN_FONT_SIZE = 8;
 export const MAX_FONT_SIZE = 32;
-export const DEFAULT_FONT_SIZE = 13;
+const DEFAULT_FONT_SIZE = 13;
 export const GRID_COL_OPTIONS = [2, 3, 4, 5, 6, 7, 8] as const;
 const DEFAULT_GRID_COLS = 2;
 
@@ -142,6 +154,49 @@ function loadCustomNameList(): string[] {
 
 function nameListFor(set: NameSetId): string[] {
   return set === "custom" ? loadCustomNameList() : [...NAME_SETS[set]];
+}
+
+/** User launch settings of one agent: extra arguments and `KEY=VALUE` lines. */
+export interface AgentLaunchSettings {
+  args: string;
+  env: string;
+}
+
+function loadAgentLaunch(): Record<string, AgentLaunchSettings> {
+  try {
+    const parsed: unknown = JSON.parse(storageGet("agentLaunch") ?? "{}");
+    if (!parsed || typeof parsed !== "object") return {};
+    const clean: Record<string, AgentLaunchSettings> = {};
+    for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!value || typeof value !== "object") continue;
+      const entry = value as Record<string, unknown>;
+      clean[id] = {
+        args: typeof entry.args === "string" ? entry.args : "",
+        env: typeof entry.env === "string" ? entry.env : "",
+      };
+    }
+    return clean;
+  } catch {
+    return {};
+  }
+}
+
+/** Parse `KEY=VALUE` lines; blank lines and `#` comments are skipped. */
+export function parseEnvLines(text: string): { env: Record<string, string>; invalid: string[] } {
+  const env: Record<string, string> = {};
+  const invalid: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const separator = line.indexOf("=");
+    const key = separator > 0 ? line.slice(0, separator).trim() : "";
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || key.startsWith("TERRA_")) {
+      invalid.push(line);
+      continue;
+    }
+    env[key] = line.slice(separator + 1).trim();
+  }
+  return { env, invalid };
 }
 
 function loadAgentNames(): Record<string, string> {
@@ -180,13 +235,13 @@ const storageRemove = (key: string): void => {
   }
 };
 
-export function loadHotkeys(): Record<string, Hotkey> {
+function loadHotkeys(): Record<HotkeyActionId, Hotkey> {
   try {
     const raw = storageGet("hotkeys");
     if (raw) {
       const parsed: unknown = JSON.parse(raw);
-      const clean: Record<string, Hotkey> = {};
-      for (const [action, def] of Object.entries(DEFAULT_HOTKEYS)) {
+      const clean: Record<HotkeyActionId, Hotkey> = { ...DEFAULT_HOTKEYS };
+      for (const { id: action } of HOTKEY_ACTIONS) {
         const value = (parsed as Record<string, unknown>)?.[action];
         if (
           value &&
@@ -207,8 +262,6 @@ export function loadHotkeys(): Record<string, Hotkey> {
             ctrl: hotkey.ctrl,
             alt: hotkey.alt,
           });
-        } else {
-          clean[action] = def;
         }
       }
       return clean;
@@ -233,6 +286,12 @@ export function matchHotkey(event: KeyboardEvent, hotkey: Hotkey): boolean {
   );
 }
 
+/** Unknown persisted values (an older or edited preference) fall back to auto-detection. */
+function loadVoiceLanguage(): VoiceLanguage {
+  const stored = storageGet("voiceLanguage");
+  return isVoiceLanguage(stored) ? stored : DEFAULT_VOICE_LANGUAGE;
+}
+
 function loadFontSize(): number {
   const raw = Number(storageGet("termFontSize"));
   return Number.isFinite(raw) && raw >= MIN_FONT_SIZE && raw <= MAX_FONT_SIZE
@@ -249,7 +308,7 @@ function loadGridCols(): number {
 
 export type PreferencesState = {
   defaultAgent: string | null;
-  hotkeys: Record<string, Hotkey>;
+  hotkeys: Record<HotkeyActionId, Hotkey>;
   sidebarCollapsed: boolean;
   fontSize: number;
   /** Terminal font family name; empty means the default stack. */
@@ -258,6 +317,10 @@ export type PreferencesState = {
   reduceMotion: boolean;
   /** Resume every saved session at startup without showing the opening screen. */
   autoResume: boolean;
+  /** Native notifications and the app icon badge when an agent needs you. */
+  systemNotifications: boolean;
+  /** Dictation goes to the project's orchestrator when one is running. */
+  voiceToOrchestrator: boolean;
   /** Give each new agent a name from `agentNameList` (off by default). */
   agentAutoNames: boolean;
   agentNameSet: NameSetId;
@@ -266,13 +329,15 @@ export type PreferencesState = {
   namesExhausted: NamesExhaustedStrategy;
   /** Names given to agents (automatically or through Rename), by terminal id. */
   agentNames: Record<string, string>;
+  /** Extra arguments and environment per agent id. */
+  agentLaunch: Record<string, AgentLaunchSettings>;
   gridCols: number;
   voiceEnabled: boolean;
-  voiceLang: string;
+  voiceLang: VoiceLanguage;
   voiceModel: string | null;
   voiceInputDevice: string | null;
   setDefaultAgent: (agent: string | null) => void;
-  setHotkeys: (hotkeys: Record<string, Hotkey>) => void;
+  setHotkeys: (hotkeys: Record<HotkeyActionId, Hotkey>) => void;
   resetHotkeys: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
@@ -283,15 +348,18 @@ export type PreferencesState = {
   setDefaultShell: (shell: string) => void;
   setReduceMotion: (enabled: boolean) => void;
   setAutoResume: (enabled: boolean) => void;
+  setSystemNotifications: (enabled: boolean) => void;
+  setVoiceToOrchestrator: (enabled: boolean) => void;
   setAgentAutoNames: (enabled: boolean) => void;
   setAgentNameSet: (set: NameSetId) => void;
   setAgentNameList: (names: string[]) => void;
   setAvoidSimilarNames: (enabled: boolean) => void;
   setNamesExhausted: (strategy: NamesExhaustedStrategy) => void;
   setAgentName: (terminalId: string, name: string | null) => void;
+  setAgentLaunch: (agentId: string, settings: AgentLaunchSettings) => void;
   setGridCols: (cols: number) => void;
   setVoiceEnabled: (enabled: boolean) => void;
-  setVoiceLang: (lang: string) => void;
+  setVoiceLang: (lang: VoiceLanguage) => void;
   setVoiceModel: (model: string | null) => void;
   setVoiceInputDevice: (device: string | null) => void;
 };
@@ -305,15 +373,18 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   defaultShell: storageGet("defaultShell") ?? "",
   reduceMotion: storageGet("reduceMotion") === "1",
   autoResume: storageGet("autoResume") === "1",
+  systemNotifications: storageGet("systemNotifications") !== "0",
+  voiceToOrchestrator: storageGet("voiceToOrchestrator") !== "0",
   agentAutoNames: storageGet("agentAutoNames") === "1",
   agentNameSet: loadNameSet(),
   agentNameList: nameListFor(loadNameSet()),
   avoidSimilarNames: storageGet("avoidSimilarNames") !== "0",
   namesExhausted: storageGet("namesExhausted") === "repeat" ? "repeat" : "type-number",
   agentNames: loadAgentNames(),
+  agentLaunch: loadAgentLaunch(),
   gridCols: loadGridCols(),
   voiceEnabled: storageGet("voiceEnabled") === "1",
-  voiceLang: storageGet("voiceLanguage") ?? "auto",
+  voiceLang: loadVoiceLanguage(),
   voiceModel: storageGet("voiceModel"),
   voiceInputDevice: storageGet("voiceInputDevice"),
 
@@ -407,6 +478,15 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
     set({ namesExhausted });
   },
 
+  setAgentLaunch: (agentId, settings) =>
+    set((state) => {
+      const agentLaunch = { ...state.agentLaunch };
+      if (settings.args.trim() || settings.env.trim()) agentLaunch[agentId] = { args: settings.args, env: settings.env };
+      else delete agentLaunch[agentId];
+      storageSet("agentLaunch", JSON.stringify(agentLaunch));
+      return { agentLaunch };
+    }),
+
   setAgentName: (terminalId, name) =>
     set((state) => {
       const agentNames = { ...state.agentNames };
@@ -419,6 +499,16 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   setAutoResume: (autoResume) => {
     storageSet("autoResume", autoResume ? "1" : "0");
     set({ autoResume });
+  },
+
+  setSystemNotifications: (systemNotifications) => {
+    storageSet("systemNotifications", systemNotifications ? "1" : "0");
+    set({ systemNotifications });
+  },
+
+  setVoiceToOrchestrator: (voiceToOrchestrator) => {
+    storageSet("voiceToOrchestrator", voiceToOrchestrator ? "1" : "0");
+    set({ voiceToOrchestrator });
   },
 
   setReduceMotion: (reduceMotion) => {

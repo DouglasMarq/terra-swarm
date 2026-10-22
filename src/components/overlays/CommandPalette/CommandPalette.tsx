@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Settings2,
   Square,
+  SquareKanban,
   Terminal,
   Trash2,
   Upload,
@@ -51,6 +52,7 @@ const ICONS: Readonly<Record<CommandIconName, LucideIcon>> = {
   home: Home,
   workbench: LayoutDashboard,
   fleet: Columns3,
+  board: SquareKanban,
   settings: Settings2,
   folder: Folder,
   group: FolderPlus,
@@ -122,7 +124,6 @@ export function CommandPalette({
         exitedTerminalIds,
       }),
     // `locale` re-runs the model so labels follow a language switch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [locale, agentLabels, resumeCount, exitedTerminalIds, agents, dockOpen, focusedGroupId, focusedTerminalId, focusedWorkspaceId, groups, hasDetachedTabs, hasRecentlyClosedTabs, recentCommandIds, voiceEnabled, voiceRecording, workspaces],
   );
   const visibleCommands = useMemo(() => filterCommands(commands, query), [commands, query]);
@@ -224,7 +225,6 @@ export function CommandPalette({
   );
 }
 
-export { COMMAND_GROUP_LABELS, COMMAND_GROUP_ORDER } from "./commandModel";
 export type {
   CommandConfirmRequest,
   CommandDescriptor,

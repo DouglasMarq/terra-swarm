@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { Bell, CheckCircle2, Info } from "lucide-react";
 import type { AgentLabel } from "../../domain/agentLabels";
+import { elapsedTime } from "../../domain/elapsedTime";
+import { latestUnreadPerAgent } from "../../domain/notifications";
 import type { NotificationItem } from "../../types";
-import { intlLocale, t as translateNow, useT } from "../../i18n";
+import { intlLocale, useT, type Translate } from "../../i18n";
 import "./notifications.css";
 
 export interface NotificationCenterProps {
@@ -10,7 +12,7 @@ export interface NotificationCenterProps {
   labels: Readonly<Record<string, AgentLabel | undefined>>;
   workspaceNames: Readonly<Record<string, string | undefined>>;
   muted: boolean;
-  /** Agents whose context window is nearly full (≥ 85%). */
+  /** Agents whose context window is nearly full (≥ `CONTEXT_ATTENTION_PERCENT`). */
   contextAlerts?: readonly { terminalId: string; workspaceId: string; used: number }[];
   onJump: (item: NotificationItem) => void;
   onFocusAgent?: (terminalId: string) => void;
@@ -23,25 +25,12 @@ export interface NotificationCenterProps {
 
 type Filter = "attention" | "all";
 
-export function relativeTime(ts: number, now = Date.now()): string {
-  const seconds = Math.max(0, Math.floor((now - ts) / 1000));
-  if (seconds < 45) return translateNow("time.now");
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return translateNow("time.minutes", { count: minutes });
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return translateNow("time.hours", { count: hours });
+export function relativeTime(ts: number, t: Translate, now = Date.now()): string {
+  const elapsed = elapsedTime(ts, now);
+  if (elapsed.unit === "now") return t("time.now");
+  if (elapsed.unit === "minutes") return t("time.minutes", { count: elapsed.count });
+  if (elapsed.unit === "hours") return t("time.hours", { count: elapsed.count });
   return new Date(ts).toLocaleDateString(intlLocale(), { day: "2-digit", month: "short" });
-}
-
-/** Latest unread signal per agent: one card per agent that needs you. */
-export function attentionItems(items: readonly NotificationItem[]): NotificationItem[] {
-  const latest = new Map<string, NotificationItem>();
-  for (const item of items) {
-    if (item.read || item.system) continue;
-    const current = latest.get(item.terminalId);
-    if (!current || current.ts < item.ts) latest.set(item.terminalId, item);
-  }
-  return [...latest.values()].sort((a, b) => b.ts - a.ts);
 }
 
 export function NotificationCenter({
@@ -59,7 +48,7 @@ export function NotificationCenter({
   now = Date.now(),
 }: NotificationCenterProps) {
   const t = useT();
-  const pending = useMemo(() => attentionItems(items), [items]);
+  const pending = useMemo(() => latestUnreadPerAgent(items), [items]);
   const pendingIds = new Set(pending.map((item) => item.terminalId));
   const contextOnly = contextAlerts.filter((alert) => !pendingIds.has(alert.terminalId));
   const attentionCount = pending.length + contextOnly.length;
@@ -106,7 +95,7 @@ export function NotificationCenter({
                   <div className="terra-notification-meta">
                     <b>{label?.primary ?? t("common.agentFallback")}</b>
                     <span className="terra-tag">{label?.tag ?? t("common.agent")}{workspaceNames[item.workspaceId] ? ` · ${workspaceNames[item.workspaceId]}` : ""}</span>
-                    <span className="terra-notification-time">{relativeTime(item.ts, now)}</span>
+                    <span className="terra-notification-time">{relativeTime(item.ts, t, now)}</span>
                   </div>
                   <p>{item.message}</p>
                   <div className="terra-notification-actions">
@@ -157,7 +146,7 @@ export function NotificationCenter({
                         {item.system ? t("common.appName") : `${label?.tag ?? t("common.agent")}${workspaceNames[item.workspaceId] ? ` · ${workspaceNames[item.workspaceId]}` : ""}`}
                       </span>
                     </span>
-                    <span className="terra-notification-time">{relativeTime(item.ts, now)}</span>
+                    <span className="terra-notification-time">{relativeTime(item.ts, t, now)}</span>
                   </button>
                 );
               })}

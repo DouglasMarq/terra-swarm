@@ -1,4 +1,5 @@
-import { t } from "../../i18n";
+import { useT, type MessageKey } from "../../i18n";
+import { errorMessage } from "../../lib/errors/errorMessage";
 import { AlertCircle, FileText, GitBranch, LoaderCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Workspace, WorkspaceGitStatus } from "../../types";
@@ -12,17 +13,11 @@ export interface NavigatorGitViewProps {
   onSelectWorkspace?: (workspaceId: string) => void;
 }
 
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  if (typeof error === "string" && error.trim()) return error;
-  return t("nav.git.error");
-}
-
-const sections: ReadonlyArray<{ key: keyof Pick<WorkspaceGitStatus, "conflicted" | "staged" | "modified" | "untracked">; label: string }> = [
-  { key: "conflicted", get label() { return t("nav.git.conflicted"); } },
-  { key: "staged", label: "Staged" },
-  { key: "modified", get label() { return t("nav.git.modified"); } },
-  { key: "untracked", get label() { return t("nav.git.untracked"); } },
+const sections: ReadonlyArray<{ key: keyof Pick<WorkspaceGitStatus, "conflicted" | "staged" | "modified" | "untracked">; label: MessageKey }> = [
+  { key: "conflicted", label: "nav.git.conflicted" },
+  { key: "staged", label: "nav.git.staged" },
+  { key: "modified", label: "nav.git.modified" },
+  { key: "untracked", label: "nav.git.untracked" },
 ];
 
 export function NavigatorGitView({
@@ -31,6 +26,7 @@ export function NavigatorGitView({
   loadGitStatus,
   onSelectWorkspace,
 }: NavigatorGitViewProps) {
+  const t = useT();
   const workspace = workspaces.find((candidate) => candidate.id === activeWorkspaceId) ?? null;
   const workspaceId = workspace?.id ?? null;
   const [status, setStatus] = useState<WorkspaceGitStatus | null>(null);
@@ -57,7 +53,7 @@ export function NavigatorGitView({
     } catch (reason) {
       if (currentRequest !== requestId.current) return;
       setStatus(null);
-      setError(errorMessage(reason));
+      setError(errorMessage(reason, ""));
     } finally {
       if (currentRequest === requestId.current) setLoading(false);
     }
@@ -88,7 +84,7 @@ export function NavigatorGitView({
       </div>
       {!workspace ? <div className={styles.integrationEmpty}>{t("nav.git.pick")}</div> : null}
       {workspace && loading && !status ? <div className={styles.integrationLoading}><LoaderCircle className={styles.spin} size={14} /> {t("nav.git.loading")}</div> : null}
-      {workspace && error ? <div className={styles.integrationError}><AlertCircle aria-hidden="true" size={14} /><span>{error}</span><button aria-label={t("nav.retry")} onClick={() => void refresh()} type="button"><RefreshCw size={12} /></button></div> : null}
+      {workspace && error !== null ? <div className={styles.integrationError}><AlertCircle aria-hidden="true" size={14} /><span>{error || t("nav.git.error")}</span><button aria-label={t("nav.retry")} onClick={() => void refresh()} type="button"><RefreshCw size={12} /></button></div> : null}
       {workspace && status ? (
         <div className={styles.integrationList}>
           <div className={styles.gitBranchRow}><GitBranch aria-hidden="true" size={14} /><strong>{status.branch ?? t("nav.git.detached")}</strong>{changedCount > 0 ? <span className={styles.integrationMeta}>{t("nav.git.changes", { count: changedCount })}</span> : null}</div>
@@ -98,7 +94,7 @@ export function NavigatorGitView({
             if (paths.length === 0) return null;
             return (
               <section className={styles.gitSection} key={section.key}>
-                <div className={styles.sectionHeader}><span>{section.label}</span><span className={styles.sectionCount}>{paths.length}</span></div>
+                <div className={styles.sectionHeader}><span>{t(section.label)}</span><span className={styles.sectionCount}>{paths.length}</span></div>
                 {paths.map((path) => <div className={styles.integrationPath} key={path}><FileText aria-hidden="true" size={12} /><span>{path}</span></div>)}
               </section>
             );

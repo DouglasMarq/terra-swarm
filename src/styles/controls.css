@@ -67,7 +67,7 @@
 }
 
 .terra-button:hover:not(:disabled) {
-  border-color: #40404a;
+  border-color: var(--terra-border-hover);
   background: var(--terra-bg-hover);
 }
 
@@ -89,7 +89,7 @@
 
 .terra-button-primary:hover:not(:disabled) {
   border-color: var(--terra-accent);
-  background: #e4e4e7;
+  background: var(--terra-text);
 }
 
 .terra-button-attention {
@@ -105,14 +105,14 @@
 }
 
 .terra-button-danger {
-  border-color: rgb(229 99 111 / 40%);
-  color: var(--terra-red-ink);
+  border-color: var(--terra-danger-line);
+  color: var(--terra-danger-ink);
   background: transparent;
 }
 
 .terra-button-danger:hover:not(:disabled) {
-  border-color: var(--terra-red);
-  background: var(--terra-red-dim);
+  border-color: var(--terra-danger);
+  background: var(--terra-danger-dim);
 }
 
 .terra-tag {
@@ -140,6 +140,7 @@
 
 .terra-dot[data-status="working"] { background: var(--terra-green); }
 .terra-dot[data-status="attention"] { background: var(--terra-amber); }
+.terra-dot[data-status="idle"] { background: var(--terra-text-muted); }
 .terra-dot[data-status="exited"] { background: var(--terra-red); }
 .terra-dot[data-status="suspended"] {
   border: 1.5px solid var(--terra-text-secondary);

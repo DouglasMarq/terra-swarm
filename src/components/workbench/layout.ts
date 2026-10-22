@@ -1,7 +1,7 @@
 import type { WorkspaceLayout } from "../../types";
 import type { WorkbenchLayoutMode } from "./types";
 
-export const WORKBENCH_LAYOUT_MODES: readonly WorkbenchLayoutMode[] = [
+const WORKBENCH_LAYOUT_MODES: readonly WorkbenchLayoutMode[] = [
   "auto",
   "spotlight",
   "sidebar",
@@ -11,7 +11,7 @@ export const WORKBENCH_LAYOUT_MODES: readonly WorkbenchLayoutMode[] = [
   "stack",
 ];
 
-export function isWorkbenchLayoutMode(value: unknown): value is WorkbenchLayoutMode {
+function isWorkbenchLayoutMode(value: unknown): value is WorkbenchLayoutMode {
   return typeof value === "string" && WORKBENCH_LAYOUT_MODES.includes(value as WorkbenchLayoutMode);
 }
 
@@ -57,13 +57,8 @@ export interface GridDimensions {
 /** Largest grid the picker offers: 8 columns × 8 rows. */
 export const GRID_MAX = 8;
 
-const GRID_CONTROL_VALUES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
-
-/** Values exposed by the grid size picker in the container header. */
-export const GRID_DIMENSION_VALUES = GRID_CONTROL_VALUES;
-
 /** Automatic grids grow with the pane count up to this many columns. */
-export const AUTO_GRID_MAX_COLUMNS = 4;
+const AUTO_GRID_MAX_COLUMNS = 4;
 
 /**
  * v3 shows two modes: Grade (a CSS grid, automatic or fixed) and Foco
@@ -198,26 +193,6 @@ export function layoutForPanelIds(
   if (total <= 0) return defaults;
   for (const id of ordered) sizes[id] = (sizes[id] / total) * 100;
   return sizes;
-}
-
-export function modeLabel(mode: WorkbenchLayoutMode): string {
-  switch (mode) {
-    case "spotlight":
-      return "Spotlight";
-    case "sidebar":
-      return "Sidebar";
-    case "grid":
-      return "Custom grid";
-    case "horizontal":
-      return "Horizontal";
-    case "vertical":
-      return "Vertical";
-    case "stack":
-      return "Stack";
-    case "auto":
-    default:
-      return "Auto";
-  }
 }
 
 export function nextLayout(

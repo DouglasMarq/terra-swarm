@@ -1,3 +1,4 @@
+use crate::sync::LockExt;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use rubato::audioadapter::Adapter;
 use rubato::{Fft, FixedSync, Resampler};
@@ -7,7 +8,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use tauri::Emitter;
 
-const TARGET_SAMPLE_RATE: u32 = 16000;
+/// Sample rate, in Hz, of the audio handed to Whisper.
+pub(super) const TARGET_SAMPLE_RATE: u32 = 16000;
 const RESAMPLE_CHUNK_SIZE: usize = 1024;
 
 /// Wrapper to pass a mono `&[f32]` slice as a single-channel `Adapter` for rubato.
@@ -39,7 +41,7 @@ const MIN_RECORDING_CHECKS: u32 = 20;
 enum Command {
     Start(
         Arc<Mutex<Vec<f32>>>,
-        tauri::AppHandle,
+        Box<tauri::AppHandle>,
         Option<String>,
         mpsc::Sender<Result<(), String>>,
     ),
@@ -111,6 +113,7 @@ where
     f()
 }
 
+// `name` is only read by the Linux filter of ALSA's virtual devices.
 #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
 fn is_usable_input(name: &str, device: &cpal::Device) -> bool {
     #[cfg(target_os = "linux")]
@@ -163,12 +166,13 @@ impl AudioController {
         thread::spawn(move || {
             let mut active_stream: Option<cpal::Stream> = None;
 
+            // Replies are best-effort: the caller may have stopped waiting.
             for cmd in rx {
                 match cmd {
                     Command::Start(buffer, app, device_name, reply) => {
                         drop(active_stream.take());
 
-                        let stream = match build_stream(buffer, app, device_name) {
+                        let stream = match build_stream(buffer, *app, device_name) {
                             Ok(s) => s,
                             Err(e) => {
                                 let _ = reply.send(Err(e));
@@ -181,7 +185,8 @@ impl AudioController {
                                 let _ = reply.send(Ok(()));
                             }
                             Err(e) => {
-                                let _ = reply.send(Err(format!("Failed to start audio stream: {e}")));
+                                let _ =
+                                    reply.send(Err(format!("Failed to start audio stream: {e}")));
                             }
                         }
                     }
@@ -204,7 +209,12 @@ impl AudioController {
     ) -> Result<(), String> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.tx
-            .send(Command::Start(audio_buffer, app, device_name, reply_tx))
+            .send(Command::Start(
+                audio_buffer,
+                Box::new(app),
+                device_name,
+                reply_tx,
+            ))
             .map_err(|e| format!("Audio thread not available: {e}"))?;
         reply_rx
             .recv()
@@ -265,9 +275,9 @@ fn build_stream(
     let device = resolve_input_device(&host, &device_name)
         .ok_or("No microphone found. Please connect a microphone and try again.")?;
 
-    let config = device
-        .default_input_config()
-        .map_err(|_| "Microphone is not available. Please check your audio input settings.".to_string())?;
+    let config = device.default_input_config().map_err(|error| {
+        format!("Microphone is not available ({error}). Please check your audio input settings.")
+    })?;
 
     let source_sample_rate = config.sample_rate();
     let source_channels = config.channels() as usize;
@@ -559,18 +569,14 @@ fn process_audio(data: &[f32], ctx: &StreamContext) {
 
     let Some(resampler_arc) = &ctx.resampler else {
         emit_audio_level(&mono, ctx);
-        if let Ok(mut buf) = ctx.buffer.lock() {
-            buf.extend_from_slice(&mono);
-        }
+        ctx.buffer.lock_or_recover().extend_from_slice(&mono);
         return;
     };
 
-    let Ok(mut pending) = ctx.resample_pending.lock() else {
-        return;
-    };
+    let mut pending = ctx.resample_pending.lock_or_recover();
     pending.extend_from_slice(&mono);
 
-    let mut resampler = resampler_arc.lock().unwrap();
+    let mut resampler = resampler_arc.lock_or_recover();
     while pending.len() >= RESAMPLE_CHUNK_SIZE {
         let chunk: Vec<f32> = pending.drain(..RESAMPLE_CHUNK_SIZE).collect();
         let input = MonoSlice(&chunk);
@@ -580,9 +586,7 @@ fn process_audio(data: &[f32], ctx: &StreamContext) {
                     .map(|i| output.read_sample(0, i).unwrap_or(0.0))
                     .collect();
                 emit_audio_level(&samples, ctx);
-                if let Ok(mut buf) = ctx.buffer.lock() {
-                    buf.extend_from_slice(&samples);
-                }
+                ctx.buffer.lock_or_recover().extend_from_slice(&samples);
             }
             Err(e) => {
                 eprintln!("Resampling error: {e}");
@@ -593,9 +597,7 @@ fn process_audio(data: &[f32], ctx: &StreamContext) {
 }
 
 fn emit_audio_level(samples: &[f32], ctx: &StreamContext) {
-    let Ok(mut counter) = ctx.sample_counter.lock() else {
-        return;
-    };
+    let mut counter = ctx.sample_counter.lock_or_recover();
     *counter += samples.len();
     if *counter < LEVEL_EMIT_INTERVAL {
         return;
@@ -608,12 +610,8 @@ fn emit_audio_level(samples: &[f32], ctx: &StreamContext) {
 }
 
 fn check_silence(rms: f32, ctx: &StreamContext) {
-    let Ok(mut tc) = ctx.total_checks.lock() else {
-        return;
-    };
-    let Ok(mut sc) = ctx.silence_counter.lock() else {
-        return;
-    };
+    let mut tc = ctx.total_checks.lock_or_recover();
+    let mut sc = ctx.silence_counter.lock_or_recover();
     *tc += 1;
     *sc = match rms < SILENCE_THRESHOLD {
         true => *sc + 1,
@@ -655,6 +653,7 @@ impl MicTestController {
         thread::spawn(move || {
             let mut active: Option<(cpal::Stream, cpal::Stream)> = None;
 
+            // Replies are best-effort: the caller may have stopped waiting.
             for cmd in rx {
                 match cmd {
                     TestCommand::Start(device_name, app, reply) => {
@@ -717,7 +716,7 @@ impl Drop for MicTestController {
 }
 
 fn push_loopback(ring: &Mutex<VecDeque<f32>>, samples: &[f32]) {
-    let Ok(mut buf) = ring.lock() else { return };
+    let mut buf = ring.lock_or_recover();
     buf.extend(samples.iter().copied());
     let excess = buf.len().saturating_sub(LOOPBACK_MAX_SAMPLES);
     if excess > 0 {
@@ -736,7 +735,7 @@ fn next_loopback_sample(
 ) -> f32 {
     *acc += step;
     if *acc >= 1.0 {
-        let mut buf = ring.lock().unwrap();
+        let mut buf = ring.lock_or_recover();
         while *acc >= 1.0 {
             *acc -= 1.0;
             *carry = buf.pop_front().unwrap_or(0.0);
@@ -795,9 +794,9 @@ fn build_test_streams(
     let host = cpal::default_host();
     let device = resolve_input_device(&host, &device_name)
         .ok_or("No microphone found. Please connect a microphone and try again.")?;
-    let in_config = device
-        .default_input_config()
-        .map_err(|_| "Microphone is not available. Please check your audio input settings.".to_string())?;
+    let in_config = device.default_input_config().map_err(|error| {
+        format!("Microphone is not available ({error}). Please check your audio input settings.")
+    })?;
     let in_channels = in_config.channels() as usize;
     let in_rate = in_config.sample_rate();
 
@@ -831,7 +830,7 @@ fn build_test_streams(
                         let mono = mono_downmix(&converted, in_channels);
                         push_loopback(&ring_in, &mono);
                         let rms_ready = {
-                            let mut c = level_in.lock().unwrap();
+                            let mut c = level_in.lock_or_recover();
                             *c += mono.len();
                             if *c >= LEVEL_EMIT_INTERVAL {
                                 *c = 0;
@@ -925,7 +924,7 @@ mod resample_tests {
             .collect();
 
         let mut out = Vec::new();
-        for chunk in input.chunks_exact(RESAMPLE_CHUNK_SIZE) {
+        for chunk in input.as_chunks::<RESAMPLE_CHUNK_SIZE>().0 {
             let output = resampler.process(&MonoSlice(chunk), None).unwrap();
             out.extend((0..output.frames()).map(|i| output.read_sample(0, i).unwrap()));
         }

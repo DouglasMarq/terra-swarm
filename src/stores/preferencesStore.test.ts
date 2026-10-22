@@ -2,10 +2,23 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_HOTKEYS,
   formatHotkey,
+  hotkeyActionLabel,
   matchHotkey,
   normalizeHotkeyForPlatform,
+  parseEnvLines,
   usePreferencesStore,
 } from "./preferencesStore";
+
+describe("hotkeyActionLabel", () => {
+  it("given a numbered action, names it with its number", () => {
+    expect(hotkeyActionLabel("selectWorkspace3")).toBe("Ir para o workspace 3");
+    expect(hotkeyActionLabel("selectTerminal9")).toBe("Focar o agente 9");
+  });
+
+  it("given a plain action, uses its own label", () => {
+    expect(hotkeyActionLabel("newTerminal")).toBe("Novo agente");
+  });
+});
 
 describe("preferences store", () => {
   afterEach(() => {
@@ -54,5 +67,21 @@ describe("preferences store", () => {
       ctrlKey: true,
       altKey: false,
     } as KeyboardEvent, linuxHotkey)).toBe(true);
+  });
+});
+
+describe("per-agent launch settings", () => {
+  it("parses KEY=VALUE lines and reports the rest", () => {
+    const { env, invalid } = parseEnvLines("# comment\nANTHROPIC_MODEL = opus\n\nFOO=a=b\nnot valid\nTERRA_PANE_ID=x\n1BAD=y");
+    expect(env).toEqual({ ANTHROPIC_MODEL: "opus", FOO: "a=b" });
+    expect(invalid).toEqual(["not valid", "TERRA_PANE_ID=x", "1BAD=y"]);
+  });
+
+  it("stores settings per agent and drops empty ones", () => {
+    const store = usePreferencesStore.getState();
+    store.setAgentLaunch("claude", { args: "--model opus", env: "FOO=1" });
+    expect(usePreferencesStore.getState().agentLaunch.claude).toEqual({ args: "--model opus", env: "FOO=1" });
+    store.setAgentLaunch("claude", { args: " ", env: "" });
+    expect(usePreferencesStore.getState().agentLaunch.claude).toBeUndefined();
   });
 });

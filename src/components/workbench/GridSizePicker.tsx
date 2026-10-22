@@ -13,6 +13,9 @@ export interface GridSizePickerProps {
   onAuto: () => void;
 }
 
+/** Above this many cells the picker warns that panes get small. */
+const DENSE_GRID_CELLS = 16;
+
 const CELLS = Array.from({ length: GRID_MAX * GRID_MAX }, (_, index) => ({
   column: (index % GRID_MAX) + 1,
   row: Math.floor(index / GRID_MAX) + 1,
@@ -53,11 +56,11 @@ export function GridSizePicker({ dimensions, auto, paneCount, disabled, onSelect
     : t("grid.size", { columns: shown.columns, rows: shown.rows, count: total });
   let hint = t("grid.hintAuto");
   if (hover || !auto) {
-    if (total > 16) hint = t("grid.hintDense");
+    if (total > DENSE_GRID_CELLS) hint = t("grid.hintDense");
     else if (total > paneCount) hint = t("grid.hintFill");
     else hint = t("grid.hintOverflow");
   }
-  const buttonLabel = auto ? t("grid.label") : `${t("grid.label")} ${dimensions.columns}×${dimensions.rows}`;
+  const buttonLabel = auto ? t("grid.label") : t("grid.labelWithSize", { columns: dimensions.columns, rows: dimensions.rows });
 
   return (
     <div className="terra-grid-picker" ref={rootRef}>

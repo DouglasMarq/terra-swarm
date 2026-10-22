@@ -41,7 +41,7 @@ const MIN_RECORDING_CHECKS: u32 = 20;
 enum Command {
     Start(
         Arc<Mutex<Vec<f32>>>,
-        tauri::AppHandle,
+        Box<tauri::AppHandle>,
         Option<String>,
         mpsc::Sender<Result<(), String>>,
     ),
@@ -172,7 +172,7 @@ impl AudioController {
                     Command::Start(buffer, app, device_name, reply) => {
                         drop(active_stream.take());
 
-                        let stream = match build_stream(buffer, app, device_name) {
+                        let stream = match build_stream(buffer, *app, device_name) {
                             Ok(s) => s,
                             Err(e) => {
                                 let _ = reply.send(Err(e));
@@ -209,7 +209,12 @@ impl AudioController {
     ) -> Result<(), String> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.tx
-            .send(Command::Start(audio_buffer, app, device_name, reply_tx))
+            .send(Command::Start(
+                audio_buffer,
+                Box::new(app),
+                device_name,
+                reply_tx,
+            ))
             .map_err(|e| format!("Audio thread not available: {e}"))?;
         reply_rx
             .recv()

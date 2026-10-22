@@ -23,7 +23,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 portable-pty = "0.9.0"
 tauri-plugin-dialog = "2.8.3"
-tauri-plugin-updater = "2"
+# Without `zip`: updates ship as a raw .msi/.exe and .AppImage (createUpdaterArtifacts: true),
+# and zip 4.x, which the feature pulls in on Windows, has unfixed extraction advisories.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-process = "2"
 tauri-plugin-notification = "2.7.0"
 cpal = "0.18.2"

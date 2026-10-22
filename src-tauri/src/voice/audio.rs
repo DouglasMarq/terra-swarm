@@ -924,7 +924,7 @@ mod resample_tests {
             .collect();
 
         let mut out = Vec::new();
-        for chunk in input.chunks_exact(RESAMPLE_CHUNK_SIZE) {
+        for chunk in input.as_chunks::<RESAMPLE_CHUNK_SIZE>().0 {
             let output = resampler.process(&MonoSlice(chunk), None).unwrap();
             out.extend((0..output.frames()).map(|i| output.read_sample(0, i).unwrap()));
         }

@@ -84,25 +84,62 @@ fn suppress_alsa_stderr<F, R>(f: F) -> R
 where
     F: FnOnce() -> R,
 {
-    use std::os::unix::io::AsRawFd;
+    with_stderr_silenced(f)
+}
 
-    let saved = unsafe { libc::dup(libc::STDERR_FILENO) };
-    if let Ok(devnull) = std::fs::File::open("/dev/null") {
-        unsafe {
-            libc::dup2(devnull.as_raw_fd(), libc::STDERR_FILENO);
+#[cfg(all(unix, any(target_os = "linux", test)))]
+static STDERR_REDIRECT: Mutex<()> = Mutex::new(());
+
+#[cfg(all(unix, any(target_os = "linux", test)))]
+fn with_stderr_silenced<F, R>(work: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    let _serialised = STDERR_REDIRECT.lock_or_recover();
+    let _silenced = SilencedStderr::begin();
+    work()
+}
+
+#[cfg(all(unix, any(target_os = "linux", test)))]
+struct SilencedStderr {
+    saved: Option<libc::c_int>,
+}
+
+#[cfg(all(unix, any(target_os = "linux", test)))]
+impl SilencedStderr {
+    fn begin() -> Self {
+        use std::os::unix::io::AsRawFd;
+
+        // SAFETY: `dup` only duplicates fd 2 in the descriptor table; a
+        // negative result is checked before the copy is used.
+        let saved = unsafe { libc::dup(libc::STDERR_FILENO) };
+        if saved < 0 {
+            return Self { saved: None };
         }
+        if let Ok(devnull) = std::fs::File::open("/dev/null") {
+            // SAFETY: `devnull` stays open for the call and `dup2` atomically
+            // replaces fd 2, whose original is kept in `saved`.
+            unsafe {
+                libc::dup2(devnull.as_raw_fd(), libc::STDERR_FILENO);
+            }
+        }
+        Self { saved: Some(saved) }
     }
+}
 
-    let result = f();
-
-    if saved >= 0 {
+#[cfg(all(unix, any(target_os = "linux", test)))]
+impl Drop for SilencedStderr {
+    fn drop(&mut self) {
+        let Some(saved) = self.saved else {
+            return;
+        };
+        // SAFETY: `saved` is a descriptor this guard alone owns, from `dup`;
+        // it is put back on fd 2 and closed exactly once, here.
         unsafe {
             libc::dup2(saved, libc::STDERR_FILENO);
             libc::close(saved);
         }
     }
-
-    result
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -944,5 +981,42 @@ mod resample_tests {
         let rms = (tail.iter().map(|s| s * s).sum::<f32>() / tail.len() as f32).sqrt();
         let want = amplitude / std::f32::consts::SQRT_2;
         assert!((rms - want).abs() < want * 0.05, "rms {rms}, want {want}");
+    }
+}
+
+#[cfg(all(test, unix))]
+mod stderr_tests {
+    use super::with_stderr_silenced;
+    use std::os::fd::AsFd;
+    use std::os::unix::fs::MetadataExt;
+    use std::time::Duration;
+
+    const CONCURRENT_CALLERS: usize = 16;
+    const ROUNDS: usize = 20;
+
+    fn stderr_identity() -> (u64, u64) {
+        let copy = std::io::stderr()
+            .as_fd()
+            .try_clone_to_owned()
+            .expect("duplicate stderr");
+        let metadata = std::fs::File::from(copy).metadata().expect("stat stderr");
+        (metadata.dev(), metadata.ino())
+    }
+
+    #[test]
+    fn given_concurrent_silencers_when_they_all_finish_then_stderr_is_the_original_one() {
+        let original = stderr_identity();
+
+        std::thread::scope(|scope| {
+            for _ in 0..CONCURRENT_CALLERS {
+                scope.spawn(|| {
+                    for _ in 0..ROUNDS {
+                        with_stderr_silenced(|| std::thread::sleep(Duration::from_micros(50)));
+                    }
+                });
+            }
+        });
+
+        assert_eq!(stderr_identity(), original);
     }
 }

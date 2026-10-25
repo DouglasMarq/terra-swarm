@@ -107,7 +107,7 @@ pub fn run() {
                 scrollback_dir,
             )));
             app.manage(voice::VoiceState::default());
-            app.manage(voice::audio::AudioController::new());
+            app.manage(voice::audio::AudioController::<tauri::Wry>::new());
             app.manage(voice::audio::MicTestController::new());
 
             let handle = app.handle().clone();

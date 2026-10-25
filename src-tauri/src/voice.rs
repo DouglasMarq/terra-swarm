@@ -7,7 +7,7 @@ use crate::sync::LockExt;
 use audio::AudioController;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use transcriber::Transcriber;
 
 /// Room for a batch of `/dev/snd` inotify events.
@@ -89,7 +89,7 @@ fn activate_model(app: &tauri::AppHandle, model_id: &str, path: PathBuf) -> Resu
     Ok(())
 }
 
-fn start_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
+fn start_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let state = app.state::<VoiceState>();
     // Held across check-and-start so two rapid toggles can't both start.
     let mut recording = state.recording.lock_or_recover();
@@ -101,7 +101,7 @@ fn start_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
         let _ = app.emit("voice-recording-error", msg);
         return Err(msg.into());
     }
-    let controller = app.state::<AudioController>();
+    let controller = app.state::<AudioController<R>>();
     let device = state.input_device.lock_or_recover().clone();
 
     state.audio_buffer.lock_or_recover().clear();
@@ -114,7 +114,7 @@ fn start_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-pub fn stop_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
+pub fn stop_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let state = app.state::<VoiceState>();
     {
         let mut recording = state.recording.lock_or_recover();
@@ -125,7 +125,7 @@ pub fn stop_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
         // forever and the flag must not leave the app stuck in "recording".
         *recording = false;
     }
-    let controller = app.state::<AudioController>();
+    let controller = app.state::<AudioController<R>>();
 
     if let Err(e) = controller.stop() {
         eprintln!("audio stop failed: {}", e);
@@ -314,10 +314,7 @@ pub fn voice_list_models(
     app: tauri::AppHandle,
     state: tauri::State<'_, VoiceState>,
 ) -> Result<Vec<VoiceModelInfo>, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let data_dir = app_data_dir(&app)?;
     let downloaded = models::downloaded_model_ids(&data_dir);
     let active = state.active_model_id.lock_or_recover().clone();
     Ok(models::available_models()
@@ -335,16 +332,18 @@ pub fn voice_list_models(
 
 #[tauri::command]
 pub async fn voice_set_model(model_id: String, app: tauri::AppHandle) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let data_dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    run_blocking(move || {
+        let data_dir = app_data_dir(&app)?;
         let path = models::model_path(&data_dir, &model_id).ok_or("Model is not downloaded yet")?;
         activate_model(&app, &model_id, path)
     })
     .await
-    .map_err(|e| e.to_string())?
+}
+
+fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))
 }
 
 #[tauri::command]
@@ -368,10 +367,7 @@ pub async fn voice_download_model(model_id: String, app: tauri::AppHandle) -> Re
 
 async fn download_model_impl(model_id: String, app: tauri::AppHandle) -> Result<(), String> {
     let model = models::find_model(&model_id).ok_or("Unknown model ID")?;
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let data_dir = app_data_dir(&app)?;
 
     let dir = models::models_dir(&data_dir);
     let model_path = dir.join(model.filename);
@@ -431,4 +427,98 @@ async fn run_blocking<T: Send + 'static>(
     tauri::async_runtime::spawn_blocking(work)
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod recording_tests {
+    use super::*;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    use tauri::test::MockRuntime;
+    use tauri::Listener;
+
+    const EVENT_DEADLINE: Duration = Duration::from_secs(5);
+
+    fn recording_app() -> tauri::App<MockRuntime> {
+        let app = tauri::test::mock_app();
+        app.manage(VoiceState::default());
+        app.manage(AudioController::<MockRuntime>::new());
+        app
+    }
+
+    fn set_recording(app: &tauri::App<MockRuntime>, is_recording: bool) {
+        *app.state::<VoiceState>().recording.lock_or_recover() = is_recording;
+    }
+
+    fn is_recording(app: &tauri::App<MockRuntime>) -> bool {
+        *app.state::<VoiceState>().recording.lock_or_recover()
+    }
+
+    fn payloads_of(app: &tauri::App<MockRuntime>, event: &str) -> mpsc::Receiver<String> {
+        let (payload_tx, payload_rx) = mpsc::channel();
+        app.listen(event.to_string(), move |event| {
+            let _ = payload_tx.send(event.payload().to_string());
+        });
+        payload_rx
+    }
+
+    #[test]
+    fn given_no_model_when_starting_then_it_reports_the_missing_model_and_stays_idle() {
+        let app = recording_app();
+        let errors = payloads_of(&app, "voice-recording-error");
+
+        let result = start_recording_impl(app.handle());
+
+        assert!(result.is_err_and(|error| error.starts_with("No voice model loaded")));
+        assert!(!is_recording(&app));
+        assert!(errors.recv_timeout(EVENT_DEADLINE).is_ok());
+    }
+
+    #[test]
+    fn given_a_recording_when_starting_again_then_it_is_refused_and_keeps_recording() {
+        let app = recording_app();
+        set_recording(&app, true);
+
+        let result = start_recording_impl(app.handle());
+
+        assert_eq!(result, Err("Already recording".to_string()));
+        assert!(is_recording(&app));
+    }
+
+    #[test]
+    fn given_no_recording_when_stopping_then_it_is_refused() {
+        let app = recording_app();
+
+        let result = stop_recording_impl(app.handle());
+
+        assert_eq!(result, Err("Not recording".to_string()));
+    }
+
+    #[test]
+    fn given_a_recording_without_a_model_when_stopping_then_it_goes_idle_and_reports_the_missing_model(
+    ) {
+        let app = recording_app();
+        set_recording(&app, true);
+        app.state::<VoiceState>()
+            .audio_buffer
+            .lock_or_recover()
+            .extend([0.1, 0.2]);
+        let stopped = payloads_of(&app, "voice-recording-stopped");
+        let errors = payloads_of(&app, "voice-transcription-error");
+
+        let result = stop_recording_impl(app.handle());
+
+        assert!(result.is_ok());
+        assert!(!is_recording(&app));
+        assert!(app
+            .state::<VoiceState>()
+            .audio_buffer
+            .lock_or_recover()
+            .is_empty());
+        assert!(stopped.recv_timeout(EVENT_DEADLINE).is_ok());
+        assert_eq!(
+            errors.recv_timeout(EVENT_DEADLINE),
+            Ok("\"No model loaded\"".to_string())
+        );
+    }
 }

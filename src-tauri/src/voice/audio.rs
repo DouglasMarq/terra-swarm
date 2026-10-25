@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use tauri::Emitter;
+use tauri::{AppHandle, Emitter, Runtime};
 
 /// Sample rate, in Hz, of the audio handed to Whisper.
 pub(super) const TARGET_SAMPLE_RATE: u32 = 16000;
@@ -42,10 +42,10 @@ const SILENCE_FRAME_COUNT: u32 = 24;
 /// Minimum checks before silence detection activates (~1s)
 const MIN_RECORDING_CHECKS: u32 = 20;
 
-enum Command {
+enum Command<R: Runtime> {
     Start(
         Arc<Mutex<Vec<f32>>>,
-        Box<tauri::AppHandle>,
+        Box<AppHandle<R>>,
         Option<String>,
         mpsc::Sender<Result<(), String>>,
     ),
@@ -196,13 +196,13 @@ fn is_usable_input(name: &str, device: &cpal::Device) -> bool {
 
 /// Thread-safe audio controller that manages mic capture on a dedicated thread
 /// (cpal streams are not Send, so the stream must live on one thread).
-pub struct AudioController {
-    tx: mpsc::Sender<Command>,
+pub struct AudioController<R: Runtime = tauri::Wry> {
+    tx: mpsc::Sender<Command<R>>,
 }
 
-impl AudioController {
+impl<R: Runtime> AudioController<R> {
     pub fn new() -> Self {
-        let (tx, rx) = mpsc::channel::<Command>();
+        let (tx, rx) = mpsc::channel::<Command<R>>();
 
         thread::spawn(move || {
             let mut active_stream: Option<cpal::Stream> = None;
@@ -245,7 +245,7 @@ impl AudioController {
     pub fn start(
         &self,
         audio_buffer: Arc<Mutex<Vec<f32>>>,
-        app: tauri::AppHandle,
+        app: AppHandle<R>,
         device_name: Option<String>,
     ) -> Result<(), String> {
         let (reply_tx, reply_rx) = mpsc::channel();
@@ -269,13 +269,13 @@ impl AudioController {
     }
 }
 
-impl Drop for AudioController {
+impl<R: Runtime> Drop for AudioController<R> {
     fn drop(&mut self) {
         let _ = self.tx.send(Command::Shutdown);
     }
 }
 
-struct StreamContext {
+struct StreamContext<R: Runtime> {
     channels: u16,
     resampler: Option<Arc<Mutex<Fft<f32>>>>,
     resample_pending: Arc<Mutex<Vec<f32>>>,
@@ -283,7 +283,7 @@ struct StreamContext {
     sample_counter: Arc<Mutex<usize>>,
     silence_counter: Arc<Mutex<u32>>,
     total_checks: Arc<Mutex<u32>>,
-    app: tauri::AppHandle,
+    app: AppHandle<R>,
 }
 
 /// Resolve the requested input device by name, falling back to the system
@@ -318,9 +318,9 @@ fn open_microphone(
     Ok((device, config))
 }
 
-fn build_stream(
+fn build_stream<R: Runtime>(
     buffer: Arc<Mutex<Vec<f32>>>,
-    app: tauri::AppHandle,
+    app: AppHandle<R>,
     device_name: Option<String>,
 ) -> Result<cpal::Stream, String> {
     let host = cpal::default_host();
@@ -649,7 +649,7 @@ mod conversion_tests {
     }
 }
 
-fn process_audio(data: &[f32], ctx: &StreamContext) {
+fn process_audio<R: Runtime>(data: &[f32], ctx: &StreamContext<R>) {
     let mono = mono_downmix(data, ctx.channels);
 
     let Some(resampler_arc) = &ctx.resampler else {
@@ -681,7 +681,7 @@ fn process_audio(data: &[f32], ctx: &StreamContext) {
     }
 }
 
-fn emit_audio_level(samples: &[f32], ctx: &StreamContext) {
+fn emit_audio_level<R: Runtime>(samples: &[f32], ctx: &StreamContext<R>) {
     let Some(rms) = take_due_level(&ctx.sample_counter, samples) else {
         return;
     };
@@ -700,7 +700,7 @@ fn take_due_level(counter: &Mutex<usize>, samples: &[f32]) -> Option<f32> {
     Some(compute_rms(samples))
 }
 
-fn check_silence(rms: f32, ctx: &StreamContext) {
+fn check_silence<R: Runtime>(rms: f32, ctx: &StreamContext<R>) {
     let mut tc = ctx.total_checks.lock_or_recover();
     let mut sc = ctx.silence_counter.lock_or_recover();
     *tc += 1;

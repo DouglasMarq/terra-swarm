@@ -458,7 +458,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     const suspended = workspace.terminals.length > 0 && workspace.terminals.every((terminal) => terminal.suspended);
     const status = projectStatus(agents.map((agent) => agent.status));
     return { id: workspace.id, name: workspace.name, status, suspended, agents };
-  }), [agentLabels, props.contextUsage, props.exited, props.notifications, props.workspaces, reported]);
+  }), [agentLabels, props.contextUsage, props.exited, props.notifications, props.workspaces, reported, t]);
   const inspectorTarget = resolveInspectorTarget({
     focusedId: props.focusedId,
     workspaces: props.workspaces,

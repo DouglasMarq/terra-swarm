@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Group, Workspace } from "../../types";
 import { useShellStore, SHELL_STORAGE_KEY } from "../../stores/shellStore";
 import { useOrchestrationStore } from "../../stores/orchestrationStore";
 import { ptyApi } from "../../lib/tauri/pty";
+import { useLocaleStore } from "../../i18n";
 import {
   shellShortcutLabels,
   shouldOpenCommandPaletteShortcut,
@@ -165,6 +166,22 @@ describe("VisualShellSurface smoke flow", () => {
     fireEvent.keyDown(window, { key: "b", metaKey: true });
     await waitFor(() => expect(useShellStore.getState().sidebarCollapsed).toBe(true));
     expect(screen.getByRole("navigation", { name: "Barra lateral recolhida" })).toBeInTheDocument();
+  });
+
+  it("given the collapsed rail, when the language changes, then the agent status follows it", async () => {
+    render(<VisualShellSurface {...shellProps()} />);
+    fireEvent.keyDown(window, { key: "b", metaKey: true });
+    const portuguese = (await screen.findByRole("button", { name: /^codex, /i })).getAttribute("aria-label");
+
+    try {
+      act(() => useLocaleStore.getState().setLocale("en"));
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /^codex, /i }).getAttribute("aria-label")).not.toBe(portuguese);
+      });
+    } finally {
+      act(() => useLocaleStore.getState().setLocale("pt-BR"));
+    }
   });
 
   it("stops compact Inspector runtime polling when its drawer closes", async () => {

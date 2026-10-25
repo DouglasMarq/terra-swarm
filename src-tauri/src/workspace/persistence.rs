@@ -8,7 +8,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
@@ -322,16 +322,18 @@ pub(crate) fn next_save_seq() -> u64 {
 pub(crate) fn save_channel() -> &'static Sender<SaveRequest> {
     SAVE_TX.get_or_init(|| {
         let (tx, rx) = channel::<SaveRequest>();
-        std::thread::spawn(move || {
-            while let Ok(mut req) = rx.recv() {
-                while let Ok(newer) = rx.recv_timeout(SAVE_DEBOUNCE) {
-                    req = newer;
-                }
-                write_guarded(&req.path, &req.json, req.seq);
-            }
-        });
+        std::thread::spawn(move || write_coalesced_saves(rx));
         tx
     })
+}
+
+fn write_coalesced_saves(rx: Receiver<SaveRequest>) {
+    while let Ok(mut req) = rx.recv() {
+        while let Ok(newer) = rx.recv_timeout(SAVE_DEBOUNCE) {
+            req = newer;
+        }
+        write_guarded(&req.path, &req.json, req.seq);
+    }
 }
 
 /// Never silently wipe the user's data: keep an unusable store around for

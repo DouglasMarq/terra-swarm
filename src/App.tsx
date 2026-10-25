@@ -1,13 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { MotionConfig } from "motion/react";
 import { useShallow } from "zustand/react/shallow";
-import { openDialog } from "./lib/tauri/system";
 import { api } from "./api";
 import { useBranchPolling } from "./app/useBranchPolling";
 import { useFocusTracking } from "./app/useFocusTracking";
 import { useAgentCatalog } from "./app/useAgentCatalog";
+import { useAgentPicker } from "./app/useAgentPicker";
 import { useAppInitialization } from "./app/useAppInitialization";
 import { useGlobalHotkeys } from "./app/useGlobalHotkeys";
+import { useGridLayout } from "./app/useGridLayout";
 import { useGroupActions } from "./app/useGroupActions";
 import { useResumeQueue } from "./app/useResumeQueue";
 import { useSnapshotTransfer } from "./app/useSnapshotTransfer";
@@ -15,6 +16,7 @@ import { useSystemNotifications } from "./app/useSystemNotifications";
 import { useVoiceCapture } from "./app/useVoiceCapture";
 import { useVoiceSettings } from "./app/useVoiceSettings";
 import { useWorkspaceNavigation } from "./app/useWorkspaceNavigation";
+import { useWorkspaceCreator } from "./app/useWorkspaceCreator";
 import { useWorkspaces } from "./app/useWorkspaces";
 import { useWorktreeClose } from "./app/useWorktreeClose";
 import { WorktreeReviewDialog } from "./components/review/WorktreeReviewDialog";
@@ -27,7 +29,6 @@ import { agentLabelText, buildAgentLabels } from "./domain/agentLabels";
 import { resumeCommandFor } from "./domain/session/resumeItems";
 import { useTerminalSessions } from "./app/useTerminalSessions";
 import { useUpdater } from "./app/useUpdater";
-import type { AgentRole } from "./domain/agent.model";
 import type { NotificationItem } from "./domain/notification.model";
 import {
   AgentPickerDialog,
@@ -39,9 +40,7 @@ import {
 import { ConfirmActionDialog } from "./components/overlays/Dialog";
 import type { FocusedAgentAction } from "./components/overlays/CommandPalette";
 import { getTerminal } from "./terminalRegistry";
-import { basename } from "./lib/path/basename";
 import {
-  GRID_COL_OPTIONS,
   usePreferencesStore,
   type HotkeyActionId,
 } from "./stores/preferencesStore";
@@ -89,16 +88,6 @@ function App() {
   const { workspaces, setWorkspaces, refresh } = workspaceData;
   const agentCatalog = useAgentCatalog();
   const { agents } = agentCatalog;
-  const [showNewWs, setShowNewWs] = useState(false);
-  const [newWsName, setNewWsName] = useState("");
-  const [newWsCwd, setNewWsCwd] = useState("");
-  const [newWsGroupId, setNewWsGroupId] = useState<string | null>(null);
-  const [showAgentPicker, setShowAgentPicker] = useState(false);
-  const [pickerTarget, setPickerTarget] = useState<string | null>(null);
-  const [pickerTargetPane, setPickerTargetPane] = useState<string | null>(null);
-  const [pickerSaveDefault, setPickerSaveDefault] = useState(false);
-  const [pickerIsolate, setPickerIsolate] = useState(false);
-  const [pickerRole, setPickerRole] = useState<AgentRole | null>(null);
   const [renameTarget, setRenameTarget] = useState<{
     kind: RenameTargetKind;
     id: string;
@@ -128,7 +117,6 @@ function App() {
     activeId,
     expandedId,
     focusedId,
-    setActiveId,
     setExpandedId,
     setFocusedId,
   } = useUiStore(
@@ -136,7 +124,6 @@ function App() {
       activeId: state.activeId,
       expandedId: state.expandedId,
       focusedId: state.focusedId,
-      setActiveId: state.setActiveId,
       setExpandedId: state.setExpandedId,
       setFocusedId: state.setFocusedId,
     })),
@@ -217,7 +204,6 @@ function App() {
     setDefaultShell,
     setReduceMotion,
     setAutoResume,
-    setGridCols,
     setAgentName,
   } = usePreferencesStore(
     useShallow((state) => ({
@@ -238,7 +224,6 @@ function App() {
       setDefaultShell: state.setDefaultShell,
       setReduceMotion: state.setReduceMotion,
       setAutoResume: state.setAutoResume,
-      setGridCols: state.setGridCols,
       setAgentName: state.setAgentName,
     })),
   );
@@ -273,6 +258,9 @@ function App() {
   const resumeQueue = useResumeQueue(sessions, refresh);
   const worktreeClose = useWorktreeClose(workspaces, sessions);
   const snapshotTransfer = useSnapshotTransfer(sessions, refresh);
+  const workspaceCreator = useWorkspaceCreator(refresh);
+  const agentPicker = useAgentPicker(agentCatalog, sessions);
+  const applyGridLayout = useGridLayout({ workspaces, setWorkspaces, refresh });
   const initialization = useAppInitialization({ workspaces: workspaceData, sessions, resumeQueue, agentCatalog, voiceSettings });
 
   const active = workspaces.find((w) => w.id === activeId) ?? null;
@@ -286,8 +274,8 @@ function App() {
   }, [active, titles, agentNames, exited]);
   const showResume = resumeQueue.open;
   const modalOpen =
-    showNewWs ||
-    showAgentPicker ||
+    workspaceCreator.open ||
+    agentPicker.open ||
     showResume ||
     renameTarget !== null ||
     workspaceToDelete !== null ||
@@ -304,63 +292,6 @@ function App() {
     snapshot: orchestrationSnapshot,
     modalOpen,
   });
-
-  const quickNewTerminal = async (wsId: string, paneId: string | null = null) => {
-    setActiveId(wsId);
-    setExpandedId(null);
-    // Wait for agent detection: at startup `agents` is still empty, and
-    // deciding on a stale list would open the picker despite a saved default.
-    await agentCatalog.whenReady();
-    const defAvailable = defaultAgent && agentCatalog.isAvailable(defaultAgent);
-    if (defAvailable) {
-      sessions.spawnInto(wsId, defaultAgent, paneId ? { paneId } : undefined).catch(sessions.reportSpawnError);
-    } else {
-      setPickerTarget(wsId);
-      setPickerTargetPane(paneId);
-      setPickerSaveDefault(false);
-      setShowAgentPicker(true);
-    }
-  };
-
-  /**
-   * The in-panel empty state is an explicit agent-creation affordance. Keep
-   * it chooser-first even when a default exists so the user can change the
-   * profile for this launch and optionally persist that choice as the new
-   * default.
-   */
-  const chooseAgentForPanel = async (wsId: string, paneId: string | null = null) => {
-    setActiveId(wsId);
-    setExpandedId(null);
-    await agentCatalog.whenReady();
-    setPickerTarget(wsId);
-    setPickerTargetPane(paneId);
-    setPickerSaveDefault(true);
-    setShowAgentPicker(true);
-  };
-
-  const chooseAgent = async (agentId: string) => {
-    if (pickerSaveDefault) {
-      setDefaultAgent(agentId);
-    }
-    setShowAgentPicker(false);
-    const target = pickerTarget;
-    const targetPane = pickerTargetPane;
-    const isolate = pickerIsolate;
-    const role = pickerRole;
-    setPickerTarget(null);
-    setPickerTargetPane(null);
-    setPickerSaveDefault(false);
-    setPickerIsolate(false);
-    setPickerRole(null);
-    if (target) {
-      await sessions.spawnInto(
-        target,
-        agentId,
-        targetPane ? { paneId: targetPane } : undefined,
-        { worktree: isolate, role },
-      ).catch(sessions.reportSpawnError);
-    }
-  };
 
   const clearNotifications = (id: string) => {
     clearNotificationCount(id);
@@ -433,7 +364,7 @@ function App() {
     voiceCommandsEnabled: flags.voiceCommands,
     sessions,
     openVoiceSettings,
-    actions: { quickNewTerminal, selectWorkspace, suspendGroup, resumeGroup },
+    actions: { quickNewTerminal: agentPicker.quickNewTerminal, selectWorkspace, suspendGroup, resumeGroup },
   });
 
   const stopFleetTerminals = async (ids: string[]) => {
@@ -452,49 +383,6 @@ function App() {
     setTerminalDetached(id, true);
     setExpandedId((current) => (current === id ? null : current));
     setFocusedId((current) => (current === id ? null : current));
-  };
-
-  const pickFolder = async () => {
-    try {
-      const dir = await openDialog({ directory: true, multiple: false });
-      if (typeof dir === "string") {
-        setNewWsCwd(dir);
-        if (!newWsName) {
-          const base = basename(dir);
-          if (base) setNewWsName(base);
-        }
-      }
-    } catch (err) {
-      console.error("folder picker failed:", err);
-    }
-  };
-
-  const createWorkspace = async () => {
-    try {
-      const ws = await api.createWorkspace(
-        newWsName.trim() || t("app.defaultWorkspaceName"),
-        newWsCwd,
-      );
-      if (newWsGroupId) {
-        await api.setWorkspaceGroup(ws.id, newWsGroupId).catch((error) => {
-          console.error(`failed to assign new workspace ${ws.id} to group:`, error);
-        });
-      }
-      setShowNewWs(false);
-      setNewWsName("");
-      setNewWsCwd("");
-      setNewWsGroupId(null);
-      await refresh();
-      setActiveId(ws.id);
-    } catch (err) {
-      console.error("failed to create workspace:", err);
-      pushSystemNotification(t("app.createWorkspaceFailed", { detail: String(err) }));
-    }
-  };
-
-  const openWorkspaceCreator = (groupId: string | null = null) => {
-    setNewWsGroupId(groupId);
-    setShowNewWs(true);
   };
 
   const closeWorkspace = async (id: string): Promise<boolean> => {
@@ -523,27 +411,6 @@ function App() {
     }
   };
 
-  const applyGridLayout = async (cols: number) => {
-    if (!(GRID_COL_OPTIONS as readonly number[]).includes(cols)) return;
-    setGridCols(cols);
-    const basis = Math.floor(100 / cols);
-    const targets = workspaces.flatMap((w) =>
-      w.terminals.map((t) => ({ wsId: w.id, id: t.id })),
-    );
-    setWorkspaces((prev) =>
-      prev.map((w) => ({
-        ...w,
-        terminals: w.terminals.map((t) => ({ ...t, width: basis })),
-      })),
-    );
-    await Promise.all(
-      targets.map(({ wsId, id }) =>
-        api.setTerminalWidth(wsId, id, basis).catch((error) => console.warn(`failed to resize terminal ${id}:`, error)),
-      ),
-    );
-    await refresh();
-  };
-
   useGlobalHotkeys({
     modalOpen,
     capturing,
@@ -553,10 +420,10 @@ function App() {
     focusedId,
     workspaces,
     actions: {
-      openWorkspaceCreator: () => openWorkspaceCreator(),
+      openWorkspaceCreator: () => workspaceCreator.openCreator(),
       renameWorkspace: (workspace) => setRenameTarget({ kind: "workspace", id: workspace.id, value: workspace.name }),
       closeWorkspace,
-      quickNewTerminal,
+      quickNewTerminal: agentPicker.quickNewTerminal,
       closeTerminal: worktreeClose.request,
       toggleVoice: voice.toggle,
     },
@@ -722,7 +589,7 @@ function App() {
         voiceFeedback={voice.feedback}
         onFocus={setFocusedId}
         onSelectWorkspace={selectWorkspace}
-        onNewWorkspace={() => openWorkspaceCreator()}
+        onNewWorkspace={() => workspaceCreator.openCreator()}
         onNewAgent={(workspaceId, paneId, agentId) => {
           if (agentId) {
             void sessions.spawnInto(
@@ -732,9 +599,9 @@ function App() {
             ).catch(sessions.reportSpawnError);
             return;
           }
-          void chooseAgentForPanel(workspaceId, paneId ?? null);
+          void agentPicker.chooseForPanel(workspaceId, paneId ?? null);
         }}
-        onQuickNewAgent={(workspaceId) => void quickNewTerminal(workspaceId)}
+        onQuickNewAgent={(workspaceId) => void agentPicker.quickNewTerminal(workspaceId)}
         onClearNotifications={clearNotifications}
         onMarkAllRead={markAllRead}
         onClearAll={clearAllNotifications}
@@ -753,7 +620,7 @@ function App() {
         loadFiles={api.listWorkspaceFiles}
         loadGitStatus={api.gitStatus}
         onCreateGroup={createGroup}
-        onCreateProject={(groupId) => openWorkspaceCreator(groupId)}
+        onCreateProject={(groupId) => workspaceCreator.openCreator(groupId)}
         onRenameNode={(node) => {
           if (node.kind === "project") {
             const workspace = workspaces.find((candidate) => candidate.id === node.id);
@@ -827,39 +694,30 @@ function App() {
       ) : null}
 
       <WorkspaceDialog
-        cwd={newWsCwd}
-        groupName={newWsGroupId ? groups.find((group) => group.id === newWsGroupId)?.name : null}
-        name={newWsName}
-        onBrowse={pickFolder}
-        onCwdChange={setNewWsCwd}
-        onNameChange={setNewWsName}
-        onOpenChange={setShowNewWs}
-        onSubmit={createWorkspace}
-        open={showNewWs}
+        cwd={workspaceCreator.cwd}
+        groupName={workspaceCreator.groupId ? groups.find((group) => group.id === workspaceCreator.groupId)?.name : null}
+        name={workspaceCreator.name}
+        onBrowse={workspaceCreator.pickFolder}
+        onCwdChange={workspaceCreator.setCwd}
+        onNameChange={workspaceCreator.setName}
+        onOpenChange={workspaceCreator.setOpen}
+        onSubmit={workspaceCreator.create}
+        open={workspaceCreator.open}
       />
 
       <AgentPickerDialog
         agents={agents}
         defaultAgent={defaultAgent}
-        onChoose={chooseAgent}
-        onOpenChange={(open) => {
-          setShowAgentPicker(open);
-          if (!open) {
-            setPickerTarget(null);
-            setPickerTargetPane(null);
-            setPickerSaveDefault(false);
-            setPickerIsolate(false);
-            setPickerRole(null);
-          }
-        }}
-        onSaveDefaultChange={setPickerSaveDefault}
-        open={showAgentPicker}
-        saveDefault={pickerSaveDefault}
-        canIsolate={Boolean(pickerTarget && branches[pickerTarget])}
-        isolate={pickerIsolate}
-        onIsolateChange={setPickerIsolate}
-        role={pickerRole}
-        onRoleChange={setPickerRole}
+        onChoose={agentPicker.choose}
+        onOpenChange={agentPicker.setOpen}
+        onSaveDefaultChange={agentPicker.setSaveDefault}
+        open={agentPicker.open}
+        saveDefault={agentPicker.saveDefault}
+        canIsolate={Boolean(agentPicker.target && branches[agentPicker.target])}
+        isolate={agentPicker.isolate}
+        onIsolateChange={agentPicker.setIsolate}
+        role={agentPicker.role}
+        onRoleChange={agentPicker.setRole}
       />
 
       <WorktreeCloseDialog {...worktreeClose.dialog} />

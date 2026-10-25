@@ -6,23 +6,27 @@ use std::collections::VecDeque;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use tauri::Emitter;
+use tauri::{AppHandle, Emitter, Runtime};
 
 /// Sample rate, in Hz, of the audio handed to Whisper.
 pub(super) const TARGET_SAMPLE_RATE: u32 = 16000;
 const RESAMPLE_CHUNK_SIZE: usize = 1024;
+const MONO_CHANNELS: usize = 1;
+const AUDIO_LEVEL_EVENT: &str = "voice-audio-level";
 
 /// Wrapper to pass a mono `&[f32]` slice as a single-channel `Adapter` for rubato.
 struct MonoSlice<'a>(&'a [f32]);
 
-/// Safety: `MonoSlice` reports a fixed channel count of 1 and a frame count
-/// equal to the slice length, both immutable for the lifetime of the buffer.
+// SAFETY: `MonoSlice` reports a fixed channel count of 1 and a frame count
+// equal to the slice length, both immutable for the lifetime of the buffer.
 unsafe impl Adapter<f32> for MonoSlice<'_> {
     unsafe fn read_sample_unchecked(&self, _channel: usize, frame: usize) -> f32 {
-        *self.0.get_unchecked(frame)
+        // SAFETY: rubato only calls this with `frame < self.frames()`, which
+        // is the slice length, so the index is in bounds.
+        unsafe { *self.0.get_unchecked(frame) }
     }
     fn channels(&self) -> usize {
-        1
+        MONO_CHANNELS
     }
     fn frames(&self) -> usize {
         self.0.len()
@@ -38,10 +42,10 @@ const SILENCE_FRAME_COUNT: u32 = 24;
 /// Minimum checks before silence detection activates (~1s)
 const MIN_RECORDING_CHECKS: u32 = 20;
 
-enum Command {
+enum Command<R: Runtime> {
     Start(
         Arc<Mutex<Vec<f32>>>,
-        Box<tauri::AppHandle>,
+        Box<AppHandle<R>>,
         Option<String>,
         mpsc::Sender<Result<(), String>>,
     ),
@@ -84,25 +88,62 @@ fn suppress_alsa_stderr<F, R>(f: F) -> R
 where
     F: FnOnce() -> R,
 {
-    use std::os::unix::io::AsRawFd;
+    with_stderr_silenced(f)
+}
 
-    let saved = unsafe { libc::dup(libc::STDERR_FILENO) };
-    if let Ok(devnull) = std::fs::File::open("/dev/null") {
-        unsafe {
-            libc::dup2(devnull.as_raw_fd(), libc::STDERR_FILENO);
+#[cfg(all(unix, any(target_os = "linux", test)))]
+static STDERR_REDIRECT: Mutex<()> = Mutex::new(());
+
+#[cfg(all(unix, any(target_os = "linux", test)))]
+fn with_stderr_silenced<F, R>(work: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    let _serialised = STDERR_REDIRECT.lock_or_recover();
+    let _silenced = SilencedStderr::begin();
+    work()
+}
+
+#[cfg(all(unix, any(target_os = "linux", test)))]
+struct SilencedStderr {
+    saved: Option<libc::c_int>,
+}
+
+#[cfg(all(unix, any(target_os = "linux", test)))]
+impl SilencedStderr {
+    fn begin() -> Self {
+        use std::os::unix::io::AsRawFd;
+
+        // SAFETY: `dup` only duplicates fd 2 in the descriptor table; a
+        // negative result is checked before the copy is used.
+        let saved = unsafe { libc::dup(libc::STDERR_FILENO) };
+        if saved < 0 {
+            return Self { saved: None };
         }
+        if let Ok(devnull) = std::fs::File::open("/dev/null") {
+            // SAFETY: `devnull` stays open for the call and `dup2` atomically
+            // replaces fd 2, whose original is kept in `saved`.
+            unsafe {
+                libc::dup2(devnull.as_raw_fd(), libc::STDERR_FILENO);
+            }
+        }
+        Self { saved: Some(saved) }
     }
+}
 
-    let result = f();
-
-    if saved >= 0 {
+#[cfg(all(unix, any(target_os = "linux", test)))]
+impl Drop for SilencedStderr {
+    fn drop(&mut self) {
+        let Some(saved) = self.saved else {
+            return;
+        };
+        // SAFETY: `saved` is a descriptor this guard alone owns, from `dup`;
+        // it is put back on fd 2 and closed exactly once, here.
         unsafe {
             libc::dup2(saved, libc::STDERR_FILENO);
             libc::close(saved);
         }
     }
-
-    result
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -155,13 +196,13 @@ fn is_usable_input(name: &str, device: &cpal::Device) -> bool {
 
 /// Thread-safe audio controller that manages mic capture on a dedicated thread
 /// (cpal streams are not Send, so the stream must live on one thread).
-pub struct AudioController {
-    tx: mpsc::Sender<Command>,
+pub struct AudioController<R: Runtime = tauri::Wry> {
+    tx: mpsc::Sender<Command<R>>,
 }
 
-impl AudioController {
+impl<R: Runtime> AudioController<R> {
     pub fn new() -> Self {
-        let (tx, rx) = mpsc::channel::<Command>();
+        let (tx, rx) = mpsc::channel::<Command<R>>();
 
         thread::spawn(move || {
             let mut active_stream: Option<cpal::Stream> = None;
@@ -204,7 +245,7 @@ impl AudioController {
     pub fn start(
         &self,
         audio_buffer: Arc<Mutex<Vec<f32>>>,
-        app: tauri::AppHandle,
+        app: AppHandle<R>,
         device_name: Option<String>,
     ) -> Result<(), String> {
         let (reply_tx, reply_rx) = mpsc::channel();
@@ -228,22 +269,21 @@ impl AudioController {
     }
 }
 
-impl Drop for AudioController {
+impl<R: Runtime> Drop for AudioController<R> {
     fn drop(&mut self) {
         let _ = self.tx.send(Command::Shutdown);
     }
 }
 
-#[derive(Clone)]
-struct StreamContext {
-    channels: usize,
+struct StreamContext<R: Runtime> {
+    channels: u16,
     resampler: Option<Arc<Mutex<Fft<f32>>>>,
     resample_pending: Arc<Mutex<Vec<f32>>>,
     buffer: Arc<Mutex<Vec<f32>>>,
     sample_counter: Arc<Mutex<usize>>,
     silence_counter: Arc<Mutex<u32>>,
     total_checks: Arc<Mutex<u32>>,
-    app: tauri::AppHandle,
+    app: AppHandle<R>,
 }
 
 /// Resolve the requested input device by name, falling back to the system
@@ -266,42 +306,28 @@ fn resolve_input_device(host: &cpal::Host, device_name: &Option<String>) -> Opti
     host.default_input_device()
 }
 
-fn build_stream(
-    buffer: Arc<Mutex<Vec<f32>>>,
-    app: tauri::AppHandle,
-    device_name: Option<String>,
-) -> Result<cpal::Stream, String> {
-    let host = cpal::default_host();
-    let device = resolve_input_device(&host, &device_name)
+fn open_microphone(
+    host: &cpal::Host,
+    device_name: &Option<String>,
+) -> Result<(cpal::Device, cpal::SupportedStreamConfig), String> {
+    let device = resolve_input_device(host, device_name)
         .ok_or("No microphone found. Please connect a microphone and try again.")?;
-
     let config = device.default_input_config().map_err(|error| {
         format!("Microphone is not available ({error}). Please check your audio input settings.")
     })?;
+    Ok((device, config))
+}
 
-    let source_sample_rate = config.sample_rate();
-    let source_channels = config.channels() as usize;
-
-    let needs_resample = source_sample_rate != TARGET_SAMPLE_RATE;
-
-    let resampler: Option<Arc<Mutex<Fft<f32>>>> = match needs_resample {
-        true => {
-            let r = Fft::new(
-                source_sample_rate as usize,
-                TARGET_SAMPLE_RATE as usize,
-                RESAMPLE_CHUNK_SIZE,
-                1,
-                FixedSync::Input,
-            )
-            .map_err(|e| format!("Failed to create resampler: {e}"))?;
-            Some(Arc::new(Mutex::new(r)))
-        }
-        false => None,
-    };
-
+fn build_stream<R: Runtime>(
+    buffer: Arc<Mutex<Vec<f32>>>,
+    app: AppHandle<R>,
+    device_name: Option<String>,
+) -> Result<cpal::Stream, String> {
+    let host = cpal::default_host();
+    let (device, config) = open_microphone(&host, &device_name)?;
     let ctx = StreamContext {
-        channels: source_channels,
-        resampler,
+        channels: config.channels(),
+        resampler: resampler_for(config.sample_rate())?,
         resample_pending: Arc::new(Mutex::new(Vec::new())),
         buffer,
         sample_counter: Arc::new(Mutex::new(0usize)),
@@ -309,128 +335,176 @@ fn build_stream(
         total_checks: Arc::new(Mutex::new(0u32)),
         app,
     };
-    let err_fn = |err| eprintln!("Audio stream error: {err}");
+    build_input(&device, &config, move |samples| {
+        process_audio(samples, &ctx)
+    })
+}
 
-    let stream = match config.sample_format() {
-        cpal::SampleFormat::F32 => {
-            let ctx = ctx.clone();
-            device
-                .build_input_stream(
-                    config.into(),
-                    move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                        process_audio(data, &ctx);
-                    },
-                    err_fn,
-                    None,
-                )
-                .map_err(|e| format!("Failed to build input stream: {e}"))?
+fn resampler_for(source_sample_rate: u32) -> Result<Option<Arc<Mutex<Fft<f32>>>>, String> {
+    if source_sample_rate == TARGET_SAMPLE_RATE {
+        return Ok(None);
+    }
+    let resampler = Fft::new(
+        rate_in_hz(source_sample_rate)?,
+        rate_in_hz(TARGET_SAMPLE_RATE)?,
+        RESAMPLE_CHUNK_SIZE,
+        MONO_CHANNELS,
+        FixedSync::Input,
+    )
+    .map_err(|e| format!("Failed to create resampler: {e}"))?;
+    Ok(Some(Arc::new(Mutex::new(resampler))))
+}
+
+fn rate_in_hz(sample_rate: u32) -> Result<usize, String> {
+    usize::try_from(sample_rate).map_err(|e| format!("Failed to create resampler: {e}"))
+}
+
+trait ConvertibleSample: cpal::SizedSample {
+    fn to_f32(&self) -> f32;
+    fn from_f32(sample: f32) -> Self;
+}
+
+impl ConvertibleSample for f32 {
+    fn to_f32(&self) -> f32 {
+        *self
+    }
+    fn from_f32(sample: f32) -> Self {
+        sample
+    }
+}
+
+macro_rules! convertible_sample {
+    ($sample:ty, $to_f32:ident, $from_f32:ident) => {
+        impl ConvertibleSample for $sample {
+            fn to_f32(&self) -> f32 {
+                $to_f32(self)
+            }
+            fn from_f32(sample: f32) -> Self {
+                $from_f32(sample)
+            }
         }
-        cpal::SampleFormat::I8 => device
-            .build_input_stream(
-                config.into(),
-                move |data: &[i8], _: &cpal::InputCallbackInfo| {
-                    let float_data: Vec<f32> = data.iter().map(i8_to_f32).collect();
-                    process_audio(&float_data, &ctx);
-                },
-                err_fn,
-                None,
-            )
-            .map_err(|e| format!("Failed to build input stream: {e}"))?,
-        cpal::SampleFormat::U8 => device
-            .build_input_stream(
-                config.into(),
-                move |data: &[u8], _: &cpal::InputCallbackInfo| {
-                    let float_data: Vec<f32> = data.iter().map(u8_to_f32).collect();
-                    process_audio(&float_data, &ctx);
-                },
-                err_fn,
-                None,
-            )
-            .map_err(|e| format!("Failed to build input stream: {e}"))?,
-        cpal::SampleFormat::I16 => device
-            .build_input_stream(
-                config.into(),
-                move |data: &[i16], _: &cpal::InputCallbackInfo| {
-                    let float_data: Vec<f32> = data.iter().map(i16_to_f32).collect();
-                    process_audio(&float_data, &ctx);
-                },
-                err_fn,
-                None,
-            )
-            .map_err(|e| format!("Failed to build input stream: {e}"))?,
-        cpal::SampleFormat::U16 => device
-            .build_input_stream(
-                config.into(),
-                move |data: &[u16], _: &cpal::InputCallbackInfo| {
-                    let float_data: Vec<f32> = data.iter().map(u16_to_f32).collect();
-                    process_audio(&float_data, &ctx);
-                },
-                err_fn,
-                None,
-            )
-            .map_err(|e| format!("Failed to build input stream: {e}"))?,
-        // 24-bit USB interfaces (Focusrite & co.) natively report I24/U24.
-        // cpal hands these over as dasp I24/U24 (right-justified in a 32-bit
-        // container), so the 24-bit full-scale helpers apply — not the I32 one.
-        cpal::SampleFormat::I24 => device
-            .build_input_stream(
-                config.into(),
-                move |data: &[cpal::I24], _: &cpal::InputCallbackInfo| {
-                    let float_data: Vec<f32> = data.iter().map(i24_to_f32).collect();
-                    process_audio(&float_data, &ctx);
-                },
-                err_fn,
-                None,
-            )
-            .map_err(|e| format!("Failed to build input stream: {e}"))?,
-        cpal::SampleFormat::U24 => device
-            .build_input_stream(
-                config.into(),
-                move |data: &[cpal::U24], _: &cpal::InputCallbackInfo| {
-                    let float_data: Vec<f32> = data.iter().map(u24_to_f32).collect();
-                    process_audio(&float_data, &ctx);
-                },
-                err_fn,
-                None,
-            )
-            .map_err(|e| format!("Failed to build input stream: {e}"))?,
-        // Several ALSA HDA codecs (e.g. Realtek ALC897) only expose their raw
-        // hardware PCM as S32 — PulseAudio/PipeWire normally hide this behind
-        // format conversion, but selecting the hw device directly bypasses
-        // that, so it must be handled here too.
-        cpal::SampleFormat::I32 => device
-            .build_input_stream(
-                config.into(),
-                move |data: &[i32], _: &cpal::InputCallbackInfo| {
-                    let float_data: Vec<f32> = data.iter().map(i32_to_f32).collect();
-                    process_audio(&float_data, &ctx);
-                },
-                err_fn,
-                None,
-            )
-            .map_err(|e| format!("Failed to build input stream: {e}"))?,
-        format => return Err(format!("Unsupported sample format: {format:?}")),
     };
+}
 
-    Ok(stream)
+convertible_sample!(i8, i8_to_f32, f32_to_i8);
+convertible_sample!(u8, u8_to_f32, f32_to_u8);
+convertible_sample!(i16, i16_to_f32, f32_to_i16);
+convertible_sample!(u16, u16_to_f32, f32_to_u16);
+// 24-bit USB interfaces (Focusrite & co.) natively report I24/U24.
+// cpal hands these over as dasp I24/U24 (right-justified in a 32-bit
+// container), so the 24-bit full-scale helpers apply — not the I32 one.
+convertible_sample!(cpal::I24, i24_to_f32, f32_to_i24);
+convertible_sample!(cpal::U24, u24_to_f32, f32_to_u24);
+// Several ALSA HDA codecs (e.g. Realtek ALC897) only expose their raw
+// hardware PCM as S32 — PulseAudio/PipeWire normally hide this behind
+// format conversion, but selecting the hw device directly bypasses
+// that, so it must be handled here too.
+convertible_sample!(i32, i32_to_f32, f32_to_i32);
+
+fn build_input<F>(
+    device: &cpal::Device,
+    config: &cpal::SupportedStreamConfig,
+    on_samples: F,
+) -> Result<cpal::Stream, String>
+where
+    F: FnMut(&[f32]) + Send + 'static,
+{
+    let stream_config = config.config();
+    match config.sample_format() {
+        cpal::SampleFormat::F32 => input_stream_of::<f32>(device, stream_config, on_samples),
+        cpal::SampleFormat::I8 => input_stream_of::<i8>(device, stream_config, on_samples),
+        cpal::SampleFormat::U8 => input_stream_of::<u8>(device, stream_config, on_samples),
+        cpal::SampleFormat::I16 => input_stream_of::<i16>(device, stream_config, on_samples),
+        cpal::SampleFormat::U16 => input_stream_of::<u16>(device, stream_config, on_samples),
+        cpal::SampleFormat::I24 => input_stream_of::<cpal::I24>(device, stream_config, on_samples),
+        cpal::SampleFormat::U24 => input_stream_of::<cpal::U24>(device, stream_config, on_samples),
+        cpal::SampleFormat::I32 => input_stream_of::<i32>(device, stream_config, on_samples),
+        format => Err(format!("Unsupported microphone sample format: {format:?}")),
+    }
+}
+
+fn input_stream_of<T: ConvertibleSample>(
+    device: &cpal::Device,
+    config: cpal::StreamConfig,
+    mut on_samples: impl FnMut(&[f32]) + Send + 'static,
+) -> Result<cpal::Stream, String> {
+    device
+        .build_input_stream(
+            config,
+            move |data: &[T], _: &cpal::InputCallbackInfo| {
+                let converted: Vec<f32> = data.iter().map(T::to_f32).collect();
+                on_samples(&converted);
+            },
+            |error| eprintln!("Microphone stream error: {error}"),
+            None,
+        )
+        .map_err(|e| format!("Failed to build input stream: {e}"))
+}
+
+fn build_output<F>(
+    device: &cpal::Device,
+    config: &cpal::SupportedStreamConfig,
+    next_sample: F,
+) -> Result<cpal::Stream, String>
+where
+    F: FnMut() -> f32 + Send + 'static,
+{
+    let stream_config = config.config();
+    match config.sample_format() {
+        cpal::SampleFormat::F32 => output_stream_of::<f32>(device, stream_config, next_sample),
+        cpal::SampleFormat::I8 => output_stream_of::<i8>(device, stream_config, next_sample),
+        cpal::SampleFormat::U8 => output_stream_of::<u8>(device, stream_config, next_sample),
+        cpal::SampleFormat::I16 => output_stream_of::<i16>(device, stream_config, next_sample),
+        cpal::SampleFormat::U16 => output_stream_of::<u16>(device, stream_config, next_sample),
+        cpal::SampleFormat::I24 => {
+            output_stream_of::<cpal::I24>(device, stream_config, next_sample)
+        }
+        cpal::SampleFormat::U24 => {
+            output_stream_of::<cpal::U24>(device, stream_config, next_sample)
+        }
+        cpal::SampleFormat::I32 => output_stream_of::<i32>(device, stream_config, next_sample),
+        format => Err(format!("Unsupported speaker sample format: {format:?}")),
+    }
+}
+
+fn output_stream_of<T: ConvertibleSample>(
+    device: &cpal::Device,
+    config: cpal::StreamConfig,
+    mut next_sample: impl FnMut() -> f32 + Send + 'static,
+) -> Result<cpal::Stream, String> {
+    let channels = usize::from(config.channels);
+    device
+        .build_output_stream(
+            config,
+            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+                for frame in data.chunks_mut(channels) {
+                    frame.fill(T::from_f32(next_sample()));
+                }
+            },
+            |error| eprintln!("Speaker stream error: {error}"),
+            None,
+        )
+        .map_err(|e| format!("Failed to build output stream: {e}"))
 }
 
 /// Downmix interleaved multi-channel audio to mono by averaging each frame.
-fn mono_downmix(data: &[f32], channels: usize) -> Vec<f32> {
+fn mono_downmix(data: &[f32], channels: u16) -> Vec<f32> {
     if channels == 0 {
         return Vec::new();
     }
-    data.chunks(channels)
-        .map(|frame| frame.iter().sum::<f32>() / channels as f32)
+    data.chunks(usize::from(channels))
+        .map(|frame| frame.iter().sum::<f32>() / f32::from(channels))
         .collect()
 }
 
 /// Compute the RMS (root mean square) of an audio sample buffer.
-fn compute_rms(samples: &[f32]) -> f32 {
+pub(super) fn compute_rms(samples: &[f32]) -> f32 {
     if samples.is_empty() {
         return 0.0;
     }
-    (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt()
+    // A mean over audio samples tolerates the rounding of a very large count.
+    let count = samples.len() as f32;
+    (samples.iter().map(|s| s * s).sum::<f32>() / count).sqrt()
 }
 
 /// 24-bit full scale (2^23 - 1). cpal delivers I24 samples as dasp `I24`:
@@ -443,60 +517,71 @@ const I24_FULL_SCALE: f32 = 8_388_607.0;
 const U24_MIDPOINT: f32 = 8_388_607.5;
 
 fn i8_to_f32(s: &i8) -> f32 {
-    *s as f32 / i8::MAX as f32
+    f32::from(*s) / f32::from(i8::MAX)
 }
 
 fn u8_to_f32(s: &u8) -> f32 {
-    (*s as f32 - u8::MAX as f32 / 2.0) / (u8::MAX as f32 / 2.0)
+    (f32::from(*s) - f32::from(u8::MAX) / 2.0) / (f32::from(u8::MAX) / 2.0)
 }
 
 fn i16_to_f32(s: &i16) -> f32 {
-    *s as f32 / i16::MAX as f32
+    f32::from(*s) / f32::from(i16::MAX)
 }
 
 fn u16_to_f32(s: &u16) -> f32 {
-    (*s as f32 - u16::MAX as f32 / 2.0) / (u16::MAX as f32 / 2.0)
+    (f32::from(*s) - f32::from(u16::MAX) / 2.0) / (f32::from(u16::MAX) / 2.0)
 }
 
 fn i24_to_f32(s: &cpal::I24) -> f32 {
+    // A 24-bit value fits the f32 mantissa, so this conversion is exact.
     s.inner() as f32 / I24_FULL_SCALE
 }
 
 fn u24_to_f32(s: &cpal::U24) -> f32 {
+    // A 24-bit value fits the f32 mantissa, so this conversion is exact.
     (s.inner() as f32 - U24_MIDPOINT) / U24_MIDPOINT
 }
 
 fn i32_to_f32(s: &i32) -> f32 {
+    // Rounding to f32 precision is inaudible in a normalised sample.
     *s as f32 / i32::MAX as f32
 }
 
 fn f32_to_i8(s: f32) -> i8 {
-    (s * i8::MAX as f32) as i8
+    // A float-to-int `as` saturates, clipping out-of-range samples.
+    (s * f32::from(i8::MAX)) as i8
 }
 
 fn f32_to_u8(s: f32) -> u8 {
     // .round() so digital silence lands exactly on the format's equilibrium
     // instead of 1 LSB below it (a tiny DC offset).
-    (s * (u8::MAX as f32 / 2.0) + u8::MAX as f32 / 2.0).round() as u8
+    // A float-to-int `as` saturates, clipping out-of-range samples.
+    (s * (f32::from(u8::MAX) / 2.0) + f32::from(u8::MAX) / 2.0).round() as u8
 }
 
 fn f32_to_i16(s: f32) -> i16 {
-    (s * i16::MAX as f32) as i16
+    // A float-to-int `as` saturates, clipping out-of-range samples.
+    (s * f32::from(i16::MAX)) as i16
 }
 
 fn f32_to_u16(s: f32) -> u16 {
-    (s * (u16::MAX as f32 / 2.0) + u16::MAX as f32 / 2.0).round() as u16
+    // A float-to-int `as` saturates, clipping out-of-range samples.
+    (s * (f32::from(u16::MAX) / 2.0) + f32::from(u16::MAX) / 2.0).round() as u16
 }
 
 fn f32_to_i24(s: f32) -> cpal::I24 {
+    // A float-to-int `as` saturates, clipping out-of-range samples.
     cpal::I24::new_unchecked((s * I24_FULL_SCALE) as i32)
 }
 
 fn f32_to_u24(s: f32) -> cpal::U24 {
+    // A float-to-int `as` saturates, clipping out-of-range samples.
     cpal::U24::new_unchecked((s * U24_MIDPOINT + U24_MIDPOINT).round() as i32)
 }
 
 fn f32_to_i32(s: f32) -> i32 {
+    // Rounding i32::MAX to f32 and the saturating float-to-int `as` clip
+    // out-of-range samples, which is the intended behaviour.
     (s * i32::MAX as f32) as i32
 }
 
@@ -564,7 +649,7 @@ mod conversion_tests {
     }
 }
 
-fn process_audio(data: &[f32], ctx: &StreamContext) {
+fn process_audio<R: Runtime>(data: &[f32], ctx: &StreamContext<R>) {
     let mono = mono_downmix(data, ctx.channels);
 
     let Some(resampler_arc) = &ctx.resampler else {
@@ -596,20 +681,26 @@ fn process_audio(data: &[f32], ctx: &StreamContext) {
     }
 }
 
-fn emit_audio_level(samples: &[f32], ctx: &StreamContext) {
-    let mut counter = ctx.sample_counter.lock_or_recover();
-    *counter += samples.len();
-    if *counter < LEVEL_EMIT_INTERVAL {
+fn emit_audio_level<R: Runtime>(samples: &[f32], ctx: &StreamContext<R>) {
+    let Some(rms) = take_due_level(&ctx.sample_counter, samples) else {
         return;
-    }
-    *counter = 0;
-    let rms = compute_rms(samples);
-    let _ = ctx.app.emit("voice-audio-level", rms);
+    };
+    let _ = ctx.app.emit(AUDIO_LEVEL_EVENT, rms);
 
     check_silence(rms, ctx);
 }
 
-fn check_silence(rms: f32, ctx: &StreamContext) {
+fn take_due_level(counter: &Mutex<usize>, samples: &[f32]) -> Option<f32> {
+    let mut counter = counter.lock_or_recover();
+    *counter += samples.len();
+    if *counter < LEVEL_EMIT_INTERVAL {
+        return None;
+    }
+    *counter = 0;
+    Some(compute_rms(samples))
+}
+
+fn check_silence<R: Runtime>(rms: f32, ctx: &StreamContext<R>) {
     let mut tc = ctx.total_checks.lock_or_recover();
     let mut sc = ctx.silence_counter.lock_or_recover();
     *tc += 1;
@@ -724,24 +815,35 @@ fn push_loopback(ring: &Mutex<VecDeque<f32>>, samples: &[f32]) {
     }
 }
 
-/// Pull one sample per output frame out of the ring buffer, holding the last
-/// value while `acc` catches up (a cheap zero-order-hold resample) and
-/// falling back to silence — not the stale value — once the buffer runs dry.
-fn next_loopback_sample(
-    ring: &Mutex<VecDeque<f32>>,
+struct LoopbackCursor {
     step: f64,
-    acc: &mut f64,
-    carry: &mut f32,
-) -> f32 {
-    *acc += step;
-    if *acc >= 1.0 {
-        let mut buf = ring.lock_or_recover();
-        while *acc >= 1.0 {
-            *acc -= 1.0;
-            *carry = buf.pop_front().unwrap_or(0.0);
+    position: f64,
+    carry: f32,
+}
+
+impl LoopbackCursor {
+    fn new(step: f64) -> Self {
+        Self {
+            step,
+            position: 0.0,
+            carry: 0.0,
         }
     }
-    *carry
+
+    /// Pull one sample per output frame out of the ring buffer, holding the last
+    /// value while `position` catches up (a cheap zero-order-hold resample) and
+    /// falling back to silence — not the stale value — once the buffer runs dry.
+    fn next_sample(&mut self, ring: &Mutex<VecDeque<f32>>) -> f32 {
+        self.position += self.step;
+        if self.position >= 1.0 {
+            let mut buf = ring.lock_or_recover();
+            while self.position >= 1.0 {
+                self.position -= 1.0;
+                self.carry = buf.pop_front().unwrap_or(0.0);
+            }
+        }
+        self.carry
+    }
 }
 
 #[cfg(test)]
@@ -751,24 +853,16 @@ mod loopback_tests {
     #[test]
     fn upsamples_by_holding_each_sample() {
         let ring = Mutex::new(VecDeque::from([1.0f32, 2.0, 3.0]));
-        let mut acc = 0f64;
-        let mut carry = 0f32;
-        let step = 0.5; // output rate is 2x the input rate
-        let out: Vec<f32> = (0..8)
-            .map(|_| next_loopback_sample(&ring, step, &mut acc, &mut carry))
-            .collect();
+        let mut cursor = LoopbackCursor::new(0.5);
+        let out: Vec<f32> = (0..8).map(|_| cursor.next_sample(&ring)).collect();
         assert_eq!(out, vec![0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 0.0]);
     }
 
     #[test]
     fn downsamples_by_dropping_samples() {
         let ring = Mutex::new(VecDeque::from([1.0f32, 2.0, 3.0, 4.0]));
-        let mut acc = 0f64;
-        let mut carry = 0f32;
-        let step = 2.0; // input rate is 2x the output rate
-        let out: Vec<f32> = (0..3)
-            .map(|_| next_loopback_sample(&ring, step, &mut acc, &mut carry))
-            .collect();
+        let mut cursor = LoopbackCursor::new(2.0);
+        let out: Vec<f32> = (0..3).map(|_| cursor.next_sample(&ring)).collect();
         assert_eq!(out, vec![2.0, 4.0, 0.0]);
     }
 
@@ -784,6 +878,53 @@ mod loopback_tests {
     }
 }
 
+#[cfg(test)]
+mod level_tests {
+    use super::*;
+
+    fn converted<T: ConvertibleSample>(sample: f32) -> f32 {
+        T::from_f32(sample).to_f32()
+    }
+
+    #[test]
+    fn given_fewer_samples_than_the_interval_when_counting_then_no_level_is_due() {
+        let counter = Mutex::new(0usize);
+
+        let level = take_due_level(&counter, &[0.5; LEVEL_EMIT_INTERVAL - 1]);
+
+        assert_eq!(level, None);
+        assert_eq!(*counter.lock().unwrap(), LEVEL_EMIT_INTERVAL - 1);
+    }
+
+    #[test]
+    fn given_the_interval_is_reached_when_counting_then_the_rms_is_due_and_the_count_restarts() {
+        let counter = Mutex::new(LEVEL_EMIT_INTERVAL - 1);
+
+        let level = take_due_level(&counter, &[0.5, -0.5]);
+
+        assert_eq!(level, Some(0.5));
+        assert_eq!(*counter.lock().unwrap(), 0);
+    }
+
+    #[test]
+    fn given_interleaved_stereo_when_downmixing_then_each_frame_is_averaged() {
+        assert_eq!(mono_downmix(&[1.0, 0.0, 0.5, 0.5], 2), vec![0.5, 0.5]);
+        assert!(mono_downmix(&[1.0], 0).is_empty());
+    }
+
+    #[test]
+    fn given_every_sample_format_when_converting_full_scale_through_it_then_it_round_trips() {
+        assert_eq!(converted::<f32>(1.0), 1.0);
+        assert_eq!(converted::<i8>(1.0), 1.0);
+        assert_eq!(converted::<u8>(1.0), 1.0);
+        assert_eq!(converted::<i16>(1.0), 1.0);
+        assert_eq!(converted::<u16>(1.0), 1.0);
+        assert_eq!(converted::<cpal::I24>(1.0), 1.0);
+        assert_eq!(converted::<cpal::U24>(1.0), 1.0);
+        assert_eq!(converted::<i32>(1.0), 1.0);
+    }
+}
+
 /// Build a live mic-capture -> speaker-playback pair so the settings page can
 /// let the user hear (and see, via `voice-audio-level`) whether the selected
 /// device actually picks up sound.
@@ -792,114 +933,39 @@ fn build_test_streams(
     app: tauri::AppHandle,
 ) -> Result<(cpal::Stream, cpal::Stream), String> {
     let host = cpal::default_host();
-    let device = resolve_input_device(&host, &device_name)
-        .ok_or("No microphone found. Please connect a microphone and try again.")?;
-    let in_config = device.default_input_config().map_err(|error| {
-        format!("Microphone is not available ({error}). Please check your audio input settings.")
-    })?;
-    let in_channels = in_config.channels() as usize;
-    let in_rate = in_config.sample_rate();
-
-    let out_device = host
-        .default_output_device()
-        .ok_or("No speaker found. Please connect a speaker or headphones and try again.")?;
-    let out_config = out_device
-        .default_output_config()
-        .map_err(|e| format!("Speaker is not available: {e}"))?;
-    let out_channels = out_config.channels() as usize;
-    if out_channels == 0 {
-        return Err("Speaker reports zero output channels".into());
-    }
-    let out_rate = out_config.sample_rate();
+    let (device, in_config) = open_microphone(&host, &device_name)?;
+    let (out_device, out_config) = open_speaker(&host)?;
+    let in_channels = in_config.channels();
 
     let ring = Arc::new(Mutex::new(VecDeque::<f32>::new()));
-    let level_counter = Arc::new(Mutex::new(0usize));
-
     let ring_in = ring.clone();
-    let level_in = level_counter.clone();
-    let app_in = app.clone();
-    let in_err_fn = |err| eprintln!("Mic test input error: {err}");
+    let level_counter = Mutex::new(0usize);
+    let input_stream = build_input(&device, &in_config, move |samples| {
+        let mono = mono_downmix(samples, in_channels);
+        push_loopback(&ring_in, &mono);
+        if let Some(rms) = take_due_level(&level_counter, &mono) {
+            let _ = app.emit(AUDIO_LEVEL_EVENT, rms);
+        }
+    })?;
 
-    macro_rules! input_arm {
-        ($ty:ty, $to_f32:expr) => {
-            device
-                .build_input_stream(
-                    in_config.into(),
-                    move |data: &$ty, _: &cpal::InputCallbackInfo| {
-                        let converted: Vec<f32> = data.iter().map($to_f32).collect();
-                        let mono = mono_downmix(&converted, in_channels);
-                        push_loopback(&ring_in, &mono);
-                        let rms_ready = {
-                            let mut c = level_in.lock_or_recover();
-                            *c += mono.len();
-                            if *c >= LEVEL_EMIT_INTERVAL {
-                                *c = 0;
-                                true
-                            } else {
-                                false
-                            }
-                        };
-                        if rms_ready {
-                            let _ = app_in.emit("voice-audio-level", compute_rms(&mono));
-                        }
-                    },
-                    in_err_fn,
-                    None,
-                )
-                .map_err(|e| format!("Failed to build input stream: {e}"))?
-        };
-    }
-
-    let input_stream = match in_config.sample_format() {
-        cpal::SampleFormat::F32 => input_arm!([f32], |s: &f32| *s),
-        cpal::SampleFormat::I8 => input_arm!([i8], i8_to_f32),
-        cpal::SampleFormat::U8 => input_arm!([u8], u8_to_f32),
-        cpal::SampleFormat::I16 => input_arm!([i16], i16_to_f32),
-        cpal::SampleFormat::U16 => input_arm!([u16], u16_to_f32),
-        cpal::SampleFormat::I24 => input_arm!([cpal::I24], i24_to_f32),
-        cpal::SampleFormat::U24 => input_arm!([cpal::U24], u24_to_f32),
-        cpal::SampleFormat::I32 => input_arm!([i32], i32_to_f32),
-        format => return Err(format!("Unsupported microphone sample format: {format:?}")),
-    };
-
-    let ring_out = ring;
-    let step = in_rate as f64 / out_rate as f64;
-    let out_err_fn = |err| eprintln!("Mic test output error: {err}");
-
-    macro_rules! output_arm {
-        ($ty:ty, $from_f32:expr) => {{
-            let mut acc = 0f64;
-            let mut carry = 0f32;
-            out_device
-                .build_output_stream(
-                    out_config.into(),
-                    move |data: &mut $ty, _: &cpal::OutputCallbackInfo| {
-                        for frame in data.chunks_mut(out_channels) {
-                            let sample =
-                                next_loopback_sample(&ring_out, step, &mut acc, &mut carry);
-                            frame.fill($from_f32(sample));
-                        }
-                    },
-                    out_err_fn,
-                    None,
-                )
-                .map_err(|e| format!("Failed to build output stream: {e}"))?
-        }};
-    }
-
-    let output_stream = match out_config.sample_format() {
-        cpal::SampleFormat::F32 => output_arm!([f32], |s: f32| s),
-        cpal::SampleFormat::I8 => output_arm!([i8], f32_to_i8),
-        cpal::SampleFormat::U8 => output_arm!([u8], f32_to_u8),
-        cpal::SampleFormat::I16 => output_arm!([i16], f32_to_i16),
-        cpal::SampleFormat::U16 => output_arm!([u16], f32_to_u16),
-        cpal::SampleFormat::I24 => output_arm!([cpal::I24], f32_to_i24),
-        cpal::SampleFormat::U24 => output_arm!([cpal::U24], f32_to_u24),
-        cpal::SampleFormat::I32 => output_arm!([i32], f32_to_i32),
-        format => return Err(format!("Unsupported speaker sample format: {format:?}")),
-    };
+    let step = f64::from(in_config.sample_rate()) / f64::from(out_config.sample_rate());
+    let mut cursor = LoopbackCursor::new(step);
+    let output_stream = build_output(&out_device, &out_config, move || cursor.next_sample(&ring))?;
 
     Ok((input_stream, output_stream))
+}
+
+fn open_speaker(host: &cpal::Host) -> Result<(cpal::Device, cpal::SupportedStreamConfig), String> {
+    let device = host
+        .default_output_device()
+        .ok_or("No speaker found. Please connect a speaker or headphones and try again.")?;
+    let config = device
+        .default_output_config()
+        .map_err(|e| format!("Speaker is not available: {e}"))?;
+    if config.channels() == 0 {
+        return Err("Speaker reports zero output channels".into());
+    }
+    Ok((device, config))
 }
 
 #[cfg(test)]
@@ -944,5 +1010,42 @@ mod resample_tests {
         let rms = (tail.iter().map(|s| s * s).sum::<f32>() / tail.len() as f32).sqrt();
         let want = amplitude / std::f32::consts::SQRT_2;
         assert!((rms - want).abs() < want * 0.05, "rms {rms}, want {want}");
+    }
+}
+
+#[cfg(all(test, unix))]
+mod stderr_tests {
+    use super::with_stderr_silenced;
+    use std::os::fd::AsFd;
+    use std::os::unix::fs::MetadataExt;
+    use std::time::Duration;
+
+    const CONCURRENT_CALLERS: usize = 16;
+    const ROUNDS: usize = 20;
+
+    fn stderr_identity() -> (u64, u64) {
+        let copy = std::io::stderr()
+            .as_fd()
+            .try_clone_to_owned()
+            .expect("duplicate stderr");
+        let metadata = std::fs::File::from(copy).metadata().expect("stat stderr");
+        (metadata.dev(), metadata.ino())
+    }
+
+    #[test]
+    fn given_concurrent_silencers_when_they_all_finish_then_stderr_is_the_original_one() {
+        let original = stderr_identity();
+
+        std::thread::scope(|scope| {
+            for _ in 0..CONCURRENT_CALLERS {
+                scope.spawn(|| {
+                    for _ in 0..ROUNDS {
+                        with_stderr_silenced(|| std::thread::sleep(Duration::from_micros(50)));
+                    }
+                });
+            }
+        });
+
+        assert_eq!(stderr_identity(), original);
     }
 }

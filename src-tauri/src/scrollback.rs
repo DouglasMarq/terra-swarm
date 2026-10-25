@@ -105,7 +105,7 @@ impl ScrollbackStore {
         Self::reject_symlink(&path)?;
 
         let current_len = fs::metadata(&path)
-            .map(|metadata| metadata.len().min(usize::MAX as u64) as usize)
+            .map(|metadata| usize::try_from(metadata.len()).unwrap_or(usize::MAX))
             .unwrap_or(0);
         if current_len.saturating_add(chunk.len()) <= COMPACTION_THRESHOLD {
             let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
@@ -263,7 +263,7 @@ mod tests {
         let path = root.join("t-1.scrollback");
         assert_eq!(
             fs::metadata(&path).expect("metadata").len(),
-            SCROLLBACK_CAP as u64
+            u64::try_from(SCROLLBACK_CAP).expect("cap fits in u64")
         );
         assert!(store.read("t-1").expect("read").ends_with(b"tail"));
         cleanup(&root);

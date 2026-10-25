@@ -1,4 +1,5 @@
 pub mod audio;
+mod download;
 pub mod models;
 pub mod transcriber;
 
@@ -6,7 +7,7 @@ use crate::sync::LockExt;
 use audio::AudioController;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use transcriber::Transcriber;
 
 /// Room for a batch of `/dev/snd` inotify events.
@@ -18,8 +19,6 @@ const DEVICE_SETTLE_DELAY: std::time::Duration = std::time::Duration::from_milli
 /// How often the microphone is checked where `/dev/snd` can't be watched.
 #[cfg(not(target_os = "linux"))]
 const MIC_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
-/// Downloaded chunks waiting for the writer thread.
-const DOWNLOAD_QUEUE_CHUNKS: usize = 64;
 
 pub struct VoiceState {
     pub recording: Mutex<bool>,
@@ -90,7 +89,7 @@ fn activate_model(app: &tauri::AppHandle, model_id: &str, path: PathBuf) -> Resu
     Ok(())
 }
 
-fn start_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
+fn start_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let state = app.state::<VoiceState>();
     // Held across check-and-start so two rapid toggles can't both start.
     let mut recording = state.recording.lock_or_recover();
@@ -102,7 +101,7 @@ fn start_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
         let _ = app.emit("voice-recording-error", msg);
         return Err(msg.into());
     }
-    let controller = app.state::<AudioController>();
+    let controller = app.state::<AudioController<R>>();
     let device = state.input_device.lock_or_recover().clone();
 
     state.audio_buffer.lock_or_recover().clear();
@@ -115,7 +114,7 @@ fn start_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-pub fn stop_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
+pub fn stop_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let state = app.state::<VoiceState>();
     {
         let mut recording = state.recording.lock_or_recover();
@@ -126,7 +125,7 @@ pub fn stop_recording_impl(app: &tauri::AppHandle) -> Result<(), String> {
         // forever and the flag must not leave the app stuck in "recording".
         *recording = false;
     }
-    let controller = app.state::<AudioController>();
+    let controller = app.state::<AudioController<R>>();
 
     if let Err(e) = controller.stop() {
         eprintln!("audio stop failed: {}", e);
@@ -247,19 +246,25 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
     use std::ffi::CString;
 
     std::thread::spawn(move || {
+        // SAFETY: `inotify_init1` has no memory preconditions; a negative
+        // result is handled right below.
         let fd = unsafe { libc::inotify_init1(libc::IN_CLOEXEC) };
         if fd < 0 {
             return;
         }
 
         let Ok(path) = CString::new("/dev/snd") else {
+            // SAFETY: `fd` is the open inotify descriptor this thread owns.
             unsafe { libc::close(fd) };
             return;
         };
+        // SAFETY: `fd` is open and `path` is a NUL-terminated string that
+        // outlives the call.
         let wd = unsafe {
             libc::inotify_add_watch(fd, path.as_ptr(), libc::IN_CREATE | libc::IN_DELETE)
         };
         if wd < 0 {
+            // SAFETY: `fd` is the open inotify descriptor this thread owns.
             unsafe { libc::close(fd) };
             return;
         }
@@ -267,6 +272,7 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
         let mut last: Option<bool> = None;
         let mut buf = [0u8; INOTIFY_BUFFER_BYTES];
         loop {
+            // SAFETY: `buf` is writable for `buf.len()` bytes and `fd` is open.
             let len = unsafe { libc::read(fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) };
             if len <= 0 {
                 break;
@@ -274,6 +280,8 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
 
             std::thread::sleep(DEVICE_SETTLE_DELAY);
 
+            // SAFETY: `fd` is open; the reads write at most `buf.len()` bytes
+            // into `buf`, and the original flags are restored afterwards.
             unsafe {
                 let flags = libc::fcntl(fd, libc::F_GETFL);
                 libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
@@ -284,6 +292,8 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
             emit_if_mic_changed(&app, &mut last);
         }
 
+        // SAFETY: `fd` is the open inotify descriptor this thread owns, closed
+        // once on the way out.
         unsafe { libc::close(fd) };
     });
 }
@@ -304,10 +314,7 @@ pub fn voice_list_models(
     app: tauri::AppHandle,
     state: tauri::State<'_, VoiceState>,
 ) -> Result<Vec<VoiceModelInfo>, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let data_dir = app_data_dir(&app)?;
     let downloaded = models::downloaded_model_ids(&data_dir);
     let active = state.active_model_id.lock_or_recover().clone();
     Ok(models::available_models()
@@ -325,16 +332,18 @@ pub fn voice_list_models(
 
 #[tauri::command]
 pub async fn voice_set_model(model_id: String, app: tauri::AppHandle) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let data_dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    run_blocking(move || {
+        let data_dir = app_data_dir(&app)?;
         let path = models::model_path(&data_dir, &model_id).ok_or("Model is not downloaded yet")?;
         activate_model(&app, &model_id, path)
     })
     .await
-    .map_err(|e| e.to_string())?
+}
+
+fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))
 }
 
 #[tauri::command]
@@ -357,104 +366,29 @@ pub async fn voice_download_model(model_id: String, app: tauri::AppHandle) -> Re
 }
 
 async fn download_model_impl(model_id: String, app: tauri::AppHandle) -> Result<(), String> {
-    use futures_util::StreamExt;
-
     let model = models::find_model(&model_id).ok_or("Unknown model ID")?;
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let data_dir = app_data_dir(&app)?;
 
     let dir = models::models_dir(&data_dir);
     let model_path = dir.join(model.filename);
-    let tmp_path = dir.join(format!("{}.tmp", model.filename));
 
+    create_models_dir(dir.clone()).await?;
     let is_downloaded = {
         let model_path = model_path.clone();
-        run_blocking(move || {
-            std::fs::create_dir_all(&dir)
-                .map_err(|e| format!("Failed to create models dir: {e}"))?;
-            Ok(model_path.exists())
-        })
-        .await?
+        run_blocking(move || Ok(model_path.exists())).await?
     };
-
     if !is_downloaded {
-        let response = reqwest::get(model.url)
-            .await
-            .map_err(|e| format!("Download failed: {e}"))?;
-
-        let total = response.content_length().unwrap_or(model.size_bytes);
-        let mut downloaded: u64 = 0;
-        let mut last_percent: u64 = 0;
-        let mut download_error: Option<String> = None;
-
-        let (chunk_tx, chunk_rx) = tokio::sync::mpsc::channel(DOWNLOAD_QUEUE_CHUNKS);
-        let writer = {
-            let tmp_path = tmp_path.clone();
-            tauri::async_runtime::spawn_blocking(move || write_chunks(&tmp_path, chunk_rx))
+        let url = model.url();
+        let request = download::DownloadRequest {
+            url: &url,
+            expected_size: model.size_bytes,
+            expected_sha256: model.sha256,
+            final_path: model_path.clone(),
+            partial_path: dir.join(format!("{}.tmp", model.filename)),
         };
-
-        let mut stream = response.bytes_stream();
-        while let Some(chunk) = stream.next().await {
-            let chunk = match chunk {
-                Ok(c) => c,
-                Err(e) => {
-                    download_error = Some(format!("Download error: {e}"));
-                    break;
-                }
-            };
-            let chunk_bytes = chunk.len() as u64;
-            if chunk_tx.send(chunk).await.is_err() {
-                break;
-            }
-
-            downloaded += chunk_bytes;
-            let percent = match total > 0 {
-                true => ((downloaded as f64 / total as f64 * 100.0).min(100.0)) as u64,
-                false => 0,
-            };
-
-            if percent > last_percent {
-                last_percent = percent;
-                let _ = app.emit(
-                    "voice-model-download-progress",
-                    DownloadProgress {
-                        model_id: model_id.clone(),
-                        downloaded,
-                        total,
-                        percent: percent as f64,
-                    },
-                );
-            }
-        }
-        drop(chunk_tx);
-
-        let written = writer
-            .await
-            .map_err(|e| e.to_string())
-            .and_then(|result| result.map_err(|e| format!("Write error: {e}")));
-        let outcome = match (download_error, written) {
-            (Some(error), _) | (None, Err(error)) => Err(error),
-            (None, Ok(())) if downloaded < total => Err(format!(
-                "Download incomplete: got {downloaded} of {total} bytes"
-            )),
-            (None, Ok(())) => Ok(()),
-        };
-
-        let model_path = model_path.clone();
-        let filename = model.filename;
-        run_blocking(move || match outcome {
-            Ok(()) => std::fs::rename(&tmp_path, &model_path)
-                .map_err(|e| format!("Failed to finalize download: {e}")),
-            Err(error) => {
-                if let Err(remove_error) = std::fs::remove_file(&tmp_path) {
-                    eprintln!(
-                        "failed to remove the partial download of {filename}: {remove_error}"
-                    );
-                }
-                Err(error)
-            }
+        let client = download::client(download::DOWNLOAD_TIMEOUTS)?;
+        download::download_file(&client, request, |progress| {
+            emit_download_progress(&app, &model_id, progress)
         })
         .await?;
     }
@@ -467,19 +401,23 @@ async fn download_model_impl(model_id: String, app: tauri::AppHandle) -> Result<
     Ok(())
 }
 
-/// Writes every chunk received to a new file at `path` until the sender is
-/// dropped. Blocking: runs on its own thread while the download streams.
-fn write_chunks<C: AsRef<[u8]>>(
-    path: &Path,
-    mut chunks: tokio::sync::mpsc::Receiver<C>,
-) -> std::io::Result<()> {
-    use std::io::Write;
+async fn create_models_dir(dir: PathBuf) -> Result<(), String> {
+    run_blocking(move || {
+        std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create models dir: {e}"))
+    })
+    .await
+}
 
-    let mut file = std::fs::File::create(path)?;
-    while let Some(chunk) = chunks.blocking_recv() {
-        file.write_all(chunk.as_ref())?;
-    }
-    file.flush()
+fn emit_download_progress(app: &tauri::AppHandle, model_id: &str, progress: download::Progress) {
+    let _ = app.emit(
+        "voice-model-download-progress",
+        DownloadProgress {
+            model_id: model_id.to_string(),
+            downloaded: progress.downloaded,
+            total: progress.total,
+            percent: f64::from(progress.percent),
+        },
+    );
 }
 
 /// Runs blocking file work off the async runtime.
@@ -492,43 +430,95 @@ async fn run_blocking<T: Send + 'static>(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::write_chunks;
+mod recording_tests {
+    use super::*;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    use tauri::test::MockRuntime;
+    use tauri::Listener;
 
-    fn temp_dir(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "terra-voice-{}-{}-{}",
-            name,
-            std::process::id(),
-            crate::clock::now_millis()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    const EVENT_DEADLINE: Duration = Duration::from_secs(5);
+
+    fn recording_app() -> tauri::App<MockRuntime> {
+        let app = tauri::test::mock_app();
+        app.manage(VoiceState::default());
+        app.manage(AudioController::<MockRuntime>::new());
+        app
+    }
+
+    fn set_recording(app: &tauri::App<MockRuntime>, is_recording: bool) {
+        *app.state::<VoiceState>().recording.lock_or_recover() = is_recording;
+    }
+
+    fn is_recording(app: &tauri::App<MockRuntime>) -> bool {
+        *app.state::<VoiceState>().recording.lock_or_recover()
+    }
+
+    fn payloads_of(app: &tauri::App<MockRuntime>, event: &str) -> mpsc::Receiver<String> {
+        let (payload_tx, payload_rx) = mpsc::channel();
+        app.listen(event.to_string(), move |event| {
+            let _ = payload_tx.send(event.payload().to_string());
+        });
+        payload_rx
     }
 
     #[test]
-    fn given_queued_chunks_writes_them_in_order_to_the_file() {
-        let dir = temp_dir("chunks");
-        let path = dir.join("model.bin.tmp");
-        let (sender, receiver) = tokio::sync::mpsc::channel(4);
-        sender.try_send(b"whis".to_vec()).unwrap();
-        sender.try_send(b"per".to_vec()).unwrap();
-        drop(sender);
+    fn given_no_model_when_starting_then_it_reports_the_missing_model_and_stays_idle() {
+        let app = recording_app();
+        let errors = payloads_of(&app, "voice-recording-error");
 
-        write_chunks(&path, receiver).unwrap();
+        let result = start_recording_impl(app.handle());
 
-        assert_eq!(std::fs::read(&path).unwrap(), b"whisper");
-        let _ = std::fs::remove_dir_all(dir);
+        assert!(result.is_err_and(|error| error.starts_with("No voice model loaded")));
+        assert!(!is_recording(&app));
+        assert!(errors.recv_timeout(EVENT_DEADLINE).is_ok());
     }
 
     #[test]
-    fn given_a_missing_folder_reports_the_write_error() {
-        let dir = temp_dir("missing");
-        let path = dir.join("absent").join("model.bin.tmp");
-        let (sender, receiver) = tokio::sync::mpsc::channel::<Vec<u8>>(1);
-        drop(sender);
+    fn given_a_recording_when_starting_again_then_it_is_refused_and_keeps_recording() {
+        let app = recording_app();
+        set_recording(&app, true);
 
-        assert!(write_chunks(&path, receiver).is_err());
-        let _ = std::fs::remove_dir_all(dir);
+        let result = start_recording_impl(app.handle());
+
+        assert_eq!(result, Err("Already recording".to_string()));
+        assert!(is_recording(&app));
+    }
+
+    #[test]
+    fn given_no_recording_when_stopping_then_it_is_refused() {
+        let app = recording_app();
+
+        let result = stop_recording_impl(app.handle());
+
+        assert_eq!(result, Err("Not recording".to_string()));
+    }
+
+    #[test]
+    fn given_a_recording_without_a_model_when_stopping_then_it_goes_idle_and_reports_the_missing_model(
+    ) {
+        let app = recording_app();
+        set_recording(&app, true);
+        app.state::<VoiceState>()
+            .audio_buffer
+            .lock_or_recover()
+            .extend([0.1, 0.2]);
+        let stopped = payloads_of(&app, "voice-recording-stopped");
+        let errors = payloads_of(&app, "voice-transcription-error");
+
+        let result = stop_recording_impl(app.handle());
+
+        assert!(result.is_ok());
+        assert!(!is_recording(&app));
+        assert!(app
+            .state::<VoiceState>()
+            .audio_buffer
+            .lock_or_recover()
+            .is_empty());
+        assert!(stopped.recv_timeout(EVENT_DEADLINE).is_ok());
+        assert_eq!(
+            errors.recv_timeout(EVENT_DEADLINE),
+            Ok("\"No model loaded\"".to_string())
+        );
     }
 }

@@ -140,7 +140,9 @@ fn bump_imported_ids(imported: &WorkspaceStore) {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use crate::pty::{running_terminals, spawn_terminal_inner, SpawnOptions, SpawnRequest};
+    use crate::pty::{
+        running_terminals, spawn_terminal_inner, Registries, SpawnOptions, SpawnRequest,
+    };
     use std::path::Path;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tauri::test::{mock_app, MockRuntime};
@@ -198,16 +200,18 @@ mod tests {
     fn spawn_sleeper(app: &App<MockRuntime>, workspace_id: &str) -> String {
         spawn_terminal_inner(
             app.handle(),
-            app.state::<Mutex<PtyManager>>().inner(),
-            app.state::<Mutex<WorkspaceStore>>().inner(),
+            Registries {
+                manager: app.state::<Mutex<PtyManager>>().inner(),
+                store: app.state::<Mutex<WorkspaceStore>>().inner(),
+            },
             SpawnRequest {
                 workspace_id,
                 command: "sleep 30",
                 cols: TERMINAL_COLS,
                 rows: TERMINAL_ROWS,
                 terminal_id: None,
+                options: &SpawnOptions::default(),
             },
-            &SpawnOptions::default(),
         )
         .expect("spawn sleeper")
         .meta

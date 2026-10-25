@@ -2,6 +2,8 @@
 //! OSC 9/99/777), window titles (OSC 0/1/2), ANSI stripping, context-window
 //! usage shown by agent CLIs, and UTF-8 chunking of the PTY stream.
 
+use std::ops::RangeInclusive;
+
 const ESC: u8 = 0x1b;
 const BEL: u8 = 0x07;
 /// Longest notification message kept, in characters.
@@ -14,6 +16,23 @@ const CONTEXT_WINDOW_BYTES: usize = 48;
 const TOKEN_LOOKBEHIND_BYTES: usize = 90;
 /// Widest `(NN%)` footer accepted, from the `(` to the `%`.
 const MAX_FOOTER_PERCENT_BYTES: usize = 5;
+const OSC_NOTIFY: u32 = 9;
+const OSC_KITTY_NOTIFY: u32 = 99;
+const OSC_URXVT_NOTIFY: u32 = 777;
+const DECIMAL_BASE: u32 = 10;
+const BEL_BYTES: usize = 1;
+const ST_BYTES: usize = 2;
+const CSI_FINAL_BYTES: RangeInclusive<u8> = 0x40..=0x7e;
+const CHARSET_SELECT_BYTES: usize = 3;
+const KILO: f64 = 1_000.0;
+const MEGA: f64 = 1_000_000.0;
+const FULL_PERCENT: f64 = 100.0;
+const FALLBACK_NOTIFICATION: &str = "Terminal notification";
+
+struct ContextReading {
+    position: usize,
+    used: f64,
+}
 
 /// Counts attention signals in a terminal output chunk and extracts a
 /// human-readable message for each: BEL characters and OSC 9 / 99 / 777
@@ -27,88 +46,122 @@ pub(super) fn extract_notifications(data: &[u8], tail: &[u8]) -> (usize, Vec<Str
     let mut bels = 0;
     let mut i = 0;
     while i < data.len() {
-        if data[i] == ESC && i + 1 < data.len() && data[i + 1] == b']' {
-            let mut j = i + 2;
-            let mut num: u32 = 0;
-            let mut digits = 0;
-            while j < data.len() && data[j].is_ascii_digit() {
-                num = num
-                    .saturating_mul(10)
-                    .saturating_add((data[j] - b'0') as u32);
-                digits += 1;
-                j += 1;
-            }
-            if j < data.len() && data[j] == b';' && digits > 0 {
-                let body_start = j + 1;
-                let mut end = data.len();
-                let mut k = body_start;
-                while k < data.len() {
-                    if data[k] == BEL {
-                        end = k;
-                        k += 1;
-                        break;
-                    }
-                    if data[k] == ESC && k + 1 < data.len() && data[k + 1] == b'\\' {
-                        end = k;
-                        k += 2;
-                        break;
-                    }
-                    k += 1;
-                }
-                if num == 9 || num == 99 || num == 777 {
-                    count += 1;
-                    let body = String::from_utf8_lossy(&data[body_start..end])
-                        .trim()
-                        .to_string();
-                    let msg = match num {
-                        // urxvt: OSC 777 ; notify ; title ; body
-                        777 => {
-                            let mut parts = body.splitn(3, ';');
-                            let _proto = parts.next();
-                            let title = parts.next().unwrap_or("").trim();
-                            let text = parts.next().unwrap_or("").trim();
-                            if !title.is_empty() && !text.is_empty() {
-                                format!("{}: {}", title, text)
-                            } else {
-                                text.to_string()
-                            }
-                        }
-                        // kitty: OSC 99 ; metadata ; payload
-                        99 => match body.split_once(';') {
-                            Some((_, payload)) => payload.trim().to_string(),
-                            None => String::new(),
-                        },
-                        _ => body,
-                    };
-                    if !msg.is_empty() {
-                        messages.push(msg.chars().take(MAX_NOTIFICATION_CHARS).collect());
-                    }
-                }
-                i = k;
-                continue;
-            }
-            i += 2;
-        } else {
+        if !starts_osc(data, i) {
             if data[i] == BEL {
                 count += 1;
                 bels += 1;
             }
             i += 1;
+            continue;
+        }
+        let Some((code, body_start)) = osc_code(data, i + 2) else {
+            i += 2;
+            continue;
+        };
+        let (body_end, next) = match find_string_terminator(data, body_start) {
+            Some((end, terminator_len)) => (end, end + terminator_len),
+            None => (data.len(), data.len()),
+        };
+        i = next;
+        if !is_notification_code(code) {
+            continue;
+        }
+        count += 1;
+        let body = String::from_utf8_lossy(&data[body_start..body_end])
+            .trim()
+            .to_string();
+        let message = notification_message(code, body);
+        if !message.is_empty() {
+            messages.push(truncate_notification(&message));
         }
     }
     if bels > 0 && messages.is_empty() {
-        let plain = strip_ansi(&String::from_utf8_lossy(tail));
-        let fallback = plain
-            .lines()
-            .rev()
-            .map(|l| l.chars().filter(|c| !c.is_control()).collect::<String>())
-            .map(|l| l.trim().to_string())
-            .find(|l| !l.is_empty())
-            .map(|l| l.chars().take(MAX_NOTIFICATION_CHARS).collect::<String>())
-            .unwrap_or_else(|| "Terminal notification".to_string());
-        messages.push(fallback);
+        messages.push(fallback_notification(tail));
     }
     (count, messages)
+}
+
+fn starts_osc(data: &[u8], position: usize) -> bool {
+    data[position] == ESC && data.get(position + 1) == Some(&b']')
+}
+
+fn osc_code(data: &[u8], digits_start: usize) -> Option<(u32, usize)> {
+    let digit_count = data[digits_start..]
+        .iter()
+        .take_while(|byte| byte.is_ascii_digit())
+        .count();
+    let separator = digits_start + digit_count;
+    if digit_count == 0 || data.get(separator) != Some(&b';') {
+        return None;
+    }
+    let code = data[digits_start..separator]
+        .iter()
+        .fold(0u32, |code, digit| {
+            code.saturating_mul(DECIMAL_BASE)
+                .saturating_add(u32::from(digit - b'0'))
+        });
+    Some((code, separator + 1))
+}
+
+fn find_string_terminator(data: &[u8], from: usize) -> Option<(usize, usize)> {
+    (from..data.len()).find_map(|position| {
+        if data[position] == BEL {
+            return Some((position, BEL_BYTES));
+        }
+        if data[position] == ESC && data.get(position + 1) == Some(&b'\\') {
+            return Some((position, ST_BYTES));
+        }
+        None
+    })
+}
+
+fn is_notification_code(code: u32) -> bool {
+    matches!(code, OSC_NOTIFY | OSC_KITTY_NOTIFY | OSC_URXVT_NOTIFY)
+}
+
+fn notification_message(code: u32, body: String) -> String {
+    match code {
+        OSC_URXVT_NOTIFY => urxvt_message(&body),
+        OSC_KITTY_NOTIFY => kitty_message(&body),
+        _ => body,
+    }
+}
+
+// urxvt: OSC 777 ; notify ; title ; body
+fn urxvt_message(body: &str) -> String {
+    let mut parts = body.splitn(3, ';');
+    let _proto = parts.next();
+    let title = parts.next().unwrap_or("").trim();
+    let text = parts.next().unwrap_or("").trim();
+    if !title.is_empty() && !text.is_empty() {
+        format!("{}: {}", title, text)
+    } else {
+        text.to_string()
+    }
+}
+
+// kitty: OSC 99 ; metadata ; payload
+fn kitty_message(body: &str) -> String {
+    match body.split_once(';') {
+        Some((_, payload)) => payload.trim().to_string(),
+        None => String::new(),
+    }
+}
+
+fn truncate_notification(message: &str) -> String {
+    message.chars().take(MAX_NOTIFICATION_CHARS).collect()
+}
+
+fn fallback_notification(tail: &[u8]) -> String {
+    let plain = strip_ansi(&String::from_utf8_lossy(tail));
+    plain
+        .lines()
+        .rev()
+        .map(|l| l.chars().filter(|c| !c.is_control()).collect::<String>())
+        .map(|l| l.trim().to_string())
+        .find(|l| !l.is_empty())
+        .map(|l| truncate_notification(&l))
+        .unwrap_or_else(|| FALLBACK_NOTIFICATION.to_string())
 }
 
 /// Scans `buf` for OSC 0/1/2 window-title sequences (ESC ] N ; text, ended by
@@ -118,21 +171,8 @@ pub(super) fn extract_notifications(data: &[u8], tail: &[u8]) -> (usize, Vec<Str
 pub(super) fn scan_titles(buf: &mut Vec<u8>, out: &mut Vec<String>) {
     let mut i = 0;
     while i < buf.len() {
-        if buf[i] == ESC && i + 1 < buf.len() && buf[i + 1] == b']' {
-            let mut j = i + 2;
-            let mut term: Option<(usize, usize)> = None;
-            while j < buf.len() {
-                if buf[j] == BEL {
-                    term = Some((j, 1));
-                    break;
-                }
-                if buf[j] == ESC && j + 1 < buf.len() && buf[j + 1] == b'\\' {
-                    term = Some((j, 2));
-                    break;
-                }
-                j += 1;
-            }
-            let Some((end, tlen)) = term else {
+        if starts_osc(buf, i) {
+            let Some((end, tlen)) = find_string_terminator(buf, i + 2) else {
                 if buf.len() - i > MAX_TITLE_SEQUENCE_BYTES {
                     i += 2;
                     continue;
@@ -173,27 +213,17 @@ pub(super) fn strip_ansi(s: &str) -> String {
                     while i < bytes.len() {
                         let b = bytes[i];
                         i += 1;
-                        if (0x40..=0x7e).contains(&b) {
+                        if CSI_FINAL_BYTES.contains(&b) {
                             break;
                         }
                     }
                 }
                 b']' => {
-                    i += 2;
-                    while i < bytes.len() {
-                        if bytes[i] == BEL {
-                            i += 1;
-                            break;
-                        }
-                        if bytes[i] == ESC && i + 1 < bytes.len() && bytes[i + 1] == b'\\' {
-                            i += 2;
-                            break;
-                        }
-                        i += 1;
-                    }
+                    i = find_string_terminator(bytes, i + 2)
+                        .map_or(bytes.len(), |(end, terminator_len)| end + terminator_len);
                 }
                 b'(' | b')' | b'#' => {
-                    i = (i + 3).min(bytes.len());
+                    i = (i + CHARSET_SELECT_BYTES).min(bytes.len());
                 }
                 _ => {
                     i = (i + 2).min(bytes.len());
@@ -212,18 +242,12 @@ fn parse_trailing_number(s: &str) -> Option<f64> {
     let bytes = t.as_bytes();
     let mut end = bytes.len();
     let mut mult = 1.0;
-    if end > 0 {
-        match bytes[end - 1] {
-            b'k' | b'K' => {
-                mult = 1_000.0;
-                end -= 1;
-            }
-            b'm' | b'M' => {
-                mult = 1_000_000.0;
-                end -= 1;
-            }
-            _ => {}
-        }
+    if let Some(multiplier) = end
+        .checked_sub(1)
+        .and_then(|last| suffix_multiplier(bytes[last]))
+    {
+        mult = multiplier;
+        end -= 1;
     }
     let mut start = end;
     while start > 0
@@ -251,15 +275,17 @@ fn parse_leading_number(s: &str) -> Option<f64> {
         return None;
     }
     let cleaned: String = t[..i].chars().filter(|c| *c != ',').collect();
-    let mut v = cleaned.parse::<f64>().ok()?;
-    if i < bytes.len() {
-        match bytes[i] {
-            b'k' | b'K' => v *= 1_000.0,
-            b'm' | b'M' => v *= 1_000_000.0,
-            _ => {}
-        }
+    let v = cleaned.parse::<f64>().ok()?;
+    let multiplier = bytes.get(i).copied().and_then(suffix_multiplier);
+    Some(v * multiplier.unwrap_or(1.0))
+}
+
+fn suffix_multiplier(suffix: u8) -> Option<f64> {
+    match suffix {
+        b'k' | b'K' => Some(KILO),
+        b'm' | b'M' => Some(MEGA),
+        _ => None,
     }
-    Some(v)
 }
 
 /// Largest index <= i that lies on a char boundary (clamped to s.len()).
@@ -287,78 +313,82 @@ fn ceil_boundary(s: &str, i: usize) -> usize {
 /// most recent one wins.
 pub(super) fn detect_context_used(text: &str) -> Option<u8> {
     let lower = text.to_lowercase();
-    let mut best: Option<(usize, f64)> = None;
-    let consider = |pos: usize, used: f64, best: &mut Option<(usize, f64)>| {
-        if used.is_finite() && (0.0..=100.0).contains(&used) && best.is_none_or(|(p, _)| pos >= p) {
-            *best = Some((pos, used));
-        }
-    };
+    let context_readings = lower
+        .match_indices("context")
+        .filter_map(|(idx, _)| context_percent_reading(&lower, idx));
+    let token_readings = lower
+        .match_indices("token")
+        .filter_map(|(idx, _)| token_ratio_reading(&lower, idx));
+    let footer_readings = lower
+        .match_indices("%)")
+        .filter_map(|(pct, _)| footer_percent_reading(&lower, pct));
+    context_readings
+        .chain(token_readings)
+        .chain(footer_readings)
+        .filter(|reading| is_valid_percent(reading.used))
+        .max_by_key(|reading| reading.position)
+        .map(|reading| rounded_percent(reading.used))
+}
 
-    let mut start = 0;
-    while let Some(off) = lower[start..].find("context") {
-        let idx = start + off;
-        let lo = floor_boundary(&lower, idx.saturating_sub(CONTEXT_WINDOW_BYTES));
-        let hi = ceil_boundary(&lower, idx + CONTEXT_WINDOW_BYTES);
-        let window = &lower[lo..hi];
-        // The percent belongs to the keyword, so take the one closest before
-        // it; an earlier '%' in the window may belong to a stale indicator.
-        let koff = idx - lo;
-        if let Some(pct) = window[..koff].rfind('%') {
-            if let Some(v) = parse_trailing_number(&window[..pct]) {
-                let used = if window.contains("left")
-                    || window.contains("remain")
-                    || window.contains("free")
-                {
-                    100.0 - v
-                } else {
-                    v
-                };
-                consider(idx, used, &mut best);
-            }
-        }
-        start = idx + "context".len();
+fn context_percent_reading(lower: &str, idx: usize) -> Option<ContextReading> {
+    let lo = floor_boundary(lower, idx.saturating_sub(CONTEXT_WINDOW_BYTES));
+    let hi = ceil_boundary(lower, idx + CONTEXT_WINDOW_BYTES);
+    let window = &lower[lo..hi];
+    // The percent belongs to the keyword, so take the one closest before
+    // it; an earlier '%' in the window may belong to a stale indicator.
+    let koff = idx - lo;
+    let pct = window[..koff].rfind('%')?;
+    let v = parse_trailing_number(&window[..pct])?;
+    let is_remaining =
+        window.contains("left") || window.contains("remain") || window.contains("free");
+    let used = if is_remaining { FULL_PERCENT - v } else { v };
+    Some(ContextReading {
+        position: idx,
+        used,
+    })
+}
+
+fn token_ratio_reading(lower: &str, idx: usize) -> Option<ContextReading> {
+    let lo = floor_boundary(lower, idx.saturating_sub(TOKEN_LOOKBEHIND_BYTES));
+    let window = &lower[lo..idx];
+    let slash = window.rfind('/')?;
+    let a = parse_trailing_number(&window[..slash])?;
+    let b = parse_leading_number(&window[slash + 1..])?;
+    if b <= 0.0 {
+        return None;
     }
+    Some(ContextReading {
+        position: idx,
+        used: a / b * FULL_PERCENT,
+    })
+}
 
-    let mut start = 0;
-    while let Some(off) = lower[start..].find("token") {
-        let idx = start + off;
-        let lo = floor_boundary(&lower, idx.saturating_sub(TOKEN_LOOKBEHIND_BYTES));
-        let window = &lower[lo..idx];
-        if let Some(slash) = window.rfind('/') {
-            if let (Some(a), Some(b)) = (
-                parse_trailing_number(&window[..slash]),
-                parse_leading_number(&window[slash + 1..]),
-            ) {
-                if b > 0.0 {
-                    consider(idx, a / b * 100.0, &mut best);
-                }
-            }
-        }
-        start = idx + "token".len();
+// OpenCode footer: "12.3K (42%)" - a bare parenthesized percent right
+// after a token count, with no "context"/"token" keyword nearby.
+fn footer_percent_reading(lower: &str, pct: usize) -> Option<ContextReading> {
+    let open = lower[..pct].rfind('(')?;
+    if pct - open > MAX_FOOTER_PERCENT_BYTES {
+        return None;
     }
-
-    // OpenCode footer: "12.3K (42%)" - a bare parenthesized percent right
-    // after a token count, with no "context"/"token" keyword nearby.
-    let mut start = 0;
-    while let Some(off) = lower[start..].find("%)") {
-        let pct = start + off;
-        if let Some(open) = lower[..pct].rfind('(') {
-            if pct - open <= MAX_FOOTER_PERCENT_BYTES {
-                let inside = &lower[open + 1..pct];
-                if !inside.is_empty() && inside.bytes().all(|b| b.is_ascii_digit()) {
-                    let before = lower[..open].trim_end();
-                    if let (Some(_), Ok(used)) =
-                        (parse_trailing_number(before), inside.parse::<f64>())
-                    {
-                        consider(pct, used, &mut best);
-                    }
-                }
-            }
-        }
-        start = pct + 2;
+    let inside = &lower[open + 1..pct];
+    if inside.is_empty() || !inside.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
     }
+    parse_trailing_number(lower[..open].trim_end())?;
+    let used = inside.parse::<f64>().ok()?;
+    Some(ContextReading {
+        position: pct,
+        used,
+    })
+}
 
-    best.map(|(_, v)| v.round() as u8)
+fn is_valid_percent(used: f64) -> bool {
+    used.is_finite() && (0.0..=FULL_PERCENT).contains(&used)
+}
+
+fn rounded_percent(used: f64) -> u8 {
+    // `used` was checked to lie in 0..=100, so the rounded value always fits in a u8.
+    used.round() as u8
 }
 
 /// Drains one decodable chunk from `pending`, replacing invalid bytes with
@@ -490,5 +520,45 @@ mod ctx_tests {
         );
         assert_eq!(detect_context_used("│ 88% context left │"), Some(12));
         assert_eq!(detect_context_used("no indicators ░░░"), None);
+    }
+}
+
+#[cfg(test)]
+mod scan_tests {
+    use super::{detect_context_used, extract_notifications, scan_titles, strip_ansi};
+
+    #[test]
+    fn given_an_unterminated_osc9_when_extracting_then_the_rest_of_the_chunk_is_its_message() {
+        let (count, messages) = extract_notifications(b"\x1b]9;Half a message", b"");
+        assert_eq!(count, 1);
+        assert_eq!(messages, vec!["Half a message".to_string()]);
+    }
+
+    #[test]
+    fn given_an_osc_without_digits_when_extracting_then_a_later_bel_still_counts() {
+        let (count, messages) = extract_notifications(b"\x1b];x\x07", b"prompt> ");
+        assert_eq!(count, 1);
+        assert_eq!(messages, vec!["prompt>".to_string()]);
+    }
+
+    #[test]
+    fn given_titles_ended_by_bel_and_st_when_scanning_then_both_are_read_and_drained() {
+        let mut buf = b"\x1b]0;first\x07text\x1b]2;second\x1b\\\x1b]1;partial".to_vec();
+        let mut titles = Vec::new();
+        scan_titles(&mut buf, &mut titles);
+        assert_eq!(titles, vec!["first".to_string(), "second".to_string()]);
+        assert_eq!(buf, b"\x1b]1;partial".to_vec());
+    }
+
+    #[test]
+    fn given_csi_osc_and_charset_sequences_when_stripping_then_only_text_remains() {
+        let stripped = strip_ansi("\x1b[1;32mgreen\x1b[0m \x1b]0;title\x07\x1b(Bdone\x1b=");
+        assert_eq!(stripped, "green done");
+    }
+
+    #[test]
+    fn given_a_ratio_in_millions_or_a_zero_total_when_detecting_then_only_the_valid_one_counts() {
+        assert_eq!(detect_context_used("0.5M / 1M tokens"), Some(50));
+        assert_eq!(detect_context_used("5 / 0 tokens"), None);
     }
 }

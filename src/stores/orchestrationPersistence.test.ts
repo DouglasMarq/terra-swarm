@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Workspace, WorkspaceGroup } from "../domain/workspace.model";
+import type { Workspace } from "../domain/workspace.model";
 
 const workspaceApiMock = vi.hoisted(() => ({
-  listWorkspaces: vi.fn<() => Promise<Workspace[]>>(),
-  listGroups: vi.fn<() => Promise<WorkspaceGroup[]>>(),
+  listWorkspaces: vi.fn<() => Promise<unknown>>(),
+  listGroups: vi.fn<() => Promise<unknown>>(),
 }));
 
 vi.mock("../lib/tauri/workspace", () => ({ workspaceApi: workspaceApiMock }));
@@ -85,5 +85,67 @@ describe("createPersistenceEngine", () => {
 
     expect(applied[applied.length - 1]).toEqual(optimistic);
     expect(reportError).toHaveBeenLastCalledWith("workspace layout reconciliation", expect.any(Error));
+  });
+
+  it("Given backend containers that are hidden or closed, when reconciling, then their visibility follows the backend", async () => {
+    workspaceApiMock.listWorkspaces.mockResolvedValue([{
+      ...backendWorkspace,
+      containers: [
+        { id: "container-open", projectId: "ws-1", paneIds: [] },
+        { id: "container-hidden", projectId: "ws-1", paneIds: [], isVisible: false },
+        { id: "container-closed", projectId: "ws-1", paneIds: [], isClosed: true },
+      ],
+    }]);
+    workspaceApiMock.listGroups.mockResolvedValue(null);
+    const { engine, read } = harness(optimistic);
+
+    engine.persistCommand(Promise.reject(new Error("rejected")), "container visibility", ["container:open"]);
+    await settle();
+
+    expect(read().containerVisibility).toMatchObject({ "container-open": true, "container-hidden": false, "container-closed": false });
+    expect(read().groups).toEqual([]);
+  });
+
+  it("Given the backend returns no workspace list, when reconciling, then only the rollback is applied", async () => {
+    workspaceApiMock.listWorkspaces.mockResolvedValue(null);
+    const { engine, applied } = harness(optimistic);
+
+    engine.persistCommand(Promise.reject(new Error("rejected")), "pane order", ["pane:1"]);
+    await settle();
+
+    expect(applied).toEqual([optimistic]);
+  });
+
+  it("Given a newer projection while the backend is read, when the read settles, then it is ignored even if it fails", async () => {
+    let failRead: (error: unknown) => void = () => undefined;
+    workspaceApiMock.listWorkspaces.mockReturnValueOnce(new Promise((_resolve, reject) => {
+      failRead = reject;
+    }));
+    const { engine, applied, reportError } = harness(optimistic);
+
+    engine.persistCommand(Promise.reject(new Error("rejected")), "pane order", ["pane:1"]);
+    await settle();
+    engine.markNewerProjection();
+    failRead(new Error("offline"));
+    await settle();
+
+    expect(applied).toEqual([optimistic]);
+    expect(reportError).toHaveBeenCalledTimes(1);
+  });
+
+  it("Given a newer projection while the backend is read, when the read succeeds, then its projection is dropped", async () => {
+    let finishRead: (workspaces: Workspace[]) => void = () => undefined;
+    workspaceApiMock.listWorkspaces.mockReturnValueOnce(new Promise((resolve) => {
+      finishRead = resolve;
+    }));
+    const { engine, applied } = harness(optimistic);
+
+    engine.persistCommand(Promise.reject(new Error("rejected")), "pane order", ["pane:1"]);
+    await settle();
+    engine.markNewerProjection();
+    finishRead([backendWorkspace]);
+    await settle();
+
+    expect(applied).toEqual([optimistic]);
   });
 });

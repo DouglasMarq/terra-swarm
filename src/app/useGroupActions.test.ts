@@ -120,4 +120,46 @@ describe("useGroupActions", () => {
     expect(useOrchestrationStore.getState().groups[0]?.isSuspended).toBe(true);
     expect(useTerminalRuntimeStore.getState().notifItems).toHaveLength(1);
   });
+
+  it("Given a failing backend, when a group is created or renamed, then the error is only logged and nothing refreshes", async () => {
+    apiMock.createGroup.mockRejectedValueOnce(new Error("taken"));
+    apiMock.renameGroup.mockRejectedValueOnce(new Error("taken"));
+    const { actions, refresh } = renderActions();
+
+    await actions.createGroup("Core");
+    await actions.renameGroup("grp-core", "Core");
+
+    expect(console.error).toHaveBeenCalledTimes(2);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("Given an unknown group, when it is resumed, then nothing is respawned and it is activated by id", async () => {
+    const { actions, sessions } = renderActions();
+
+    await actions.resumeGroup("grp-ghost");
+
+    expect(sessions.resumeItems).toHaveBeenCalledWith([]);
+    expect(apiMock.resumeGroup).toHaveBeenCalledWith("grp-ghost");
+  });
+
+  it("Given a failed resume and a failing restore, when the group is resumed, then the restore error is logged and the notice still shows", async () => {
+    apiMock.suspendGroup.mockRejectedValueOnce(new Error("offline"));
+    const { actions } = renderActions(["failed", "failed"]);
+
+    await actions.resumeGroup("grp-core");
+
+    expect(console.error).toHaveBeenCalledWith("failed to restore suspended group grp-core:", expect.any(Error));
+    expect(useTerminalRuntimeStore.getState().notifItems).toHaveLength(1);
+  });
+
+  it("Given activation and restore both fail, when the group is resumed, then both errors are logged", async () => {
+    apiMock.resumeGroup.mockRejectedValueOnce(new Error("offline"));
+    apiMock.suspendGroup.mockRejectedValueOnce(new Error("offline"));
+    const { actions } = renderActions();
+
+    await actions.resumeGroup("grp-core");
+
+    expect(console.error).toHaveBeenCalledWith("failed to resume group grp-core:", expect.any(Error));
+    expect(console.error).toHaveBeenCalledWith("failed to restore suspended group grp-core:", expect.any(Error));
+  });
 });

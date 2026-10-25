@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
 import type { Workspace } from "../domain/workspace.model";
 import { t } from "../i18n";
-import { HOTKEY_ACTIONS, hotkeyActionLabel, matchHotkey, type Hotkey, type HotkeyActionId, usePreferencesStore } from "../stores/preferencesStore";
+import { hotkeyActionLabel, matchHotkey, type HotkeyActionId, usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
-import { useUiStore } from "../stores/uiStore";
+import { conflictingAction, isEditableTarget, recordedHotkey, runHotkeyAction, type HotkeyActionHandlers } from "./hotkeyActions";
 
 interface GlobalHotkeysInput {
   /** A dialog is open: shortcuts stay off. */
@@ -16,14 +16,7 @@ interface GlobalHotkeysInput {
   active: Workspace | null;
   focusedId: string | null;
   workspaces: readonly Workspace[];
-  actions: {
-    openWorkspaceCreator: () => void;
-    renameWorkspace: (workspace: Workspace) => void;
-    closeWorkspace: (id: string) => unknown;
-    quickNewTerminal: (workspaceId: string) => unknown;
-    closeTerminal: (id: string) => unknown;
-    toggleVoice: () => void;
-  };
+  actions: HotkeyActionHandlers;
 }
 
 /** The app-wide keyboard shortcuts and recording a new one in Settings. */
@@ -57,85 +50,13 @@ export function useGlobalHotkeys({
     const handler = (e: KeyboardEvent) => {
       const { modalOpen, capturing, hotkeys, active, focusedId, workspaces } =
         hotkeyCtx.current;
-      const actions = hotkeyActions.current;
       if (modalOpen || capturing) return;
-      const target = e.target as HTMLElement | null;
-      if (
-        target?.closest("input, select") ||
-        target?.closest("textarea:not(.xterm-helper-textarea)")
-      )
-        return;
-      for (const [action, hk] of Object.entries(hotkeys)) {
-        if (!matchHotkey(e, hk)) continue;
-        e.preventDefault();
-        e.stopPropagation();
-        switch (action) {
-          case "newWorkspace":
-            actions.openWorkspaceCreator();
-            break;
-          case "renameWorkspace":
-            if (active) {
-              actions.renameWorkspace(active);
-            }
-            break;
-          case "deleteWorkspace":
-            if (active) actions.closeWorkspace(active.id);
-            break;
-          case "newTerminal":
-            if (active) actions.quickNewTerminal(active.id);
-            break;
-          case "closeTerminal":
-            if (focusedId) actions.closeTerminal(focusedId);
-            break;
-          case "maximizeTerminal": {
-            const last = active?.terminals[active.terminals.length - 1];
-            const target =
-              focusedId && active?.terminals.some((t) => t.id === focusedId)
-                ? focusedId
-                : last?.id;
-            if (target) {
-              useUiStore.getState().setExpandedId((prev) => (prev === target ? null : target));
-            }
-            break;
-          }
-          case "minimizeTerminal":
-            useUiStore.getState().setExpandedId(null);
-            break;
-          case "increaseFontSize":
-            usePreferencesStore.getState().changeFontSize(1);
-            break;
-          case "decreaseFontSize":
-            usePreferencesStore.getState().changeFontSize(-1);
-            break;
-          case "resetFontSize":
-            usePreferencesStore.getState().resetFontSize();
-            break;
-          case "toggleVoice":
-            actions.toggleVoice();
-            break;
-          default: {
-            const wsMatch = /^selectWorkspace([1-9])$/.exec(action);
-            if (wsMatch) {
-              const ws = workspaces[Number(wsMatch[1]) - 1];
-              if (ws) {
-                useUiStore.getState().setActiveId(ws.id);
-                useUiStore.getState().setExpandedId(null);
-              }
-              break;
-            }
-            const termMatch = /^selectTerminal([1-9])$/.exec(action);
-            if (termMatch) {
-              const t = active?.terminals[Number(termMatch[1]) - 1];
-              if (t) {
-                useUiStore.getState().setFocusedId(t.id);
-                useUiStore.getState().setExpandedId((cur) => (cur === t.id ? cur : null));
-              }
-            }
-            break;
-          }
-        }
-        return;
-      }
+      if (isEditableTarget(e.target)) return;
+      const matched = Object.entries(hotkeys).find(([, hk]) => matchHotkey(e, hk));
+      if (!matched) return;
+      e.preventDefault();
+      e.stopPropagation();
+      runHotkeyAction(matched[0], { active, focusedId, workspaces, actions: hotkeyActions.current });
     };
     window.addEventListener("keydown", handler, { capture: true });
     return () =>
@@ -151,30 +72,14 @@ export function useGlobalHotkeys({
         setCapturing(null);
         return;
       }
-      if (["Meta", "Shift", "Control", "Alt"].includes(e.key)) return;
-      const hk: Hotkey = {
-        key: e.key,
-        meta: e.metaKey,
-        shift: e.shiftKey,
-        ctrl: e.ctrlKey,
-        alt: e.altKey,
-      };
-      if (!hk.meta && !hk.ctrl && !hk.alt) return;
+      const hk = recordedHotkey(e);
+      if (!hk) return;
       // Reject duplicates: dispatch stops at the first match, so a combo
       // already bound to another action would silently never fire.
-      const conflict = HOTKEY_ACTIONS.find(
-        (a) =>
-          a.id !== capturing &&
-          hotkeys[a.id] &&
-          hotkeys[a.id].key === hk.key &&
-          hotkeys[a.id].meta === hk.meta &&
-          hotkeys[a.id].shift === hk.shift &&
-          hotkeys[a.id].ctrl === hk.ctrl &&
-          hotkeys[a.id].alt === hk.alt,
-      );
+      const conflict = conflictingAction(hk, { hotkeys, capturing });
       if (conflict) {
         useTerminalRuntimeStore.getState().pushSystemNotification(
-          t("app.shortcutTaken", { action: hotkeyActionLabel(conflict.id) }),
+          t("app.shortcutTaken", { action: hotkeyActionLabel(conflict) }),
         );
         setCapturing(null);
         return;

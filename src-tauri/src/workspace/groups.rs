@@ -70,7 +70,7 @@ impl WorkspaceStore {
             layout_mode: Some(default_layout_mode()),
             suspended: false,
             archived: false,
-            created_at: Some(unix_millis()),
+            created_at: Some(crate::clock::now_epoch_millis()),
         };
         self.groups.push(group.clone());
         self.save();

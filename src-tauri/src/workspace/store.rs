@@ -46,7 +46,7 @@ impl WorkspaceStore {
             active_container_id: None,
             collapsed: false,
             archived: false,
-            created_at: Some(unix_millis()),
+            created_at: Some(crate::clock::now_epoch_millis()),
             layout_mode: Some(default_layout_mode()),
             layout: Some(WorkspaceLayout::default()),
         };

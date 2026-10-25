@@ -162,8 +162,7 @@ pub fn store_saved_at(store: State<'_, Mutex<WorkspaceStore>>) -> Result<Option<
     let millis = std::fs::metadata(path)
         .and_then(|m| m.modified())
         .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_millis() as u64);
+        .and_then(crate::clock::epoch_millis);
     Ok(millis)
 }
 

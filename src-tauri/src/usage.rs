@@ -211,7 +211,7 @@ mod tests {
             "terra-usage-{}-{}-{}",
             name,
             std::process::id(),
-            crate::mcp::repo::now_millis()
+            crate::clock::now_millis()
         ));
         std::fs::create_dir_all(&dir).unwrap();
         dir

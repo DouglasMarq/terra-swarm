@@ -345,7 +345,7 @@ pub(crate) mod test_repo {
             "terra-wt-{}-{}-{}",
             name,
             std::process::id(),
-            crate::mcp::repo::now_millis()
+            crate::clock::now_millis()
         ));
         std::fs::create_dir_all(dir.join("app")).unwrap();
         let run = |args: &[&str]| git(&dir, args).unwrap();

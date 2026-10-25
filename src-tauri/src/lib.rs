@@ -1,4 +1,5 @@
 pub mod cli;
+mod clock;
 mod fonts;
 mod ipc_error;
 mod mcp;

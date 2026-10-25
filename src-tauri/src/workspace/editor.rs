@@ -9,7 +9,6 @@ use crate::sync::LockExt;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::UNIX_EPOCH;
 use tauri::State;
 
 /// Larger files are not opened in the editor.
@@ -41,10 +40,7 @@ fn modified_millis(path: &Path) -> Result<u64, String> {
     let modified = std::fs::metadata(path)
         .and_then(|metadata| metadata.modified())
         .map_err(|error| format!("cannot read the file's time: {}", error))?;
-    Ok(modified
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_millis() as u64)
-        .unwrap_or(0))
+    Ok(crate::clock::epoch_millis(modified).unwrap_or(0))
 }
 
 /// The real path of `relative` inside `root`, which must be an existing file.
@@ -168,7 +164,7 @@ mod tests {
             "terra-editor-{}-{}-{}",
             name,
             std::process::id(),
-            crate::mcp::repo::now_millis()
+            crate::clock::now_millis()
         ));
         std::fs::create_dir_all(dir.join("src")).unwrap();
         dir
@@ -200,7 +196,7 @@ mod tests {
         let stale = file.modified.saturating_sub(5_000);
         let file_time = std::fs::File::options().write(true).open(&path).unwrap();
         file_time
-            .set_modified(UNIX_EPOCH + std::time::Duration::from_millis(stale))
+            .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_millis(stale))
             .unwrap();
         assert_eq!(
             write_file(&root, "notes.md", "mine", Some(file.modified))

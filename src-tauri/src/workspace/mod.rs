@@ -368,10 +368,3 @@ fn home_dir() -> String {
         std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
     }
 }
-
-fn unix_millis() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
-}

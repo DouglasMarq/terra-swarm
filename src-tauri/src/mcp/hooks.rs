@@ -343,10 +343,8 @@ mod tests {
 
     #[test]
     fn given_an_unavailable_database_a_hook_records_no_state() {
-        let dir = std::env::temp_dir().join(format!(
-            "terra-mcp-hook-{}",
-            super::super::repo::now_millis()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("terra-mcp-hook-{}", crate::clock::now_millis()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(super::super::db::DB_FILE);
         std::fs::write(&path, b"not a sqlite database").unwrap();

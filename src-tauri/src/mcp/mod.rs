@@ -419,7 +419,8 @@ mod tests {
 
     #[test]
     fn an_unreadable_database_turns_the_server_off() {
-        let dir = std::env::temp_dir().join(format!("terra-mcp-hub-{}", repo::now_millis()));
+        let dir =
+            std::env::temp_dir().join(format!("terra-mcp-hub-{}", crate::clock::now_millis()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(db::DB_FILE);
         std::fs::write(&path, b"this is not a sqlite database, not even close").unwrap();

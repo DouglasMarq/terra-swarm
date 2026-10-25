@@ -159,23 +159,17 @@ pub fn find_codex_log(sessions: &Path, thread_id: &str) -> Option<PathBuf> {
     walk(sessions, thread_id, 0)
 }
 
-fn home() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-}
-
 fn claude_projects_dir() -> Option<PathBuf> {
     let base = std::env::var_os("CLAUDE_CONFIG_DIR")
         .map(PathBuf::from)
-        .or_else(|| home().map(|home| home.join(".claude")))?;
+        .or_else(|| crate::paths::home_dir().map(|home| home.join(".claude")))?;
     Some(base.join("projects"))
 }
 
 fn codex_sessions_dir() -> Option<PathBuf> {
     let base = std::env::var_os("CODEX_HOME")
         .map(PathBuf::from)
-        .or_else(|| home().map(|home| home.join(".codex")))?;
+        .or_else(|| crate::paths::home_dir().map(|home| home.join(".codex")))?;
     Some(base.join("sessions"))
 }
 

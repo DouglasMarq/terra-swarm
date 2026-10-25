@@ -12,6 +12,9 @@ use super::{http, loopback_authority, TIMEOUT as CONNECT_TIMEOUT};
 /// Tool calls can wait on the database; give them room.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_RESPONSE_BYTES: u64 = 16 * 1024 * 1024;
+const HEADER_END: &[u8] = b"\r\n\r\n";
+const CRLF: &[u8] = b"\r\n";
+const HEX_RADIX: u32 = 16;
 
 /// JSON-RPC 2.0 error codes.
 const JSONRPC_PARSE_ERROR: i64 = -32700;
@@ -91,8 +94,8 @@ impl Endpoint {
 /// Status code, lower-cased headers and decoded body of an HTTP/1.1 response.
 fn split_response(raw: &[u8]) -> Result<(u16, String, String), String> {
     let end = raw
-        .windows(4)
-        .position(|window| window == b"\r\n\r\n")
+        .windows(HEADER_END.len())
+        .position(|window| window == HEADER_END)
         .ok_or("incomplete HTTP response")?;
     let head = String::from_utf8_lossy(&raw[..end]).to_string();
     let status = head
@@ -101,7 +104,7 @@ fn split_response(raw: &[u8]) -> Result<(u16, String, String), String> {
         .and_then(|code| code.parse().ok())
         .ok_or("no HTTP status")?;
     let headers = head.to_lowercase();
-    let mut body = raw[end + 4..].to_vec();
+    let mut body = raw[end + HEADER_END.len()..].to_vec();
     if headers.contains("transfer-encoding: chunked") {
         body = dechunk(&body);
     }
@@ -110,22 +113,22 @@ fn split_response(raw: &[u8]) -> Result<(u16, String, String), String> {
 
 fn dechunk(mut data: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
-    while let Some(line_end) = data.windows(2).position(|window| window == b"\r\n") {
+    while let Some(line_end) = data.windows(CRLF.len()).position(|window| window == CRLF) {
         let size = usize::from_str_radix(
             String::from_utf8_lossy(&data[..line_end])
                 .trim()
                 .split(';')
                 .next()
                 .unwrap_or("0"),
-            16,
+            HEX_RADIX,
         )
         .unwrap_or(0);
-        data = &data[line_end + 2..];
+        data = &data[line_end + CRLF.len()..];
         if size == 0 || data.len() < size {
             break;
         }
         out.extend_from_slice(&data[..size]);
-        data = data.get(size + 2..).unwrap_or(&[]);
+        data = data.get(size + CRLF.len()..).unwrap_or(&[]);
     }
     out
 }

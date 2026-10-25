@@ -6,6 +6,7 @@
 
 use rusqlite::{params, Connection, OptionalExtension, Row, Transaction, TransactionBehavior};
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
 use super::model::{
     task_not_found, Message, Note, StoreError, StoreResult, Task, TaskEvent, TaskPriority,
@@ -15,6 +16,35 @@ use super::model::{
 /// The tables a workspace's rows live in; fixed at compile time, so they
 /// can be named in SQL with `format!`.
 const WORKSPACE_TABLES: [&str; 3] = ["tasks", "messages", "notes"];
+const NOTE_KEY_WEIGHT: f64 = 2.0;
+const NOTE_BODY_WEIGHT: f64 = 1.0;
+const STATUS_ORDER: [TaskStatus; 4] = [
+    TaskStatus::InProgress,
+    TaskStatus::Todo,
+    TaskStatus::Blocked,
+    TaskStatus::Review,
+];
+static LIST_TASKS_SQL: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "SELECT id, workspace_id, title, description, status, priority, assignee, created_by,
+                labels, position, created_at, updated_at
+         FROM tasks
+         WHERE workspace_id = ?1
+           AND (?2 IS NULL OR status = ?2)
+           AND (?3 IS NULL OR assignee = ?3)
+         ORDER BY {}, priority, position, created_at",
+        status_rank_sql()
+    )
+});
+
+fn status_rank_sql() -> String {
+    let cases: String = STATUS_ORDER
+        .iter()
+        .enumerate()
+        .map(|(rank, status)| format!("WHEN '{}' THEN {} ", status.as_str(), rank))
+        .collect();
+    format!("CASE status {}ELSE {} END", cases, STATUS_ORDER.len())
+}
 
 pub struct TaskQuery<'a> {
     pub workspace_id: &'a str,
@@ -212,18 +242,7 @@ impl Queries<'_> {
     /// Ordered by status (active work first), priority, then position.
     pub fn list_tasks(&self, query: &TaskQuery<'_>) -> StoreResult<Vec<Task>> {
         let mut tasks: Vec<Task> = {
-            let mut stmt = self.conn.prepare_cached(
-                "SELECT id, workspace_id, title, description, status, priority, assignee, created_by,
-                        labels, position, created_at, updated_at
-                 FROM tasks
-                 WHERE workspace_id = ?1
-                   AND (?2 IS NULL OR status = ?2)
-                   AND (?3 IS NULL OR assignee = ?3)
-                 ORDER BY CASE status
-                            WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'blocked' THEN 2
-                            WHEN 'review' THEN 3 ELSE 4 END,
-                          priority, position, created_at",
-            )?;
+            let mut stmt = self.conn.prepare_cached(&LIST_TASKS_SQL)?;
             let rows = stmt.query_map(
                 params![
                     query.workspace_id,
@@ -545,9 +564,12 @@ impl Queries<'_> {
                     "SELECT n.id, n.workspace_id, n.key, n.body, n.author, n.created_at, n.updated_at
                      FROM notes_fts f JOIN notes n ON n.id = f.rowid
                      WHERE notes_fts MATCH ?1 AND n.workspace_id = ?2
-                     ORDER BY bm25(notes_fts, 2.0, 1.0), n.updated_at DESC LIMIT ?3",
+                     ORDER BY bm25(notes_fts, ?4, ?5), n.updated_at DESC LIMIT ?3",
                 )?;
-                let rows = stmt.query_map(params![fts, workspace_id, limit], note_from_row)?;
+                let rows = stmt.query_map(
+                    params![fts, workspace_id, limit, NOTE_KEY_WEIGHT, NOTE_BODY_WEIGHT],
+                    note_from_row,
+                )?;
                 rows.collect::<Result<_, _>>()?
             }
             None => {

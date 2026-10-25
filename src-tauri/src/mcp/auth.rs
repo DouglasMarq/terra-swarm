@@ -29,8 +29,10 @@ impl AgentIdentity {
     }
 }
 
+const TOKEN_BYTES: usize = 32;
+
 pub fn new_token() -> String {
-    let mut bytes = [0u8; 32];
+    let mut bytes = [0u8; TOKEN_BYTES];
     // getrandom only fails when the OS has no entropy source at all; a
     // guessable token is worse than not starting the terminal's access.
     getrandom::fill(&mut bytes).expect("no OS randomness available for MCP tokens");

@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Runtime};
 
 mod commands;
 mod editor;
@@ -52,7 +52,7 @@ const MAX_LAYOUT_TRACKS: u32 = 128;
 /// frontend already coalesces/refreshes this event; keeping emission at the
 /// command boundary also covers secondary windows that did not initiate the
 /// mutation.
-pub(crate) fn emit_workspaces_changed(app: &AppHandle) {
+pub(crate) fn emit_workspaces_changed<R: Runtime>(app: &AppHandle<R>) {
     let _ = app.emit("workspaces-changed", ());
 }
 

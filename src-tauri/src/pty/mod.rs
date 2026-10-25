@@ -1,4 +1,4 @@
-use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{native_pty_system, Child, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
@@ -23,11 +23,13 @@ use shell::resolve_shell;
 use shell::{shell_flavor, ShellFlavor};
 
 use crate::ipc_error::{IpcError, IpcErrorCode};
-use crate::mcp::launch::Quoting;
+use crate::mcp::launch::{McpLaunch, Quoting};
+use crate::mcp::roles::Role;
 use crate::mcp::{McpHub, McpLease};
 use crate::scrollback::ScrollbackStore;
 use crate::sync::LockExt;
 use crate::workspace::{TerminalMeta, WorkspaceStore};
+use crate::worktree::WorktreeInfo;
 
 static NEXT_TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
 static SPAWN_SEQ: AtomicU64 = AtomicU64::new(1);
@@ -46,6 +48,8 @@ const INPUT_QUEUE_CAPACITY: usize = 256;
 /// Size, in cells, of the terminals `demo_seed` opens.
 const DEMO_COLS: u16 = 100;
 const DEMO_ROWS: u16 = 30;
+const DEMO_AGENT_COMMANDS: [&str; 4] = ["claude", "codex", "opencode", "kimi"];
+const DEMO_AGENT_COUNT: usize = 2;
 
 /// Per-terminal ring of recently emitted output plus the cumulative count of
 /// bytes ever emitted. The frontend fetches a snapshot on mount and uses
@@ -58,7 +62,7 @@ pub struct Backlog {
 
 impl Backlog {
     fn from_bytes(data: Vec<u8>) -> Self {
-        let total = data.len() as u64;
+        let total = byte_count(&data);
         let buf = if data.len() > BACKLOG_CAP_BYTES {
             data[data.len() - BACKLOG_CAP_BYTES..].to_vec()
         } else {
@@ -73,8 +77,12 @@ impl Backlog {
             let cut = self.buf.len() - BACKLOG_CAP_BYTES;
             self.buf.drain(..cut);
         }
-        self.total += s.len() as u64;
+        self.total += byte_count(s.as_bytes());
     }
+}
+
+fn byte_count(bytes: &[u8]) -> u64 {
+    u64::try_from(bytes.len()).unwrap_or(u64::MAX)
 }
 
 pub struct PtyEntry {
@@ -243,24 +251,26 @@ pub struct TerminalRuntimeInfo {
     pub generation: u64,
 }
 
-fn runtime_info_from_values(
-    id: &str,
+struct RuntimeFacts<'a> {
+    id: &'a str,
     pid: Option<u32>,
     cols: u16,
     rows: u16,
     generation: u64,
-    reaped: bool,
-) -> TerminalRuntimeInfo {
+    is_reaped: bool,
+}
+
+fn runtime_info_from_values(facts: RuntimeFacts<'_>) -> TerminalRuntimeInfo {
     TerminalRuntimeInfo {
-        id: id.to_string(),
+        id: facts.id.to_string(),
         // Once the child is reaped, the operating-system pid may already be
         // recycled. Never expose that stale identifier as live runtime data.
-        pid: if reaped { None } else { pid },
-        cols,
-        rows,
-        running: !reaped,
-        reaped,
-        generation,
+        pid: if facts.is_reaped { None } else { facts.pid },
+        cols: facts.cols,
+        rows: facts.rows,
+        running: !facts.is_reaped,
+        reaped: facts.is_reaped,
+        generation: facts.generation,
     }
 }
 
@@ -272,10 +282,14 @@ fn runtime_info_from_manager(
         return Ok(None);
     };
     let (cols, rows) = *entry.last_size.lock_or_recover();
-    let reaped = entry.reaped.load(Ordering::SeqCst);
-    Ok(Some(runtime_info_from_values(
-        id, entry.pid, cols, rows, entry.seq, reaped,
-    )))
+    Ok(Some(runtime_info_from_values(RuntimeFacts {
+        id,
+        pid: entry.pid,
+        cols,
+        rows,
+        generation: entry.seq,
+        is_reaped: entry.reaped.load(Ordering::SeqCst),
+    })))
 }
 
 #[derive(Serialize, Clone)]
@@ -293,154 +307,325 @@ pub struct SpawnRequest<'a> {
     pub cols: u16,
     pub rows: u16,
     pub terminal_id: Option<&'a str>,
+    pub options: &'a SpawnOptions,
+}
+
+#[derive(Clone, Copy)]
+pub struct Registries<'a> {
+    pub manager: &'a Mutex<PtyManager>,
+    pub store: &'a Mutex<WorkspaceStore>,
+}
+
+struct StoredTerminal {
+    worktree: Option<WorktreeInfo>,
+    role: Option<Role>,
+    command: Option<String>,
+}
+
+#[derive(Clone, Copy)]
+struct WorktreeTarget<'a> {
+    repo_cwd: &'a str,
+    workspace_id: &'a str,
+    terminal_id: &'a str,
+    options: &'a SpawnOptions,
+}
+
+#[derive(Clone, Copy)]
+struct ProcessLaunch<'a> {
+    id: &'a str,
+    workspace_id: &'a str,
+    seq: u64,
+    cwd: &'a str,
+    command: &'a str,
+    role: Option<Role>,
+    options: &'a SpawnOptions,
+    cols: u16,
+    rows: u16,
+}
+
+struct SpawnedProcess<'a> {
+    launch: ProcessLaunch<'a>,
+    master: Box<dyn MasterPty + Send>,
+    child: Box<dyn Child + Send + Sync>,
+    mcp_lease: Option<McpLease>,
+}
+
+struct TerminalIo {
+    input: std::sync::mpsc::SyncSender<Vec<u8>>,
+    backlog: Arc<Mutex<Backlog>>,
+    scrollback_enabled: Arc<AtomicBool>,
+}
+
+type SharedKiller = Arc<Mutex<Box<dyn ChildKiller + Send + Sync>>>;
+
+struct ExitWatch {
+    id: String,
+    workspace_id: String,
+    seq: u64,
+    killer: SharedKiller,
+    reaped: Arc<AtomicBool>,
+    #[cfg(unix)]
+    process_group: Option<Arc<ProcessGroup>>,
 }
 
 pub fn spawn_terminal_inner<R: Runtime>(
     app: &AppHandle<R>,
-    manager: &Mutex<PtyManager>,
-    store: &Mutex<WorkspaceStore>,
+    registries: Registries<'_>,
     request: SpawnRequest<'_>,
-    options: &SpawnOptions,
 ) -> Result<SpawnedTerminal, String> {
-    let SpawnRequest {
-        workspace_id,
-        command,
-        cols,
-        rows,
-        terminal_id: force_id,
-    } = request;
-    let preferred_shell = options.shell.as_deref();
-    let workspace_id = workspace_id.to_string();
-    let cwd = {
-        let store = store.lock_or_recover();
-        store
-            .get(&workspace_id)
-            .map(|ws| ws.cwd.clone())
-            .ok_or_else(|| format!("workspace {} not found", workspace_id))?
-    };
-
-    let id = match force_id {
-        Some(fid) => {
-            bump_next_terminal_id(fid);
-            fid.to_string()
-        }
-        None => format!("t-{}", NEXT_TERMINAL_ID.fetch_add(1, Ordering::SeqCst)),
-    };
-    let command = command.trim().to_string();
+    let Registries { manager, store } = registries;
+    let workspace_id = request.workspace_id.to_string();
+    let cwd = workspace_cwd(store, &workspace_id)?;
+    let id = allocate_terminal_id(request.terminal_id);
+    let command = request.command.trim().to_string();
     let seq = SPAWN_SEQ.fetch_add(1, Ordering::SeqCst);
-
-    {
-        let store = store.lock_or_recover();
-        if let Some(owner) = store.terminal_owner(&id) {
-            if owner != workspace_id {
-                return Err(format!(
-                    "terminal {} already belongs to workspace {}",
-                    id, owner
-                ));
-            }
-        }
-    }
+    ensure_not_owned_elsewhere(store, &id, &workspace_id)?;
 
     let _reservation = SpawnReservation::claim(manager, &id)?;
 
-    let (existing_worktree, existing_role, existing_command) = store
-        .lock_or_recover()
-        .get(&workspace_id)
-        .and_then(|ws| ws.terminals.iter().find(|terminal| terminal.id == id))
-        .map_or((None, None, None), |terminal| {
-            (
-                terminal.worktree.clone(),
-                terminal.role,
-                Some(terminal.command.clone()),
-            )
-        });
-    let role = existing_role.or(options.role);
-    let mut created_worktree = CreatedWorktree(None);
-    let worktree = match existing_worktree {
-        Some(existing) => {
-            if !std::path::Path::new(&existing.cwd).is_dir() {
-                return Err(format!(
-                    "the agent's worktree {} no longer exists",
-                    existing.path
-                ));
-            }
-            Some(existing)
-        }
-        None if options.worktree => {
-            let root = match &options.worktree_root {
-                Some(root) => root.clone(),
-                None => app
-                    .path()
-                    .app_data_dir()
-                    .map_err(|e| e.to_string())?
-                    .join("worktrees"),
-            };
-            let info =
-                crate::worktree::create(std::path::Path::new(&cwd), &root, &workspace_id, &id)?;
-            created_worktree = CreatedWorktree(Some(info.clone()));
-            Some(info)
-        }
-        None => None,
+    let stored = stored_terminal(store, &workspace_id, &id);
+    let role = stored.role.or(request.options.role);
+    let target = WorktreeTarget {
+        repo_cwd: &cwd,
+        workspace_id: &workspace_id,
+        terminal_id: &id,
+        options: request.options,
     };
+    let (worktree, created_worktree) = resolve_worktree(app, stored.worktree, target)?;
     let cwd = worktree.as_ref().map_or(cwd, |info| info.cwd.clone());
 
-    let shell = resolve_shell(preferred_shell);
-    let mut cmd = CommandBuilder::new(&shell);
-    let interactive = command.is_empty() || command == "shell";
-    #[cfg(unix)]
-    let quoting = Quoting::Posix;
-    #[cfg(windows)]
-    let quoting = match shell_flavor(&shell) {
-        ShellFlavor::Posix => Quoting::Posix,
-        _ => Quoting::Windows,
+    let launch = ProcessLaunch {
+        id: &id,
+        workspace_id: &workspace_id,
+        seq,
+        cwd: &cwd,
+        command: &command,
+        role,
+        options: request.options,
+        cols: request.cols.max(MIN_PTY_DIMENSION),
+        rows: request.rows.max(MIN_PTY_DIMENSION),
     };
+    register_process(app, manager, spawn_process(app, launch)?)?;
+
+    let meta = TerminalMeta {
+        id: id.clone(),
+        command: recorded_command(stored.command, command),
+        width: None,
+        pane_id: None,
+        tab_id: None,
+        group_id: None,
+        suspended: false,
+        worktree,
+        role,
+    };
+    record_terminal(registries, &workspace_id, &meta)?;
+
+    created_worktree.disarm();
+    Ok(SpawnedTerminal { meta, seq })
+}
+
+fn record_terminal(
+    registries: Registries<'_>,
+    workspace_id: &str,
+    meta: &TerminalMeta,
+) -> Result<(), String> {
+    let added = registries
+        .store
+        .lock_or_recover()
+        .add_terminal(workspace_id, meta.clone());
+    if added {
+        return Ok(());
+    }
+    // The workspace was closed while we were spawning; don't leak the
+    // process or leave it running untracked.
+    kill_terminal_inner(registries.manager, &meta.id);
+    Err(format!(
+        "workspace {} unavailable or terminal {} belongs to another workspace",
+        workspace_id, meta.id
+    ))
+}
+
+fn workspace_cwd(store: &Mutex<WorkspaceStore>, workspace_id: &str) -> Result<String, String> {
+    store
+        .lock_or_recover()
+        .get(workspace_id)
+        .map(|ws| ws.cwd.clone())
+        .ok_or_else(|| format!("workspace {} not found", workspace_id))
+}
+
+fn allocate_terminal_id(forced_id: Option<&str>) -> String {
+    let Some(forced_id) = forced_id else {
+        return format!("t-{}", NEXT_TERMINAL_ID.fetch_add(1, Ordering::SeqCst));
+    };
+    bump_next_terminal_id(forced_id);
+    forced_id.to_string()
+}
+
+fn ensure_not_owned_elsewhere(
+    store: &Mutex<WorkspaceStore>,
+    id: &str,
+    workspace_id: &str,
+) -> Result<(), String> {
+    let store = store.lock_or_recover();
+    match store.terminal_owner(id) {
+        Some(owner) if owner != workspace_id => Err(format!(
+            "terminal {} already belongs to workspace {}",
+            id, owner
+        )),
+        _ => Ok(()),
+    }
+}
+
+fn stored_terminal(store: &Mutex<WorkspaceStore>, workspace_id: &str, id: &str) -> StoredTerminal {
+    store
+        .lock_or_recover()
+        .get(workspace_id)
+        .and_then(|ws| ws.terminals.iter().find(|terminal| terminal.id == id))
+        .map_or(
+            StoredTerminal {
+                worktree: None,
+                role: None,
+                command: None,
+            },
+            |terminal| StoredTerminal {
+                worktree: terminal.worktree.clone(),
+                role: terminal.role,
+                command: Some(terminal.command.clone()),
+            },
+        )
+}
+
+fn existing_worktree(existing: WorktreeInfo) -> Result<WorktreeInfo, String> {
+    if !std::path::Path::new(&existing.cwd).is_dir() {
+        return Err(format!(
+            "the agent's worktree {} no longer exists",
+            existing.path
+        ));
+    }
+    Ok(existing)
+}
+
+fn resolve_worktree<R: Runtime>(
+    app: &AppHandle<R>,
+    stored: Option<WorktreeInfo>,
+    target: WorktreeTarget<'_>,
+) -> Result<(Option<WorktreeInfo>, CreatedWorktree), String> {
+    if let Some(existing) = stored {
+        return Ok((Some(existing_worktree(existing)?), CreatedWorktree(None)));
+    }
+    if !target.options.worktree {
+        return Ok((None, CreatedWorktree(None)));
+    }
+    let info = new_worktree(app, target)?;
+    Ok((Some(info.clone()), CreatedWorktree(Some(info))))
+}
+
+fn new_worktree<R: Runtime>(
+    app: &AppHandle<R>,
+    target: WorktreeTarget<'_>,
+) -> Result<WorktreeInfo, String> {
+    let root = match &target.options.worktree_root {
+        Some(root) => root.clone(),
+        None => app
+            .path()
+            .app_data_dir()
+            .map_err(|e| e.to_string())?
+            .join("worktrees"),
+    };
+    crate::worktree::create(
+        std::path::Path::new(target.repo_cwd),
+        &root,
+        target.workspace_id,
+        target.terminal_id,
+    )
+}
+
+fn spawn_process<'a, R: Runtime>(
+    app: &AppHandle<R>,
+    launch: ProcessLaunch<'a>,
+) -> Result<SpawnedProcess<'a>, String> {
+    let shell = resolve_shell(launch.options.shell.as_deref());
+    let interactive = launch.command.is_empty() || launch.command == "shell";
     // The user's per-agent arguments, appended only to the process that
     // runs: the stored command stays as typed so resume can rebuild it.
-    let launch_command = match options.args.as_deref().map(str::trim) {
-        Some(args) if !args.is_empty() && !interactive => format!("{} {}", command, args),
-        _ => command.clone(),
+    let launch_command = match launch.options.args.as_deref().map(str::trim) {
+        Some(args) if !args.is_empty() && !interactive => format!("{} {}", launch.command, args),
+        _ => launch.command.to_string(),
     };
     // Issued only after the duplicate checks above: a fresh token for an id
     // that is already running would log the live terminal out.
-    let mut mcp_launch = app
-        .try_state::<Arc<McpHub>>()
-        .and_then(|hub| hub.launch(&id, &workspace_id, &launch_command, role, quoting));
+    let mut mcp_launch = app.try_state::<Arc<McpHub>>().and_then(|hub| {
+        hub.launch(
+            launch.id,
+            launch.workspace_id,
+            &launch_command,
+            launch.role,
+            quoting_for(&shell),
+        )
+    });
     // Only the spawned process sees the MCP flags; `command` (persisted in
     // the workspace store) stays as the user typed it.
     let run_command = mcp_launch
         .as_ref()
         .map_or_else(|| launch_command.clone(), |launch| launch.command.clone());
-    #[cfg(unix)]
-    {
-        if interactive {
-            cmd.args(["-l", "-i"]);
-        } else {
-            cmd.args(["-l", "-c", &format!("exec {}", run_command)]);
-        }
+    let mut cmd = CommandBuilder::new(&shell);
+    cmd.args(shell_args(&shell, interactive, &run_command));
+    cmd.cwd(launch.cwd);
+    apply_env(&mut cmd, launch.options, mcp_launch.as_ref());
+
+    let pair = native_pty_system()
+        .openpty(pty_size(launch.cols, launch.rows))
+        .map_err(|e| e.to_string())?;
+    let child = pair
+        .slave
+        .spawn_command(cmd)
+        .map_err(|e| format!("failed to spawn `{}`: {}", launch.command, e))?;
+    drop(pair.slave);
+    Ok(SpawnedProcess {
+        launch,
+        master: pair.master,
+        child,
+        mcp_lease: mcp_launch.take().map(|launch| launch.lease),
+    })
+}
+
+#[cfg(unix)]
+fn quoting_for(_shell: &str) -> Quoting {
+    Quoting::Posix
+}
+
+#[cfg(windows)]
+fn quoting_for(shell: &str) -> Quoting {
+    match shell_flavor(shell) {
+        ShellFlavor::Posix => Quoting::Posix,
+        _ => Quoting::Windows,
     }
-    #[cfg(windows)]
-    match shell_flavor(&shell) {
-        ShellFlavor::PowerShell => {
-            if interactive {
-                cmd.args(["-NoLogo"]);
-            } else {
-                cmd.args(["-NoLogo", "-Command", &run_command]);
-            }
-        }
-        ShellFlavor::Cmd => {
-            if !interactive {
-                cmd.args(["/C", &run_command]);
-            }
-        }
-        ShellFlavor::Posix => {
-            if interactive {
-                cmd.args(["-l", "-i"]);
-            } else {
-                cmd.args(["-l", "-c", &format!("exec {}", run_command)]);
-            }
-        }
+}
+
+#[cfg(unix)]
+fn shell_args(_shell: &str, interactive: bool, run_command: &str) -> Vec<String> {
+    posix_shell_args(interactive, run_command)
+}
+
+#[cfg(windows)]
+fn shell_args(shell: &str, interactive: bool, run_command: &str) -> Vec<String> {
+    match shell_flavor(shell) {
+        ShellFlavor::PowerShell if interactive => vec!["-NoLogo".into()],
+        ShellFlavor::PowerShell => vec!["-NoLogo".into(), "-Command".into(), run_command.into()],
+        ShellFlavor::Cmd if interactive => Vec::new(),
+        ShellFlavor::Cmd => vec!["/C".into(), run_command.into()],
+        ShellFlavor::Posix => posix_shell_args(interactive, run_command),
     }
-    cmd.cwd(&cwd);
+}
+
+fn posix_shell_args(interactive: bool, run_command: &str) -> Vec<String> {
+    if interactive {
+        return vec!["-l".into(), "-i".into()];
+    }
+    vec!["-l".into(), "-c".into(), format!("exec {}", run_command)]
+}
+
+fn apply_env(cmd: &mut CommandBuilder, options: &SpawnOptions, mcp_launch: Option<&McpLaunch>) {
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "terra-swarm");
@@ -449,49 +634,128 @@ pub fn spawn_terminal_inner<R: Runtime>(
     }
     // Set after the user's variables so they cannot point an agent at
     // another terminal's identity.
-    if let Some(launch) = &mcp_launch {
+    if let Some(launch) = mcp_launch {
         for (key, value) in &launch.env {
             cmd.env(key, value);
         }
     }
+}
 
-    let pair = native_pty_system()
-        .openpty(PtySize {
-            rows: rows.max(MIN_PTY_DIMENSION),
-            cols: cols.max(MIN_PTY_DIMENSION),
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(|e| e.to_string())?;
+fn pty_size(cols: u16, rows: u16) -> PtySize {
+    PtySize {
+        rows,
+        cols,
+        pixel_width: 0,
+        pixel_height: 0,
+    }
+}
 
-    let mut child = pair
-        .slave
-        .spawn_command(cmd)
-        .map_err(|e| format!("failed to spawn `{}`: {}", command, e))?;
-    drop(pair.slave);
-
+fn register_process<R: Runtime>(
+    app: &AppHandle<R>,
+    manager: &Mutex<PtyManager>,
+    process: SpawnedProcess<'_>,
+) -> Result<(), String> {
+    let io = start_terminal_io(app, manager, &process)?;
+    let SpawnedProcess {
+        launch,
+        master,
+        child,
+        mcp_lease,
+    } = process;
     let pid = child.process_id();
     #[cfg(unix)]
     let process_group = pid.and_then(ProcessGroup::of_leader).map(Arc::new);
     let killer = Arc::new(Mutex::new(child.clone_killer()));
     let reaped = Arc::new(AtomicBool::new(false));
+    let watch = ExitWatch {
+        id: launch.id.to_string(),
+        workspace_id: launch.workspace_id.to_string(),
+        seq: launch.seq,
+        killer: Arc::clone(&killer),
+        reaped: Arc::clone(&reaped),
+        #[cfg(unix)]
+        process_group: process_group.clone(),
+    };
+    let entry = PtyEntry {
+        input: io.input,
+        master: Arc::new(Mutex::new(master)),
+        killer,
+        pid,
+        last_size: Arc::new(Mutex::new((launch.cols, launch.rows))),
+        seq: launch.seq,
+        reaped,
+        backlog: io.backlog,
+        scrollback_enabled: io.scrollback_enabled,
+        _mcp_lease: mcp_lease,
+        #[cfg(unix)]
+        process_group,
+    };
+    manager
+        .lock_or_recover()
+        .terminals
+        .insert(launch.id.to_string(), entry);
+
+    // Register the entry before waiting on the child. A command can exit
+    // between spawn and this point; starting the monitor earlier used to let
+    // it observe an absent map entry, emit an exit, and then leave a reaped
+    // session behind as a phantom running terminal.
+    spawn_exit_monitor(app, child, watch);
+    Ok(())
+}
+
+fn start_terminal_io<R: Runtime>(
+    app: &AppHandle<R>,
+    manager: &Mutex<PtyManager>,
+    process: &SpawnedProcess<'_>,
+) -> Result<TerminalIo, String> {
+    let launch = process.launch;
     let scrollback_enabled = Arc::new(AtomicBool::new(true));
     let (scrollback, durable_scrollback_enabled) = {
         let manager = manager.lock_or_recover();
         (manager.scrollback(), manager.durable_scrollback_enabled())
     };
-    let durable_backlog = if durable_scrollback_enabled.load(Ordering::SeqCst) {
-        scrollback.read(&id).unwrap_or_else(|error| {
-            eprintln!("failed to read durable scrollback for {}: {}", id, error);
-            Vec::new()
-        })
-    } else {
-        Vec::new()
-    };
-    let backlog = Arc::new(Mutex::new(Backlog::from_bytes(durable_backlog)));
-    let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
-    let mut writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+    let restored = restored_backlog(&scrollback, &durable_scrollback_enabled, launch.id);
+    let backlog = Arc::new(Mutex::new(Backlog::from_bytes(restored)));
+    let reader = process
+        .master
+        .try_clone_reader()
+        .map_err(|e| e.to_string())?;
+    let writer = process.master.take_writer().map_err(|e| e.to_string())?;
 
+    output::spawn_output_pump(
+        app,
+        output::TerminalIds {
+            id: launch.id,
+            workspace_id: launch.workspace_id,
+        },
+        output::OutputPipe {
+            reader,
+            backlog: Arc::clone(&backlog),
+            scrollback: output::DurableScrollback {
+                store: Arc::clone(&scrollback),
+                is_terminal_enabled: Arc::clone(&scrollback_enabled),
+                is_app_enabled: durable_scrollback_enabled,
+            },
+        },
+    );
+    Ok(TerminalIo {
+        input: spawn_input_writer(writer),
+        backlog,
+        scrollback_enabled,
+    })
+}
+
+fn restored_backlog(scrollback: &ScrollbackStore, is_enabled: &AtomicBool, id: &str) -> Vec<u8> {
+    if !is_enabled.load(Ordering::SeqCst) {
+        return Vec::new();
+    }
+    scrollback.read(id).unwrap_or_else(|error| {
+        eprintln!("failed to read durable scrollback for {}: {}", id, error);
+        Vec::new()
+    })
+}
+
+fn spawn_input_writer(mut writer: Box<dyn Write + Send>) -> std::sync::mpsc::SyncSender<Vec<u8>> {
     let (input_tx, input_rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(INPUT_QUEUE_CAPACITY);
     std::thread::spawn(move || {
         while let Ok(data) = input_rx.recv() {
@@ -504,99 +768,62 @@ pub fn spawn_terminal_inner<R: Runtime>(
             }
         }
     });
+    input_tx
+}
 
-    output::spawn_output_pump(
-        app,
-        output::TerminalIds {
-            id: &id,
-            workspace_id: &workspace_id,
-        },
-        output::OutputPipe {
-            reader,
-            backlog: Arc::clone(&backlog),
-            scrollback: output::DurableScrollback {
-                store: Arc::clone(&scrollback),
-                is_terminal_enabled: Arc::clone(&scrollback_enabled),
-                is_app_enabled: Arc::clone(&durable_scrollback_enabled),
-            },
-        },
-    );
-
-    let entry_killer = Arc::clone(&killer);
-    let monitor_reaped = Arc::clone(&reaped);
-    let entry = PtyEntry {
-        input: input_tx,
-        master: Arc::new(Mutex::new(pair.master)),
-        killer,
-        pid,
-        last_size: Arc::new(Mutex::new((
-            cols.max(MIN_PTY_DIMENSION),
-            rows.max(MIN_PTY_DIMENSION),
-        ))),
-        seq,
-        reaped,
-        backlog,
-        scrollback_enabled,
-        _mcp_lease: mcp_launch.take().map(|launch| launch.lease),
+fn spawn_exit_monitor<R: Runtime>(
+    app: &AppHandle<R>,
+    mut child: Box<dyn Child + Send + Sync>,
+    watch: ExitWatch,
+) {
+    let app = app.clone();
+    std::thread::spawn(move || {
         #[cfg(unix)]
-        process_group: process_group.clone(),
+        if let Some(group) = &watch.process_group {
+            group.wait_for_exit();
+            group.kill_and_seal();
+        }
+        let code = match child.wait() {
+            Ok(status) => Some(status.exit_code()),
+            Err(error) => {
+                eprintln!("failed to wait for terminal {}: {}", watch.id, error);
+                None
+            }
+        };
+        // Mark reaped immediately so kill_entry never signals a pid that
+        // the OS may already have recycled.
+        watch.reaped.store(true, Ordering::SeqCst);
+        // Remove from the manager BEFORE notifying the frontend, so a
+        // concurrent running_terminals never reports this id as alive.
+        forget_exited_terminal(&app, &watch);
+        let _ = app.emit(
+            "terminal-exit",
+            ExitPayload {
+                id: watch.id,
+                workspace_id: watch.workspace_id,
+                code,
+                seq: watch.seq,
+            },
+        );
+    });
+}
+
+fn forget_exited_terminal<R: Runtime>(app: &AppHandle<R>, watch: &ExitWatch) {
+    let Some(manager) = app.try_state::<Mutex<PtyManager>>() else {
+        return;
     };
-    manager
-        .lock_or_recover()
+    let mut manager = manager.lock_or_recover();
+    let is_current = manager
         .terminals
-        .insert(id.clone(), entry);
-
-    // Register the entry before waiting on the child. A command can exit
-    // between spawn and this point; starting the monitor earlier used to let
-    // it observe an absent map entry, emit an exit, and then leave a reaped
-    // session behind as a phantom running terminal.
-    {
-        let app = app.clone();
-        let exit_id = id.clone();
-        let exit_ws = workspace_id.clone();
-        let entry_killer = entry_killer;
-        let reaped = monitor_reaped;
-        std::thread::spawn(move || {
-            #[cfg(unix)]
-            if let Some(group) = &process_group {
-                group.wait_for_exit();
-                group.kill_and_seal();
-            }
-            let code = match child.wait() {
-                Ok(status) => Some(status.exit_code()),
-                Err(error) => {
-                    eprintln!("failed to wait for terminal {}: {}", exit_id, error);
-                    None
-                }
-            };
-            // Mark reaped immediately so kill_entry never signals a pid that
-            // the OS may already have recycled.
-            reaped.store(true, Ordering::SeqCst);
-            // Remove from the manager BEFORE notifying the frontend, so a
-            // concurrent running_terminals never reports this id as alive.
-            if let Some(manager) = app.try_state::<Mutex<PtyManager>>() {
-                let mut manager = manager.lock_or_recover();
-                let is_current = manager
-                    .terminals
-                    .get(&exit_id)
-                    .is_some_and(|e| Arc::ptr_eq(&e.killer, &entry_killer));
-                if is_current {
-                    manager.terminals.remove(&exit_id);
-                }
-            }
-            let _ = app.emit(
-                "terminal-exit",
-                ExitPayload {
-                    id: exit_id.clone(),
-                    workspace_id: exit_ws,
-                    code,
-                    seq,
-                },
-            );
-        });
+        .get(&watch.id)
+        .is_some_and(|entry| Arc::ptr_eq(&entry.killer, &watch.killer));
+    if is_current {
+        manager.terminals.remove(&watch.id);
     }
+}
 
-    let recorded_command = match existing_command {
+fn recorded_command(existing_command: Option<String>, command: String) -> String {
+    match existing_command {
         Some(original)
             if agents::is_resume_command(&command) && !agents::is_resume_command(&original) =>
         {
@@ -604,33 +831,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
         }
         _ if command.is_empty() => "shell".into(),
         _ => command,
-    };
-    let meta = TerminalMeta {
-        id: id.clone(),
-        command: recorded_command,
-        width: None,
-        pane_id: None,
-        tab_id: None,
-        group_id: None,
-        suspended: false,
-        worktree: worktree.clone(),
-        role,
-    };
-    let added = store
-        .lock_or_recover()
-        .add_terminal(&workspace_id, meta.clone());
-    if !added {
-        // The workspace was closed while we were spawning; don't leak the
-        // process or leave it running untracked.
-        kill_terminal_inner(manager, &id);
-        return Err(format!(
-            "workspace {} unavailable or terminal {} belongs to another workspace",
-            workspace_id, id
-        ));
     }
-
-    created_worktree.disarm();
-    Ok(SpawnedTerminal { meta, seq })
 }
 
 struct SpawnReservation<'a> {
@@ -692,24 +893,27 @@ pub fn spawn_terminal(
     launch: Option<LaunchExtras>,
 ) -> Result<SpawnedTerminal, String> {
     let launch = launch.unwrap_or_default();
+    let options = SpawnOptions {
+        shell,
+        args: launch.args,
+        env: launch.env,
+        worktree: launch.worktree,
+        worktree_root: None,
+        role: launch.role,
+    };
     spawn_terminal_inner(
         &app,
-        &manager,
-        &store,
+        Registries {
+            manager: &manager,
+            store: &store,
+        },
         SpawnRequest {
             workspace_id: &workspace_id,
             command: &command,
             cols,
             rows,
             terminal_id: terminal_id.as_deref(),
-        },
-        &SpawnOptions {
-            shell,
-            args: launch.args,
-            env: launch.env,
-            worktree: launch.worktree,
-            worktree_root: None,
-            role: launch.role,
+            options: &options,
         },
     )
 }
@@ -717,15 +921,16 @@ pub fn spawn_terminal(
 pub fn demo_seed(app: &AppHandle) {
     let store = app.state::<Mutex<WorkspaceStore>>();
     let manager = app.state::<Mutex<PtyManager>>();
-    let mut picked: Vec<&str> = Vec::new();
-    for c in ["claude", "codex", "opencode", "kimi"] {
-        if command_available(c) {
-            picked.push(c);
-        }
-        if picked.len() == 2 {
-            break;
-        }
-    }
+    let registries = Registries {
+        manager: &manager,
+        store: &store,
+    };
+    let picked: Vec<&str> = DEMO_AGENT_COMMANDS
+        .into_iter()
+        .filter(|command| command_available(command))
+        .take(DEMO_AGENT_COUNT)
+        .collect();
+    let options = SpawnOptions::default();
     let spawn = |workspace_id: &str, command: &str| {
         let request = SpawnRequest {
             workspace_id,
@@ -733,10 +938,9 @@ pub fn demo_seed(app: &AppHandle) {
             cols: DEMO_COLS,
             rows: DEMO_ROWS,
             terminal_id: None,
+            options: &options,
         };
-        if let Err(error) =
-            spawn_terminal_inner(app, &manager, &store, request, &SpawnOptions::default())
-        {
+        if let Err(error) = spawn_terminal_inner(app, registries, request) {
             eprintln!("demo seed could not spawn `{}`: {}", command, error);
         }
     };
@@ -816,12 +1020,7 @@ pub fn resize_terminal(
     }
     let guard = master.lock_or_recover();
     guard
-        .resize(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
+        .resize(pty_size(cols, rows))
         .map_err(|e| e.to_string())?;
     // Only record the new size after the resize actually succeeded, otherwise
     // a failed resize can never be retried (dedup would treat it as a no-op).
@@ -912,7 +1111,7 @@ pub fn terminal_backlog(
         .read(&id)
         .map_err(|error| format!("failed to read terminal {} scrollback: {}", id, error))?;
     Ok(BacklogSnapshot {
-        total: data.len() as u64,
+        total: byte_count(&data),
         data: String::from_utf8_lossy(&data).into_owned(),
     })
 }
@@ -1041,11 +1240,18 @@ mod input_tests {
 
 #[cfg(test)]
 mod runtime_info_tests {
-    use super::{runtime_info_from_manager, runtime_info_from_values, PtyManager};
+    use super::{runtime_info_from_manager, runtime_info_from_values, PtyManager, RuntimeFacts};
 
     #[test]
     fn live_runtime_info_exposes_only_real_process_facts() {
-        let info = runtime_info_from_values("term-live", Some(42), 120, 40, 7, false);
+        let info = runtime_info_from_values(RuntimeFacts {
+            id: "term-live",
+            pid: Some(42),
+            cols: 120,
+            rows: 40,
+            generation: 7,
+            is_reaped: false,
+        });
         assert_eq!(info.id, "term-live");
         assert_eq!(info.pid, Some(42));
         assert_eq!((info.cols, info.rows), (120, 40));
@@ -1056,7 +1262,14 @@ mod runtime_info_tests {
 
     #[test]
     fn reaped_runtime_info_is_not_reported_as_running() {
-        let info = runtime_info_from_values("term-ended", Some(42), 80, 24, 8, true);
+        let info = runtime_info_from_values(RuntimeFacts {
+            id: "term-ended",
+            pid: Some(42),
+            cols: 80,
+            rows: 24,
+            generation: 8,
+            is_reaped: true,
+        });
         assert_eq!(info.pid, None);
         assert!(!info.running);
         assert!(info.reaped);
@@ -1074,7 +1287,9 @@ mod runtime_info_tests {
 
 #[cfg(test)]
 mod spawn_lifecycle_tests {
-    use super::{spawn_terminal_inner, PtyManager, SpawnOptions, SpawnRequest, SpawnReservation};
+    use super::{
+        spawn_terminal_inner, PtyManager, Registries, SpawnOptions, SpawnRequest, SpawnReservation,
+    };
     use crate::workspace::WorkspaceStore;
     use std::sync::Mutex;
     use std::time::{Duration, Instant};
@@ -1097,16 +1312,18 @@ mod spawn_lifecycle_tests {
 
         let result = spawn_terminal_inner(
             app.handle(),
-            manager.inner(),
-            store.inner(),
+            Registries {
+                manager: manager.inner(),
+                store: store.inner(),
+            },
             SpawnRequest {
                 workspace_id: &workspace.id,
                 command: "sleep 30",
                 cols: 80,
                 rows: 24,
                 terminal_id: Some("t-race"),
+                options: &SpawnOptions::default(),
             },
-            &SpawnOptions::default(),
         );
 
         assert!(result.is_err());
@@ -1152,16 +1369,18 @@ mod spawn_lifecycle_tests {
 
         let spawned = spawn_terminal_inner(
             app.handle(),
-            manager.inner(),
-            store.inner(),
+            Registries {
+                manager: manager.inner(),
+                store: store.inner(),
+            },
             SpawnRequest {
                 workspace_id: &workspace.id,
                 command: "exit 0",
                 cols: 80,
                 rows: 24,
                 terminal_id: None,
+                options: &SpawnOptions::default(),
             },
-            &SpawnOptions::default(),
         )
         .expect("spawn immediate command");
 
@@ -1225,16 +1444,18 @@ mod spawn_lifecycle_tests {
             };
             let spawned = spawn_terminal_inner(
                 app.handle(),
-                manager.inner(),
-                store.inner(),
+                Registries {
+                    manager: manager.inner(),
+                    store: store.inner(),
+                },
                 SpawnRequest {
                     workspace_id: &workspace.id,
                     command: "printenv",
                     cols: 80,
                     rows: 24,
                     terminal_id: None,
+                    options: &options,
                 },
-                &options,
             )
             .expect("spawn printenv");
             // The stored command stays as typed.
@@ -1282,16 +1503,18 @@ mod spawn_lifecycle_tests {
         };
         let first = spawn_terminal_inner(
             app.handle(),
-            manager.inner(),
-            store.inner(),
+            Registries {
+                manager: manager.inner(),
+                store: store.inner(),
+            },
             SpawnRequest {
                 workspace_id: &workspace.id,
                 command: "pwd > where.txt",
                 cols: 80,
                 rows: 24,
                 terminal_id: None,
+                options: &options,
             },
-            &options,
         )
         .expect("spawn isolated agent");
         let info = first.meta.worktree.clone().expect("worktree recorded");
@@ -1314,16 +1537,18 @@ mod spawn_lifecycle_tests {
         std::thread::sleep(Duration::from_millis(200));
         let again = spawn_terminal_inner(
             app.handle(),
-            manager.inner(),
-            store.inner(),
+            Registries {
+                manager: manager.inner(),
+                store: store.inner(),
+            },
             SpawnRequest {
                 workspace_id: &workspace.id,
                 command: "true",
                 cols: 80,
                 rows: 24,
                 terminal_id: Some(&first.meta.id),
+                options: &plain,
             },
-            &plain,
         )
         .expect("respawn isolated agent");
         assert_eq!(again.meta.worktree.as_ref(), Some(&info));
@@ -1335,7 +1560,8 @@ mod spawn_lifecycle_tests {
 #[cfg(all(test, unix))]
 mod kill_tests {
     use super::{
-        kill_terminal_inner, spawn_terminal_inner, PtyManager, SpawnOptions, SpawnRequest,
+        kill_terminal_inner, spawn_terminal_inner, PtyManager, Registries, SpawnOptions,
+        SpawnRequest,
     };
     use crate::sync::LockExt;
     use crate::workspace::WorkspaceStore;
@@ -1357,18 +1583,20 @@ mod kill_tests {
         let manager = app.state::<Mutex<PtyManager>>();
         let spawned = spawn_terminal_inner(
             app.handle(),
-            manager.inner(),
-            store.inner(),
+            Registries {
+                manager: manager.inner(),
+                store: store.inner(),
+            },
             SpawnRequest {
                 workspace_id: &workspace.id,
                 command: "sleep 30",
                 cols: 80,
                 rows: 24,
                 terminal_id: None,
-            },
-            &SpawnOptions {
-                shell: Some("/bin/sh".into()),
-                ..SpawnOptions::default()
+                options: &SpawnOptions {
+                    shell: Some("/bin/sh".into()),
+                    ..SpawnOptions::default()
+                },
             },
         )
         .expect("spawn long-running command");

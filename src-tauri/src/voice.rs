@@ -257,11 +257,7 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
             return;
         };
         let wd = unsafe {
-            libc::inotify_add_watch(
-                fd,
-                path.as_ptr(),
-                (libc::IN_CREATE | libc::IN_DELETE) as u32,
-            )
+            libc::inotify_add_watch(fd, path.as_ptr(), libc::IN_CREATE | libc::IN_DELETE)
         };
         if wd < 0 {
             unsafe { libc::close(fd) };

@@ -46,16 +46,14 @@ pub fn session_log(call: &HookCall) -> Option<SessionLog> {
     integration::by_id(&call.agent)?.session_log(&call.payload)
 }
 
-/// Apply a hook call for `who`. Returns the state it set, if any.
-pub fn apply<R: Runtime>(
-    hub: &McpHub<R>,
-    who: &AgentIdentity,
-    call: &HookCall,
-) -> Option<AgentState> {
+/// Apply a hook call for `who`.
+pub fn apply<R: Runtime>(hub: &McpHub<R>, who: &AgentIdentity, call: &HookCall) {
     if let Some(log) = session_log(call) {
         hub.set_session_log(&who.terminal_id, log);
     }
-    let (state, summary) = interpret(call)?;
+    let Some((state, summary)) = interpret(call) else {
+        return;
+    };
     let reported = hub.statuses().and_then(|mut statuses| {
         statuses.report_status(
             &who.actor(),
@@ -72,14 +70,13 @@ pub fn apply<R: Runtime>(
                 "cannot record the state hook of {}: {}",
                 who.terminal_id, error
             );
-            return None;
+            return;
         }
     };
     hub.emit_agent_status(&status);
     if state == AgentState::NeedsInput {
         hub.emit_attention(&status);
     }
-    Some(state)
 }
 
 /// `POST /hooks`: `terra-swarm hook` sends `{ agent, event, payload }`.
@@ -145,6 +142,7 @@ mod tests {
     use super::super::test_support::{app, hub, identity};
     use super::super::EVENT_AGENT_STATUS;
     use super::*;
+    use crate::sync::LockExt;
     use serde_json::json;
 
     fn call(agent: &str, event: &str, payload: Value) -> HookCall {
@@ -274,13 +272,13 @@ mod tests {
     fn applying_a_hook_updates_status_and_raises_attention() {
         let (hub, events) = hub();
         let who = identity("t-1", "ws-1", "claude");
-        let state = apply(
+        apply(
             &hub,
             &who,
             &call("claude", "Notification", json!({ "message": "Approve?" })),
         );
-        assert_eq!(state, Some(AgentState::NeedsInput));
         let status = hub.statuses().unwrap().status_of("t-1").cloned().unwrap();
+        assert_eq!(status.state, AgentState::NeedsInput);
         assert_eq!(status.summary, "Approve?");
         let events = events.lock().unwrap();
         assert!(events.iter().any(|(event, _)| event == EVENT_AGENT_STATUS));
@@ -298,12 +296,12 @@ mod tests {
         let path = dir.join(super::super::db::DB_FILE);
         std::fs::write(&path, b"not a sqlite database").unwrap();
         let hub = McpHub::open(path, None, app());
-        let state = apply(
+        apply(
             &hub,
             &identity("t-1", "ws-1", "claude"),
             &call("claude", "Stop", json!({})),
         );
-        assert_eq!(state, None);
+        assert!(hub.statuses.lock_or_recover().status_of("t-1").is_none());
         let _ = std::fs::remove_dir_all(dir);
     }
 }

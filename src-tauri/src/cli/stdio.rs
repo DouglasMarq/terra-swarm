@@ -42,7 +42,7 @@ impl Endpoint {
     }
 
     /// POST one JSON-RPC message; returns the messages the server answered.
-    pub fn send(&mut self, message: &Value) -> Result<Vec<Value>, String> {
+    pub fn send(&self, message: &Value) -> Result<Vec<Value>, String> {
         let body = message.to_string();
         let address = self
             .authority
@@ -89,8 +89,11 @@ impl Endpoint {
                 body.trim()
             ));
         }
-        let messages = parse_messages(&body, headers.contains("text/event-stream"))?;
-        for reply in &messages {
+        parse_messages(&body, headers.contains("text/event-stream"))
+    }
+
+    pub fn remember_protocol_version(&mut self, replies: &[Value]) {
+        for reply in replies {
             if let Some(version) = reply
                 .pointer("/result/protocolVersion")
                 .and_then(Value::as_str)
@@ -98,7 +101,6 @@ impl Endpoint {
                 self.protocol_version = Some(version.to_string());
             }
         }
-        Ok(messages)
     }
 }
 
@@ -191,7 +193,10 @@ pub fn bridge(
             }
         };
         let replies = match endpoint.send(&message) {
-            Ok(replies) => replies,
+            Ok(replies) => {
+                endpoint.remember_protocol_version(&replies);
+                replies
+            }
             Err(error) => match message.get("id") {
                 Some(id) if !id.is_null() => vec![
                     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": JSONRPC_INTERNAL_ERROR, "message": error } }),

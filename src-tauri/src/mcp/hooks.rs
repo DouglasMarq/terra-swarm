@@ -5,9 +5,11 @@
 
 use std::sync::Arc;
 
+use axum::body::Body;
 use axum::extract::{Request, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::Runtime;
@@ -117,8 +119,9 @@ async fn receive<R: Runtime>(
     let Some(who) = request.extensions().get::<AgentIdentity>().cloned() else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    let Ok(body) = axum::body::to_bytes(request.into_body(), MAX_HOOK_BODY).await else {
-        return StatusCode::PAYLOAD_TOO_LARGE.into_response();
+    let body = match read_body(request.into_body()).await {
+        Ok(body) => body,
+        Err(status) => return status.into_response(),
     };
     let Some(call) = parse(&body) else {
         return StatusCode::BAD_REQUEST.into_response();
@@ -134,6 +137,22 @@ async fn receive<R: Runtime>(
     // An empty body: a Claude hook reads its response as hook output, and an
     // empty one changes nothing about what the agent does.
     StatusCode::OK.into_response()
+}
+
+async fn read_body(body: Body) -> Result<Vec<u8>, StatusCode> {
+    let mut chunks = body.into_data_stream();
+    let mut bytes = Vec::new();
+    while let Some(chunk) = chunks.next().await {
+        let chunk = chunk.map_err(|error| {
+            eprintln!("cannot read a hook body: {}", error);
+            StatusCode::BAD_REQUEST
+        })?;
+        if bytes.len() + chunk.len() > MAX_HOOK_BODY {
+            return Err(StatusCode::PAYLOAD_TOO_LARGE);
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -303,5 +322,46 @@ mod tests {
         );
         assert!(hub.statuses.lock_or_recover().status_of("t-1").is_none());
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn hook_request(body: axum::body::Body) -> Request {
+        let mut request = Request::new(body);
+        request
+            .extensions_mut()
+            .insert(identity("t-1", "ws-1", "claude"));
+        request
+    }
+
+    fn receive_status(request: Request) -> StatusCode {
+        let (hub, _) = hub();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let response = runtime.block_on(receive(hub, request, |body| {
+            serde_json::from_slice::<HookCall>(body).ok()
+        }));
+        response.status()
+    }
+
+    #[test]
+    fn given_a_body_that_breaks_off_when_receiving_a_hook_then_it_answers_400() {
+        let chunks: Vec<Result<&'static str, std::io::Error>> = vec![
+            Ok("{\"agent\":"),
+            Err(std::io::Error::other("connection reset")),
+        ];
+        let body = axum::body::Body::from_stream(futures_util::stream::iter(chunks));
+
+        assert_eq!(receive_status(hook_request(body)), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn given_a_body_over_the_limit_when_receiving_a_hook_then_it_answers_413() {
+        let body = axum::body::Body::from(vec![b' '; MAX_HOOK_BODY + 1]);
+
+        assert_eq!(
+            receive_status(hook_request(body)),
+            StatusCode::PAYLOAD_TOO_LARGE
+        );
     }
 }

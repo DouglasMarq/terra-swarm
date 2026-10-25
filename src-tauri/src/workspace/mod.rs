@@ -28,7 +28,7 @@ pub(crate) use git::*;
 pub use git::{git_branch, git_status};
 pub(crate) use persistence::*;
 pub(crate) use snapshot::*;
-pub use snapshot::{export_workspace_snapshot, import_workspace_snapshot, store_saved_at};
+pub use snapshot::{export_workspace_snapshot, store_saved_at};
 
 static NEXT_WS_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -52,7 +52,7 @@ const MAX_LAYOUT_TRACKS: u32 = 128;
 /// frontend already coalesces/refreshes this event; keeping emission at the
 /// command boundary also covers secondary windows that did not initiate the
 /// mutation.
-fn emit_workspaces_changed(app: &AppHandle) {
+pub(crate) fn emit_workspaces_changed(app: &AppHandle) {
     let _ = app.emit("workspaces-changed", ());
 }
 

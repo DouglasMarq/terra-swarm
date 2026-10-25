@@ -225,24 +225,6 @@ pub fn remove_group(
     result
 }
 
-/// Mark a group suspended and stop its PTYs without deleting terminal
-/// metadata or durable scrollback. Resume remains a metadata-only operation;
-/// the frontend decides when to enqueue respawns.
-#[tauri::command(async)]
-pub fn suspend_group(app: AppHandle, id: String) -> Result<(), String> {
-    let store = app.state::<Mutex<WorkspaceStore>>();
-    let terminal_ids = {
-        let mut store = store.lock_or_recover();
-        store.suspend_group(&id)?
-    };
-    let manager = app.state::<Mutex<crate::pty::PtyManager>>();
-    for terminal_id in terminal_ids {
-        crate::pty::kill_terminal_inner(&manager, &terminal_id);
-    }
-    emit_workspaces_changed(&app);
-    Ok(())
-}
-
 #[tauri::command(async)]
 pub fn resume_group(app: AppHandle, id: String) -> Result<(), String> {
     let store = app.state::<Mutex<WorkspaceStore>>();
@@ -299,22 +281,4 @@ pub fn set_terminal_width(
         emit_workspaces_changed(&app);
     }
     result
-}
-
-#[tauri::command(async)]
-pub fn close_workspace(app: AppHandle, id: String) -> Result<(), String> {
-    let store = app.state::<Mutex<WorkspaceStore>>();
-    let terminals = {
-        let mut store = store.lock_or_recover();
-        store.remove(&id).map(|ws| ws.terminals)
-    };
-    crate::mcp::purge_workspace(&app, &id);
-    if let Some(terminals) = terminals {
-        let manager = app.state::<Mutex<crate::pty::PtyManager>>();
-        for t in terminals {
-            crate::pty::kill_terminal_inner(&manager, &t.id);
-        }
-    }
-    emit_workspaces_changed(&app);
-    Ok(())
 }

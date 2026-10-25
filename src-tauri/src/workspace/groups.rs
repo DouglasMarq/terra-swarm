@@ -100,14 +100,7 @@ impl WorkspaceStore {
         };
         self.groups.remove(index);
         for workspace in &mut self.workspaces {
-            if workspace.group_id.as_deref() == Some(id) {
-                workspace.group_id = None;
-            }
-            for terminal in &mut workspace.terminals {
-                if terminal.group_id.as_deref() == Some(id) {
-                    terminal.group_id = None;
-                }
-            }
+            leave_group(workspace, id);
         }
         Ok(())
     }
@@ -170,6 +163,17 @@ fn suspend_workspace_sessions(workspace: &mut Workspace, suspended_ids: &HashSet
             .is_some_and(|pty_id| suspended_ids.contains(pty_id))
         {
             tab.suspended = true;
+        }
+    }
+}
+
+fn leave_group(workspace: &mut Workspace, group_id: &str) {
+    if workspace.group_id.as_deref() == Some(group_id) {
+        workspace.group_id = None;
+    }
+    for terminal in &mut workspace.terminals {
+        if terminal.group_id.as_deref() == Some(group_id) {
+            terminal.group_id = None;
         }
     }
 }

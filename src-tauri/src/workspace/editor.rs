@@ -288,7 +288,8 @@ mod tests {
     fn given_text_over_the_size_limit_save_fails_with_the_other_code() {
         let root = temp_root("too-large");
         std::fs::write(root.join("big.txt"), "x").unwrap();
-        let text = "x".repeat(MAX_EDIT_BYTES as usize + 1);
+        let text =
+            "x".repeat(usize::try_from(MAX_EDIT_BYTES).expect("edit limit fits in memory") + 1);
         let error = write_file(
             &root,
             FileSave {

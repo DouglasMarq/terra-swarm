@@ -178,10 +178,11 @@
 
 /* The padding sits on .xterm, not on .pane-body: FitAddon subtracts the
  * padding of this element only, so padding on the parent made xterm wider
- * and taller than its box and the last column and row were cut off. */
+ * and taller than its box and the last column and row were cut off. No
+ * right padding: FitAddon already keeps the 14px scrollbar strip free. */
 .pane-body .xterm {
   height: 100%;
-  padding: var(--terra-space-2) var(--terra-space-2) var(--terra-space-2) var(--terra-space-3);
+  padding: var(--terra-space-1) 0 var(--terra-space-1) var(--terra-space-2);
 }
 
 .pane-attention {

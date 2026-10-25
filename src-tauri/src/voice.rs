@@ -371,9 +371,11 @@ async fn download_model_impl(model_id: String, app: tauri::AppHandle) -> Result<
         run_blocking(move || Ok(model_path.exists())).await?
     };
     if !is_downloaded {
+        let url = model.url();
         let request = download::DownloadRequest {
-            url: model.url,
+            url: &url,
             expected_size: model.size_bytes,
+            expected_sha256: model.sha256,
             final_path: model_path.clone(),
             partial_path: dir.join(format!("{}.tmp", model.filename)),
         };

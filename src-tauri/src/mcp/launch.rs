@@ -4,21 +4,16 @@ pub const ENV_PANE_ID: &str = "TERRA_PANE_ID";
 pub const ENV_WORKSPACE_ID: &str = "TERRA_WORKSPACE_ID";
 pub const ENV_HOOK_URL: &str = "TERRA_HOOK_URL";
 
-/// Name the server is registered under in each CLI.
 pub const SERVER_NAME: &str = "terra";
 
-/// How the shell that runs the command expects arguments to be quoted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Quoting {
-    /// `sh -c`: single quotes.
     Posix,
-    /// PowerShell `-Command` / `cmd /C`: double quotes.
     // Constructed only under cfg(windows) in pty::spawn_terminal_inner.
     #[cfg_attr(unix, allow(dead_code))]
     Windows,
 }
 
-/// The agent id of a command line: its executable's file name.
 pub fn agent_of(command: &str) -> String {
     let executable = command.split_whitespace().next().unwrap_or("");
     if executable.is_empty() || executable == "shell" {
@@ -45,7 +40,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn agent_is_the_executable_name() {
+    fn given_a_command_line_when_reading_its_agent_then_it_is_the_executable_name() {
         assert_eq!(agent_of("claude --continue"), "claude");
         assert_eq!(agent_of("/opt/bin/codex resume --last"), "codex");
         assert_eq!(agent_of(r"C:\tools\codex.exe"), "codex");
@@ -54,7 +49,7 @@ mod tests {
     }
 
     #[test]
-    fn posix_quoting_escapes_single_quotes() {
+    fn given_a_value_with_single_quotes_when_quoting_for_posix_then_they_are_escaped() {
         assert_eq!(quote("it's", Quoting::Posix), r"'it'\''s'");
     }
 }

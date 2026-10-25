@@ -1,14 +1,3 @@
-//! Embedded MCP server that lets the agent CLIs running in Terra Swarm's
-//! terminals share a task board, message each other and keep project notes.
-//!
-//! - `db`: SQLite connection and migrations (`<app_data_dir>/mcp.db`).
-//! - `repo`: the queries, shared by the MCP tools and the Tasks panel.
-//! - `auth`: per-terminal bearer tokens.
-//! - `tools`: the MCP tool catalogue and its handlers, independent of HTTP.
-//! - `server`: Streamable HTTP transport on 127.0.0.1 (rmcp + axum).
-//! - `launch`: how a terminal gets its token, environment and CLI flags.
-//! - `commands`: Tauri commands used by the Tasks panel and Settings.
-
 pub mod auth;
 pub mod commands;
 pub mod connect;
@@ -41,7 +30,6 @@ use statuses::StatusRegistry;
 pub const EVENT_TASKS_CHANGED: &str = "mcp-tasks-changed";
 pub const EVENT_MESSAGE: &str = "mcp-message";
 pub const EVENT_AGENT_STATUS: &str = "mcp-agent-status";
-/// Ask the UI to type a prompt into an idle agent's terminal.
 pub const EVENT_NUDGE: &str = "mcp-nudge";
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -52,9 +40,7 @@ pub struct WorkspaceInfo {
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct ServerInfo {
-    /// The "Expose Terra MCP to agents" preference.
     pub enabled: bool,
-    /// False when `mcp.db` could not be opened or migrated.
     pub available: bool,
     pub running: bool,
     pub url: Option<String>,
@@ -70,18 +56,13 @@ pub struct McpHub<R: Runtime = Wry> {
     db_path: Option<PathBuf>,
     tokens: Mutex<TokenRegistry>,
     port: Mutex<Option<u16>>,
-    /// This app's binary, run by Codex as its `notify` hook.
     hook_program: Mutex<Option<PathBuf>>,
-    /// Where generated client config files (Claude's `--mcp-config`) live.
     config_dir: Option<PathBuf>,
-    /// Each terminal's session log, as its hooks reported it.
     session_logs: Mutex<std::collections::HashMap<String, crate::usage::SessionLog>>,
     app: AppHandle<R>,
 }
 
 impl<R: Runtime> McpHub<R> {
-    /// Open `mcp.db`. When it cannot be opened or migrated the app keeps
-    /// running with the MCP server off, and Settings shows why.
     pub fn open(db_path: PathBuf, config_dir: Option<PathBuf>, app: AppHandle<R>) -> Self {
         let (repo, error) = match db::open(&db_path) {
             Ok(conn) => (Some(Mutex::new(Repo::new(conn))), None),
@@ -120,7 +101,7 @@ impl<R: Runtime> McpHub<R> {
         }
     }
 
-    pub fn available(&self) -> bool {
+    pub fn is_available(&self) -> bool {
         self.repo.is_some()
     }
 
@@ -171,15 +152,15 @@ impl<R: Runtime> McpHub<R> {
         self.config_dir.as_ref()
     }
 
-    pub fn enabled(&self) -> bool {
-        self.repo().map(|repo| repo.enabled()).unwrap_or(false)
+    pub fn is_enabled(&self) -> bool {
+        self.repo().map(|repo| repo.is_enabled()).unwrap_or(false)
     }
 
     pub fn info(&self) -> ServerInfo {
         let port = self.port();
         ServerInfo {
-            enabled: self.enabled(),
-            available: self.available(),
+            enabled: self.is_enabled(),
+            available: self.is_available(),
             running: port.is_some(),
             url: self.url(),
             port,
@@ -220,8 +201,6 @@ impl<R: Runtime> McpHub<R> {
         let _ = self.app.emit(event, payload);
     }
 
-    // ----- tokens ---------------------------------------------------------
-
     pub fn issue(&self, identity: AgentIdentity) -> Result<String, getrandom::Error> {
         self.tokens.lock_or_recover().issue(identity)
     }
@@ -230,7 +209,6 @@ impl<R: Runtime> McpHub<R> {
         self.tokens.lock_or_recover().identify(token)
     }
 
-    /// The terminal's status goes away with its last token.
     pub fn revoke_token(&self, token: &str) {
         let gone = self.tokens.lock_or_recover().revoke_token(token);
         if let Some(identity) = gone {
@@ -264,9 +242,6 @@ impl<R: Runtime> McpHub<R> {
         );
     }
 
-    // ----- workspace lifecycle --------------------------------------------
-
-    /// Delete a closed workspace's board, messages, notes and statuses.
     pub fn purge_workspace(&self, workspace_id: &str) {
         self.tokens.lock_or_recover().revoke_workspace(workspace_id);
         match self.repo() {
@@ -282,8 +257,6 @@ impl<R: Runtime> McpHub<R> {
             .forget_workspace(workspace_id);
         self.emit_tasks_changed(workspace_id);
     }
-
-    // ----- events ---------------------------------------------------------
 
     pub fn emit_tasks_changed(&self, workspace_id: &str) {
         self.emit(
@@ -305,10 +278,10 @@ impl<R: Runtime> McpHub<R> {
             .cloned()
     }
 
-    pub fn emit_nudge(&self, workspace_id: &str, terminal_id: &str, prompt: &str) {
+    pub fn emit_nudge(&self, nudge: &model::Nudge<'_>) {
         self.emit(
             EVENT_NUDGE,
-            serde_json::json!({ "workspace_id": workspace_id, "terminal_id": terminal_id, "prompt": prompt }),
+            serde_json::json!({ "workspace_id": nudge.workspace_id, "terminal_id": nudge.terminal_id, "prompt": nudge.prompt }),
         );
     }
 
@@ -322,7 +295,6 @@ impl<R: Runtime> McpHub<R> {
         );
     }
 
-    /// An agent is waiting for a human (a permission prompt, a question).
     pub fn emit_attention(&self, status: &AgentStatus) {
         let workspace = self.workspace(&status.workspace_id);
         self.emit(
@@ -427,13 +399,11 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn dropping_a_lease_revokes_its_token_only() {
+    fn given_two_leases_when_dropping_one_then_only_its_token_is_revoked() {
         let (hub, events) = hub();
         let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let lease = McpLease::new(&hub, token.clone());
         let newer = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
-        // The stale lease belongs to a replaced token: dropping it must not
-        // log the restarted terminal out.
         drop(lease);
         assert!(hub.identify(&newer).is_some());
         drop(McpLease::new(&hub, newer.clone()));
@@ -446,7 +416,7 @@ mod tests {
     }
 
     #[test]
-    fn purge_revokes_tokens_and_clears_data() {
+    fn given_a_workspace_with_agents_when_purging_it_then_tokens_are_revoked_and_data_cleared() {
         let (hub, events) = hub();
         let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         tasks::create(
@@ -482,11 +452,12 @@ mod tests {
             .lock()
             .unwrap()
             .iter()
-            .any(|(e, p)| e == EVENT_TASKS_CHANGED && p["workspace_id"] == "ws-1"));
+            .any(|(event, payload)| event == EVENT_TASKS_CHANGED
+                && payload["workspace_id"] == "ws-1"));
     }
 
     #[test]
-    fn an_unreadable_database_turns_the_server_off() {
+    fn given_an_unreadable_database_when_starting_then_the_server_is_off() {
         let dir =
             std::env::temp_dir().join(format!("terra-mcp-hub-{}", crate::clock::now_millis()));
         std::fs::create_dir_all(&dir).unwrap();

@@ -17,7 +17,7 @@ pub mod shell;
 #[cfg(unix)]
 use process_group::ProcessGroup;
 
-use agents::command_available;
+use agents::is_command_available;
 use shell::resolve_shell;
 #[cfg(windows)]
 use shell::{shell_flavor, ShellFlavor};
@@ -37,49 +37,45 @@ static NEXT_TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
 static SPAWN_SEQ: AtomicU64 = AtomicU64::new(1);
 
 pub fn bump_next_terminal_id(id: &str) {
-    if let Some(n) = id.strip_prefix("t-").and_then(|s| s.parse::<u64>().ok()) {
-        NEXT_TERMINAL_ID.fetch_max(n.saturating_add(1), Ordering::SeqCst);
+    if let Some(number) = id
+        .strip_prefix("t-")
+        .and_then(|digits| digits.parse::<u64>().ok())
+    {
+        NEXT_TERMINAL_ID.fetch_max(number.saturating_add(1), Ordering::SeqCst);
     }
 }
 
 const BACKLOG_CAP_BYTES: usize = 256 * 1024;
-/// Smallest width and height, in cells, a PTY is opened or resized to.
 const MIN_PTY_DIMENSION: u16 = 2;
-/// Writes queued for a terminal's input before `write_terminal` reports it busy.
 const INPUT_QUEUE_CAPACITY: usize = 256;
-/// Size, in cells, of the terminals `demo_seed` opens.
 const DEMO_COLS: u16 = 100;
 const DEMO_ROWS: u16 = 30;
 const DEMO_AGENT_COMMANDS: [&str; 4] = ["claude", "codex", "opencode", "kimi"];
 const DEMO_AGENT_COUNT: usize = 2;
 
-/// Per-terminal ring of recently emitted output plus the cumulative count of
-/// bytes ever emitted. The frontend fetches a snapshot on mount and uses
-/// `total` to drop live events that are already contained in the snapshot,
-/// giving exactly-once delivery across listener attach.
 pub struct Backlog {
-    buf: Vec<u8>,
+    retained: Vec<u8>,
     total: u64,
 }
 
 impl Backlog {
     fn from_bytes(data: Vec<u8>) -> Self {
         let total = byte_count(&data);
-        let buf = if data.len() > BACKLOG_CAP_BYTES {
+        let retained = if data.len() > BACKLOG_CAP_BYTES {
             data[data.len() - BACKLOG_CAP_BYTES..].to_vec()
         } else {
             data
         };
-        Self { buf, total }
+        Self { retained, total }
     }
 
-    fn push(&mut self, s: &str) {
-        self.buf.extend_from_slice(s.as_bytes());
-        if self.buf.len() > BACKLOG_CAP_BYTES {
-            let cut = self.buf.len() - BACKLOG_CAP_BYTES;
-            self.buf.drain(..cut);
+    fn push(&mut self, text: &str) {
+        self.retained.extend_from_slice(text.as_bytes());
+        if self.retained.len() > BACKLOG_CAP_BYTES {
+            let cut = self.retained.len() - BACKLOG_CAP_BYTES;
+            self.retained.drain(..cut);
         }
-        self.total += byte_count(s.as_bytes());
+        self.total += byte_count(text.as_bytes());
     }
 }
 
@@ -94,21 +90,17 @@ pub struct PtyEntry {
     pub pid: Option<u32>,
     pub last_size: Arc<Mutex<(u16, u16)>>,
     pub seq: u64,
-    pub reaped: Arc<AtomicBool>,
+    pub is_reaped: Arc<AtomicBool>,
     pub backlog: Arc<Mutex<Backlog>>,
-    /// Cleared before an explicit kill so a late reader flush cannot recreate
-    /// a scrollback file that the user intentionally deleted.
-    pub scrollback_enabled: Arc<AtomicBool>,
-    /// The terminal's MCP token, held only for its `Drop`: dropping the entry
-    /// revokes it.
+    pub is_scrollback_enabled: Arc<AtomicBool>,
     pub _mcp_lease: Option<McpLease>,
     #[cfg(unix)]
     process_group: Option<Arc<ProcessGroup>>,
 }
 
-fn kill_entry(entry: PtyEntry, disable_scrollback: bool) {
-    if disable_scrollback {
-        entry.scrollback_enabled.store(false, Ordering::SeqCst);
+fn kill_entry(entry: PtyEntry, should_disable_scrollback: bool) {
+    if should_disable_scrollback {
+        entry.is_scrollback_enabled.store(false, Ordering::SeqCst);
     }
     #[cfg(unix)]
     if let Some(group) = &entry.process_group {
@@ -124,10 +116,7 @@ pub struct PtyManager {
     terminals: HashMap<String, PtyEntry>,
     spawning: HashSet<String>,
     scrollback: Arc<ScrollbackStore>,
-    /// Runtime gate for durable scrollback. It starts disabled (fail-closed)
-    /// and is shared with every PTY flusher so toggling the feature does not
-    /// require respawning sessions or racing a manager map mutation.
-    durable_scrollback_enabled: Arc<AtomicBool>,
+    is_durable_scrollback_enabled: Arc<AtomicBool>,
 }
 
 impl Default for PtyManager {
@@ -136,7 +125,7 @@ impl Default for PtyManager {
             terminals: HashMap::new(),
             spawning: HashSet::new(),
             scrollback: Arc::new(ScrollbackStore::default()),
-            durable_scrollback_enabled: Arc::new(AtomicBool::new(false)),
+            is_durable_scrollback_enabled: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -147,7 +136,7 @@ impl PtyManager {
             terminals: HashMap::new(),
             spawning: HashSet::new(),
             scrollback: Arc::new(ScrollbackStore::from_root(path)),
-            durable_scrollback_enabled: Arc::new(AtomicBool::new(false)),
+            is_durable_scrollback_enabled: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -156,18 +145,18 @@ impl PtyManager {
     }
 
     pub fn durable_scrollback_enabled(&self) -> Arc<AtomicBool> {
-        Arc::clone(&self.durable_scrollback_enabled)
+        Arc::clone(&self.is_durable_scrollback_enabled)
     }
 
-    pub fn set_durable_scrollback_enabled(&self, enabled: bool) {
-        self.durable_scrollback_enabled
-            .store(enabled, Ordering::SeqCst);
+    pub fn set_durable_scrollback_enabled(&self, is_enabled: bool) {
+        self.is_durable_scrollback_enabled
+            .store(is_enabled, Ordering::SeqCst);
     }
 
     fn running_terminals(&self) -> Vec<RunningTerminal> {
         self.terminals
             .iter()
-            .filter(|(_, entry)| !entry.reaped.load(Ordering::SeqCst))
+            .filter(|(_, entry)| !entry.is_reaped.load(Ordering::SeqCst))
             .map(|(id, entry)| RunningTerminal {
                 id: id.clone(),
                 seq: entry.seq,
@@ -184,25 +173,17 @@ pub struct ExitPayload {
     pub seq: u64,
 }
 
-/// Per-launch settings that are not part of the stored terminal record.
 #[derive(Default, Debug, Clone)]
 pub struct SpawnOptions {
     pub shell: Option<String>,
-    /// Extra arguments appended to the command (per-agent setting).
     pub args: Option<String>,
-    /// Extra environment variables (per-agent setting).
     pub env: HashMap<String, String>,
-    /// Isolate a new agent in its own git worktree.
-    pub worktree: bool,
-    /// Where worktrees go; the app data directory when unset.
+    pub should_use_worktree: bool,
     pub worktree_root: Option<std::path::PathBuf>,
-    /// Team role for a new agent; a respawned one keeps its recorded role.
     pub role: Option<crate::roles::Role>,
 }
 
 impl SpawnOptions {
-    /// Variables safe to set: a real name, no NUL, and never one of the
-    /// variables Terra uses to identify the terminal.
     fn valid_env(&self) -> impl Iterator<Item = (&String, &String)> {
         self.env.iter().filter(|(key, value)| {
             !key.is_empty()
@@ -238,9 +219,6 @@ pub struct RunningTerminal {
     pub seq: u64,
 }
 
-/// Point-in-time runtime facts for one PTY. This intentionally contains no
-/// CPU or memory estimates: those metrics are not part of Terra's runtime
-/// contract.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalRuntimeInfo {
@@ -262,12 +240,17 @@ struct RuntimeFacts<'a> {
     is_reaped: bool,
 }
 
+fn unrecycled_pid(facts: &RuntimeFacts<'_>) -> Option<u32> {
+    if facts.is_reaped {
+        return None;
+    }
+    facts.pid
+}
+
 fn runtime_info_from_values(facts: RuntimeFacts<'_>) -> TerminalRuntimeInfo {
     TerminalRuntimeInfo {
         id: facts.id.to_string(),
-        // Once the child is reaped, the operating-system pid may already be
-        // recycled. Never expose that stale identifier as live runtime data.
-        pid: if facts.is_reaped { None } else { facts.pid },
+        pid: unrecycled_pid(&facts),
         cols: facts.cols,
         rows: facts.rows,
         running: !facts.is_reaped,
@@ -290,7 +273,7 @@ fn runtime_info_from_manager(
         cols,
         rows,
         generation: entry.seq,
-        is_reaped: entry.reaped.load(Ordering::SeqCst),
+        is_reaped: entry.is_reaped.load(Ordering::SeqCst),
     })))
 }
 
@@ -300,8 +283,6 @@ pub struct BacklogSnapshot {
     pub total: u64,
 }
 
-/// What to run and where: the terminal's workspace, its command as typed, its
-/// initial size and, for a respawn, the id it keeps.
 #[derive(Clone, Copy)]
 pub struct SpawnRequest<'a> {
     pub workspace_id: &'a str,
@@ -355,7 +336,7 @@ struct SpawnedProcess<'a> {
 struct TerminalIo {
     input: std::sync::mpsc::SyncSender<Vec<u8>>,
     backlog: Arc<Mutex<Backlog>>,
-    scrollback_enabled: Arc<AtomicBool>,
+    is_scrollback_enabled: Arc<AtomicBool>,
 }
 
 type SharedKiller = Arc<Mutex<Box<dyn ChildKiller + Send + Sync>>>;
@@ -365,7 +346,7 @@ struct ExitWatch {
     workspace_id: String,
     seq: u64,
     killer: SharedKiller,
-    reaped: Arc<AtomicBool>,
+    is_reaped: Arc<AtomicBool>,
     #[cfg(unix)]
     process_group: Option<Arc<ProcessGroup>>,
 }
@@ -442,8 +423,6 @@ fn record_terminal(
         Ok(())
     });
     if recorded.is_err() {
-        // The workspace was closed while we were spawning; don't leak the
-        // process or leave it running untracked.
         kill_terminal_inner(registries.manager, &meta.id);
     }
     recorded
@@ -453,7 +432,7 @@ fn workspace_cwd(store: &Mutex<WorkspaceStore>, workspace_id: &str) -> Result<St
     store
         .lock_or_recover()
         .get(workspace_id)
-        .map(|ws| ws.cwd.clone())
+        .map(|workspace| workspace.cwd.clone())
         .ok_or_else(|| format!("workspace {} not found", workspace_id))
 }
 
@@ -484,7 +463,12 @@ fn stored_terminal(store: &Mutex<WorkspaceStore>, workspace_id: &str, id: &str) 
     store
         .lock_or_recover()
         .get(workspace_id)
-        .and_then(|ws| ws.terminals.iter().find(|terminal| terminal.id == id))
+        .and_then(|workspace| {
+            workspace
+                .terminals
+                .iter()
+                .find(|terminal| terminal.id == id)
+        })
         .map_or(
             StoredTerminal {
                 worktree: None,
@@ -517,7 +501,7 @@ fn resolve_worktree<R: Runtime>(
     if let Some(existing) = stored {
         return Ok((Some(existing_worktree(existing)?), CreatedWorktree(None)));
     }
-    if !target.options.worktree {
+    if !target.options.should_use_worktree {
         return Ok((None, CreatedWorktree(None)));
     }
     let info = new_worktree(app, target)?;
@@ -533,7 +517,7 @@ fn new_worktree<R: Runtime>(
         None => app
             .path()
             .app_data_dir()
-            .map_err(|e| e.to_string())?
+            .map_err(|error| error.to_string())?
             .join("worktrees"),
     };
     crate::worktree::create(NewWorktree {
@@ -549,41 +533,36 @@ fn spawn_process<'a, R: Runtime>(
     launch: ProcessLaunch<'a>,
 ) -> Result<SpawnedProcess<'a>, String> {
     let shell = resolve_shell(launch.options.shell.as_deref());
-    let interactive = launch.command.is_empty() || launch.command == "shell";
-    // The user's per-agent arguments, appended only to the process that
-    // runs: the stored command stays as typed so resume can rebuild it.
-    let launch_command = match launch.options.args.as_deref().map(str::trim) {
-        Some(args) if !args.is_empty() && !interactive => format!("{} {}", launch.command, args),
+    let is_interactive = launch.command.is_empty() || launch.command == "shell";
+    let command_with_agent_args = match launch.options.args.as_deref().map(str::trim) {
+        Some(args) if !args.is_empty() && !is_interactive => format!("{} {}", launch.command, args),
         _ => launch.command.to_string(),
     };
-    // Issued only after the duplicate checks above: a fresh token for an id
-    // that is already running would log the live terminal out.
     let mut mcp_launch = app.try_state::<Arc<McpHub>>().and_then(|hub| {
         hub.launch(LaunchRequest {
             terminal_id: launch.id,
             workspace_id: launch.workspace_id,
-            command: &launch_command,
+            command: &command_with_agent_args,
             role: launch.role,
             quoting: quoting_for(&shell),
         })
     });
-    // Only the spawned process sees the MCP flags; `command` (persisted in
-    // the workspace store) stays as the user typed it.
-    let run_command = mcp_launch
-        .as_ref()
-        .map_or_else(|| launch_command.clone(), |launch| launch.command.clone());
+    let run_command = mcp_launch.as_ref().map_or_else(
+        || command_with_agent_args.clone(),
+        |launch| launch.command.clone(),
+    );
     let mut cmd = CommandBuilder::new(&shell);
-    cmd.args(shell_args(&shell, interactive, &run_command));
+    cmd.args(shell_args(&shell, is_interactive, &run_command));
     cmd.cwd(launch.cwd);
     apply_env(&mut cmd, launch.options, mcp_launch.as_ref());
 
     let pair = native_pty_system()
         .openpty(pty_size(launch.cols, launch.rows))
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
     let child = pair
         .slave
         .spawn_command(cmd)
-        .map_err(|e| format!("failed to spawn `{}`: {}", launch.command, e))?;
+        .map_err(|error| format!("failed to spawn `{}`: {}", launch.command, error))?;
     drop(pair.slave);
     Ok(SpawnedProcess {
         launch,
@@ -607,23 +586,23 @@ fn quoting_for(shell: &str) -> Quoting {
 }
 
 #[cfg(unix)]
-fn shell_args(_shell: &str, interactive: bool, run_command: &str) -> Vec<String> {
-    posix_shell_args(interactive, run_command)
+fn shell_args(_shell: &str, is_interactive: bool, run_command: &str) -> Vec<String> {
+    posix_shell_args(is_interactive, run_command)
 }
 
 #[cfg(windows)]
-fn shell_args(shell: &str, interactive: bool, run_command: &str) -> Vec<String> {
+fn shell_args(shell: &str, is_interactive: bool, run_command: &str) -> Vec<String> {
     match shell_flavor(shell) {
-        ShellFlavor::PowerShell if interactive => vec!["-NoLogo".into()],
+        ShellFlavor::PowerShell if is_interactive => vec!["-NoLogo".into()],
         ShellFlavor::PowerShell => vec!["-NoLogo".into(), "-Command".into(), run_command.into()],
-        ShellFlavor::Cmd if interactive => Vec::new(),
+        ShellFlavor::Cmd if is_interactive => Vec::new(),
         ShellFlavor::Cmd => vec!["/C".into(), run_command.into()],
-        ShellFlavor::Posix => posix_shell_args(interactive, run_command),
+        ShellFlavor::Posix => posix_shell_args(is_interactive, run_command),
     }
 }
 
-fn posix_shell_args(interactive: bool, run_command: &str) -> Vec<String> {
-    if interactive {
+fn posix_shell_args(is_interactive: bool, run_command: &str) -> Vec<String> {
+    if is_interactive {
         return vec!["-l".into(), "-i".into()];
     }
     vec!["-l".into(), "-c".into(), format!("exec {}", run_command)]
@@ -636,12 +615,15 @@ fn apply_env(cmd: &mut CommandBuilder, options: &SpawnOptions, mcp_launch: Optio
     for (key, value) in options.valid_env() {
         cmd.env(key, value);
     }
-    // Set after the user's variables so they cannot point an agent at
-    // another terminal's identity.
-    if let Some(launch) = mcp_launch {
-        for (key, value) in &launch.env {
-            cmd.env(key, value);
-        }
+    override_with_terminal_identity(cmd, mcp_launch);
+}
+
+fn override_with_terminal_identity(cmd: &mut CommandBuilder, mcp_launch: Option<&McpLaunch>) {
+    let Some(launch) = mcp_launch else {
+        return;
+    };
+    for (key, value) in &launch.env {
+        cmd.env(key, value);
     }
 }
 
@@ -670,13 +652,13 @@ fn register_process<R: Runtime>(
     #[cfg(unix)]
     let process_group = pid.and_then(ProcessGroup::of_leader).map(Arc::new);
     let killer = Arc::new(Mutex::new(child.clone_killer()));
-    let reaped = Arc::new(AtomicBool::new(false));
+    let is_reaped = Arc::new(AtomicBool::new(false));
     let watch = ExitWatch {
         id: launch.id.to_string(),
         workspace_id: launch.workspace_id.to_string(),
         seq: launch.seq,
         killer: Arc::clone(&killer),
-        reaped: Arc::clone(&reaped),
+        is_reaped: Arc::clone(&is_reaped),
         #[cfg(unix)]
         process_group: process_group.clone(),
     };
@@ -687,9 +669,9 @@ fn register_process<R: Runtime>(
         pid,
         last_size: Arc::new(Mutex::new((launch.cols, launch.rows))),
         seq: launch.seq,
-        reaped,
+        is_reaped,
         backlog: io.backlog,
-        scrollback_enabled: io.scrollback_enabled,
+        is_scrollback_enabled: io.is_scrollback_enabled,
         _mcp_lease: mcp_lease,
         #[cfg(unix)]
         process_group,
@@ -699,10 +681,6 @@ fn register_process<R: Runtime>(
         .terminals
         .insert(launch.id.to_string(), entry);
 
-    // Register the entry before waiting on the child. A command can exit
-    // between spawn and this point; starting the monitor earlier used to let
-    // it observe an absent map entry, emit an exit, and then leave a reaped
-    // session behind as a phantom running terminal.
     spawn_exit_monitor(app, child, watch);
     Ok(())
 }
@@ -713,18 +691,21 @@ fn start_terminal_io<R: Runtime>(
     process: &SpawnedProcess<'_>,
 ) -> Result<TerminalIo, String> {
     let launch = process.launch;
-    let scrollback_enabled = Arc::new(AtomicBool::new(true));
-    let (scrollback, durable_scrollback_enabled) = {
+    let is_scrollback_enabled = Arc::new(AtomicBool::new(true));
+    let (scrollback, is_durable_scrollback_enabled) = {
         let manager = manager.lock_or_recover();
         (manager.scrollback(), manager.durable_scrollback_enabled())
     };
-    let restored = restored_backlog(&scrollback, &durable_scrollback_enabled, launch.id);
+    let restored = restored_backlog(&scrollback, &is_durable_scrollback_enabled, launch.id);
     let backlog = Arc::new(Mutex::new(Backlog::from_bytes(restored)));
     let reader = process
         .master
         .try_clone_reader()
-        .map_err(|e| e.to_string())?;
-    let writer = process.master.take_writer().map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
+    let writer = process
+        .master
+        .take_writer()
+        .map_err(|error| error.to_string())?;
 
     output::spawn_output_pump(
         app,
@@ -737,15 +718,15 @@ fn start_terminal_io<R: Runtime>(
             backlog: Arc::clone(&backlog),
             scrollback: output::DurableScrollback {
                 store: Arc::clone(&scrollback),
-                is_terminal_enabled: Arc::clone(&scrollback_enabled),
-                is_app_enabled: durable_scrollback_enabled,
+                is_terminal_enabled: Arc::clone(&is_scrollback_enabled),
+                is_app_enabled: is_durable_scrollback_enabled,
             },
         },
     );
     Ok(TerminalIo {
         input: spawn_input_writer(writer),
         backlog,
-        scrollback_enabled,
+        is_scrollback_enabled,
     })
 }
 
@@ -794,11 +775,7 @@ fn spawn_exit_monitor<R: Runtime>(
                 None
             }
         };
-        // Mark reaped immediately so kill_entry never signals a pid that
-        // the OS may already have recycled.
-        watch.reaped.store(true, Ordering::SeqCst);
-        // Remove from the manager BEFORE notifying the frontend, so a
-        // concurrent running_terminals never reports this id as alive.
+        watch.is_reaped.store(true, Ordering::SeqCst);
         forget_exited_terminal(&app, &watch);
         let _ = app.emit(
             "terminal-exit",
@@ -863,7 +840,6 @@ impl Drop for SpawnReservation<'_> {
     }
 }
 
-/// Removes a worktree created for a spawn that then failed.
 struct CreatedWorktree(Option<crate::worktree::WorktreeInfo>);
 
 impl CreatedWorktree {
@@ -902,7 +878,7 @@ pub fn spawn_terminal(
         shell,
         args: launch.args,
         env: launch.env,
-        worktree: launch.worktree,
+        should_use_worktree: launch.worktree,
         worktree_root: None,
         role: launch.role,
     };
@@ -932,7 +908,7 @@ pub fn demo_seed(app: &AppHandle) {
     };
     let picked: Vec<&str> = DEMO_AGENT_COMMANDS
         .into_iter()
-        .filter(|command| command_available(command))
+        .filter(|command| is_command_available(command))
         .take(DEMO_AGENT_COUNT)
         .collect();
     let options = SpawnOptions::default();
@@ -975,13 +951,12 @@ pub fn write_terminal(
         manager
             .terminals
             .get(&id)
-            .map(|e| e.input.clone())
+            .map(|entry| entry.input.clone())
             .ok_or_else(|| format!("terminal {} not found", id))?
     };
     send_input(&input, &id, data)
 }
 
-/// Queues `data` for the terminal's writer; a full queue reports `Busy`.
 fn send_input(
     input: &std::sync::mpsc::SyncSender<Vec<u8>>,
     id: &str,
@@ -1026,9 +1001,7 @@ pub fn resize_terminal(
     let guard = master.lock_or_recover();
     guard
         .resize(pty_size(cols, rows))
-        .map_err(|e| e.to_string())?;
-    // Only record the new size after the resize actually succeeded, otherwise
-    // a failed resize can never be retried (dedup would treat it as a no-op).
+        .map_err(|error| error.to_string())?;
     *last_size.lock_or_recover() = (cols, rows);
     Ok(())
 }
@@ -1052,7 +1025,7 @@ pub fn kill_all(manager: &Mutex<PtyManager>) {
         .lock_or_recover()
         .terminals
         .drain()
-        .map(|(_, e)| e)
+        .map(|(_, entry)| entry)
         .collect();
     for entry in entries {
         kill_entry(entry, false);
@@ -1074,8 +1047,6 @@ pub fn kill_terminal(app: AppHandle, id: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Kills the PTY process but keeps the workspace store entry, so a respawn
-/// with the same id (restart) preserves the terminal's position and width.
 #[tauri::command(async)]
 pub fn stop_terminal(app: AppHandle, id: String) -> Result<(), String> {
     let manager = app.state::<Mutex<PtyManager>>();
@@ -1088,27 +1059,26 @@ pub fn terminal_backlog(
     manager: State<'_, Mutex<PtyManager>>,
     id: String,
 ) -> Result<BacklogSnapshot, String> {
-    let (backlog, scrollback, durable_scrollback_enabled) = {
+    let (backlog, scrollback, is_durable_scrollback_enabled) = {
         let manager = manager.lock_or_recover();
         (
-            manager.terminals.get(&id).map(|e| Arc::clone(&e.backlog)),
+            manager
+                .terminals
+                .get(&id)
+                .map(|entry| Arc::clone(&entry.backlog)),
             manager.scrollback(),
             manager.durable_scrollback_enabled(),
         )
     };
     if let Some(backlog) = backlog {
-        let b = backlog.lock_or_recover();
+        let backlog = backlog.lock_or_recover();
         return Ok(BacklogSnapshot {
-            data: String::from_utf8_lossy(&b.buf).into_owned(),
-            total: b.total,
+            data: String::from_utf8_lossy(&backlog.retained).into_owned(),
+            total: backlog.total,
         });
     }
 
-    // A stopped/exited terminal is intentionally absent from the live map;
-    // the durable tail remains the source of truth only while the feature is
-    // enabled. Disabling the flag never deletes existing files, but it must
-    // not expose them as a hidden fallback.
-    if !durable_scrollback_enabled.load(Ordering::SeqCst) {
+    if !is_durable_scrollback_enabled.load(Ordering::SeqCst) {
         return Ok(BacklogSnapshot {
             data: String::new(),
             total: 0,
@@ -1123,9 +1093,6 @@ pub fn terminal_backlog(
     })
 }
 
-/// Enable or disable durable scrollback for all current and future PTYs.
-/// The state is intentionally runtime-only and fail-closed on startup; turning
-/// it off stops new disk writes and fallback reads without deleting old data.
 #[tauri::command(async)]
 pub fn set_durable_scrollback_enabled(
     manager: State<'_, Mutex<PtyManager>>,
@@ -1144,9 +1111,6 @@ pub fn running_terminals(
     Ok(manager.running_terminals())
 }
 
-/// Return only the runtime facts for the requested PTY. Unknown ids resolve
-/// to `null` so an exited/removed session is not confused with a command
-/// failure and the Inspector can render an unavailable state safely.
 #[tauri::command(async)]
 pub fn terminal_runtime_info(
     manager: State<'_, Mutex<PtyManager>>,
@@ -1177,17 +1141,18 @@ mod scrollback_flag_tests {
     }
 
     #[test]
-    fn durable_scrollback_gate_is_fail_closed_and_non_destructive() {
+    fn given_a_new_manager_when_toggling_durable_scrollback_then_the_gate_starts_closed_and_keeps_stored_bytes(
+    ) {
         let root = root();
         let store = ScrollbackStore::from_root(root.clone());
         store
             .append("t-flag", b"existing")
             .expect("seed scrollback");
         let manager = PtyManager::with_scrollback_dir(root.clone());
-        let enabled = manager.durable_scrollback_enabled();
+        let is_enabled = manager.durable_scrollback_enabled();
 
-        assert!(!enabled.load(Ordering::SeqCst));
-        let hidden = if enabled.load(Ordering::SeqCst) {
+        assert!(!is_enabled.load(Ordering::SeqCst));
+        let hidden = if is_enabled.load(Ordering::SeqCst) {
             store.read("t-flag").expect("read")
         } else {
             Vec::new()
@@ -1195,12 +1160,12 @@ mod scrollback_flag_tests {
         assert!(hidden.is_empty());
 
         manager.set_durable_scrollback_enabled(true);
-        assert!(enabled.load(Ordering::SeqCst));
+        assert!(is_enabled.load(Ordering::SeqCst));
         assert_eq!(store.read("t-flag").expect("enabled read"), b"existing");
 
         manager.set_durable_scrollback_enabled(false);
-        assert!(!enabled.load(Ordering::SeqCst));
-        let hidden_again = if enabled.load(Ordering::SeqCst) {
+        assert!(!is_enabled.load(Ordering::SeqCst));
+        let hidden_again = if is_enabled.load(Ordering::SeqCst) {
             store.read("t-flag").expect("read")
         } else {
             Vec::new()
@@ -1221,14 +1186,14 @@ mod input_tests {
     use std::sync::mpsc::sync_channel;
 
     #[test]
-    fn given_room_in_the_queue_write_queues_the_bytes() {
+    fn given_room_in_the_queue_when_writing_then_the_bytes_are_queued() {
         let (input, output) = sync_channel(1);
         send_input(&input, "t-1", "ls\n".into()).unwrap();
         assert_eq!(output.try_recv().unwrap(), b"ls\n");
     }
 
     #[test]
-    fn given_a_full_input_queue_write_fails_with_the_busy_code() {
+    fn given_a_full_input_queue_when_writing_then_it_fails_with_the_busy_code() {
         let (input, _output) = sync_channel(1);
         send_input(&input, "t-1", "a".into()).unwrap();
         let error = send_input(&input, "t-1", "b".into()).unwrap_err();
@@ -1236,7 +1201,7 @@ mod input_tests {
     }
 
     #[test]
-    fn given_a_closed_input_write_fails_with_the_other_code() {
+    fn given_a_closed_input_when_writing_then_it_fails_with_the_other_code() {
         let (input, output) = sync_channel::<Vec<u8>>(1);
         drop(output);
         let error = send_input(&input, "t-1", "a".into()).unwrap_err();
@@ -1250,7 +1215,7 @@ mod runtime_info_tests {
     use super::{runtime_info_from_manager, runtime_info_from_values, PtyManager, RuntimeFacts};
 
     #[test]
-    fn live_runtime_info_exposes_only_real_process_facts() {
+    fn given_a_live_terminal_when_reading_runtime_info_then_it_exposes_only_real_process_facts() {
         let info = runtime_info_from_values(RuntimeFacts {
             id: "term-live",
             pid: Some(42),
@@ -1268,7 +1233,7 @@ mod runtime_info_tests {
     }
 
     #[test]
-    fn reaped_runtime_info_is_not_reported_as_running() {
+    fn given_a_reaped_terminal_when_reading_runtime_info_then_it_is_not_reported_as_running() {
         let info = runtime_info_from_values(RuntimeFacts {
             id: "term-ended",
             pid: Some(42),
@@ -1283,7 +1248,7 @@ mod runtime_info_tests {
     }
 
     #[test]
-    fn an_empty_manager_has_no_runtime_info_for_unknown_ids() {
+    fn given_an_empty_manager_when_reading_runtime_info_of_an_unknown_id_then_there_is_none() {
         let manager = PtyManager::default();
         assert_eq!(
             runtime_info_from_manager(&manager, "term-missing").expect("runtime query"),
@@ -1363,7 +1328,8 @@ mod spawn_lifecycle_tests {
     }
 
     #[test]
-    fn immediate_exit_is_registered_then_removed_without_a_phantom_runtime() {
+    fn given_a_command_that_exits_immediately_when_spawning_then_it_is_registered_and_removed_without_a_phantom_runtime(
+    ) {
         let app = tauri::test::mock_app();
         assert!(app.manage(Mutex::new(PtyManager::default())));
         assert!(app.manage(Mutex::new(WorkspaceStore::default())));
@@ -1391,9 +1357,6 @@ mod spawn_lifecycle_tests {
         )
         .expect("spawn immediate command");
 
-        // The child exits before the caller can observe a second command
-        // round-trip. The monitor must still see the entry that was inserted
-        // before it started waiting and remove exactly that generation.
         let deadline = Instant::now() + Duration::from_secs(2);
         loop {
             let manager = manager.lock().expect("pty manager");
@@ -1425,7 +1388,8 @@ mod spawn_lifecycle_tests {
 
     #[cfg(unix)]
     #[test]
-    fn per_agent_args_and_env_reach_the_process_but_not_terra_variables() {
+    fn given_per_agent_args_and_env_when_spawning_then_they_reach_the_process_but_terra_variables_do_not(
+    ) {
         let app = tauri::test::mock_app();
         assert!(app.manage(Mutex::new(PtyManager::default())));
         assert!(app.manage(Mutex::new(WorkspaceStore::default())));
@@ -1465,7 +1429,6 @@ mod spawn_lifecycle_tests {
                 },
             )
             .expect("spawn printenv");
-            // The stored command stays as typed.
             assert_eq!(spawned.meta.command, "printenv");
         };
         run("AGENT_TEST_VAR", "agent.txt");
@@ -1490,7 +1453,7 @@ mod spawn_lifecycle_tests {
 
     #[cfg(unix)]
     #[test]
-    fn an_isolated_agent_gets_a_worktree_and_keeps_it_on_respawn() {
+    fn given_an_isolated_agent_when_spawning_and_respawning_then_it_gets_a_worktree_and_keeps_it() {
         let app = tauri::test::mock_app();
         assert!(app.manage(Mutex::new(PtyManager::default())));
         assert!(app.manage(Mutex::new(WorkspaceStore::default())));
@@ -1504,7 +1467,7 @@ mod spawn_lifecycle_tests {
         let manager = app.state::<Mutex<PtyManager>>();
         let options = SpawnOptions {
             shell: Some("/bin/sh".into()),
-            worktree: true,
+            should_use_worktree: true,
             worktree_root: Some(root.clone()),
             ..SpawnOptions::default()
         };
@@ -1535,8 +1498,6 @@ mod spawn_lifecycle_tests {
             );
             std::thread::sleep(Duration::from_millis(20));
         }
-        // Respawning the same id (resume) goes back to the same worktree,
-        // even without asking for isolation again.
         let plain = SpawnOptions {
             shell: Some("/bin/sh".into()),
             ..SpawnOptions::default()
@@ -1578,7 +1539,7 @@ mod kill_tests {
     use tauri::Manager;
 
     #[test]
-    fn given_a_poisoned_manager_lock_kill_terminal_inner_still_kills_the_process() {
+    fn given_a_poisoned_manager_lock_when_killing_a_terminal_then_the_process_is_still_killed() {
         let app = tauri::test::mock_app();
         assert!(app.manage(Mutex::new(PtyManager::default())));
         assert!(app.manage(Mutex::new(WorkspaceStore::default())));
@@ -1607,14 +1568,14 @@ mod kill_tests {
             },
         )
         .expect("spawn long-running command");
-        let reaped = Arc::clone(
+        let is_reaped = Arc::clone(
             &manager
                 .lock()
                 .expect("pty manager")
                 .terminals
                 .get(&spawned.meta.id)
                 .expect("registered terminal")
-                .reaped,
+                .is_reaped,
         );
         std::thread::scope(|scope| {
             let poisoner = scope.spawn(|| {
@@ -1632,7 +1593,7 @@ mod kill_tests {
             .terminals
             .contains_key(&spawned.meta.id));
         let deadline = Instant::now() + Duration::from_secs(3);
-        while !reaped.load(Ordering::SeqCst) {
+        while !is_reaped.load(Ordering::SeqCst) {
             assert!(
                 Instant::now() < deadline,
                 "the process outlived kill_terminal_inner"

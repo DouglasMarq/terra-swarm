@@ -1,5 +1,3 @@
-//! Branch and `git status` summary for a workspace folder.
-
 use super::*;
 use crate::sync::LockExt;
 use serde::Serialize;
@@ -31,9 +29,7 @@ pub(crate) fn parse_git_status(output: &[u8]) -> Result<WorkspaceGitStatus, Stri
         }
         let file = FileRecord::parse(record)?;
         if file.has_original_path() {
-            // `-z` emits the original rename/copy path as the following
-            // record. Consume it so it cannot be mistaken for a new status.
-            let _ = records.next();
+            let _original_path_record = records.next();
         }
         record_file(&mut status, file);
     }
@@ -143,8 +139,6 @@ fn record_file(status: &mut WorkspaceGitStatus, file: FileRecord) {
     }
     if file.is_conflicted() {
         add_unique(&mut status.conflicted, file.path);
-        // Unmerged entries form their own category. Keeping them out of
-        // staged/modified avoids double-counting a conflict in the UI.
         return;
     }
     if file.index != ' ' && file.index != '?' {
@@ -208,8 +202,6 @@ fn git_line(cwd: &str, args: &[&str]) -> Option<String> {
         .filter(|text| !text.is_empty())
 }
 
-/// Current git branch for a workspace directory, or the short commit hash
-/// when HEAD is detached. None when the directory is not a git work tree.
 #[tauri::command(async)]
 pub fn git_branch(cwd: String) -> Option<String> {
     git_line(&cwd, &["branch", "--show-current"])

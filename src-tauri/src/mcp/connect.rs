@@ -1,8 +1,3 @@
-//! Connects a new terminal to the MCP server: a token, four environment
-//! variables and, for agent CLIs that support it, the flags that register
-//! the server. The persisted terminal command never contains any of this, so
-//! a token never reaches `workspaces.json`.
-
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{Runtime, Wry};
@@ -38,8 +33,6 @@ pub fn rewrite_command(command: &str, agent: &str, context: &LaunchContext<'_>) 
 }
 
 impl<R: Runtime> McpHub<R> {
-    /// Everything a terminal needs to talk to the server, or `None` when the
-    /// server is off or not running (the terminal then starts unchanged).
     pub fn launch(self: &Arc<Self>, request: LaunchRequest<'_>) -> Option<McpLaunch<R>> {
         let LaunchRequest {
             terminal_id,
@@ -48,7 +41,7 @@ impl<R: Runtime> McpHub<R> {
             role,
             quoting,
         } = request;
-        if !self.enabled() {
+        if !self.is_enabled() {
             return None;
         }
         let url = self.url()?;
@@ -126,7 +119,7 @@ mod tests {
     const URL: &str = "http://127.0.0.1:4100/mcp";
 
     #[test]
-    fn other_commands_are_left_alone() {
+    fn given_a_command_without_integration_when_rewriting_then_it_is_left_alone() {
         let context = LaunchContext {
             url: URL,
             hook_url: "http://127.0.0.1:4100/hooks",
@@ -142,7 +135,8 @@ mod tests {
     }
 
     #[test]
-    fn launch_issues_a_token_and_env_only_when_enabled_and_running() {
+    fn given_the_server_state_when_launching_then_a_token_and_env_are_issued_only_when_enabled_and_running(
+    ) {
         let (hub, _) = hub();
         assert!(hub.launch(posix_request("claude")).is_none());
         hub.set_port(4100);

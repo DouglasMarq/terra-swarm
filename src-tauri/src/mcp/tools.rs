@@ -1,12 +1,11 @@
-//! The MCP tool catalogue. Handlers take the caller's identity (from its
-//! token) and plain JSON arguments, so they are tested without HTTP.
-
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::Runtime;
 
 use super::messages::{self, InboxRequest, Outgoing};
-use super::model::{AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus};
+use super::model::{
+    AgentState, NewTask, Nudge, StoreError, Task, TaskPatch, TaskPriority, TaskStatus,
+};
 use super::model::{DEFAULT_INBOX_LIMIT, DEFAULT_SEARCH_LIMIT, MAX_LIMIT, MAX_TITLE_CHARS};
 use super::notes::{self, NoteDraft, NoteSearch};
 use super::repo::{StatusFilter, TaskQuery};
@@ -18,7 +17,7 @@ pub struct ToolDef {
     pub name: &'static str,
     pub title: &'static str,
     pub description: &'static str,
-    pub read_only: bool,
+    pub is_read_only: bool,
     pub schema: Value,
 }
 
@@ -30,11 +29,13 @@ pub enum ToolError {
 }
 
 impl std::fmt::Display for ToolError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ToolError::UnknownTool(name) => write!(f, "unknown tool `{}`", name),
-            ToolError::InvalidArguments(message) => write!(f, "invalid arguments: {}", message),
-            ToolError::Store(error) => write!(f, "{}", error),
+            ToolError::UnknownTool(name) => write!(formatter, "unknown tool `{}`", name),
+            ToolError::InvalidArguments(message) => {
+                write!(formatter, "invalid arguments: {}", message)
+            }
+            ToolError::Store(error) => write!(formatter, "{}", error),
         }
     }
 }
@@ -96,7 +97,7 @@ fn whoami_tool() -> ToolDef {
         description: "Returns your own terminal id, agent name and project (workspace), plus \
             the teammates currently connected to this project with their reported state. Call \
             this first: other tools refer to agents by terminal id (for example `t-3`).",
-        read_only: true,
+        is_read_only: true,
         schema: json!({ "type": "object", "properties": {} }),
     }
 }
@@ -110,7 +111,7 @@ fn list_tasks_tool() -> ToolDef {
             or \"me\" for your own tasks). `blocked_by` lists unfinished dependencies: such a \
             task can't be claimed yet. Each entry is a summary; use `get_task` for the \
             description and history.",
-        read_only: true,
+        is_read_only: true,
         schema: json!({
             "type": "object",
             "properties": {
@@ -127,7 +128,7 @@ fn get_task_tool() -> ToolDef {
         title: "Get task",
         description: "Returns one task with its full description, dependencies and its latest \
             history `events` (created, claimed, status, assigned, note, completed).",
-        read_only: true,
+        is_read_only: true,
         schema: json!({
             "type": "object",
             "properties": { "id": { "type": "string", "description": "Task id, e.g. \"T-4\"." } },
@@ -143,7 +144,7 @@ fn create_task_tool() -> ToolDef {
         description: "Adds a task to the shared board in `todo`, unassigned, so any agent can \
             claim it. Split large work into tasks a single agent can finish. `depends_on` \
             lists task ids that must be `done` before this one can be claimed.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -169,7 +170,7 @@ fn claim_task_tool() -> ToolDef {
             you start working on a task. Atomic: if another agent already claimed it, it is \
             not in `todo`, or a dependency is not done yet, this fails and you should pick \
             something else.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": { "id": { "type": "string" } },
@@ -185,7 +186,7 @@ fn update_task_tool() -> ToolDef {
         description: "Changes a task's status and/or adds a note to its history. Use \
             `status: \"blocked\"` with a `note` explaining what you are waiting for. To hand \
             work in, prefer `complete_task`.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -205,7 +206,7 @@ fn complete_task_tool() -> ToolDef {
         description: "Marks your task as finished and moves it to `review` for a human to \
             check, recording `summary` (what changed, how it was verified) in the log. Only \
             the assignee can complete an assigned task.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -224,7 +225,7 @@ fn send_message_tool() -> ToolDef {
         description: "Sends a message to a teammate by terminal id (see `whoami`), or to \
             \"all\" to broadcast to every agent in this project. Messages are delivered \
             through the recipient's `read_inbox`.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -243,7 +244,7 @@ fn read_inbox_tool() -> ToolDef {
         description: "Returns messages sent to you or to \"all\", oldest first (at most \
             `limit`, default 50), and marks them as read. By default only unread messages \
             are returned; pass `unread_only: false` to see the history too.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -262,7 +263,7 @@ fn add_note_tool() -> ToolDef {
             now and in later sessions. Use it for facts worth keeping: commands, conventions, \
             decisions, gotchas. Giving a `key` (e.g. \"test-command\") replaces the earlier \
             note with the same key.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -281,7 +282,7 @@ fn search_notes_tool() -> ToolDef {
         description: "Full-text search over the project's shared notes (key and text). Every \
             word must match, as a prefix, ignoring case and accents; best matches first, at \
             most `limit` (default 20). An empty query lists the most recently updated notes.",
-        read_only: true,
+        is_read_only: true,
         schema: json!({
             "type": "object",
             "properties": {
@@ -301,7 +302,7 @@ fn assign_task_tool() -> ToolDef {
             moves a `todo` task to `in_progress`, puts the task (and your optional `note`) in \
             their inbox, and, when they are idle, types a prompt into their terminal so they \
             start right away. A task with unfinished dependencies cannot be assigned yet.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -321,7 +322,7 @@ fn report_status_tool() -> ToolDef {
         description: "Tells your teammates and the humans watching what you are doing: \
             `working`, `idle`, `needs_input` (waiting for a human) or `blocked`, with a \
             one-line `summary`. Update it when your state changes.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -469,8 +470,6 @@ fn handlers<R: Runtime>() -> [(&'static str, Handler<R>); 13] {
     ]
 }
 
-/// Run one tool for `who`. Every store call uses `who.workspace_id`, so a
-/// caller can never reach another project's data.
 pub fn call<R: Runtime>(
     hub: &McpHub<R>,
     who: &AgentIdentity,
@@ -511,25 +510,25 @@ fn whoami<R: Runtime>(
     who: &AgentIdentity,
     _args: Value,
 ) -> Result<Value, ToolError> {
-    let ws = who.workspace_id.as_str();
+    let workspace_id = who.workspace_id.as_str();
     let me = who.terminal_id.as_str();
-    let workspace = hub.workspace(ws);
+    let workspace = hub.workspace(workspace_id);
     let peers = peer_summaries(hub, who)?;
     let repo = hub.repo()?;
     let mine = repo.queries().list_tasks(&TaskQuery {
         status: StatusFilter::Unfinished,
         assignee: Some(me),
-        ..TaskQuery::all(ws)
+        ..TaskQuery::all(workspace_id)
     })?;
     Ok(json!({
         "terminal_id": me,
         "agent": who.agent,
         "role": who.role,
         "role_instructions": who.role.map(|role| role.instructions()),
-        "workspace_id": ws,
+        "workspace_id": workspace_id,
         "workspace_name": workspace.as_ref().map(|info| info.name.clone()),
         "workspace_cwd": workspace.as_ref().map(|info| info.cwd.clone()),
-        "unread_messages": repo.queries().unread_count(ws, me)?,
+        "unread_messages": repo.queries().unread_count(workspace_id, me)?,
         "my_open_tasks": mine.iter().map(task_summary).collect::<Vec<_>>(),
         "peers": peers,
     }))
@@ -673,16 +672,22 @@ fn ensure_known_recipient<R: Runtime>(
     who: &AgentIdentity,
     to: &str,
 ) -> Result<(), ToolError> {
-    let ws = who.workspace_id.as_str();
+    let workspace_id = who.workspace_id.as_str();
     if to == who.terminal_id {
         return Err(ToolError::InvalidArguments(
             "you cannot send a message to yourself".into(),
         ));
     }
-    let known = to == "all"
-        || hub.peers(ws).iter().any(|peer| peer.terminal_id == to)
-        || hub.workspace_terminals(ws).iter().any(|id| id == to);
-    if !known {
+    let is_known = to == "all"
+        || hub
+            .peers(workspace_id)
+            .iter()
+            .any(|peer| peer.terminal_id == to)
+        || hub
+            .workspace_terminals(workspace_id)
+            .iter()
+            .any(|id| id == to);
+    if !is_known {
         return Err(ToolError::InvalidArguments(format!(
             "`{}` is not a terminal of this project; use a terminal id from `whoami` \
              or \"all\"",
@@ -767,16 +772,18 @@ fn assign_task<R: Runtime>(
         note: args.note.as_deref(),
     };
     let (task, message) = tasks::assign(&mut *hub.repo()?, &who.actor(), &assignment)?;
-    // Typing into a terminal that is busy or waiting on a human could
-    // answer a prompt by accident, so only idle agents are woken.
-    let idle = is_idle(hub, to)?;
+    let is_target_idle = is_idle(hub, to)?;
     hub.emit_tasks_changed(&who.workspace_id);
     hub.emit_message(&message);
-    if idle {
+    if is_target_idle {
         let prompt = assignment_prompt(&task, &who.terminal_id);
-        hub.emit_nudge(&who.workspace_id, to, &prompt);
+        hub.emit_nudge(&Nudge {
+            workspace_id: &who.workspace_id,
+            terminal_id: to,
+            prompt: &prompt,
+        });
     }
-    Ok(json!({ "task": task, "woken": idle }))
+    Ok(json!({ "task": task, "woken": is_target_idle }))
 }
 
 fn read_inbox<R: Runtime>(
@@ -786,7 +793,7 @@ fn read_inbox<R: Runtime>(
 ) -> Result<Value, ToolError> {
     let args: ReadInboxArgs = parse(args)?;
     let request = InboxRequest {
-        unread_only: args.unread_only.unwrap_or(true),
+        is_unread_only: args.unread_only.unwrap_or(true),
         limit: args.limit,
     };
     let messages = messages::read_inbox(&mut *hub.repo()?, &who.actor(), &request)?;
@@ -868,7 +875,7 @@ mod tests {
     }
 
     #[test]
-    fn every_tool_has_an_object_schema_and_a_handler() {
+    fn given_the_tool_list_when_inspecting_it_then_every_tool_has_an_object_schema_and_a_handler() {
         let (hub, _) = hub();
         let who = identity("t-1", "ws-1", "claude");
         let defs = definitions();
@@ -904,7 +911,7 @@ mod tests {
     }
 
     #[test]
-    fn two_agents_coordinate_through_the_board() {
+    fn given_two_agents_when_using_the_board_then_they_coordinate_through_it() {
         let (hub, events) = hub();
         hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         hub.issue(identity("t-2", "ws-1", "claude")).unwrap();
@@ -1024,11 +1031,10 @@ mod tests {
             .as_array()
             .unwrap()
             .iter()
-            .map(|e| e["kind"].as_str().unwrap())
+            .map(|event| event["kind"].as_str().unwrap())
             .collect();
         assert_eq!(kinds, vec!["created", "claimed", "completed"]);
 
-        // A dependent task shows what it waits on and can't be claimed yet.
         call(
             &hub,
             &lead,
@@ -1063,17 +1069,18 @@ mod tests {
         assert!(
             events
                 .iter()
-                .filter(|(e, _)| e == EVENT_TASKS_CHANGED)
+                .filter(|(event, _)| event == EVENT_TASKS_CHANGED)
                 .count()
                 >= 3
         );
         assert!(events
             .iter()
-            .any(|(e, p)| e == EVENT_MESSAGE && p["to"] == "t-2"));
+            .any(|(event, payload)| event == EVENT_MESSAGE && payload["to"] == "t-2"));
     }
 
     #[test]
-    fn tools_are_scoped_to_the_callers_workspace() {
+    fn given_agents_in_several_workspaces_when_calling_tools_then_they_are_scoped_to_the_callers_workspace(
+    ) {
         let (hub, _) = hub();
         hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         hub.issue(identity("t-5", "ws-2", "codex")).unwrap();
@@ -1131,7 +1138,6 @@ mod tests {
             .unwrap()["notes"],
             json!([])
         );
-        // Agents of other projects are not addressable either.
         assert!(call(
             &hub,
             &other,
@@ -1156,7 +1162,8 @@ mod tests {
     }
 
     #[test]
-    fn given_a_task_of_another_workspace_every_task_tool_reports_not_found_and_changes_nothing() {
+    fn given_a_task_of_another_workspace_when_calling_any_task_tool_then_it_reports_not_found_and_changes_nothing(
+    ) {
         let (hub, _) = hub();
         let owner = identity("t-1", "ws-1", "claude");
         let lead = AgentIdentity {
@@ -1225,7 +1232,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_arguments_are_reported() {
+    fn given_invalid_arguments_when_calling_tools_then_they_are_reported() {
         let (hub, _) = hub();
         let who = identity("t-1", "ws-1", "claude");
         assert!(matches!(
@@ -1295,7 +1302,7 @@ mod tests {
     }
 
     #[test]
-    fn status_and_notes_round_trip() {
+    fn given_a_status_and_notes_when_writing_and_reading_them_then_they_round_trip() {
         let (hub, events) = hub();
         hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         hub.issue(identity("t-2", "ws-1", "codex")).unwrap();
@@ -1325,7 +1332,7 @@ mod tests {
             .lock()
             .unwrap()
             .iter()
-            .any(|(e, _)| e == EVENT_AGENT_STATUS));
+            .any(|(event, _)| event == EVENT_AGENT_STATUS));
 
         call(
             &hub,
@@ -1368,7 +1375,7 @@ mod tests {
     }
 
     #[test]
-    fn the_orchestrator_assigns_and_wakes_idle_teammates() {
+    fn given_an_orchestrator_when_assigning_tasks_then_idle_teammates_are_woken() {
         let (hub, events) = hub();
         let lead = AgentIdentity {
             role: Some(Role::Orchestrator),
@@ -1420,7 +1427,6 @@ mod tests {
         )
         .unwrap();
 
-        // Only the orchestrator assigns.
         let refused = call(
             &hub,
             &dev,
@@ -1432,7 +1438,6 @@ mod tests {
         assert!(
             matches!(refused, Err(ToolError::InvalidArguments(message)) if message.contains("orchestrator"))
         );
-        // Dependencies come first, and the target must be a running teammate.
         assert!(matches!(
             call(
                 &hub,
@@ -1454,7 +1459,6 @@ mod tests {
         )
         .is_err());
 
-        // A busy agent gets the task and a message, but nothing typed.
         call(
             &hub,
             &dev,
@@ -1495,7 +1499,6 @@ mod tests {
             .iter()
             .any(|(event, _)| event == EVENT_NUDGE));
 
-        // An idle one is woken with a prompt.
         call(
             &hub,
             &dev,

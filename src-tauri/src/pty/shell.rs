@@ -1,6 +1,3 @@
-//! Which shell runs a terminal: the login shell, `/etc/shells` and, on
-//! Windows, PowerShell, Git Bash and cmd.
-
 #[cfg(unix)]
 const PASSWD_BUFFER_FALLBACK_BYTES: usize = 1024;
 #[cfg(unix)]
@@ -72,28 +69,24 @@ fn read_passwd_shell(buffer: &mut [libc::c_char]) -> Result<Option<String>, libc
 }
 
 #[cfg(unix)]
-fn valid_shell(shell: &str) -> bool {
+fn is_valid_shell(shell: &str) -> bool {
     shell.starts_with('/') && std::path::Path::new(shell).exists()
 }
 
 #[cfg(windows)]
-fn valid_shell(shell: &str) -> bool {
+fn is_valid_shell(shell: &str) -> bool {
     let path = std::path::Path::new(shell);
     path.is_absolute() && path.exists()
 }
 
 #[cfg(windows)]
 pub(super) fn find_on_path(exe: &str) -> Option<String> {
-    // Search PATH directly instead of shelling out to where.exe: its output is
-    // encoded in the console OEM codepage, so any non-ASCII install path
-    // (accented usernames, localized "Program Files") breaks UTF-8 decoding
-    // and the tool is reported missing.
     let paths = std::env::var_os("PATH")?;
     let pathext: Vec<String> = std::env::var("PATHEXT")
         .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string())
         .split(';')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+        .map(|extension| extension.trim().to_string())
+        .filter(|extension| !extension.is_empty())
         .collect();
     for dir in std::env::split_paths(&paths) {
         if dir.as_os_str().is_empty() {
@@ -117,7 +110,7 @@ pub(super) fn find_on_path(exe: &str) -> Option<String> {
 fn find_git_bash() -> Option<String> {
     if let Some(git) = find_on_path("git.exe") {
         let path = std::path::Path::new(&git);
-        if let Some(root) = path.parent().and_then(|p| p.parent()) {
+        if let Some(root) = path.parent().and_then(|bin| bin.parent()) {
             let bash = root.join("bin").join("bash.exe");
             if bash.exists() {
                 return Some(bash.to_string_lossy().into_owned());
@@ -139,8 +132,8 @@ fn find_git_bash() -> Option<String> {
     }
     candidates
         .into_iter()
-        .find(|p| p.exists())
-        .map(|p| p.to_string_lossy().into_owned())
+        .find(|candidate| candidate.exists())
+        .map(|candidate| candidate.to_string_lossy().into_owned())
 }
 
 #[cfg(windows)]
@@ -155,7 +148,7 @@ pub(super) enum ShellFlavor {
 pub(super) fn shell_flavor(shell: &str) -> ShellFlavor {
     let name = std::path::Path::new(shell)
         .file_name()
-        .and_then(|n| n.to_str())
+        .and_then(|file_name| file_name.to_str())
         .unwrap_or(shell)
         .to_lowercase();
     if name.starts_with("pwsh") || name.starts_with("powershell") {
@@ -173,7 +166,7 @@ pub(super) fn user_shell() -> String {
         return shell;
     }
     if let Ok(shell) = std::env::var("SHELL") {
-        if valid_shell(&shell) {
+        if is_valid_shell(&shell) {
             return shell;
         }
     }
@@ -189,7 +182,7 @@ pub(super) fn user_shell() -> String {
         return ps;
     }
     if let Ok(comspec) = std::env::var("COMSPEC") {
-        if valid_shell(&comspec) {
+        if is_valid_shell(&comspec) {
             return comspec;
         }
     }
@@ -198,7 +191,7 @@ pub(super) fn user_shell() -> String {
 
 pub(super) fn resolve_shell(preferred: Option<&str>) -> String {
     match preferred.map(str::trim) {
-        Some(shell) if valid_shell(shell) => shell.to_string(),
+        Some(shell) if is_valid_shell(shell) => shell.to_string(),
         _ => user_shell(),
     }
 }
@@ -207,7 +200,7 @@ pub(super) fn resolve_shell(preferred: Option<&str>) -> String {
 pub fn list_available_shells() -> Vec<String> {
     let mut shells: Vec<String> = Vec::new();
     let mut add = |shell: String| {
-        if valid_shell(&shell) && !shells.contains(&shell) {
+        if is_valid_shell(&shell) && !shells.contains(&shell) {
             shells.push(shell);
         }
     };

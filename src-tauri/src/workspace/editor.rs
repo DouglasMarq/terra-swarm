@@ -1,8 +1,3 @@
-//! Reading and saving one text file of a workspace for the built-in editor.
-//! Paths are workspace-relative and must stay inside the workspace, and a
-//! save refuses to overwrite a file that changed on disk since it was read
-//! (agents edit the same files).
-
 use super::{safe_relative_path, write_atomic, WorkspaceStore};
 use crate::ipc_error::{IpcError, IpcErrorCode};
 use crate::sync::LockExt;
@@ -11,10 +6,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::State;
 
-/// Larger files are not opened in the editor.
 pub(crate) const MAX_EDIT_BYTES: u64 = 2 * 1024 * 1024;
 
-/// A NUL byte within this many leading bytes marks the file as binary.
 const BINARY_SNIFF_BYTES: usize = 8192;
 
 const BYTES_PER_KB: u64 = 1024;
@@ -23,11 +16,9 @@ const BYTES_PER_KB: u64 = 1024;
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceFileContent {
     pub path: String,
-    /// Empty when the file is binary.
     pub content: String,
     pub binary: bool,
     pub size: u64,
-    /// Modification time in milliseconds, passed back when saving.
     pub modified: u64,
 }
 
@@ -51,7 +42,6 @@ fn modified_millis(path: &Path) -> Result<u64, String> {
     Ok(crate::clock::epoch_millis(modified).unwrap_or(0))
 }
 
-/// The real path of `relative` inside `root`, which must be an existing file.
 fn resolve_file(root: &Path, relative: &str) -> Result<PathBuf, String> {
     let root = root
         .canonicalize()
@@ -64,8 +54,8 @@ fn resolve_file(root: &Path, relative: &str) -> Result<PathBuf, String> {
         .join(&relative)
         .canonicalize()
         .map_err(|error| format!("file is unavailable: {}", error))?;
-    // A symlink may point anywhere; only what resolves inside the workspace opens.
-    if !target.starts_with(&root) {
+    let is_inside_workspace = target.starts_with(&root);
+    if !is_inside_workspace {
         return Err("file path cannot escape the workspace".into());
     }
     if !target.is_file() {
@@ -157,7 +147,6 @@ pub fn read_workspace_file(
     )
 }
 
-/// `expected_modified` is the time the editor read; `None` overwrites.
 #[tauri::command(async)]
 pub fn write_workspace_file(
     store: State<'_, Mutex<WorkspaceStore>>,
@@ -192,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn reads_and_saves_text_inside_the_workspace() {
+    fn given_a_text_file_inside_the_workspace_when_reading_and_saving_then_both_succeed() {
         let root = temp_root("rw");
         std::fs::write(root.join("src/main.ts"), "let a = 1;\n").unwrap();
         let file = read_file(&root, "src/main.ts").unwrap();
@@ -216,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn refuses_to_overwrite_a_file_an_agent_changed() {
+    fn given_a_file_an_agent_changed_when_saving_then_the_overwrite_is_refused() {
         let root = temp_root("conflict");
         let path = root.join("notes.md");
         std::fs::write(&path, "one").unwrap();
@@ -285,7 +274,7 @@ mod tests {
     }
 
     #[test]
-    fn given_text_over_the_size_limit_save_fails_with_the_other_code() {
+    fn given_text_over_the_size_limit_when_saving_then_it_fails_with_the_other_code() {
         let root = temp_root("too-large");
         std::fs::write(root.join("big.txt"), "x").unwrap();
         let text =
@@ -305,7 +294,8 @@ mod tests {
     }
 
     #[test]
-    fn stays_inside_the_workspace_and_skips_binaries() {
+    fn given_paths_outside_the_workspace_or_binary_files_when_reading_then_they_are_refused_or_skipped(
+    ) {
         let root = temp_root("guard");
         let outside = root.with_extension("outside");
         std::fs::write(&outside, "secret").unwrap();

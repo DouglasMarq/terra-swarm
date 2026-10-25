@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub fn epoch_millis(time: SystemTime) -> Option<u64> {
     time.duration_since(UNIX_EPOCH)
         .ok()
-        .map(|elapsed| elapsed.as_millis() as u64)
+        .and_then(|elapsed| u64::try_from(elapsed.as_millis()).ok())
 }
 
 pub fn now_epoch_millis() -> u64 {
@@ -11,7 +11,7 @@ pub fn now_epoch_millis() -> u64 {
 }
 
 pub fn now_millis() -> i64 {
-    now_epoch_millis() as i64
+    i64::try_from(now_epoch_millis()).unwrap_or(i64::MAX)
 }
 
 #[cfg(test)]
@@ -41,6 +41,6 @@ mod tests {
         let unsigned = now_epoch_millis();
 
         assert!(signed > 0);
-        assert!(unsigned >= signed as u64);
+        assert!(unsigned >= signed.unsigned_abs());
     }
 }

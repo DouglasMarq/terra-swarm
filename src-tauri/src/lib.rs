@@ -22,12 +22,9 @@ use std::time::Duration;
 use sync::LockExt;
 use tauri::{Listener, Manager};
 
-/// How long `SWARM_DEMO=1` waits for the window before seeding terminals.
 const DEMO_SEED_DELAY: Duration = Duration::from_millis(800);
 const BUILD_FAILURE_EXIT_CODE: i32 = 1;
 
-/// Remove the old scrollback of terminals the store no longer knows. A
-/// store that could not be read knows no terminals, so it keeps them all.
 fn clean_orphaned_scrollback(
     store: &workspace::WorkspaceStore,
     scrollback_store: &scrollback::ScrollbackStore,
@@ -92,10 +89,10 @@ fn setup(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn reserve_known_ids(store: &workspace::WorkspaceStore) {
-    for ws in &store.workspaces {
-        workspace::bump_next_id(&ws.id);
-        for t in &ws.terminals {
-            pty::bump_next_terminal_id(&t.id);
+    for known_workspace in &store.workspaces {
+        workspace::bump_next_id(&known_workspace.id);
+        for terminal in &known_workspace.terminals {
+            pty::bump_next_terminal_id(&terminal.id);
         }
     }
 }
@@ -118,9 +115,7 @@ fn open_mcp_hub(
             error
         ),
     }
-    // Without a database there is nothing to serve: the server stays
-    // off and Settings explains why.
-    if hub.available() {
+    if hub.is_available() {
         if let Err(error) = mcp::server::start(Arc::clone(&hub)) {
             eprintln!("failed to start the MCP server: {}", error);
         }
@@ -134,10 +129,8 @@ fn retain_known_workspaces(hub: &mcp::McpHub, store: &workspace::WorkspaceStore)
         .iter()
         .map(|workspace| workspace.id.clone())
         .collect::<std::collections::HashSet<_>>();
-    // Workspaces closed by an older build left their data behind. An
-    // empty list may mean the workspace store failed to load; keep
-    // the board rather than wiping it in that case.
-    if known_workspaces.is_empty() {
+    let has_store_possibly_failed_to_load = known_workspaces.is_empty();
+    if has_store_possibly_failed_to_load {
         return;
     }
     if let Err(error) = hub
@@ -173,8 +166,6 @@ fn seed_demo_later(handle: tauri::AppHandle) {
 fn on_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
     match event {
         tauri::RunEvent::ExitRequested { .. } => {
-            // Flush the workspace store synchronously; the debounced
-            // background writer may not fire before the process exits.
             app.state::<Mutex<workspace::WorkspaceStore>>()
                 .lock_or_recover()
                 .save_now();
@@ -283,7 +274,8 @@ mod tests {
     }
 
     #[test]
-    fn given_a_store_that_could_not_be_read_keeps_every_transcript() {
+    fn given_a_store_that_could_not_be_read_when_cleaning_transcripts_then_it_keeps_every_transcript(
+    ) {
         let (root, transcript) = old_transcript("unread");
         let store = workspace::WorkspaceStore::default();
 
@@ -297,7 +289,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_loaded_store_removes_old_transcripts_it_does_not_know() {
+    fn given_a_loaded_store_when_cleaning_transcripts_then_it_removes_old_ones_it_does_not_know() {
         let (root, transcript) = old_transcript("loaded");
         let store = workspace::WorkspaceStore {
             save_path: Some(root.join("workspaces.json")),

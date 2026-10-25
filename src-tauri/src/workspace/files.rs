@@ -1,5 +1,3 @@
-//! Read-only, workspace-relative directory listing for the Files view.
-
 use super::*;
 use crate::sync::LockExt;
 use serde::Serialize;
@@ -11,8 +9,6 @@ pub(crate) const DEFAULT_FILE_LIST_LIMIT: usize = 200;
 
 pub(crate) const MAX_FILE_LIST_LIMIT: usize = 400;
 
-/// Metadata-only directory entry used by the lazy Files activity. The
-/// command never reads file contents and paths are always workspace-relative.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceFileEntry {
@@ -74,12 +70,12 @@ pub(crate) fn list_directory_entries(
     let target = directory_inside(&root, &relative)?;
     let mut entries = read_entries(&target, &relative)?;
     entries.sort_by(compare_entries);
-    let truncated = entries.len() > limit;
+    let is_truncated = entries.len() > limit;
     entries.truncate(limit);
     Ok(WorkspaceFileListing {
         path: relative_path_string(&relative),
         entries,
-        truncated,
+        truncated: is_truncated,
         limit,
     })
 }
@@ -160,10 +156,10 @@ fn entry_kind(file_type: &std::fs::FileType) -> &'static str {
 }
 
 fn compare_entries(left: &WorkspaceFileEntry, right: &WorkspaceFileEntry) -> std::cmp::Ordering {
-    let left_directory = left.kind == DIRECTORY_KIND;
-    let right_directory = right.kind == DIRECTORY_KIND;
-    right_directory
-        .cmp(&left_directory)
+    let is_left_directory = left.kind == DIRECTORY_KIND;
+    let is_right_directory = right.kind == DIRECTORY_KIND;
+    is_right_directory
+        .cmp(&is_left_directory)
         .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
         .then_with(|| left.name.cmp(&right.name))
 }

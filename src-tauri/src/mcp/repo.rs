@@ -1,9 +1,3 @@
-//! Queries behind the MCP tools and the Tasks panel: tasks, messages and
-//! notes. Every call is scoped by `workspace_id`, which callers take from the
-//! caller's token, never from the agent's arguments.
-//!
-//! Everything is in `mcp.db` and is kept in full (no size-based eviction).
-
 use rusqlite::types::Value;
 use rusqlite::{
     params, params_from_iter, Connection, OptionalExtension, Row, Transaction, TransactionBehavior,
@@ -16,8 +10,6 @@ use super::model::{
     TaskStatus, MAX_LIMIT,
 };
 
-/// The tables a workspace's rows live in; fixed at compile time, so they
-/// can be named in SQL with `format!`.
 const WORKSPACE_TABLES: [&str; 3] = ["tasks", "messages", "notes"];
 const TASK_STATUS_COLUMN: usize = 4;
 const NOTE_KEY_WEIGHT: f64 = 2.0;
@@ -145,15 +137,25 @@ pub struct NoteRecord<'a> {
     pub at: i64,
 }
 
-pub struct InboxQuery<'a> {
+pub struct TaskLookup<'a> {
     pub workspace_id: &'a str,
-    pub reader: &'a str,
-    pub unread_only: bool,
+    pub id: &'a str,
+    pub events: Option<usize>,
+}
+
+pub struct NoteQuery<'a> {
+    pub workspace_id: &'a str,
+    pub query: &'a str,
     pub limit: usize,
 }
 
-/// Turn free text into an FTS5 query: every word must match, each as a
-/// prefix, and FTS operators typed by the agent are taken literally.
+pub struct InboxQuery<'a> {
+    pub workspace_id: &'a str,
+    pub reader: &'a str,
+    pub is_unread_only: bool,
+    pub limit: usize,
+}
+
 fn fts_query(query: &str) -> Option<String> {
     let terms: Vec<String> = query
         .split_whitespace()
@@ -168,7 +170,6 @@ fn json_list<T: Into<serde_json::Value>>(items: impl Iterator<Item = T>) -> Stri
     items.collect::<serde_json::Value>().to_string()
 }
 
-/// Child rows go with their parents through ON DELETE CASCADE.
 fn delete_workspace_rows(tx: &Transaction<'_>, workspace_id: &str) -> StoreResult<()> {
     tx.execute(
         "DELETE FROM tasks WHERE workspace_id = ?1",
@@ -261,8 +262,6 @@ pub struct Queries<'c> {
 }
 
 impl Queries<'_> {
-    // ----- tasks ----------------------------------------------------------
-
     pub fn has_task(&self, workspace_id: &str, id: &str) -> StoreResult<bool> {
         let found = self
             .conn
@@ -275,19 +274,21 @@ impl Queries<'_> {
         Ok(found.is_some())
     }
 
-    pub fn task(&self, workspace_id: &str, id: &str, events: Option<usize>) -> StoreResult<Task> {
+    pub fn task(&self, lookup: &TaskLookup<'_>) -> StoreResult<Task> {
         let mut task = self
             .conn
             .query_row(
                 "SELECT id, workspace_id, title, description, status, priority, assignee, created_by,
                         labels, position, created_at, updated_at
                  FROM tasks WHERE id = ?1 AND workspace_id = ?2",
-                params![id, workspace_id],
+                params![lookup.id, lookup.workspace_id],
                 task_from_row,
             )
             .optional()?
-            .ok_or_else(|| task_not_found(id))?;
-        self.attach_task_details(workspace_id, std::slice::from_mut(&mut task), events)?;
+            .ok_or_else(|| task_not_found(lookup.id))?;
+        let tasks = std::slice::from_mut(&mut task);
+        self.attach_dependencies(lookup.workspace_id, tasks)?;
+        self.attach_recent_events(tasks, lookup.events)?;
         Ok(task)
     }
 
@@ -307,7 +308,6 @@ impl Queries<'_> {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
-    /// Ordered by status (active work first), priority, then position.
     pub fn list_tasks(&self, query: &TaskQuery<'_>) -> StoreResult<Vec<Task>> {
         let mut tasks: Vec<Task> = {
             let filter = TaskFilter::of(query);
@@ -315,19 +315,12 @@ impl Queries<'_> {
             let rows = stmt.query_map(params_from_iter(&filter.values), task_from_row)?;
             rows.collect::<Result<_, _>>()?
         };
-        self.attach_task_details(query.workspace_id, &mut tasks, query.events)?;
+        self.attach_dependencies(query.workspace_id, &mut tasks)?;
+        self.attach_recent_events(&mut tasks, query.events)?;
         Ok(tasks)
     }
 
-    /// Fill the dependencies of `tasks` and, when `events` is set, their latest
-    /// events, with one query each however many tasks there are.
-    fn attach_task_details(
-        &self,
-        workspace_id: &str,
-        tasks: &mut [Task],
-        events: Option<usize>,
-    ) -> StoreResult<()> {
-        self.attach_dependencies(workspace_id, tasks)?;
+    fn attach_recent_events(&self, tasks: &mut [Task], events: Option<usize>) -> StoreResult<()> {
         let Some(limit) = events else {
             return Ok(());
         };
@@ -483,8 +476,6 @@ impl Queries<'_> {
         Ok(())
     }
 
-    // ----- messages -------------------------------------------------------
-
     pub fn insert_message(&self, message: &MessageRecord<'_>) -> StoreResult<Message> {
         self.conn.execute(
             "INSERT INTO messages(workspace_id, sender, recipient, body, created_at)
@@ -517,7 +508,6 @@ impl Queries<'_> {
         Ok(message)
     }
 
-    /// Messages sent to `reader` or to `all`, oldest first, at most `limit`.
     pub fn inbox(&self, query: &InboxQuery<'_>) -> StoreResult<Vec<Message>> {
         let mut stmt = self.conn.prepare_cached(
             "SELECT id, workspace_id, sender, recipient, body, created_at FROM messages m
@@ -530,7 +520,7 @@ impl Queries<'_> {
             params![
                 query.workspace_id,
                 query.reader,
-                query.unread_only,
+                query.is_unread_only,
                 sql_limit(query.limit)
             ],
             message_from_row,
@@ -548,7 +538,6 @@ impl Queries<'_> {
         Ok(())
     }
 
-    /// Fill `read_by` of `messages` with one query however many there are.
     pub fn attach_readers(&self, messages: &mut [Message]) -> StoreResult<()> {
         let index: HashMap<i64, usize> = messages
             .iter()
@@ -585,10 +574,6 @@ impl Queries<'_> {
             .map_err(|_| rusqlite::Error::IntegralValueOutOfRange(0, count))?)
     }
 
-    // ----- notes ----------------------------------------------------------
-
-    /// Save a note. A note with the same `key` is updated in place, so keys
-    /// work as named facts ("test-command", "api-conventions").
     pub fn upsert_note(&self, note: &NoteRecord<'_>) -> StoreResult<Note> {
         let id: i64 = self.conn.query_row(
             "INSERT INTO notes(workspace_id, key, body, author, created_at, updated_at)
@@ -614,14 +599,12 @@ impl Queries<'_> {
             .ok_or_else(|| StoreError::NotFound(format!("note {} not found in this workspace", id)))
     }
 
-    /// Full-text search over key and body, best matches first. An empty
-    /// query lists the most recently updated notes.
-    pub fn search_notes(
-        &self,
-        workspace_id: &str,
-        query: &str,
-        limit: usize,
-    ) -> StoreResult<Vec<Note>> {
+    pub fn search_notes(&self, search: &NoteQuery<'_>) -> StoreResult<Vec<Note>> {
+        let NoteQuery {
+            workspace_id,
+            query,
+            limit,
+        } = *search;
         let notes: Vec<Note> = match fts_query(query) {
             Some(fts) => {
                 let mut stmt = self.conn.prepare_cached(
@@ -697,10 +680,7 @@ impl Repo {
         Ok(RepoTx { tx })
     }
 
-    // ----- settings -------------------------------------------------------
-
-    /// Whether terminals get the MCP server injected. On unless turned off.
-    pub fn enabled(&self) -> bool {
+    pub fn is_enabled(&self) -> bool {
         match self
             .conn
             .query_row(
@@ -721,18 +701,14 @@ impl Repo {
         }
     }
 
-    pub fn set_enabled(&self, enabled: bool) -> StoreResult<()> {
+    pub fn set_enabled(&self, is_enabled: bool) -> StoreResult<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO settings(key, value) VALUES ('enabled', ?1)",
-            params![if enabled { "1" } else { "0" }],
+            params![if is_enabled { "1" } else { "0" }],
         )?;
         Ok(())
     }
 
-    // ----- workspace lifecycle --------------------------------------------
-
-    /// Delete everything a workspace owns. Workspaces live in
-    /// `workspaces.json`, so there is no foreign key to cascade from.
     pub fn purge_workspace(&mut self, workspace_id: &str) -> StoreResult<()> {
         let tx = self.conn.transaction()?;
         delete_workspace_rows(&tx, workspace_id)?;
@@ -740,8 +716,6 @@ impl Repo {
         Ok(())
     }
 
-    /// Purge workspaces that disappeared while the app was not running, all
-    /// in one transaction.
     pub fn retain_workspaces(&mut self, known: &HashSet<String>) -> StoreResult<()> {
         let mut gone: Vec<String> = Vec::new();
         for table in WORKSPACE_TABLES {
@@ -798,7 +772,7 @@ mod tests {
     }
 
     #[test]
-    fn given_ids_of_another_workspace_the_loaders_find_nothing() {
+    fn given_ids_of_another_workspace_when_loading_then_nothing_is_found() {
         let mut repo = Repo::in_memory();
         let task_id = tasks::create(&mut repo, &actor("ws-1", "t-1"), task("private"))
             .unwrap()
@@ -824,7 +798,11 @@ mod tests {
         .unwrap()
         .id;
         assert!(matches!(
-            repo.queries().task("ws-2", &task_id, None),
+            repo.queries().task(&TaskLookup {
+                workspace_id: "ws-2",
+                id: &task_id,
+                events: None,
+            }),
             Err(StoreError::NotFound(_))
         ));
         assert!(matches!(
@@ -838,7 +816,7 @@ mod tests {
     }
 
     #[test]
-    fn given_unreadable_labels_the_task_loads_with_none() {
+    fn given_unreadable_labels_when_loading_the_task_then_it_has_none() {
         let mut repo = Repo::in_memory();
         let id = tasks::create(&mut repo, &actor("ws-1", "t-1"), task("x"))
             .unwrap()
@@ -986,23 +964,23 @@ mod tests {
     }
 
     #[test]
-    fn purge_removes_only_that_workspace() {
+    fn given_two_workspaces_when_purging_one_then_only_its_data_is_removed() {
         let mut repo = Repo::in_memory();
-        for ws in ["ws-1", "ws-2"] {
-            let a = tasks::create(&mut repo, &actor(ws, "t-1"), task("a")).unwrap();
+        for workspace_id in ["ws-1", "ws-2"] {
+            let first = tasks::create(&mut repo, &actor(workspace_id, "t-1"), task("a")).unwrap();
             tasks::create(
                 &mut repo,
-                &actor(ws, "t-1"),
+                &actor(workspace_id, "t-1"),
                 NewTask {
                     title: "b".into(),
-                    depends_on: vec![a.id],
+                    depends_on: vec![first.id],
                     ..NewTask::default()
                 },
             )
             .unwrap();
             let message = messages::send(
                 repo.queries(),
-                &actor(ws, "t-1"),
+                &actor(workspace_id, "t-1"),
                 &Outgoing {
                     to: "all",
                     body: "hi",
@@ -1011,9 +989,9 @@ mod tests {
             .unwrap();
             messages::read_inbox(
                 &mut repo,
-                &actor(ws, "t-2"),
+                &actor(workspace_id, "t-2"),
                 &InboxRequest {
-                    unread_only: true,
+                    is_unread_only: true,
                     limit: None,
                 },
             )
@@ -1021,7 +999,7 @@ mod tests {
             assert!(message.id > 0);
             notes::add(
                 repo.queries(),
-                &actor(ws, "t-1"),
+                &actor(workspace_id, "t-1"),
                 &NoteDraft {
                     key: Some("k"),
                     body: "note",
@@ -1063,19 +1041,19 @@ mod tests {
     }
 
     #[test]
-    fn given_an_unreadable_setting_the_server_stays_enabled() {
+    fn given_an_unreadable_setting_when_reading_it_then_the_server_stays_enabled() {
         let repo = Repo::in_memory();
         repo.execute("ALTER TABLE settings RENAME TO settings_gone", &[]);
-        assert!(repo.enabled());
+        assert!(repo.is_enabled());
     }
 
     #[test]
-    fn data_and_setting_survive_a_reopen() {
+    fn given_stored_data_and_settings_when_reopening_then_they_survive() {
         let dir = std::env::temp_dir().join(format!("terra-mcp-reopen-{}", now_millis()));
         let path = dir.join("mcp.db");
         {
             let mut repo = Repo::new(super::super::db::open(&path).unwrap());
-            assert!(repo.enabled());
+            assert!(repo.is_enabled());
             repo.set_enabled(false).unwrap();
             tasks::create(&mut repo, &actor("ws-1", "t-1"), task("kept")).unwrap();
             messages::send(
@@ -1098,7 +1076,7 @@ mod tests {
             .unwrap();
         }
         let mut repo = Repo::new(super::super::db::open(&path).unwrap());
-        assert!(!repo.enabled());
+        assert!(!repo.is_enabled());
         assert_eq!(
             repo.queries()
                 .list_tasks(&TaskQuery::all("ws-1"))
@@ -1111,7 +1089,7 @@ mod tests {
                 &mut repo,
                 &actor("ws-1", "t-2"),
                 &InboxRequest {
-                    unread_only: true,
+                    is_unread_only: true,
                     limit: None
                 }
             )
@@ -1132,7 +1110,6 @@ mod tests {
             .len(),
             1
         );
-        // Ids keep counting after a restart.
         assert_eq!(
             tasks::create(&mut repo, &actor("ws-1", "t-1"), task("next"))
                 .unwrap()

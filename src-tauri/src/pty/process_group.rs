@@ -92,7 +92,7 @@ mod tests {
         unsafe { libc::kill(pid, 0) == 0 }
     }
 
-    fn exits_within_deadline(child: &mut Child) -> bool {
+    fn has_exited_within_deadline(child: &mut Child) -> bool {
         let started = Instant::now();
         while started.elapsed() < DEADLINE {
             if child.try_wait().expect("poll child").is_some() {
@@ -121,7 +121,7 @@ mod tests {
 
         group.kill();
 
-        assert!(exits_within_deadline(&mut child));
+        assert!(has_exited_within_deadline(&mut child));
     }
 
     #[test]

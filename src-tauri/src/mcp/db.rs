@@ -1,15 +1,8 @@
-//! SQLite connection and schema migrations for `<app_data_dir>/mcp.db`.
-//!
-//! Migrations are an append-only list applied in one transaction on startup;
-//! `PRAGMA user_version` records how many have run. Never edit a shipped
-//! migration: add a new one.
-
 use rusqlite::Connection;
 use std::path::Path;
 use std::time::Duration;
 
 pub const DB_FILE: &str = "mcp.db";
-/// How long a connection waits for another one's write lock.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const OPTIMIZE_ALL_TABLES: &str = "PRAGMA optimize = 0x10002";
 
@@ -120,17 +113,16 @@ pub fn schema_version() -> u32 {
     MIGRATIONS.len() as u32
 }
 
-fn configure(conn: &Connection, file_backed: bool) -> rusqlite::Result<()> {
+fn configure(conn: &Connection, is_file_backed: bool) -> rusqlite::Result<()> {
     conn.busy_timeout(BUSY_TIMEOUT)?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
-    if file_backed {
+    if is_file_backed {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
     }
     Ok(())
 }
 
-/// Bring the schema up to date. Returns the resulting version.
 pub fn migrate(conn: &mut Connection) -> Result<u32, String> {
     let current: u32 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
@@ -157,8 +149,6 @@ pub fn migrate(conn: &mut Connection) -> Result<u32, String> {
     Ok(target)
 }
 
-/// Open the database file and migrate it. Any failure leaves the file as it
-/// is: the caller runs the app with the MCP server off.
 pub fn open(path: &Path) -> Result<Connection, String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -199,16 +189,16 @@ mod tests {
     }
 
     #[test]
-    fn migrations_apply_from_scratch_and_are_idempotent() {
+    fn given_an_empty_database_when_migrating_twice_then_migrations_apply_and_are_idempotent() {
         let path = temp_path("fresh");
         {
             let conn = open(&path).unwrap();
             let version: u32 = conn
-                .query_row("PRAGMA user_version", [], |r| r.get(0))
+                .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
             assert_eq!(version, schema_version());
             let mode: String = conn
-                .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+                .query_row("PRAGMA journal_mode", [], |row| row.get(0))
                 .unwrap();
             assert_eq!(mode, "wal");
             conn.execute(
@@ -217,20 +207,21 @@ mod tests {
             )
             .unwrap();
         }
-        // Reopening runs no migration again and keeps the data.
         let mut conn = open(&path).unwrap();
         assert_eq!(migrate(&mut conn).unwrap(), schema_version());
         let kept: String = conn
-            .query_row("SELECT value FROM settings WHERE key = 'probe'", [], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'probe'",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert_eq!(kept, "kept");
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
     #[test]
-    fn a_newer_schema_is_refused_without_touching_the_file() {
+    fn given_a_newer_schema_when_opening_then_it_is_refused_without_touching_the_file() {
         let path = temp_path("newer");
         {
             let conn = open(&path).unwrap();
@@ -243,12 +234,11 @@ mod tests {
     }
 
     #[test]
-    fn a_file_that_is_not_sqlite_fails_to_open() {
+    fn given_a_file_that_is_not_sqlite_when_opening_then_it_fails() {
         let path = temp_path("garbage");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, b"definitely not a database, just some bytes here").unwrap();
         assert!(open(&path).is_err());
-        // The file is left for the user to inspect.
         assert!(path.exists());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
@@ -337,7 +327,7 @@ mod tests {
     }
 
     #[test]
-    fn fts5_is_available() {
+    fn given_an_in_memory_database_when_searching_notes_then_fts5_is_available() {
         let conn = open_in_memory();
         conn.execute(
             "INSERT INTO notes(workspace_id, key, body, author, created_at, updated_at)
@@ -349,7 +339,7 @@ mod tests {
             .query_row(
                 "SELECT COUNT(*) FROM notes_fts WHERE notes_fts MATCH '\"acao\"'",
                 [],
-                |r| r.get(0),
+                |row| row.get(0),
             )
             .unwrap();
         assert_eq!(hits, 1);

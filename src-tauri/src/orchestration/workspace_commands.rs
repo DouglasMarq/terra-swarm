@@ -12,8 +12,6 @@ use crate::workspace::{
     WorkspaceStore,
 };
 
-/// Called by `close_workspace`: workspaces live in `workspaces.json`, so
-/// their MCP data has no foreign key to cascade from.
 fn purge_workspace<R: Runtime>(app: &AppHandle<R>, workspace_id: &str) {
     if let Some(hub) = app.try_state::<Arc<McpHub<R>>>() {
         hub.purge_workspace(workspace_id);
@@ -27,9 +25,6 @@ fn stop_terminals<R: Runtime>(app: &AppHandle<R>, terminal_ids: &[String]) {
     }
 }
 
-/// Mark a group suspended and stop its PTYs without deleting terminal
-/// metadata or durable scrollback. Resume remains a metadata-only operation;
-/// the frontend decides when to enqueue respawns.
 #[tauri::command(async)]
 pub fn suspend_group(app: AppHandle, id: String) -> Result<(), String> {
     suspend_and_stop(&app, &id)
@@ -73,9 +68,6 @@ fn close_and_stop<R: Runtime>(app: &AppHandle<R>, id: &str) {
     emit_workspaces_changed(app);
 }
 
-/// Import a validated legacy/v1/v2 snapshot.  The current store is backed up
-/// and replaced atomically; all currently tracked PTYs are stopped so the
-/// imported metadata cannot accidentally describe an inherited live process.
 #[tauri::command(async)]
 pub fn import_workspace_snapshot(
     app: AppHandle,
@@ -114,9 +106,6 @@ fn replace_running_store<R: Runtime>(
         .ok_or_else(|| "workspace store has no persistence path".to_string())?;
     let backup = replace_store_file(&target, json)?;
 
-    // A transfer is metadata-only. Stop every process known to this app
-    // before swapping the in-memory store, including sessions absent from the
-    // old persisted file after a previous interrupted operation.
     kill_all(&app.state::<Mutex<PtyManager>>());
 
     imported.save_path = Some(target);
@@ -137,7 +126,8 @@ fn bump_imported_ids(imported: &WorkspaceStore) {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use super::*;
     use crate::pty::{

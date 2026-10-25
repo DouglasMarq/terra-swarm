@@ -4,7 +4,7 @@ use super::model::{
     Message, NewTask, StoreError, StoreResult, Task, TaskPatch, TaskPriority, TaskStatus,
     TASK_EVENTS_SHOWN,
 };
-use super::repo::{EventRecord, Queries, Repo};
+use super::repo::{EventRecord, Queries, Repo, TaskLookup};
 use crate::clock::now_millis;
 
 const FIRST_POSITION: f64 = 1.0;
@@ -29,7 +29,11 @@ pub struct Completion<'a> {
 pub fn get(repo: &Repo, workspace_id: &str, raw_id: &str) -> StoreResult<Task> {
     let queries = repo.queries();
     let id = resolve_id(queries, workspace_id, raw_id)?;
-    queries.task(workspace_id, &id, Some(TASK_EVENTS_SHOWN))
+    queries.task(&TaskLookup {
+        workspace_id,
+        id: &id,
+        events: Some(TASK_EVENTS_SHOWN),
+    })
 }
 
 pub fn delete(repo: &Repo, workspace_id: &str, raw_id: &str) -> StoreResult<()> {
@@ -44,20 +48,19 @@ pub fn create(repo: &mut Repo, actor: &Actor<'_>, new: NewTask) -> StoreResult<T
     let task = new_task(queries, actor, new)?;
     queries.insert_task(&task)?;
     let change = Change {
+        queries,
         actor: actor.name,
         task_id: &task.id,
         at: task.created_at,
     };
-    change.record(queries, "created", "")?;
+    change.record("created", "")?;
     if let Some(assignee) = &task.assignee {
-        change.record(queries, "assigned", assignee)?;
+        change.record("assigned", assignee)?;
     }
     tx.commit()?;
     shown(repo, actor, &task.id)
 }
 
-/// Take a `todo` task. The write transaction is the lock: of two agents
-/// racing for a task, the second sees the first one's claim.
 pub fn claim(repo: &mut Repo, actor: &Actor<'_>, raw_id: &str) -> StoreResult<Task> {
     let at = now_millis();
     let tx = repo.transaction()?;
@@ -70,11 +73,12 @@ pub fn claim(repo: &mut Repo, actor: &Actor<'_>, raw_id: &str) -> StoreResult<Ta
     task.updated_at = at;
     queries.save_task(&task)?;
     let change = Change {
+        queries,
         actor: actor.name,
         task_id: &task.id,
         at,
     };
-    change.record(queries, "claimed", "")?;
+    change.record("claimed", "")?;
     tx.commit()?;
     shown(repo, actor, &task.id)
 }
@@ -86,9 +90,6 @@ pub fn update(repo: &mut Repo, actor: &Actor<'_>, update: TaskUpdate<'_>) -> Sto
     shown(repo, actor, &id)
 }
 
-/// Hand a task to `to` and tell them in a message: both are written or
-/// neither is. Done tasks and tasks with unfinished dependencies can't be
-/// assigned; a `todo` task moves to `in_progress`.
 pub fn assign(
     repo: &mut Repo,
     actor: &Actor<'_>,
@@ -111,7 +112,11 @@ pub fn assign(
             patch,
         },
     )?;
-    let task = queries.task(actor.workspace_id, &id, Some(TASK_EVENTS_SHOWN))?;
+    let task = queries.task(&TaskLookup {
+        workspace_id: actor.workspace_id,
+        id: &id,
+        events: Some(TASK_EVENTS_SHOWN),
+    })?;
     let body = assignment_message(&task, assignment.note);
     let outgoing = Outgoing {
         to: assignment.to,
@@ -122,8 +127,6 @@ pub fn assign(
     Ok((task, message))
 }
 
-/// Hand work in for review. Only the assignee (or anyone, while the task
-/// is unassigned) can complete it.
 pub fn complete(
     repo: &mut Repo,
     actor: &Actor<'_>,
@@ -143,18 +146,22 @@ pub fn complete(
     task.updated_at = at;
     queries.save_task(&task)?;
     let change = Change {
+        queries,
         actor: actor.name,
         task_id: &task.id,
         at,
     };
-    change.record(queries, "completed", &summary)?;
+    change.record("completed", &summary)?;
     tx.commit()?;
     shown(repo, actor, &task.id)
 }
 
 fn shown(repo: &Repo, actor: &Actor<'_>, id: &str) -> StoreResult<Task> {
-    repo.queries()
-        .task(actor.workspace_id, id, Some(TASK_EVENTS_SHOWN))
+    repo.queries().task(&TaskLookup {
+        workspace_id: actor.workspace_id,
+        id,
+        events: Some(TASK_EVENTS_SHOWN),
+    })
 }
 
 fn resolve_id(queries: Queries<'_>, workspace_id: &str, raw_id: &str) -> StoreResult<String> {
@@ -167,18 +174,23 @@ fn resolve_id(queries: Queries<'_>, workspace_id: &str, raw_id: &str) -> StoreRe
 
 fn existing(queries: Queries<'_>, workspace_id: &str, raw_id: &str) -> StoreResult<Task> {
     let id = resolve_id(queries, workspace_id, raw_id)?;
-    queries.task(workspace_id, &id, None)
+    queries.task(&TaskLookup {
+        workspace_id,
+        id: &id,
+        events: None,
+    })
 }
 
 struct Change<'a> {
+    queries: Queries<'a>,
     actor: &'a str,
     task_id: &'a str,
     at: i64,
 }
 
 impl Change<'_> {
-    fn record(&self, queries: Queries<'_>, kind: &str, body: &str) -> StoreResult<()> {
-        queries.add_event(&EventRecord {
+    fn record(&self, kind: &str, body: &str) -> StoreResult<()> {
+        self.queries.add_event(&EventRecord {
             task_id: self.task_id,
             actor: self.actor,
             kind,
@@ -223,8 +235,6 @@ fn new_task(queries: Queries<'_>, actor: &Actor<'_>, new: NewTask) -> StoreResul
     })
 }
 
-/// Resolve dependency ids with one query, keeping their order and dropping
-/// duplicates. Any id that is not a task of the workspace is refused.
 fn dependency_ids(
     queries: Queries<'_>,
     workspace_id: &str,
@@ -251,7 +261,6 @@ fn dependency_ids(
     Ok(depends_on)
 }
 
-/// Next free slot at the end of a status column.
 fn end_of_column(queries: Queries<'_>, workspace_id: &str, status: TaskStatus) -> StoreResult<f64> {
     let max = queries.max_position(workspace_id, status)?;
     Ok(max.map_or(FIRST_POSITION, |max| max.floor() + POSITION_STEP))
@@ -320,8 +329,6 @@ fn assignment_message(task: &Task, note: Option<&str>) -> String {
     }
 }
 
-/// The writes of `update`, inside the caller's transaction. Returns the
-/// resolved task id.
 fn apply_patch(
     queries: Queries<'_>,
     actor: &Actor<'_>,
@@ -330,6 +337,7 @@ fn apply_patch(
     let before = existing(queries, actor.workspace_id, update.id)?;
     let patch = clean_patch(update.patch)?;
     let change = Change {
+        queries,
         actor: actor.name,
         task_id: &before.id,
         at: now_millis(),
@@ -339,7 +347,7 @@ fn apply_patch(
     after.updated_at = change.at;
     queries.save_task(&after)?;
     for (kind, body) in patch_events(&before, &after, patch.note.as_deref()) {
-        change.record(queries, kind, &body)?;
+        change.record(kind, &body)?;
     }
     Ok(before.id.clone())
 }
@@ -389,8 +397,6 @@ fn patched(before: &Task, patch: &TaskPatch) -> Task {
     }
 }
 
-/// A task that changes column goes to the end of the new one unless the
-/// caller placed it explicitly.
 fn new_position(queries: Queries<'_>, before: &Task, patch: &TaskPatch) -> StoreResult<f64> {
     if let Some(position) = patch.position {
         return Ok(position);
@@ -452,7 +458,8 @@ mod tests {
     }
 
     #[test]
-    fn task_crud_with_dependencies_and_events() {
+    fn given_tasks_with_dependencies_when_creating_updating_and_deleting_then_events_are_recorded()
+    {
         let mut repo = Repo::in_memory();
         let base = create(&mut repo, &actor("ws-1", "t-1"), task("Lexer")).unwrap();
         let created = create(
@@ -498,7 +505,7 @@ mod tests {
             .as_ref()
             .unwrap()
             .iter()
-            .map(|e| e.kind.as_str())
+            .map(|event| event.kind.as_str())
             .collect();
         assert_eq!(kinds, vec!["created", "status", "note"]);
         assert_eq!(updated.events.as_ref().unwrap()[1].body, "todo → blocked");
@@ -511,15 +518,15 @@ mod tests {
             get(&repo, "ws-1", "T-1"),
             Err(StoreError::NotFound(_))
         ));
-        // Deleting a task cascades to its dependency links and events.
         assert!(get(&repo, "ws-1", "T-2").unwrap().depends_on.is_empty());
         assert_eq!(repo.count("task_deps"), 0);
     }
 
     #[test]
-    fn list_orders_by_status_priority_and_position() {
+    fn given_tasks_of_mixed_status_and_priority_when_listing_then_they_are_ordered_by_status_priority_and_position(
+    ) {
         let mut repo = Repo::in_memory();
-        create(&mut repo, &actor("ws-1", "u"), task("medium first")).unwrap(); // T-1
+        create(&mut repo, &actor("ws-1", "u"), task("medium first")).unwrap();
         create(
             &mut repo,
             &actor("ws-1", "u"),
@@ -529,13 +536,12 @@ mod tests {
                 ..NewTask::default()
             },
         )
-        .unwrap(); // T-2
-        create(&mut repo, &actor("ws-1", "u"), task("medium second")).unwrap(); // T-3
-        create(&mut repo, &actor("ws-1", "u"), task("in progress")).unwrap(); // T-4
-        create(&mut repo, &actor("ws-1", "u"), task("finished")).unwrap(); // T-5
+        .unwrap();
+        create(&mut repo, &actor("ws-1", "u"), task("medium second")).unwrap();
+        create(&mut repo, &actor("ws-1", "u"), task("in progress")).unwrap();
+        create(&mut repo, &actor("ws-1", "u"), task("finished")).unwrap();
         set_status(&mut repo, "T-4", TaskStatus::InProgress);
         set_status(&mut repo, "T-5", TaskStatus::Done);
-        // Same priority: T-3 is moved ahead of T-1 inside the column.
         update(
             &mut repo,
             &actor("ws-1", "u"),
@@ -554,7 +560,7 @@ mod tests {
             .list_tasks(&TaskQuery::all("ws-1"))
             .unwrap()
             .into_iter()
-            .map(|t| t.id)
+            .map(|task| task.id)
             .collect();
         assert_eq!(ids, vec!["T-4", "T-2", "T-3", "T-1", "T-5"]);
         assert!(
@@ -572,7 +578,6 @@ mod tests {
                 .len(),
             3
         );
-        // Moving to a new column without a position lands at its end.
         let moved = update(
             &mut repo,
             &actor("ws-1", "u"),
@@ -589,7 +594,7 @@ mod tests {
     }
 
     #[test]
-    fn tasks_are_invisible_from_other_workspaces() {
+    fn given_a_task_in_one_workspace_when_listing_from_another_then_it_is_invisible() {
         let mut repo = Repo::in_memory();
         create(&mut repo, &actor("ws-1", "t-1"), task("secret")).unwrap();
         assert!(repo
@@ -616,11 +621,12 @@ mod tests {
     }
 
     #[test]
-    fn given_a_task_of_another_workspace_task_writes_find_nothing_and_change_nothing() {
+    fn given_a_task_of_another_workspace_when_writing_to_it_then_nothing_is_found_or_changed() {
         let mut repo = Repo::in_memory();
         create(&mut repo, &actor("ws-1", "t-1"), task("private")).unwrap();
-        let not_found = |result: StoreResult<Task>| matches!(result, Err(StoreError::NotFound(_)));
-        assert!(not_found(update(
+        let is_not_found =
+            |result: StoreResult<Task>| matches!(result, Err(StoreError::NotFound(_)));
+        assert!(is_not_found(update(
             &mut repo,
             &actor("ws-2", "t-9"),
             TaskUpdate {
@@ -633,8 +639,8 @@ mod tests {
                 }
             }
         )));
-        assert!(not_found(claim(&mut repo, &actor("ws-2", "t-9"), "T-1")));
-        assert!(not_found(complete(
+        assert!(is_not_found(claim(&mut repo, &actor("ws-2", "t-9"), "T-1")));
+        assert!(is_not_found(complete(
             &mut repo,
             &actor("ws-2", "t-9"),
             &Completion {
@@ -668,7 +674,8 @@ mod tests {
     }
 
     #[test]
-    fn given_a_dependency_link_to_another_workspace_it_neither_shows_nor_blocks() {
+    fn given_a_dependency_link_to_another_workspace_when_loading_then_it_neither_shows_nor_blocks()
+    {
         let mut repo = Repo::in_memory();
         let foreign = create(&mut repo, &actor("ws-1", "t-1"), task("foreign")).unwrap();
         let local = create(&mut repo, &actor("ws-2", "t-5"), task("local")).unwrap();
@@ -683,7 +690,7 @@ mod tests {
     }
 
     #[test]
-    fn given_several_tasks_each_gets_its_own_dependencies_and_latest_events() {
+    fn given_several_tasks_when_listing_then_each_gets_its_own_dependencies_and_latest_events() {
         let mut repo = Repo::in_memory();
         let first = create(&mut repo, &actor("ws-1", "t-1"), task("first")).unwrap();
         let second = create(
@@ -754,7 +761,7 @@ mod tests {
     }
 
     #[test]
-    fn given_an_unknown_dependency_create_task_names_it_and_creates_nothing() {
+    fn given_an_unknown_dependency_when_creating_a_task_then_it_is_named_and_nothing_is_created() {
         let mut repo = Repo::in_memory();
         create(&mut repo, &actor("ws-1", "t-1"), task("base")).unwrap();
         assert_eq!(
@@ -775,7 +782,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_todo_task_assign_task_starts_it_and_messages_the_assignee() {
+    fn given_a_todo_task_when_assigning_it_then_it_starts_and_the_assignee_is_messaged() {
         let mut repo = Repo::in_memory();
         let id = create(&mut repo, &actor("ws-1", "t-1"), task("API"))
             .unwrap()
@@ -812,7 +819,7 @@ mod tests {
     }
 
     #[test]
-    fn given_the_message_cannot_be_written_assign_task_leaves_the_task_untouched() {
+    fn given_the_message_cannot_be_written_when_assigning_a_task_then_the_task_is_untouched() {
         let mut repo = Repo::in_memory();
         let id = create(&mut repo, &actor("ws-1", "t-1"), task("API"))
             .unwrap()
@@ -838,7 +845,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_bad_input() {
+    fn given_bad_input_when_writing_tasks_then_it_is_rejected() {
         let mut repo = Repo::in_memory();
         assert!(matches!(
             create(&mut repo, &actor("ws-1", "t-1"), task("   ")),
@@ -884,7 +891,8 @@ mod tests {
     }
 
     #[test]
-    fn claim_needs_a_free_todo_task_with_finished_dependencies() {
+    fn given_tasks_in_various_states_when_claiming_then_only_a_free_todo_task_with_finished_dependencies_is_claimed(
+    ) {
         let mut repo = Repo::in_memory();
         let first = create(&mut repo, &actor("ws-1", "t-1"), task("first")).unwrap();
         let second = create(
@@ -953,7 +961,7 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_claims_have_exactly_one_winner() {
+    fn given_concurrent_claims_when_claiming_the_same_task_then_exactly_one_wins() {
         let repo = Arc::new(Mutex::new(Repo::in_memory()));
         let id = create(
             &mut repo.lock().unwrap(),
@@ -965,29 +973,27 @@ mod tests {
         let agents = 8;
         let barrier = Arc::new(Barrier::new(agents));
         let handles: Vec<_> = (0..agents)
-            .map(|n| {
+            .map(|agent_number| {
                 let repo = Arc::clone(&repo);
                 let barrier = Arc::clone(&barrier);
                 let id = id.clone();
                 std::thread::spawn(move || {
                     barrier.wait();
-                    let name = format!("t-{}", n + 10);
+                    let name = format!("t-{}", agent_number + 10);
                     claim(&mut repo.lock().unwrap(), &actor("ws-1", &name), &id).is_ok()
                 })
             })
             .collect();
         let winners = handles
             .into_iter()
-            .map(|h| h.join().unwrap())
-            .filter(|won| *won)
+            .map(|handle| handle.join().unwrap())
+            .filter(|has_won| *has_won)
             .count();
         assert_eq!(winners, 1);
     }
 
     #[test]
-    fn claim_is_atomic_across_connections() {
-        // Two connections to one file: the write transaction alone must stop
-        // the second claim, even without the in-process mutex.
+    fn given_two_connections_when_claiming_the_same_task_then_the_claim_is_atomic() {
         let dir = std::env::temp_dir().join(format!("terra-mcp-claim-{}", now_millis()));
         let path = dir.join("mcp.db");
         let mut one = Repo::new(super::super::db::open(&path).unwrap());

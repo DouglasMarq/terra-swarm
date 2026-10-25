@@ -91,7 +91,7 @@ pub fn available_models() -> Vec<VoiceModel> {
 }
 
 pub fn find_model(id: &str) -> Option<VoiceModel> {
-    available_models().into_iter().find(|m| m.id == id)
+    available_models().into_iter().find(|model| model.id == id)
 }
 
 pub fn models_dir(data_dir: &Path) -> PathBuf {
@@ -107,8 +107,8 @@ pub fn model_path(data_dir: &Path, id: &str) -> Option<PathBuf> {
 pub fn downloaded_model_ids(data_dir: &Path) -> Vec<String> {
     available_models()
         .iter()
-        .filter(|m| models_dir(data_dir).join(m.filename).exists())
-        .map(|m| m.id.to_string())
+        .filter(|model| models_dir(data_dir).join(model.filename).exists())
+        .map(|model| model.id.to_string())
         .collect()
 }
 
@@ -117,7 +117,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_catalog_has_unique_ids_and_matching_files() {
+    fn given_the_model_catalog_when_inspecting_it_then_ids_are_unique_and_files_match() {
         let models = available_models();
         let mut ids: Vec<&str> = models.iter().map(|model| model.id).collect();
         ids.sort_unstable();
@@ -155,7 +155,7 @@ mod tests {
     }
 
     #[test]
-    fn only_present_files_count_as_downloaded() {
+    fn given_model_files_when_checking_downloads_then_only_present_files_count() {
         let dir = std::env::temp_dir().join(format!("terra-voice-models-{}", std::process::id()));
         std::fs::create_dir_all(models_dir(&dir)).unwrap();
         assert!(downloaded_model_ids(&dir).is_empty());

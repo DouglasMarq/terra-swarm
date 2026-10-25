@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
 pub const MAX_TITLE_CHARS: usize = 200;
-/// Guards against runaway input; history itself is never trimmed.
 pub const MAX_BODY_BYTES: usize = 64 * 1024;
 pub const MAX_LABELS: usize = 16;
 pub const MAX_LABEL_CHARS: usize = 40;
@@ -13,6 +12,12 @@ pub const TASK_EVENTS_SHOWN: usize = 50;
 const MIN_LIMIT: usize = 1;
 const BYTES_PER_KIB: usize = 1024;
 const TASK_ID_PREFIX: &str = "T-";
+
+pub struct Nudge<'a> {
+    pub workspace_id: &'a str,
+    pub terminal_id: &'a str,
+    pub prompt: &'a str,
+}
 
 pub struct Actor<'a> {
     pub workspace_id: &'a str,
@@ -55,7 +60,6 @@ impl TaskStatus {
     }
 }
 
-/// Stored as an integer (0 urgent … 3 low), exposed by name.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskPriority {
@@ -123,11 +127,9 @@ pub struct Task {
     pub labels: Vec<String>,
     pub position: f64,
     pub depends_on: Vec<String>,
-    /// Dependencies that are not `done` yet; non-empty means it can't be claimed.
     pub blocked_by: Vec<String>,
     pub created_at: i64,
     pub updated_at: i64,
-    /// The latest events, oldest first. Omitted from summaries.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub events: Option<Vec<TaskEvent>>,
 }
@@ -204,7 +206,6 @@ pub struct NewTask {
     pub assignee: Option<String>,
 }
 
-/// A partial update. `assignee: Some(None)` unassigns the task.
 #[derive(Default, Clone, Debug)]
 pub struct TaskPatch {
     pub title: Option<String>,
@@ -226,13 +227,15 @@ pub enum StoreError {
 }
 
 impl std::fmt::Display for StoreError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             StoreError::NotFound(message)
             | StoreError::Invalid(message)
-            | StoreError::Conflict(message) => f.write_str(message),
-            StoreError::Unavailable(_) => f.write_str("the Terra MCP database is unavailable"),
-            StoreError::Database(_) => f.write_str("database error"),
+            | StoreError::Conflict(message) => formatter.write_str(message),
+            StoreError::Unavailable(_) => {
+                formatter.write_str("the Terra MCP database is unavailable")
+            }
+            StoreError::Database(_) => formatter.write_str("database error"),
         }
     }
 }
@@ -255,7 +258,6 @@ impl From<rusqlite::Error> for StoreError {
 
 pub type StoreResult<T> = Result<T, StoreError>;
 
-/// Accept `T-12`, `t-12` and a bare `12`, so agents can be sloppy with ids.
 pub fn normalize_task_id(raw: &str) -> Option<String> {
     let raw = raw.trim();
     let digits = raw
@@ -266,8 +268,8 @@ pub fn normalize_task_id(raw: &str) -> Option<String> {
     digits
         .parse::<u64>()
         .ok()
-        .filter(|n| *n > 0)
-        .map(|n| format!("T-{}", n))
+        .filter(|number| *number > 0)
+        .map(|number| format!("T-{}", number))
 }
 
 pub fn task_not_found(raw: &str) -> StoreError {
@@ -288,9 +290,9 @@ pub fn clean_title(raw: &str) -> StoreResult<String> {
     Ok(title.to_string())
 }
 
-pub fn clean_body(raw: &str, what: &str, allow_empty: bool) -> StoreResult<String> {
+pub fn clean_body(raw: &str, what: &str, can_be_empty: bool) -> StoreResult<String> {
     let body = raw.trim();
-    if body.is_empty() && !allow_empty {
+    if body.is_empty() && !can_be_empty {
         return Err(StoreError::Invalid(format!("{} cannot be empty", what)));
     }
     if body.len() > MAX_BODY_BYTES {

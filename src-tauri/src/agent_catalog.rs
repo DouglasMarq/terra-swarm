@@ -1,7 +1,6 @@
 use serde::Deserialize;
 use std::sync::OnceLock;
 
-/// The shared agent catalog, also read by the frontend.
 const AGENT_CATALOG_JSON: &str = include_str!("../../src/domain/agents.json");
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
@@ -10,7 +9,6 @@ pub struct CatalogAgent {
     pub label: String,
     #[serde(default)]
     pub resume: Option<String>,
-    /// How Terra connects the agent to its MCP server and state hooks.
     #[serde(default)]
     pub integration: Option<String>,
 }
@@ -20,8 +18,6 @@ struct Catalog {
     agents: Vec<CatalogAgent>,
 }
 
-/// Coding-agent CLIs Terra Swarm knows, in display order. The id doubles as
-/// the executable name and as the profile id used by the frontend.
 pub fn catalog() -> &'static [CatalogAgent] {
     static CATALOG: OnceLock<Vec<CatalogAgent>> = OnceLock::new();
     CATALOG.get_or_init(|| {
@@ -31,7 +27,6 @@ pub fn catalog() -> &'static [CatalogAgent] {
     })
 }
 
-/// The integration of a known agent ("claude", "codex"), if any.
 pub fn integration_of(agent: &str) -> Option<&'static str> {
     catalog()
         .iter()
@@ -39,8 +34,6 @@ pub fn integration_of(agent: &str) -> Option<&'static str> {
         .and_then(|entry| entry.integration.as_deref())
 }
 
-/// Whether `command` is a known agent's continuation command
-/// (`claude --continue`, `codex resume --last`, …).
 pub fn is_resume_command(command: &str) -> bool {
     let command = command.split_whitespace().collect::<Vec<_>>().join(" ");
     catalog()
@@ -53,7 +46,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn continuation_commands_are_recognised() {
+    fn given_a_continuation_command_when_checking_for_resume_then_it_is_recognised() {
         assert!(is_resume_command("claude --continue"));
         assert!(is_resume_command("codex  resume --last"));
         assert!(!is_resume_command("claude"));
@@ -61,7 +54,7 @@ mod tests {
     }
 
     #[test]
-    fn the_catalog_parses_with_unique_ids() {
+    fn given_the_bundled_catalog_when_parsing_it_then_every_id_is_unique() {
         let ids: Vec<&str> = catalog().iter().map(|agent| agent.id.as_str()).collect();
         let mut unique = ids.clone();
         unique.sort_unstable();

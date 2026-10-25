@@ -2,7 +2,7 @@ use super::model::{
     clamp_limit, clean_body, Actor, Note, StoreError, StoreResult, DEFAULT_SEARCH_LIMIT,
     MAX_NOTE_KEY_CHARS,
 };
-use super::repo::{NoteRecord, Queries};
+use super::repo::{NoteQuery, NoteRecord, Queries};
 use crate::clock::now_millis;
 
 pub struct NoteDraft<'a> {
@@ -39,7 +39,11 @@ pub fn search(
     search: &NoteSearch<'_>,
 ) -> StoreResult<Vec<Note>> {
     let limit = clamp_limit(search.limit, DEFAULT_SEARCH_LIMIT);
-    queries.search_notes(workspace_id, search.query, limit)
+    queries.search_notes(&NoteQuery {
+        workspace_id,
+        query: search.query,
+        limit,
+    })
 }
 
 #[cfg(test)]
@@ -49,7 +53,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn keyed_notes_upsert_and_full_text_search() {
+    fn given_keyed_notes_when_writing_and_searching_then_they_upsert_and_match_full_text() {
         let repo = Repo::in_memory();
         let first = add(
             repo.queries(),
@@ -111,7 +115,6 @@ mod tests {
         .unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].body, "npm run test:unit");
-        // Prefix and accent-insensitive matching.
         assert_eq!(
             search(
                 repo.queries(),
@@ -125,7 +128,6 @@ mod tests {
             .len(),
             1
         );
-        // The key is searchable too, and FTS syntax is taken literally.
         assert_eq!(
             search(
                 repo.queries(),

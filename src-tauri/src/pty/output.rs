@@ -1,8 +1,3 @@
-//! Moves a terminal's output from the PTY to the window: one thread drains
-//! the PTY, another coalesces chunks into paced `pty-output-<id>` events and
-//! runs the side-channel scans (notifications, titles, context usage, dev
-//! server URLs).
-
 use serde::Serialize;
 use std::io::Read;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,15 +14,10 @@ use super::Backlog;
 use crate::scrollback::ScrollbackStore;
 use crate::sync::LockExt;
 
-/// Size of one read from the PTY.
 const READ_BUFFER_BYTES: usize = 16 * 1024;
-/// Pacing of output events (about 60 per second).
 const FLUSH_INTERVAL: Duration = Duration::from_millis(16);
-/// Pending output this large is emitted without waiting for the pacing.
 const FORCE_FLUSH_BYTES: usize = 64 * 1024;
-/// How often the recent output is scanned for dev servers and context usage.
 const SCAN_INTERVAL: Duration = Duration::from_millis(250);
-/// Recent output kept for the notification fallback and the periodic scans.
 const RAW_TAIL_BYTES: usize = 8 * 1024;
 
 #[derive(Serialize, Clone)]
@@ -58,8 +48,6 @@ pub struct TitlePayload {
     pub title: String,
 }
 
-/// Where a terminal's output is persisted, and the two switches (this
-/// terminal's and the app-wide one) that must both be on for it to be.
 pub(super) struct DurableScrollback {
     pub store: Arc<ScrollbackStore>,
     pub is_terminal_enabled: Arc<AtomicBool>,
@@ -103,17 +91,17 @@ pub(super) fn spawn_output_pump<R: Runtime>(
 fn spawn_reader(mut reader: Box<dyn Read + Send>, id: String) -> Receiver<Vec<u8>> {
     let (chunk_tx, chunk_rx) = std::sync::mpsc::channel::<Vec<u8>>();
     std::thread::spawn(move || {
-        let mut buf = [0u8; READ_BUFFER_BYTES];
+        let mut buffer = [0u8; READ_BUFFER_BYTES];
         loop {
-            match reader.read(&mut buf) {
+            match reader.read(&mut buffer) {
                 Ok(0) => break,
-                Ok(n) => {
-                    if chunk_tx.send(buf[..n].to_vec()).is_err() {
+                Ok(read_bytes) => {
+                    if chunk_tx.send(buffer[..read_bytes].to_vec()).is_err() {
                         break;
                     }
                 }
-                Err(e) => {
-                    eprintln!("pty reader for {} failed: {}", id, e);
+                Err(error) => {
+                    eprintln!("pty reader for {} failed: {}", id, error);
                     break;
                 }
             }
@@ -461,7 +449,7 @@ mod tests {
             titles.recv_timeout(EVENT_DEADLINE).expect("title event"),
             json!({ "id": "t-pump", "workspace_id": "w-pump", "title": "Build" })
         );
-        assert_eq!(backlog.lock_or_recover().buf, output.to_vec());
+        assert_eq!(backlog.lock_or_recover().retained, output.to_vec());
     }
 
     #[test]

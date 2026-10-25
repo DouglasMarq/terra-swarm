@@ -4,24 +4,21 @@ pub mod models;
 pub mod transcriber;
 
 use crate::sync::LockExt;
-use audio::AudioController;
+use audio::{AudioController, Capture};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use transcriber::Transcriber;
 
-/// Room for a batch of `/dev/snd` inotify events.
 #[cfg(target_os = "linux")]
 const INOTIFY_BUFFER_BYTES: usize = 4096;
-/// Wait after a `/dev/snd` change so the burst of events settles first.
 #[cfg(target_os = "linux")]
 const DEVICE_SETTLE_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
-/// How often the microphone is checked where `/dev/snd` can't be watched.
 #[cfg(not(target_os = "linux"))]
 const MIC_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
 
 pub struct VoiceState {
-    pub recording: Mutex<bool>,
+    pub is_recording: Mutex<bool>,
     pub audio_buffer: Arc<Mutex<Vec<f32>>>,
     pub active_model_id: Mutex<Option<String>>,
     pub language: Mutex<String>,
@@ -33,7 +30,7 @@ pub struct VoiceState {
 impl Default for VoiceState {
     fn default() -> Self {
         Self {
-            recording: Mutex::new(false),
+            is_recording: Mutex::new(false),
             audio_buffer: Arc::new(Mutex::new(Vec::new())),
             active_model_id: Mutex::new(None),
             language: Mutex::new("auto".into()),
@@ -62,12 +59,10 @@ struct DownloadProgress {
     percent: f64,
 }
 
-/// Load a Whisper context, preferring GPU and falling back to CPU when the
-/// GPU context fails to initialize.
 #[cfg(not(target_os = "windows"))]
 fn load_transcriber(path: &Path) -> Result<Transcriber, String> {
     match Transcriber::new(path, true) {
-        Ok(t) => Ok(t),
+        Ok(transcriber) => Ok(transcriber),
         Err(gpu_err) => {
             eprintln!("GPU model load failed, retrying on CPU: {gpu_err}");
             Transcriber::new(path, false)
@@ -91,9 +86,8 @@ fn activate_model(app: &tauri::AppHandle, model_id: &str, path: PathBuf) -> Resu
 
 fn start_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let state = app.state::<VoiceState>();
-    // Held across check-and-start so two rapid toggles can't both start.
-    let mut recording = state.recording.lock_or_recover();
-    if *recording {
+    let mut is_recording = state.is_recording.lock_or_recover();
+    if *is_recording {
         return Err("Already recording".into());
     }
     if state.transcriber.lock_or_recover().is_none() {
@@ -105,11 +99,16 @@ fn start_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let device = state.input_device.lock_or_recover().clone();
 
     state.audio_buffer.lock_or_recover().clear();
-    if let Err(e) = controller.start(state.audio_buffer.clone(), app.clone(), device) {
-        let _ = app.emit("voice-recording-error", &e);
-        return Err(e);
+    let capture = Capture {
+        audio_buffer: state.audio_buffer.clone(),
+        app: app.clone(),
+        device_name: device,
+    };
+    if let Err(error) = controller.start(capture) {
+        let _ = app.emit("voice-recording-error", &error);
+        return Err(error);
     }
-    *recording = true;
+    *is_recording = true;
     let _ = app.emit("voice-recording-started", ());
     Ok(())
 }
@@ -117,19 +116,17 @@ fn start_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
 pub fn stop_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let state = app.state::<VoiceState>();
     {
-        let mut recording = state.recording.lock_or_recover();
-        if !*recording {
+        let mut is_recording = state.is_recording.lock_or_recover();
+        if !*is_recording {
             return Err("Not recording".into());
         }
-        // Clear unconditionally: if the audio thread died, stop() will fail
-        // forever and the flag must not leave the app stuck in "recording".
-        *recording = false;
+        *is_recording = false;
     }
     let controller = app.state::<AudioController<R>>();
 
-    if let Err(e) = controller.stop() {
-        eprintln!("audio stop failed: {}", e);
-        let _ = app.emit("voice-recording-error", &e);
+    if let Err(error) = controller.stop() {
+        eprintln!("audio stop failed: {}", error);
+        let _ = app.emit("voice-recording-error", &error);
     }
     let _ = app.emit("voice-recording-stopped", ());
 
@@ -142,15 +139,15 @@ pub fn stop_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String>
         let _ = app_handle.emit("voice-transcription-started", ());
         let result =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match &transcriber {
-                Some(t) => t.transcribe(&audio_data, &language),
+                Some(transcriber) => transcriber.transcribe(&audio_data, &language),
                 None => Err("No model loaded".into()),
             }));
         match result {
             Ok(Ok(text)) => {
                 let _ = app_handle.emit("voice-transcription-complete", text);
             }
-            Ok(Err(e)) => {
-                let _ = app_handle.emit("voice-transcription-error", e);
+            Ok(Err(error)) => {
+                let _ = app_handle.emit("voice-transcription-error", error);
             }
             Err(_) => {
                 let _ = app_handle.emit(
@@ -165,8 +162,8 @@ pub fn stop_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String>
 
 #[tauri::command(async)]
 pub fn voice_toggle_recording(app: tauri::AppHandle) -> Result<(), String> {
-    let recording = *app.state::<VoiceState>().recording.lock_or_recover();
-    match recording {
+    let is_recording = *app.state::<VoiceState>().is_recording.lock_or_recover();
+    match is_recording {
         true => stop_recording_impl(&app),
         false => start_recording_impl(&app),
     }
@@ -181,14 +178,14 @@ pub fn voice_set_language(language: String, state: tauri::State<'_, VoiceState>)
 pub async fn voice_mic_available() -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(audio::has_input_device)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub async fn voice_list_input_devices() -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(audio::list_input_devices)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -196,12 +193,6 @@ pub fn voice_set_input_device(device: Option<String>, state: tauri::State<'_, Vo
     *state.input_device.lock_or_recover() = device;
 }
 
-/// Start capturing the given device and playing it back through the
-/// speakers (plus streaming `voice-audio-level` for the settings UI meter),
-/// so the user can hear and see whether a device — whose OS-reported name
-/// doesn't always match what's on the box — is actually picking up sound.
-/// Runs on its own stream pair, entirely separate from the real recording
-/// path, so it can never clobber or be clobbered by an active transcription.
 #[tauri::command]
 pub async fn voice_test_mic_start(
     device: Option<String>,
@@ -212,26 +203,24 @@ pub async fn voice_test_mic_start(
             .start(device, app.clone())
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
 pub async fn voice_test_mic_stop(app: tauri::AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || app.state::<audio::MicTestController>().stop())
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|error| error.to_string())?
 }
 
-/// Check the current mic state and, when it changed, emit `voice-mic-changed`.
-/// Stops an active recording if the microphone disappeared.
-fn emit_if_mic_changed(app: &tauri::AppHandle, last: &mut Option<bool>) {
-    let available = audio::has_input_device();
-    if *last == Some(available) {
+fn emit_if_mic_changed(app: &tauri::AppHandle, was_mic_available: &mut Option<bool>) {
+    let is_mic_available = audio::has_input_device();
+    if *was_mic_available == Some(is_mic_available) {
         return;
     }
-    *last = Some(available);
-    let _ = app.emit("voice-mic-changed", available);
-    if !available && *app.state::<VoiceState>().recording.lock_or_recover() {
+    *was_mic_available = Some(is_mic_available);
+    let _ = app.emit("voice-mic-changed", is_mic_available);
+    if !is_mic_available && *app.state::<VoiceState>().is_recording.lock_or_recover() {
         if let Err(error) = stop_recording_impl(app) {
             eprintln!(
                 "failed to stop recording after the mic disappeared: {}",
@@ -269,7 +258,7 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
             return;
         }
 
-        let mut last: Option<bool> = None;
+        let mut was_mic_available: Option<bool> = None;
         let mut buf = [0u8; INOTIFY_BUFFER_BYTES];
         loop {
             // SAFETY: `buf` is writable for `buf.len()` bytes and `fd` is open.
@@ -289,7 +278,7 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
                 libc::fcntl(fd, libc::F_SETFL, flags);
             }
 
-            emit_if_mic_changed(&app, &mut last);
+            emit_if_mic_changed(&app, &mut was_mic_available);
         }
 
         // SAFETY: `fd` is the open inotify descriptor this thread owns, closed
@@ -301,9 +290,9 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
 #[cfg(not(target_os = "linux"))]
 pub fn watch_input_devices(app: tauri::AppHandle) {
     std::thread::spawn(move || {
-        let mut last: Option<bool> = None;
+        let mut was_mic_available: Option<bool> = None;
         loop {
-            emit_if_mic_changed(&app, &mut last);
+            emit_if_mic_changed(&app, &mut was_mic_available);
             std::thread::sleep(MIC_POLL_INTERVAL);
         }
     });
@@ -319,13 +308,15 @@ pub fn voice_list_models(
     let active = state.active_model_id.lock_or_recover().clone();
     Ok(models::available_models()
         .into_iter()
-        .map(|m| VoiceModelInfo {
-            id: m.id.to_string(),
-            display_name: m.display_name.to_string(),
-            size_label: m.size_label.to_string(),
-            description: m.description.to_string(),
-            downloaded: downloaded.iter().any(|d| d == m.id),
-            active: active.as_deref() == Some(m.id),
+        .map(|model| VoiceModelInfo {
+            id: model.id.to_string(),
+            display_name: model.display_name.to_string(),
+            size_label: model.size_label.to_string(),
+            description: model.description.to_string(),
+            downloaded: downloaded
+                .iter()
+                .any(|downloaded_id| downloaded_id == model.id),
+            active: active.as_deref() == Some(model.id),
         })
         .collect())
 }
@@ -343,17 +334,15 @@ pub async fn voice_set_model(model_id: String, app: tauri::AppHandle) -> Result<
 fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))
+        .map_err(|error| format!("Failed to get app data dir: {error}"))
 }
 
 #[tauri::command]
 pub async fn voice_download_model(model_id: String, app: tauri::AppHandle) -> Result<(), String> {
-    // Per-model in-progress guard: two concurrent downloads of the same model
-    // would interleave writes into the shared .tmp file and corrupt it.
     {
         let state = app.state::<VoiceState>();
-        let mut dl = state.downloading.lock_or_recover();
-        if !dl.insert(model_id.clone()) {
+        let mut downloading = state.downloading.lock_or_recover();
+        if !downloading.insert(model_id.clone()) {
             return Err(format!("Download of {} is already in progress", model_id));
         }
     }
@@ -403,7 +392,8 @@ async fn download_model_impl(model_id: String, app: tauri::AppHandle) -> Result<
 
 async fn create_models_dir(dir: PathBuf) -> Result<(), String> {
     run_blocking(move || {
-        std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create models dir: {e}"))
+        std::fs::create_dir_all(&dir)
+            .map_err(|error| format!("Failed to create models dir: {error}"))
     })
     .await
 }
@@ -420,13 +410,12 @@ fn emit_download_progress(app: &tauri::AppHandle, model_id: &str, progress: down
     );
 }
 
-/// Runs blocking file work off the async runtime.
 async fn run_blocking<T: Send + 'static>(
     work: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(work)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|error| error.to_string())?
 }
 
 #[cfg(test)]
@@ -447,11 +436,11 @@ mod recording_tests {
     }
 
     fn set_recording(app: &tauri::App<MockRuntime>, is_recording: bool) {
-        *app.state::<VoiceState>().recording.lock_or_recover() = is_recording;
+        *app.state::<VoiceState>().is_recording.lock_or_recover() = is_recording;
     }
 
     fn is_recording(app: &tauri::App<MockRuntime>) -> bool {
-        *app.state::<VoiceState>().recording.lock_or_recover()
+        *app.state::<VoiceState>().is_recording.lock_or_recover()
     }
 
     fn payloads_of(app: &tauri::App<MockRuntime>, event: &str) -> mpsc::Receiver<String> {

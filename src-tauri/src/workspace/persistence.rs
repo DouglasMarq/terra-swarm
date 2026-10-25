@@ -1,6 +1,3 @@
-//! `workspaces.json` on disk: versioned envelope, forgiving decode,
-//! debounced atomic writes and `.bak` copies of anything it had to drop.
-
 use super::*;
 use crate::sync::LockExt;
 use serde::{Deserialize, Serialize};
@@ -28,12 +25,8 @@ pub(crate) static WRITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 pub(crate) static ATOMIC_TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
-/// Quiet time after the last change before the debounced save writes.
 const SAVE_DEBOUNCE: Duration = Duration::from_millis(150);
 
-/// Version of the on-disk workspace envelope.  The contents of the envelope
-/// are intentionally kept separate from `WorkspaceStore`: the latter also
-/// carries runtime-only state such as the save path.
 pub(crate) const WORKSPACE_FILE_VERSION: u32 = 2;
 
 pub(crate) const LEGACY_WORKSPACE_FILE_VERSION: u32 = 1;
@@ -56,31 +49,21 @@ pub(crate) struct WorkspaceFile {
 pub(crate) struct DecodedWorkspaceFile {
     pub(crate) workspaces: Vec<Workspace>,
     pub(crate) groups: Vec<Group>,
-    /// A JSON array is the format used before the versioned envelope existed.
-    pub(crate) legacy: bool,
-    /// Entries which could not be deserialized are dropped individually so a
-    /// single damaged workspace cannot make all the other workspaces vanish.
-    pub(crate) dropped_entries: bool,
+    pub(crate) is_legacy: bool,
+    pub(crate) has_dropped_entries: bool,
 }
 
-/// Decode both the current envelope and the pre-envelope array format.
-///
-/// Parsing through `serde_json::Value` here is deliberate.  Deserializing a
-/// `Vec<Workspace>` directly would reject the whole file when one entry is
-/// malformed, which is needlessly destructive for a local preferences file.
-/// Valid entries are recovered and the caller can retain a backup before
-/// writing the normalized result.
 pub(crate) fn decode_workspace_file(raw: &str) -> Result<DecodedWorkspaceFile, String> {
     let value: Value = serde_json::from_str(raw).map_err(|error| error.to_string())?;
 
     match value {
         Value::Array(entries) => {
-            let (workspaces, dropped_entries) = decode_workspace_entries(entries);
+            let (workspaces, has_dropped_entries) = decode_workspace_entries(entries);
             Ok(DecodedWorkspaceFile {
                 workspaces,
                 groups: Vec::new(),
-                legacy: true,
-                dropped_entries,
+                is_legacy: true,
+                has_dropped_entries,
             })
         }
         Value::Object(mut object) => {
@@ -96,18 +79,14 @@ pub(crate) fn decode_workspace_file(raw: &str) -> Result<DecodedWorkspaceFile, S
 
             let entries = match object.remove("workspaces") {
                 Some(Value::Array(entries)) => entries,
-                // An omitted collection is equivalent to an empty collection;
-                // this keeps adding fields to the envelope backwards-friendly.
                 None => Vec::new(),
                 Some(_) => {
                     return Err("workspace store workspaces must be an array".to_string());
                 }
             };
-            let (workspaces, dropped_entries) = decode_workspace_entries(entries);
-            let (groups, dropped_groups) = match object.remove("groups") {
+            let (workspaces, has_dropped_entries) = decode_workspace_entries(entries);
+            let (groups, has_dropped_groups) = match object.remove("groups") {
                 Some(Value::Array(entries)) => decode_group_entries(entries),
-                // v1 did not have groups. A missing collection is the
-                // canonical default for both versions.
                 None => (Vec::new(), false),
                 Some(_) => {
                     return Err("workspace store groups must be an array".to_string());
@@ -116,8 +95,8 @@ pub(crate) fn decode_workspace_file(raw: &str) -> Result<DecodedWorkspaceFile, S
             Ok(DecodedWorkspaceFile {
                 workspaces,
                 groups,
-                legacy: version == u64::from(LEGACY_WORKSPACE_FILE_VERSION),
-                dropped_entries: dropped_entries || dropped_groups,
+                is_legacy: version == u64::from(LEGACY_WORKSPACE_FILE_VERSION),
+                has_dropped_entries: has_dropped_entries || has_dropped_groups,
             })
         }
         _ => Err("workspace store must be an object or array".to_string()),
@@ -125,13 +104,13 @@ pub(crate) fn decode_workspace_file(raw: &str) -> Result<DecodedWorkspaceFile, S
 }
 
 pub(crate) fn decode_workspace_entries(entries: Vec<Value>) -> (Vec<Workspace>, bool) {
-    let mut dropped_entries = false;
+    let mut has_dropped_entries = false;
     let mut workspaces = Vec::with_capacity(entries.len());
     for (index, value) in entries.into_iter().enumerate() {
         match serde_json::from_value::<Workspace>(value) {
             Ok(workspace) => workspaces.push(workspace),
             Err(error) => {
-                dropped_entries = true;
+                has_dropped_entries = true;
                 eprintln!(
                     "skipping malformed workspace entry {} while loading: {}",
                     index, error
@@ -139,17 +118,17 @@ pub(crate) fn decode_workspace_entries(entries: Vec<Value>) -> (Vec<Workspace>, 
             }
         }
     }
-    (workspaces, dropped_entries)
+    (workspaces, has_dropped_entries)
 }
 
 pub(crate) fn decode_group_entries(entries: Vec<Value>) -> (Vec<Group>, bool) {
-    let mut dropped_entries = false;
+    let mut has_dropped_entries = false;
     let mut groups = Vec::with_capacity(entries.len());
     for (index, value) in entries.into_iter().enumerate() {
         match serde_json::from_value::<Group>(value) {
             Ok(group) => groups.push(group),
             Err(error) => {
-                dropped_entries = true;
+                has_dropped_entries = true;
                 eprintln!(
                     "skipping malformed group entry {} while loading: {}",
                     index, error
@@ -157,21 +136,15 @@ pub(crate) fn decode_group_entries(entries: Vec<Value>) -> (Vec<Group>, bool) {
             }
         }
     }
-    (groups, dropped_entries)
+    (groups, has_dropped_entries)
 }
 
-/// Serialized write that never lets an older snapshot overwrite a newer one:
-/// every save gets a monotonic seq, and a request is skipped when a newer
-/// save has already landed (e.g. save_now at exit vs a stale debounced write).
 pub(crate) fn write_guarded(path: &std::path::Path, json: &str, seq: u64) {
-    if let Err(e) = write_guarded_result(path, json, seq) {
-        eprintln!("failed to save workspaces: {}", e);
+    if let Err(error) = write_guarded_result(path, json, seq) {
+        eprintln!("failed to save workspaces: {}", error);
     }
 }
 
-/// Synchronous variant used by portability commands.  The regular debounced
-/// writer intentionally logs failures because it runs off-thread; explicit
-/// import/export must return the failure to the caller instead.
 pub(crate) fn write_guarded_result(path: &Path, json: &str, seq: u64) -> std::io::Result<()> {
     let lock = WRITE_LOCK.get_or_init(|| Mutex::new(()));
     let _guard = lock.lock_or_recover();
@@ -188,8 +161,6 @@ pub(crate) fn write_guarded_result(path: &Path, json: &str, seq: u64) -> std::io
     Ok(())
 }
 
-/// Writes `json` to `path` atomically (temp file + rename) so a crash
-/// mid-write can never leave a truncated/corrupt store behind.
 pub(crate) fn write_atomic(path: &std::path::Path, json: &str) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -237,9 +208,6 @@ pub(crate) fn read_snapshot_file(path: &Path) -> Result<String, String> {
     })
 }
 
-/// Move an existing store out of the way before normalizing it.  The first
-/// backup keeps the historical `workspaces.json.bak` name; subsequent
-/// recoveries get a numbered suffix instead of replacing an earlier backup.
 pub(crate) fn backup_store(path: &std::path::Path) -> std::io::Result<Option<PathBuf>> {
     if !path.exists() {
         return Ok(None);
@@ -268,9 +236,6 @@ fn free_backup_path(path: &Path) -> PathBuf {
     }
 }
 
-/// Replace the active on-disk store while preserving a recoverable copy of
-/// the previous file.  The lock also fences out an older debounced save, and
-/// the rollback path restores the backup if the atomic write fails.
 pub(crate) fn replace_store_file(path: &Path, json: &str) -> Result<Option<PathBuf>, String> {
     let lock = WRITE_LOCK.get_or_init(|| Mutex::new(()));
     let _guard = lock.lock_or_recover();
@@ -316,9 +281,6 @@ pub(crate) fn next_save_seq() -> u64 {
     SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1
 }
 
-/// Background writer: coalesces a burst of save requests into the newest one
-/// and flushes it to disk `SAVE_DEBOUNCE` after the last change, so mutations
-/// never do blocking disk I/O on a caller thread.
 pub(crate) fn save_channel() -> &'static Sender<SaveRequest> {
     SAVE_TX.get_or_init(|| {
         let (tx, rx) = channel::<SaveRequest>();
@@ -344,8 +306,6 @@ fn next_save_burst(rx: &Receiver<SaveRequest>) -> Option<HashMap<PathBuf, SaveRe
     Some(burst)
 }
 
-/// Never silently wipe the user's data: keep an unusable store around for
-/// inspection instead of overwriting it.
 fn back_up_unusable_store(path: &Path) {
     if let Err(error) = backup_store(path) {
         eprintln!("failed to back up unusable workspaces store: {}", error);
@@ -405,8 +365,8 @@ fn decode_store(path: &Path, raw: &str) -> LoadedStore {
             groups: decoded.groups,
             save_path: Some(path.to_path_buf()),
         },
-        is_legacy: decoded.legacy,
-        has_dropped_entries: decoded.dropped_entries,
+        is_legacy: decoded.is_legacy,
+        has_dropped_entries: decoded.has_dropped_entries,
         is_unusable: false,
     }
 }
@@ -433,9 +393,6 @@ fn unreadable_store(path: &Path, error: std::io::Error) -> LoadedStore {
 }
 
 impl WorkspaceStore {
-    /// Load the store at `path`. A missing file starts empty; a file that
-    /// cannot be decoded is backed up and replaced; a file that cannot be
-    /// read at all is left untouched and this session never saves over it.
     pub fn load(path: PathBuf) -> Self {
         let loaded = read_store(&path);
         if loaded.is_unusable {
@@ -443,10 +400,6 @@ impl WorkspaceStore {
         }
         let mut store = loaded.store;
 
-        // Normalize loaded data before it can reach the UI or PTY layer.  If
-        // normalization discarded anything, retain the original file before
-        // writing the canonical representation.  A legacy array is migrated
-        // on load so future app versions only need to understand the envelope.
         let should_back_up = loaded.has_dropped_entries || !store.is_normalized();
         store.normalize();
         for group in &store.groups {
@@ -469,9 +422,6 @@ impl WorkspaceStore {
     }
 
     pub(crate) fn serialized_snapshot(&self) -> Result<String, serde_json::Error> {
-        // Keep serialization resilient even if a caller has modified the
-        // public `workspaces` field directly.  The store itself is left
-        // untouched; only the persisted snapshot is normalized.
         let mut snapshot = Self {
             workspaces: self.workspaces.clone(),
             groups: self.groups.clone(),
@@ -504,15 +454,13 @@ impl WorkspaceStore {
         }
     }
 
-    /// Synchronous, un-debounced save for shutdown, so the final state is
-    /// never lost when the app exits within the `SAVE_DEBOUNCE` window.
     pub fn save_now(&self) {
         let Some(path) = &self.save_path else { return };
         match self.serialized_snapshot() {
             Ok(json) => {
                 write_guarded(path, &json, next_save_seq());
             }
-            Err(e) => eprintln!("failed to serialize workspaces on exit: {}", e),
+            Err(error) => eprintln!("failed to serialize workspaces on exit: {}", error),
         }
     }
 }

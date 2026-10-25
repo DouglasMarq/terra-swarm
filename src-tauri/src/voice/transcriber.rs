@@ -6,18 +6,12 @@ use whisper_rs::{
     FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState,
 };
 
-/// Most tokens Whisper may produce for one dictation.
 const MAX_TOKENS: i32 = 128;
-/// Threads used when the number of cores cannot be read.
 const FALLBACK_THREAD_COUNT: i32 = 4;
-/// Whisper's encoder window: `WINDOW_SECONDS` of audio fill `MAX_AUDIO_CTX`
-/// audio-context frames.
 const WINDOW_SECONDS: f32 = 30.0;
 const MAX_AUDIO_CTX: i32 = 1500;
 const MIN_AUDIO_CTX: i32 = 768;
-/// Frames added to the proportional audio context.
 const AUDIO_CTX_PADDING: f32 = 256.0;
-/// The audio context is rounded up to a multiple of this.
 const AUDIO_CTX_STEP: i32 = 64;
 const MILLIS_PER_SECOND: u32 = 1000;
 const TRIM_CHUNK_SAMPLES: usize = samples_in_millis(100);
@@ -27,31 +21,29 @@ const SILENCE_THRESHOLD: f32 = 0.01;
 pub struct Transcriber {
     ctx: WhisperContext,
     state: Mutex<Option<WhisperState>>,
-    /// With a GPU every logical core runs pre/post-processing; on CPU only
-    /// half of them do, as hyperthreads slow whisper down.
-    use_gpu: bool,
+    should_use_gpu: bool,
 }
 
 impl Transcriber {
-    pub fn new(model_path: &Path, use_gpu: bool) -> Result<Self, String> {
+    pub fn new(model_path: &Path, should_use_gpu: bool) -> Result<Self, String> {
         let mut ctx_params = WhisperContextParameters::default();
-        ctx_params.use_gpu(use_gpu);
+        ctx_params.use_gpu(should_use_gpu);
         ctx_params.flash_attn(true);
 
         let ctx = WhisperContext::new_with_params(
             model_path.to_str().ok_or("Invalid model path encoding")?,
             ctx_params,
         )
-        .map_err(|e| format!("Failed to load Whisper model: {e}"))?;
+        .map_err(|error| format!("Failed to load Whisper model: {error}"))?;
 
         let state = ctx
             .create_state()
-            .map_err(|e| format!("Failed to create whisper state: {e}"))?;
+            .map_err(|error| format!("Failed to create whisper state: {error}"))?;
 
         Ok(Self {
             ctx,
             state: Mutex::new(Some(state)),
-            use_gpu,
+            should_use_gpu,
         })
     }
 
@@ -61,23 +53,23 @@ impl Transcriber {
         }
 
         let audio = trim_trailing_silence(audio);
-        let params = decoding_params(language, audio.len(), thread_count(self.use_gpu));
+        let params = decoding_params(language, audio.len(), thread_count(self.should_use_gpu));
 
         let mut guard = self.state.lock_or_recover();
 
         let mut state = match guard.take() {
-            Some(s) => s,
+            Some(state) => state,
             None => self
                 .ctx
                 .create_state()
-                .map_err(|e| format!("Failed to recreate whisper state: {e}"))?,
+                .map_err(|error| format!("Failed to recreate whisper state: {error}"))?,
         };
 
         let result = state.full(params, audio);
 
-        if let Err(e) = result {
+        if let Err(error) = result {
             *guard = None;
-            return Err(format!("Transcription failed: {e}"));
+            return Err(format!("Transcription failed: {error}"));
         }
 
         let text = segments_text(&state);
@@ -110,11 +102,11 @@ fn decoding_params(language: &str, sample_count: usize, threads: i32) -> FullPar
     params
 }
 
-fn thread_count(use_gpu: bool) -> i32 {
+fn thread_count(should_use_gpu: bool) -> i32 {
     std::thread::available_parallelism()
         .ok()
         .and_then(|cores| i32::try_from(cores.get()).ok())
-        .map(|cores| match use_gpu {
+        .map(|cores| match should_use_gpu {
             true => cores,
             false => (cores / 2).max(1),
         })
@@ -124,20 +116,19 @@ fn thread_count(use_gpu: bool) -> i32 {
 fn segments_text(state: &WhisperState) -> String {
     let mut text = String::new();
 
-    for i in 0..state.full_n_segments() {
-        let Some(segment) = state.get_segment(i) else {
+    for segment_index in 0..state.full_n_segments() {
+        let Some(segment) = state.get_segment(segment_index) else {
             continue;
         };
-        let Ok(s) = segment.to_str() else { continue };
-        text.push_str(s);
+        let Ok(segment_text) = segment.to_str() else {
+            continue;
+        };
+        text.push_str(segment_text);
     }
 
     text
 }
 
-/// Compute the audio_ctx parameter for Whisper based on number of 16kHz samples.
-/// Formula from whisper.cpp issue #1855: (duration/30)*1500 + padding.
-/// Minimum 768, maximum 1500, always a multiple of 64.
 fn compute_audio_ctx(num_samples: usize) -> i32 {
     // The frame count is clamped below, so f32 precision and the saturating
     // float-to-int `as` are exact enough for it.
@@ -153,7 +144,6 @@ const fn samples_in_millis(millis: u32) -> usize {
     (TARGET_SAMPLE_RATE / MILLIS_PER_SECOND * millis) as usize
 }
 
-/// Trim trailing silence from audio. Works backwards in 100ms chunks.
 fn trim_trailing_silence(audio: &[f32]) -> &[f32] {
     let mut end = audio.len();
 
@@ -184,7 +174,8 @@ mod tests {
     }
 
     #[test]
-    fn audio_ctx_scales_with_duration_within_bounds() {
+    fn given_audio_of_various_lengths_when_computing_the_audio_context_then_it_scales_within_bounds(
+    ) {
         assert_eq!(compute_audio_ctx(0), 768);
         assert_eq!(compute_audio_ctx(16_000 * 30), 1500);
         assert_eq!(compute_audio_ctx(16_000 * 120), 1500);
@@ -194,16 +185,15 @@ mod tests {
     }
 
     #[test]
-    fn trailing_silence_is_trimmed_with_padding() {
+    fn given_trailing_silence_when_trimming_then_it_is_cut_leaving_padding() {
         let mut audio = vec![0.5f32; 16_000];
         audio.extend(vec![0.0f32; 16_000]);
         let trimmed = trim_trailing_silence(&audio);
-        // The loud second plus 100 ms of padding.
         assert_eq!(trimmed.len(), 16_000 + 1600);
     }
 
     #[test]
-    fn short_or_quiet_audio_keeps_its_minimum() {
+    fn given_short_or_quiet_audio_when_trimming_then_it_keeps_its_minimum() {
         let quiet = vec![0.0f32; 16_000];
         assert_eq!(trim_trailing_silence(&quiet).len(), 4800 + 1600);
         let tiny = vec![0.0f32; 1000];

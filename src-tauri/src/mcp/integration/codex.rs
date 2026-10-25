@@ -10,7 +10,6 @@ use crate::usage::{number, SessionLog, TokenUsage};
 
 const ID: &str = "codex";
 
-/// How deep the Codex sessions folder is searched (`YYYY/MM/DD/<log>`).
 const MAX_CODEX_LOG_DEPTH: usize = 4;
 
 pub struct Codex;
@@ -26,7 +25,7 @@ impl AgentIntegration for Codex {
     }
 
     fn launch_command(&self, command: &str, context: &LaunchContext<'_>) -> String {
-        let notify = if user_has_codex_notify() {
+        let notify = if has_user_codex_notify() {
             None
         } else {
             context.hook_program
@@ -74,8 +73,6 @@ impl AgentIntegration for Codex {
 }
 
 pub fn rewrite(command: &str, registration: &Overrides<'_>, quoting: Quoting) -> String {
-    // `-c` is a global flag, so it is valid before a subcommand such as
-    // `codex resume --last`. The token is read from the environment.
     let rest = command
         .split_once(char::is_whitespace)
         .map(|(_, rest)| rest.trim_start())
@@ -97,8 +94,6 @@ pub fn rewrite(command: &str, registration: &Overrides<'_>, quoting: Quoting) ->
                 quoting
             ),
         ),
-        // Codex reads a value that is not valid TOML as a plain
-        // string, which avoids nesting quotes for cmd/PowerShell.
         Quoting::Windows => format!(
             "-c mcp_servers.{name}.url={url} -c mcp_servers.{name}.bearer_token_env_var={env}",
             name = SERVER_NAME,
@@ -106,9 +101,8 @@ pub fn rewrite(command: &str, registration: &Overrides<'_>, quoting: Quoting) ->
             env = ENV_TOKEN
         ),
     };
-    // `notify` is a TOML array; on Windows shells the nested quotes
-    // are not worth the risk, so the state hook stays POSIX-only.
-    if let (Some(program), Quoting::Posix) = (registration.notify, quoting) {
+    let can_quote_toml_array = quoting == Quoting::Posix;
+    if let (Some(program), true) = (registration.notify, can_quote_toml_array) {
         let program = serde_json::to_string(&program.to_string_lossy()).unwrap_or_default();
         overrides.push_str(&format!(
             " -c {}",
@@ -125,19 +119,16 @@ pub fn rewrite(command: &str, registration: &Overrides<'_>, quoting: Quoting) ->
     }
 }
 
-/// Whether the user's own Codex config already sets `notify`; Terra's hook
-/// would replace it, so it is left out then.
-pub fn user_has_codex_notify() -> bool {
+pub fn has_user_codex_notify() -> bool {
     let Some(home) = codex_home() else {
         return false;
     };
     std::fs::read_to_string(home.join("config.toml"))
-        .map(|text| codex_config_sets_notify(&text))
+        .map(|text| has_codex_notify_setting(&text))
         .unwrap_or(false)
 }
 
-/// A top-level `notify = ...` line, before the first table header.
-pub fn codex_config_sets_notify(config: &str) -> bool {
+pub fn has_codex_notify_setting(config: &str) -> bool {
     for line in config.lines() {
         let line = line.trim();
         if line.starts_with('[') {
@@ -152,7 +143,6 @@ pub fn codex_config_sets_notify(config: &str) -> bool {
     false
 }
 
-/// Codex logs running totals; the last `token_count` event has them.
 pub fn codex_usage(path: &Path) -> std::io::Result<TokenUsage> {
     let reader = BufReader::new(std::fs::File::open(path)?);
     let mut total = TokenUsage::default();
@@ -181,12 +171,11 @@ pub fn codex_usage(path: &Path) -> std::io::Result<TokenUsage> {
     Ok(total)
 }
 
-/// The Codex rollout file of `thread_id`, searched newest day first.
 pub fn find_codex_log(sessions: &Path, thread_id: &str) -> Option<PathBuf> {
     if thread_id.is_empty()
         || !thread_id
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
     {
         return None;
     }
@@ -233,7 +222,7 @@ mod tests {
     const URL: &str = "http://127.0.0.1:4100/mcp";
 
     #[test]
-    fn codex_gets_overrides_before_its_subcommand() {
+    fn given_a_codex_command_when_rewriting_then_overrides_come_before_its_subcommand() {
         let registration = Overrides {
             url: URL,
             notify: None,
@@ -251,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_notify_runs_this_app_as_a_hook_on_posix_only() {
+    fn given_a_codex_launch_when_rewriting_then_notify_runs_this_app_as_a_hook_on_posix_only() {
         let program = Path::new("/Applications/Terra Swarm.app/Contents/MacOS/terra-swarm");
         let registration = Overrides {
             url: URL,
@@ -265,18 +254,18 @@ mod tests {
     }
 
     #[test]
-    fn an_existing_codex_notify_is_detected() {
-        assert!(codex_config_sets_notify(
+    fn given_a_codex_config_with_notify_when_checking_then_it_is_detected() {
+        assert!(has_codex_notify_setting(
             "model = \"o3\"\nnotify = [\"say\", \"done\"]\n"
         ));
-        assert!(!codex_config_sets_notify(
+        assert!(!has_codex_notify_setting(
             "model = \"o3\"\n[tui]\nnotify = true\n"
         ));
-        assert!(!codex_config_sets_notify(""));
+        assert!(!has_codex_notify_setting(""));
     }
 
     #[test]
-    fn codex_takes_the_last_running_total() {
+    fn given_codex_token_counts_when_reading_usage_then_the_last_running_total_is_taken() {
         let sessions = temp("codex");
         let day = sessions.join("2026/10/20");
         std::fs::create_dir_all(&day).unwrap();

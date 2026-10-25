@@ -13,7 +13,6 @@ const ID: &str = "claude";
 
 const CLAUDE_CONFIG_FILE: &str = "claude-mcp.json";
 const CLAUDE_SETTINGS_FILE: &str = "claude-hooks.json";
-/// How long Claude Code waits for one of Terra's hooks.
 const CLAUDE_HOOK_TIMEOUT_SECS: u64 = 5;
 
 pub struct Claude;
@@ -72,9 +71,6 @@ impl AgentIntegration for Claude {
             )),
             "Notification" => {
                 let message = text_field(payload, &["message"]).unwrap_or_default();
-                // `idle_prompt` only means the turn ended a minute ago; it is not
-                // a question, and treating it as one would keep the orchestrator
-                // from waking an agent that finished. Older versions send no type.
                 match payload.get("notification_type").and_then(Value::as_str) {
                     None
                     | Some("permission_prompt")
@@ -139,8 +135,6 @@ pub fn rewrite(command: &str, registration: &Flags<'_>, quoting: Quoting) -> Str
             quote(prompt, quoting)
         ));
     }
-    // `--mcp-config` takes several values, so it goes last: placed
-    // before a prompt argument it would swallow the prompt as a file.
     if let Some(path) = registration.mcp_config {
         flags.push_str(&format!(
             " --mcp-config {}",
@@ -150,14 +144,6 @@ pub fn rewrite(command: &str, registration: &Flags<'_>, quoting: Quoting) -> Str
     format!("{}{}", command, flags)
 }
 
-/// Claude Code hooks that report the agent's state to Terra over HTTP.
-/// Claude validates the URL before expanding variables, so it is written
-/// literally (loopback and port only); the token still comes from the
-/// environment, so the file holds no secret.
-///
-/// `SessionStart` takes no HTTP hooks, so a fresh session would never
-/// report itself idle (and the orchestrator could not wake it). It runs
-/// `session_start_command` instead: this app's `hook claude SessionStart`.
 pub fn claude_settings_json(hook_url: &str, session_start_command: Option<&str>) -> String {
     let handler = serde_json::json!({
         "type": "http",
@@ -179,8 +165,6 @@ pub fn claude_settings_json(hook_url: &str, session_start_command: Option<&str>)
     serde_json::json!({ "hooks": hooks }).to_string()
 }
 
-/// The Claude Code config reads the URL and token from the environment, so
-/// one file serves every terminal and holds no secret.
 pub fn claude_config_json() -> String {
     serde_json::json!({
         "mcpServers": {
@@ -223,9 +207,6 @@ pub fn write_claude_settings(
     Ok(path)
 }
 
-/// Sum the assistant replies of a Claude Code transcript. A reply with
-/// several content blocks is logged once per block, so replies are counted
-/// once per message id.
 pub fn claude_usage(path: &Path) -> std::io::Result<TokenUsage> {
     let reader = BufReader::new(std::fs::File::open(path)?);
     let mut seen: HashSet<String> = HashSet::new();
@@ -281,8 +262,6 @@ fn claude_projects_dir() -> Option<PathBuf> {
     Some(base.join("projects"))
 }
 
-/// A transcript path from a hook is accepted only inside Claude's own
-/// projects folder: the hook payload comes from the agent.
 pub fn accept_claude_transcript(path: &str, projects: Option<&Path>) -> Option<PathBuf> {
     let projects = projects?.canonicalize().ok()?;
     let path = Path::new(path).canonicalize().ok()?;
@@ -301,7 +280,7 @@ mod tests {
     use crate::roles::Role;
 
     #[test]
-    fn claude_gets_hooks_and_its_config_file_last() {
+    fn given_a_claude_command_when_rewriting_then_it_gets_hooks_and_its_config_file_last() {
         let mcp = Path::new("/Users/me/Library/Application Support/x/claude-mcp.json");
         let hooks = Path::new("/Users/me/Library/Application Support/x/claude-hooks.json");
         let registration = Flags {
@@ -340,13 +319,12 @@ mod tests {
     }
 
     #[test]
-    fn claude_hooks_settings_hold_no_secret() {
+    fn given_claude_hook_settings_when_writing_them_then_they_hold_no_secret() {
         let json: serde_json::Value = serde_json::from_str(&claude_settings_json(
             "http://127.0.0.1:4100/hooks",
             Some("'/Applications/Terra Swarm.app/Contents/MacOS/terra-swarm' hook claude SessionStart"),
         ))
         .unwrap();
-        // SessionStart accepts only command hooks: it runs this app's binary.
         let start = &json["hooks"]["SessionStart"][0]["hooks"][0];
         assert_eq!(start["type"], "command");
         assert!(start["command"]
@@ -369,7 +347,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_config_holds_no_secret() {
+    fn given_the_claude_config_when_writing_it_then_it_holds_no_secret() {
         let json: serde_json::Value = serde_json::from_str(&claude_config_json()).unwrap();
         let server = &json["mcpServers"]["terra"];
         assert_eq!(server["type"], "http");
@@ -381,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_replies_count_once_per_message() {
+    fn given_claude_replies_when_counting_usage_then_each_message_counts_once() {
         let dir = temp("claude");
         let log = dir.join("s.jsonl");
         let reply = |id: &str, block: &str| {
@@ -414,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn only_transcripts_inside_claudes_folder_are_read() {
+    fn given_transcript_paths_when_reading_then_only_those_inside_claudes_folder_are_read() {
         let projects = temp("projects");
         let inside = projects.join("p/s.jsonl");
         std::fs::create_dir_all(inside.parent().unwrap()).unwrap();

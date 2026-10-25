@@ -10,7 +10,7 @@ pub struct Outgoing<'a> {
 }
 
 pub struct InboxRequest {
-    pub unread_only: bool,
+    pub is_unread_only: bool,
     pub limit: Option<usize>,
 }
 
@@ -33,8 +33,6 @@ pub fn send(
     })
 }
 
-/// Messages sent to `reader` or to `all`, oldest first, at most `limit`.
-/// Every returned message is recorded as read by `reader`.
 pub fn read_inbox(
     repo: &mut Repo,
     reader: &Actor<'_>,
@@ -43,7 +41,7 @@ pub fn read_inbox(
     let query = InboxQuery {
         workspace_id: reader.workspace_id,
         reader: reader.name,
-        unread_only: request.unread_only,
+        is_unread_only: request.is_unread_only,
         limit: clamp_limit(request.limit, DEFAULT_INBOX_LIMIT),
     };
     let tx = repo.transaction()?;
@@ -70,7 +68,8 @@ mod tests {
     }
 
     #[test]
-    fn inbox_separates_direct_and_broadcast_and_marks_read() {
+    fn given_direct_and_broadcast_messages_when_reading_the_inbox_then_they_are_separated_and_marked_read(
+    ) {
         let mut repo = Repo::in_memory();
         send(
             repo.queries(),
@@ -123,19 +122,21 @@ mod tests {
             &mut repo,
             &actor("ws-1", "t-2"),
             &InboxRequest {
-                unread_only: true,
+                is_unread_only: true,
                 limit: None,
             },
         )
         .unwrap();
-        let bodies: Vec<&str> = inbox.iter().map(|m| m.body.as_str()).collect();
+        let bodies: Vec<&str> = inbox.iter().map(|message| message.body.as_str()).collect();
         assert_eq!(bodies, vec!["hi two", "hi all"]);
-        assert!(inbox.iter().all(|m| m.read_by.contains(&"t-2".to_string())));
+        assert!(inbox
+            .iter()
+            .all(|message| message.read_by.contains(&"t-2".to_string())));
         assert!(read_inbox(
             &mut repo,
             &actor("ws-1", "t-2"),
             &InboxRequest {
-                unread_only: true,
+                is_unread_only: true,
                 limit: None
             }
         )
@@ -146,7 +147,7 @@ mod tests {
                 &mut repo,
                 &actor("ws-1", "t-2"),
                 &InboxRequest {
-                    unread_only: false,
+                    is_unread_only: false,
                     limit: None
                 }
             )
@@ -154,14 +155,13 @@ mod tests {
             .len(),
             2
         );
-        // t-3 gets both broadcasts and its own direct message; `limit` reads one.
         assert_eq!(repo.queries().unread_count("ws-1", "t-3").unwrap(), 3);
         assert_eq!(
             read_inbox(
                 &mut repo,
                 &actor("ws-1", "t-3"),
                 &InboxRequest {
-                    unread_only: true,
+                    is_unread_only: true,
                     limit: Some(1)
                 }
             )
@@ -173,15 +173,15 @@ mod tests {
     }
 
     #[test]
-    fn history_is_kept_in_full() {
+    fn given_many_messages_when_reading_the_history_then_it_is_kept_in_full() {
         let mut repo = Repo::in_memory();
-        for n in 0..700 {
+        for message_number in 0..700 {
             send(
                 repo.queries(),
                 &actor("ws-1", "t-1"),
                 &Outgoing {
                     to: "all",
-                    body: &format!("m{}", n),
+                    body: &format!("m{}", message_number),
                 },
             )
             .unwrap();
@@ -192,7 +192,7 @@ mod tests {
                 &mut repo,
                 &actor("ws-1", "t-2"),
                 &InboxRequest {
-                    unread_only: true,
+                    is_unread_only: true,
                     limit: Some(MAX_LIMIT + 50)
                 }
             )
@@ -205,7 +205,7 @@ mod tests {
                 &mut repo,
                 &actor("ws-1", "t-2"),
                 &InboxRequest {
-                    unread_only: true,
+                    is_unread_only: true,
                     limit: None
                 }
             )
@@ -216,14 +216,14 @@ mod tests {
         let id = tasks::create(&mut repo, &actor("ws-1", "t-1"), task("log"))
             .unwrap()
             .id;
-        for n in 0..150 {
+        for step in 0..150 {
             tasks::update(
                 &mut repo,
                 &actor("ws-1", "t-1"),
                 TaskUpdate {
                     id: &id,
                     patch: TaskPatch {
-                        note: Some(format!("step {}", n)),
+                        note: Some(format!("step {}", step)),
                         ..TaskPatch::default()
                     },
                 },

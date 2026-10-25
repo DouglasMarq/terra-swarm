@@ -1,8 +1,3 @@
-//! Agent lifecycle hooks. Agent CLIs call `terra-swarm hook <agent> <event>`
-//! (see `crate::cli`), which posts here with the terminal's token, so the
-//! board knows whether an agent is working, idle or waiting for a human
-//! without the agent having to call `report_status` itself.
-
 use std::sync::Arc;
 
 use axum::body::Body;
@@ -21,34 +16,26 @@ use super::{AgentIdentity, McpHub};
 use crate::usage::SessionLog;
 
 pub const HOOKS_PATH: &str = "/hooks";
-/// Where an agent CLI's HTTP hook posts its raw event JSON.
 pub const INTEGRATION_HOOKS_PATH: &str = "/hooks/{integration}";
 pub const EVENT_AGENT_ATTENTION: &str = "agent-attention";
 const MAX_HOOK_BODY: usize = 256 * 1024;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct HookCall {
-    /// Which CLI sent it ("claude", "codex").
     pub agent: String,
-    /// The CLI's event name ("Stop", "Notification", "agent-turn-complete"…).
     pub event: String,
-    /// Whatever the CLI passed along, as JSON.
     #[serde(default)]
     pub payload: Value,
 }
 
-/// What a hook event says about the agent: its new state and a one-line
-/// summary. `None` for events that carry no state change.
 pub fn interpret(call: &HookCall) -> Option<(AgentState, String)> {
     integration::by_id(&call.agent)?.interpret(&call.event, &call.payload)
 }
 
-/// The session log a hook event points at, for token usage.
 pub fn session_log(call: &HookCall) -> Option<SessionLog> {
     integration::by_id(&call.agent)?.session_log(&call.payload)
 }
 
-/// Apply a hook call for `who`.
 pub fn apply<R: Runtime>(hub: &McpHub<R>, who: &AgentIdentity, call: &HookCall) {
     if let Some(log) = session_log(call) {
         hub.set_session_log(&who.terminal_id, log);
@@ -81,7 +68,6 @@ pub fn apply<R: Runtime>(hub: &McpHub<R>, who: &AgentIdentity, call: &HookCall) 
     }
 }
 
-/// `POST /hooks`: `terra-swarm hook` sends `{ agent, event, payload }`.
 pub async fn handle<R: Runtime>(State(hub): State<Arc<McpHub<R>>>, request: Request) -> Response {
     receive(hub, request, |body| {
         serde_json::from_slice::<HookCall>(body).ok()
@@ -89,7 +75,6 @@ pub async fn handle<R: Runtime>(State(hub): State<Arc<McpHub<R>>>, request: Requ
     .await
 }
 
-/// `POST /hooks/{integration}`: an agent CLI's HTTP hook posts its event JSON as is.
 pub async fn handle_integration<R: Runtime>(
     State(hub): State<Arc<McpHub<R>>>,
     Path(id): Path<String>,
@@ -113,14 +98,13 @@ pub async fn handle_integration<R: Runtime>(
     .await
 }
 
-/// Both routes sit behind the same token check as the MCP endpoint.
 async fn receive<R: Runtime>(
     hub: Arc<McpHub<R>>,
     request: Request,
     parse: impl FnOnce(&[u8]) -> Option<HookCall>,
 ) -> Response {
-    // Hooks come from CLIs, never from a browser page.
-    if request.headers().contains_key(header::ORIGIN) {
+    let is_from_browser_page = request.headers().contains_key(header::ORIGIN);
+    if is_from_browser_page {
         return StatusCode::FORBIDDEN.into_response();
     }
     let Some(who) = request.extensions().get::<AgentIdentity>().cloned() else {
@@ -141,8 +125,6 @@ async fn receive<R: Runtime>(
         };
         eprintln!("a hook handler {}", reason);
     }
-    // An empty body: a Claude hook reads its response as hook output, and an
-    // empty one changes nothing about what the agent does.
     StatusCode::OK.into_response()
 }
 
@@ -180,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_events_map_to_states() {
+    fn given_claude_hook_events_when_interpreting_then_they_map_to_states() {
         assert_eq!(
             interpret(&call(
                 "claude",
@@ -216,7 +198,6 @@ mod tests {
             )),
             Some((AgentState::NeedsInput, "Allow Bash?".into()))
         );
-        // Finishing a turn and sitting quietly is not "needs you".
         assert_eq!(
             interpret(&call(
                 "claude",
@@ -242,7 +223,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_turn_complete_means_idle() {
+    fn given_a_codex_turn_complete_when_interpreting_then_the_agent_is_idle() {
         let (state, summary) = interpret(&call(
             "codex",
             "notify",
@@ -258,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_hooks_name_their_session() {
+    fn given_a_codex_hook_when_reading_its_session_log_then_it_names_its_session() {
         let log = session_log(&call(
             "codex",
             "notify",
@@ -271,7 +252,6 @@ mod tests {
                 locator: "0199-abc".into()
             })
         );
-        // A Claude transcript outside Claude's own folder is ignored.
         assert_eq!(
             session_log(&call(
                 "claude",
@@ -283,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn long_summaries_are_cut() {
+    fn given_a_long_message_when_interpreting_then_the_summary_is_cut() {
         let (_, summary) = interpret(&call(
             "claude",
             "Notification",
@@ -295,7 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn applying_a_hook_updates_status_and_raises_attention() {
+    fn given_a_hook_when_applying_it_then_the_status_is_updated_and_attention_raised() {
         let (hub, events) = hub();
         let who = identity("t-1", "ws-1", "claude");
         apply(
@@ -315,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn given_an_unavailable_database_a_hook_records_no_state() {
+    fn given_an_unavailable_database_when_applying_a_hook_then_no_state_is_recorded() {
         let dir =
             std::env::temp_dir().join(format!("terra-mcp-hook-{}", crate::clock::now_millis()));
         std::fs::create_dir_all(&dir).unwrap();

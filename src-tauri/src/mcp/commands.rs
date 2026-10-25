@@ -1,7 +1,3 @@
-//! Tauri commands behind the Tasks panel and the Settings toggle. They use
-//! the same `repo` as the MCP tools, log changes as the human ("user") and
-//! emit the same events, so every window refreshes the same way.
-
 use serde::{Deserialize, Deserializer};
 use std::sync::Arc;
 use tauri::State;
@@ -12,7 +8,6 @@ use super::tasks::{self, TaskUpdate};
 use super::{McpHub, ServerInfo};
 
 pub const USER_ACTOR: &str = "user";
-/// History shown on each card of the Tasks panel.
 const PANEL_EVENTS: usize = 20;
 const COMMAND_FAILED: &str = "MCP command failed";
 const MAX_BOARD_TASKS: usize = 500;
@@ -26,7 +21,6 @@ fn user(workspace_id: &str) -> Actor<'_> {
     }
 }
 
-/// Tells "field absent" (`None`) apart from "field is null" (`Some(None)`).
 fn double_option<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
 where
     D: Deserializer<'de>,
@@ -52,14 +46,12 @@ pub fn mcp_server_info(hub: Hub<'_>) -> ServerInfo {
     hub.info()
 }
 
-/// Turn the injection on or off. Running terminals keep their connection;
-/// the setting applies to terminals started afterwards.
 #[tauri::command(async)]
 pub fn mcp_set_enabled(hub: Hub<'_>, enabled: bool) -> Result<ServerInfo, String> {
     hub.repo()
         .and_then(|repo| repo.set_enabled(enabled))
         .inspect_err(|error| error.log_internal(COMMAND_FAILED))
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
     Ok(hub.info())
 }
 
@@ -74,7 +66,7 @@ pub fn mcp_list_tasks(hub: Hub<'_>, workspace_id: String) -> Result<Vec<Task>, S
             })
         })
         .inspect_err(|error| error.log_internal(COMMAND_FAILED))
-        .map_err(|e| e.to_string())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command(async)]
@@ -102,7 +94,7 @@ pub fn mcp_create_task(
             )
         })
         .inspect_err(|error| error.log_internal(COMMAND_FAILED))
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(task)
 }
@@ -135,7 +127,7 @@ pub fn mcp_update_task(
             )
         })
         .inspect_err(|error| error.log_internal(COMMAND_FAILED))
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(task)
 }
@@ -145,7 +137,7 @@ pub fn mcp_delete_task(hub: Hub<'_>, workspace_id: String, id: String) -> Result
     hub.repo()
         .and_then(|repo| tasks::delete(&repo, &workspace_id, &id))
         .inspect_err(|error| error.log_internal(COMMAND_FAILED))
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(())
 }
@@ -160,8 +152,6 @@ pub fn mcp_agent_statuses(hub: Hub<'_>, workspace_id: String) -> Vec<AgentStatus
         })
 }
 
-/// Tokens used by each agent of the workspace whose session log is known
-/// (reported by its hooks), read from the agent CLI's own log files.
 #[tauri::command(async)]
 pub fn agent_usage(hub: Hub<'_>, workspace_id: String) -> Vec<crate::usage::AgentUsage> {
     hub.workspace_terminals(&workspace_id)
@@ -183,7 +173,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn patch_distinguishes_missing_and_null_assignee() {
+    fn given_a_patch_with_a_missing_or_null_assignee_when_parsing_then_the_two_are_distinguished() {
         let missing: TaskPatchInput =
             serde_json::from_str(r#"{"status":"done","position":2.5}"#).unwrap();
         assert_eq!(missing.assignee, None);

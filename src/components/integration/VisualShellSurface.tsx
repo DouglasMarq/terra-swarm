@@ -30,7 +30,7 @@ import { useAgentUsage } from "../../app/useAgentUsage";
 import { useInspectorRuntime } from "../../app/useInspectorRuntime";
 import { startPreviewBridge } from "../../stores/previewStore";
 import { PreviewPanel } from "../preview/PreviewPanel";
-import { deriveAgentStatus } from "../../domain/agentStatus";
+import { deriveAgentStatus, isTerminalRunning } from "../../domain/agentStatus";
 import { NavigatorPanel } from "../navigation/NavigatorPanel";
 import type { ActivityTab, NavigatorFilesLoader, NavigatorGitLoader, NavigatorNodeRef } from "../navigation/types";
 import type { WorkbenchLocation, WorkbenchTabRenderContext } from "../workbench/types";
@@ -490,25 +490,23 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   );
   const contextAlerts = nearlyFullContexts(props.workspaces, props.exited, props.contextUsage);
   const activeWorkspace = props.workspaces.find((workspace) => workspace.id === props.activeId) ?? null;
+  const activeAgents = (activeWorkspace?.terminals ?? []).map((terminal) => ({
+    id: terminal.id,
+    label: agentLabels[terminal.id]?.primary ?? terminal.command,
+    running: isTerminalRunning(terminal, props.exited),
+  }));
   const tasksPanel = (
     <TasksPanel
       workspaceId={activeWorkspace?.id ?? null}
       workspaceName={activeWorkspace?.name ?? null}
-      agents={(activeWorkspace?.terminals ?? []).map((terminal) => ({
-        id: terminal.id,
-        label: agentLabels[terminal.id]?.primary ?? terminal.command,
-      }))}
+      agents={activeAgents}
     />
   );
   const taskBoard = (
     <TaskBoard
       workspaceId={activeWorkspace?.id ?? null}
       workspaceName={activeWorkspace?.name ?? null}
-      agents={(activeWorkspace?.terminals ?? []).map((terminal) => ({
-        id: terminal.id,
-        label: agentLabels[terminal.id]?.primary ?? terminal.command,
-        running: !terminal.suspended && !(terminal.id in props.exited),
-      }))}
+      agents={activeAgents}
       onSendPrompt={(terminalId, prompt) => sendPromptToTerminal(terminalId, prompt)}
     />
   );

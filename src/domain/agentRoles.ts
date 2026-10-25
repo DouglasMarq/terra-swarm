@@ -1,4 +1,5 @@
 import type { AgentRole, Workspace } from "../types";
+import { isTerminalRunning } from "./agentStatus";
 
 /** In the order a team is usually built. */
 export const AGENT_ROLES: readonly AgentRole[] = ["orchestrator", "planner", "executor", "reviewer", "tester"];
@@ -12,5 +13,5 @@ export function orchestratorOf(
   workspace: Pick<Workspace, "terminals"> | null | undefined,
   exited: Readonly<Record<string, unknown>>,
 ): string | null {
-  return workspace?.terminals.find((terminal) => terminal.role === "orchestrator" && !terminal.suspended && !(terminal.id in exited))?.id ?? null;
+  return workspace?.terminals.find((terminal) => terminal.role === "orchestrator" && isTerminalRunning(terminal, exited))?.id ?? null;
 }

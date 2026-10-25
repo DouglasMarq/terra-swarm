@@ -22,6 +22,7 @@ import { FileEditorDialog } from "./components/editor/FileEditorDialog";
 import { PromptLibraryDialog } from "./components/library/PromptLibraryDialog";
 import { TeamDialog } from "./components/library/TeamDialog";
 import { orchestratorOf } from "./domain/agentRoles";
+import { isTerminalRunning } from "./domain/agentStatus";
 import { agentLabelText, buildAgentLabels } from "./domain/agentLabels";
 import { resumeCommandFor, useTerminalSessions } from "./app/useTerminalSessions";
 import { useUpdater } from "./app/useUpdater";
@@ -278,7 +279,7 @@ function App() {
     if (!active) return [];
     const labels = buildAgentLabels([active], { titles, names: agentNames });
     return active.terminals
-      .filter((terminal) => !terminal.suspended && !(terminal.id in exited))
+      .filter((terminal) => isTerminalRunning(terminal, exited))
       .map((terminal) => ({ id: terminal.id, label: labels[terminal.id] ? agentLabelText(labels[terminal.id]) : terminal.command }));
   }, [active, titles, agentNames, exited]);
   const showResume = resumeQueue.open;

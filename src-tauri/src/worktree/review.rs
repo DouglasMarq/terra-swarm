@@ -1,6 +1,3 @@
-//! Reviewing an isolated agent's work: what changed on its branch, then
-//! commit, merge into the base branch, or push and open a pull request.
-
 use serde::Serialize;
 use std::path::Path;
 use std::process::Command;
@@ -15,9 +12,7 @@ const MAX_UNTRACKED_FILES: usize = 200;
 #[serde(rename_all = "camelCase")]
 pub struct ChangedFile {
     pub path: String,
-    /// `added`, `modified`, `deleted`, `renamed` or `untracked`.
     pub change: String,
-    /// `None` for binary files.
     pub additions: Option<u32>,
     pub deletions: Option<u32>,
 }
@@ -26,13 +21,11 @@ pub struct ChangedFile {
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeDiff {
     pub status: WorktreeStatus,
-    /// Everything the branch changed since it left the base, committed or not.
     pub files: Vec<ChangedFile>,
     pub patch: String,
     pub truncated: bool,
 }
 
-/// The commit the branch forked from, so the diff ignores later base work.
 fn fork_point(info: &WorktreeInfo) -> Result<String, String> {
     git(
         Path::new(&info.path),
@@ -49,8 +42,6 @@ fn change_kind(code: &str) -> &'static str {
     }
 }
 
-/// `git diff --no-index` exits 1 when the files differ, which is the point.
-/// A file git cannot diff shows as empty.
 fn diff_new_file(dir: &Path, file: &str) -> String {
     match git_command(dir)
         .args(["diff", "--no-index", "--", "/dev/null", file])
@@ -132,8 +123,7 @@ pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
     let counts = git(dir, &["diff", "--numstat", "-M", &base])?;
     for (kind_line, count_line) in kinds.lines().zip(counts.lines()) {
         let code = kind_line.split('\t').next().unwrap_or("M");
-        // A rename lists the old and the new path; the new one is last.
-        let path = kind_line
+        let newest_path = kind_line
             .rsplit('\t')
             .next()
             .unwrap_or_default()
@@ -142,7 +132,7 @@ pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
         let additions = numbers.next().and_then(|n| n.parse().ok());
         let deletions = numbers.next().and_then(|n| n.parse().ok());
         files.push(ChangedFile {
-            path,
+            path: newest_path,
             change: change_kind(code).into(),
             additions,
             deletions,
@@ -167,7 +157,6 @@ pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
     })
 }
 
-/// Commit everything in the worktree (new files included) on its branch.
 pub fn commit(info: &WorktreeInfo, message: &str) -> Result<WorktreeStatus, String> {
     let message = message.trim();
     if message.is_empty() {
@@ -183,8 +172,6 @@ pub fn commit(info: &WorktreeInfo, message: &str) -> Result<WorktreeStatus, Stri
     status(info)
 }
 
-/// Merge the branch into its base, in the main checkout. The main checkout
-/// must have the base checked out, and the worktree must be committed.
 pub fn merge(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
     let current = status(info)?;
     if !current.dirty.is_empty() {
@@ -211,8 +198,9 @@ pub fn merge(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
             info.base
         ));
     }
-    // Never touch a merge the user has in progress there.
-    if git(repo, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok() {
+    let is_user_merge_in_progress =
+        git(repo, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok();
+    if is_user_merge_in_progress {
         return Err(
             "the main checkout is in the middle of a merge; finish or abort it first".into(),
         );
@@ -250,8 +238,6 @@ fn gh(dir: &Path, args: &[&str]) -> Result<String, String> {
     run_command(command, "gh", "gh failed")
 }
 
-/// Push the branch to `origin` and open a pull request against the base
-/// with the GitHub CLI. Returns the pull request's URL.
 pub fn open_pull_request(info: &WorktreeInfo, title: &str, body: &str) -> Result<String, String> {
     let title = title.trim();
     if title.is_empty() {
@@ -306,7 +292,6 @@ mod tests {
         std::fs::write(dir.join("app/readme.txt"), "hello\nworld\n").unwrap();
         git(dir, &["commit", "-qam", "edit"]).unwrap();
         std::fs::write(dir.join("app/notes.md"), "a\nb\n").unwrap();
-        // Work landing on the base later must not show up in the branch diff.
         std::fs::write(repo.join("other.txt"), "x").unwrap();
         git(&repo, &["add", "."]).unwrap();
         git(&repo, &["commit", "-qm", "base moves"]).unwrap();
@@ -380,7 +365,6 @@ mod tests {
         assert_eq!(after.ahead, 1);
         assert!(after.dirty.is_empty());
 
-        // The main checkout must be on the base branch.
         git(&repo, &["checkout", "-q", "-b", "elsewhere"]).unwrap();
         assert!(merge(&info).unwrap_err().contains("switch it to main"));
         git(&repo, &["checkout", "-q", "main"]).unwrap();

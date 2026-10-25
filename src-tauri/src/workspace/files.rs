@@ -1,5 +1,3 @@
-//! Read-only, workspace-relative directory listing for the Files view.
-
 use super::*;
 use crate::sync::LockExt;
 use serde::Serialize;
@@ -11,8 +9,6 @@ pub(crate) const DEFAULT_FILE_LIST_LIMIT: usize = 200;
 
 pub(crate) const MAX_FILE_LIST_LIMIT: usize = 400;
 
-/// Metadata-only directory entry used by the lazy Files activity. The
-/// command never reads file contents and paths are always workspace-relative.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceFileEntry {

@@ -441,8 +441,6 @@ fn deduplicates_terminal_ids_across_workspaces_without_touching_scrollback() {
         b"valid durable output"
     );
 
-    // A destructive terminal removal now has exactly one owner to act
-    // on; the quarantined duplicate cannot make a second workspace match.
     store.forget_terminal("shared-terminal");
     assert!(store
         .workspaces
@@ -478,7 +476,6 @@ fn given_an_unreadable_store_keeps_the_file_and_does_not_save() {
     fs::write(&path, &original).expect("store");
     fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).expect("chmod");
     if fs::read(&path).is_ok() {
-        // Permission bits do not stop a privileged user (root) from reading.
         cleanup(&path);
         return;
     }

@@ -10,13 +10,10 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use transcriber::Transcriber;
 
-/// Room for a batch of `/dev/snd` inotify events.
 #[cfg(target_os = "linux")]
 const INOTIFY_BUFFER_BYTES: usize = 4096;
-/// Wait after a `/dev/snd` change so the burst of events settles first.
 #[cfg(target_os = "linux")]
 const DEVICE_SETTLE_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
-/// How often the microphone is checked where `/dev/snd` can't be watched.
 #[cfg(not(target_os = "linux"))]
 const MIC_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -62,8 +59,6 @@ struct DownloadProgress {
     percent: f64,
 }
 
-/// Load a Whisper context, preferring GPU and falling back to CPU when the
-/// GPU context fails to initialize.
 #[cfg(not(target_os = "windows"))]
 fn load_transcriber(path: &Path) -> Result<Transcriber, String> {
     match Transcriber::new(path, true) {
@@ -91,7 +86,6 @@ fn activate_model(app: &tauri::AppHandle, model_id: &str, path: PathBuf) -> Resu
 
 fn start_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let state = app.state::<VoiceState>();
-    // Held across check-and-start so two rapid toggles can't both start.
     let mut recording = state.recording.lock_or_recover();
     if *recording {
         return Err("Already recording".into());
@@ -121,8 +115,6 @@ pub fn stop_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String>
         if !*recording {
             return Err("Not recording".into());
         }
-        // Clear unconditionally: if the audio thread died, stop() will fail
-        // forever and the flag must not leave the app stuck in "recording".
         *recording = false;
     }
     let controller = app.state::<AudioController<R>>();
@@ -196,12 +188,6 @@ pub fn voice_set_input_device(device: Option<String>, state: tauri::State<'_, Vo
     *state.input_device.lock_or_recover() = device;
 }
 
-/// Start capturing the given device and playing it back through the
-/// speakers (plus streaming `voice-audio-level` for the settings UI meter),
-/// so the user can hear and see whether a device — whose OS-reported name
-/// doesn't always match what's on the box — is actually picking up sound.
-/// Runs on its own stream pair, entirely separate from the real recording
-/// path, so it can never clobber or be clobbered by an active transcription.
 #[tauri::command]
 pub async fn voice_test_mic_start(
     device: Option<String>,
@@ -222,8 +208,6 @@ pub async fn voice_test_mic_stop(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?
 }
 
-/// Check the current mic state and, when it changed, emit `voice-mic-changed`.
-/// Stops an active recording if the microphone disappeared.
 fn emit_if_mic_changed(app: &tauri::AppHandle, last: &mut Option<bool>) {
     let available = audio::has_input_device();
     if *last == Some(available) {
@@ -348,8 +332,6 @@ fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
 
 #[tauri::command]
 pub async fn voice_download_model(model_id: String, app: tauri::AppHandle) -> Result<(), String> {
-    // Per-model in-progress guard: two concurrent downloads of the same model
-    // would interleave writes into the shared .tmp file and corrupt it.
     {
         let state = app.state::<VoiceState>();
         let mut dl = state.downloading.lock_or_recover();
@@ -420,7 +402,6 @@ fn emit_download_progress(app: &tauri::AppHandle, model_id: &str, progress: down
     );
 }
 
-/// Runs blocking file work off the async runtime.
 async fn run_blocking<T: Send + 'static>(
     work: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {

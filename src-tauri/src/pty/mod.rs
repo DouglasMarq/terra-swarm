@@ -43,20 +43,13 @@ pub fn bump_next_terminal_id(id: &str) {
 }
 
 const BACKLOG_CAP_BYTES: usize = 256 * 1024;
-/// Smallest width and height, in cells, a PTY is opened or resized to.
 const MIN_PTY_DIMENSION: u16 = 2;
-/// Writes queued for a terminal's input before `write_terminal` reports it busy.
 const INPUT_QUEUE_CAPACITY: usize = 256;
-/// Size, in cells, of the terminals `demo_seed` opens.
 const DEMO_COLS: u16 = 100;
 const DEMO_ROWS: u16 = 30;
 const DEMO_AGENT_COMMANDS: [&str; 4] = ["claude", "codex", "opencode", "kimi"];
 const DEMO_AGENT_COUNT: usize = 2;
 
-/// Per-terminal ring of recently emitted output plus the cumulative count of
-/// bytes ever emitted. The frontend fetches a snapshot on mount and uses
-/// `total` to drop live events that are already contained in the snapshot,
-/// giving exactly-once delivery across listener attach.
 pub struct Backlog {
     buf: Vec<u8>,
     total: u64,
@@ -96,11 +89,7 @@ pub struct PtyEntry {
     pub seq: u64,
     pub reaped: Arc<AtomicBool>,
     pub backlog: Arc<Mutex<Backlog>>,
-    /// Cleared before an explicit kill so a late reader flush cannot recreate
-    /// a scrollback file that the user intentionally deleted.
     pub scrollback_enabled: Arc<AtomicBool>,
-    /// The terminal's MCP token, held only for its `Drop`: dropping the entry
-    /// revokes it.
     pub _mcp_lease: Option<McpLease>,
     #[cfg(unix)]
     process_group: Option<Arc<ProcessGroup>>,
@@ -124,9 +113,6 @@ pub struct PtyManager {
     terminals: HashMap<String, PtyEntry>,
     spawning: HashSet<String>,
     scrollback: Arc<ScrollbackStore>,
-    /// Runtime gate for durable scrollback. It starts disabled (fail-closed)
-    /// and is shared with every PTY flusher so toggling the feature does not
-    /// require respawning sessions or racing a manager map mutation.
     durable_scrollback_enabled: Arc<AtomicBool>,
 }
 
@@ -184,25 +170,17 @@ pub struct ExitPayload {
     pub seq: u64,
 }
 
-/// Per-launch settings that are not part of the stored terminal record.
 #[derive(Default, Debug, Clone)]
 pub struct SpawnOptions {
     pub shell: Option<String>,
-    /// Extra arguments appended to the command (per-agent setting).
     pub args: Option<String>,
-    /// Extra environment variables (per-agent setting).
     pub env: HashMap<String, String>,
-    /// Isolate a new agent in its own git worktree.
     pub worktree: bool,
-    /// Where worktrees go; the app data directory when unset.
     pub worktree_root: Option<std::path::PathBuf>,
-    /// Team role for a new agent; a respawned one keeps its recorded role.
     pub role: Option<crate::roles::Role>,
 }
 
 impl SpawnOptions {
-    /// Variables safe to set: a real name, no NUL, and never one of the
-    /// variables Terra uses to identify the terminal.
     fn valid_env(&self) -> impl Iterator<Item = (&String, &String)> {
         self.env.iter().filter(|(key, value)| {
             !key.is_empty()
@@ -238,9 +216,6 @@ pub struct RunningTerminal {
     pub seq: u64,
 }
 
-/// Point-in-time runtime facts for one PTY. This intentionally contains no
-/// CPU or memory estimates: those metrics are not part of Terra's runtime
-/// contract.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalRuntimeInfo {
@@ -262,12 +237,17 @@ struct RuntimeFacts<'a> {
     is_reaped: bool,
 }
 
+fn unrecycled_pid(facts: &RuntimeFacts<'_>) -> Option<u32> {
+    if facts.is_reaped {
+        return None;
+    }
+    facts.pid
+}
+
 fn runtime_info_from_values(facts: RuntimeFacts<'_>) -> TerminalRuntimeInfo {
     TerminalRuntimeInfo {
         id: facts.id.to_string(),
-        // Once the child is reaped, the operating-system pid may already be
-        // recycled. Never expose that stale identifier as live runtime data.
-        pid: if facts.is_reaped { None } else { facts.pid },
+        pid: unrecycled_pid(&facts),
         cols: facts.cols,
         rows: facts.rows,
         running: !facts.is_reaped,
@@ -300,8 +280,6 @@ pub struct BacklogSnapshot {
     pub total: u64,
 }
 
-/// What to run and where: the terminal's workspace, its command as typed, its
-/// initial size and, for a respawn, the id it keeps.
 #[derive(Clone, Copy)]
 pub struct SpawnRequest<'a> {
     pub workspace_id: &'a str,
@@ -442,8 +420,6 @@ fn record_terminal(
         Ok(())
     });
     if recorded.is_err() {
-        // The workspace was closed while we were spawning; don't leak the
-        // process or leave it running untracked.
         kill_terminal_inner(registries.manager, &meta.id);
     }
     recorded
@@ -550,28 +526,23 @@ fn spawn_process<'a, R: Runtime>(
 ) -> Result<SpawnedProcess<'a>, String> {
     let shell = resolve_shell(launch.options.shell.as_deref());
     let interactive = launch.command.is_empty() || launch.command == "shell";
-    // The user's per-agent arguments, appended only to the process that
-    // runs: the stored command stays as typed so resume can rebuild it.
-    let launch_command = match launch.options.args.as_deref().map(str::trim) {
+    let command_with_agent_args = match launch.options.args.as_deref().map(str::trim) {
         Some(args) if !args.is_empty() && !interactive => format!("{} {}", launch.command, args),
         _ => launch.command.to_string(),
     };
-    // Issued only after the duplicate checks above: a fresh token for an id
-    // that is already running would log the live terminal out.
     let mut mcp_launch = app.try_state::<Arc<McpHub>>().and_then(|hub| {
         hub.launch(LaunchRequest {
             terminal_id: launch.id,
             workspace_id: launch.workspace_id,
-            command: &launch_command,
+            command: &command_with_agent_args,
             role: launch.role,
             quoting: quoting_for(&shell),
         })
     });
-    // Only the spawned process sees the MCP flags; `command` (persisted in
-    // the workspace store) stays as the user typed it.
-    let run_command = mcp_launch
-        .as_ref()
-        .map_or_else(|| launch_command.clone(), |launch| launch.command.clone());
+    let run_command = mcp_launch.as_ref().map_or_else(
+        || command_with_agent_args.clone(),
+        |launch| launch.command.clone(),
+    );
     let mut cmd = CommandBuilder::new(&shell);
     cmd.args(shell_args(&shell, interactive, &run_command));
     cmd.cwd(launch.cwd);
@@ -636,12 +607,15 @@ fn apply_env(cmd: &mut CommandBuilder, options: &SpawnOptions, mcp_launch: Optio
     for (key, value) in options.valid_env() {
         cmd.env(key, value);
     }
-    // Set after the user's variables so they cannot point an agent at
-    // another terminal's identity.
-    if let Some(launch) = mcp_launch {
-        for (key, value) in &launch.env {
-            cmd.env(key, value);
-        }
+    override_with_terminal_identity(cmd, mcp_launch);
+}
+
+fn override_with_terminal_identity(cmd: &mut CommandBuilder, mcp_launch: Option<&McpLaunch>) {
+    let Some(launch) = mcp_launch else {
+        return;
+    };
+    for (key, value) in &launch.env {
+        cmd.env(key, value);
     }
 }
 
@@ -699,10 +673,6 @@ fn register_process<R: Runtime>(
         .terminals
         .insert(launch.id.to_string(), entry);
 
-    // Register the entry before waiting on the child. A command can exit
-    // between spawn and this point; starting the monitor earlier used to let
-    // it observe an absent map entry, emit an exit, and then leave a reaped
-    // session behind as a phantom running terminal.
     spawn_exit_monitor(app, child, watch);
     Ok(())
 }
@@ -794,11 +764,7 @@ fn spawn_exit_monitor<R: Runtime>(
                 None
             }
         };
-        // Mark reaped immediately so kill_entry never signals a pid that
-        // the OS may already have recycled.
         watch.reaped.store(true, Ordering::SeqCst);
-        // Remove from the manager BEFORE notifying the frontend, so a
-        // concurrent running_terminals never reports this id as alive.
         forget_exited_terminal(&app, &watch);
         let _ = app.emit(
             "terminal-exit",
@@ -863,7 +829,6 @@ impl Drop for SpawnReservation<'_> {
     }
 }
 
-/// Removes a worktree created for a spawn that then failed.
 struct CreatedWorktree(Option<crate::worktree::WorktreeInfo>);
 
 impl CreatedWorktree {
@@ -981,7 +946,6 @@ pub fn write_terminal(
     send_input(&input, &id, data)
 }
 
-/// Queues `data` for the terminal's writer; a full queue reports `Busy`.
 fn send_input(
     input: &std::sync::mpsc::SyncSender<Vec<u8>>,
     id: &str,
@@ -1027,8 +991,6 @@ pub fn resize_terminal(
     guard
         .resize(pty_size(cols, rows))
         .map_err(|e| e.to_string())?;
-    // Only record the new size after the resize actually succeeded, otherwise
-    // a failed resize can never be retried (dedup would treat it as a no-op).
     *last_size.lock_or_recover() = (cols, rows);
     Ok(())
 }
@@ -1074,8 +1036,6 @@ pub fn kill_terminal(app: AppHandle, id: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Kills the PTY process but keeps the workspace store entry, so a respawn
-/// with the same id (restart) preserves the terminal's position and width.
 #[tauri::command(async)]
 pub fn stop_terminal(app: AppHandle, id: String) -> Result<(), String> {
     let manager = app.state::<Mutex<PtyManager>>();
@@ -1104,10 +1064,6 @@ pub fn terminal_backlog(
         });
     }
 
-    // A stopped/exited terminal is intentionally absent from the live map;
-    // the durable tail remains the source of truth only while the feature is
-    // enabled. Disabling the flag never deletes existing files, but it must
-    // not expose them as a hidden fallback.
     if !durable_scrollback_enabled.load(Ordering::SeqCst) {
         return Ok(BacklogSnapshot {
             data: String::new(),
@@ -1123,9 +1079,6 @@ pub fn terminal_backlog(
     })
 }
 
-/// Enable or disable durable scrollback for all current and future PTYs.
-/// The state is intentionally runtime-only and fail-closed on startup; turning
-/// it off stops new disk writes and fallback reads without deleting old data.
 #[tauri::command(async)]
 pub fn set_durable_scrollback_enabled(
     manager: State<'_, Mutex<PtyManager>>,
@@ -1144,9 +1097,6 @@ pub fn running_terminals(
     Ok(manager.running_terminals())
 }
 
-/// Return only the runtime facts for the requested PTY. Unknown ids resolve
-/// to `null` so an exited/removed session is not confused with a command
-/// failure and the Inspector can render an unavailable state safely.
 #[tauri::command(async)]
 pub fn terminal_runtime_info(
     manager: State<'_, Mutex<PtyManager>>,
@@ -1391,9 +1341,6 @@ mod spawn_lifecycle_tests {
         )
         .expect("spawn immediate command");
 
-        // The child exits before the caller can observe a second command
-        // round-trip. The monitor must still see the entry that was inserted
-        // before it started waiting and remove exactly that generation.
         let deadline = Instant::now() + Duration::from_secs(2);
         loop {
             let manager = manager.lock().expect("pty manager");
@@ -1465,7 +1412,6 @@ mod spawn_lifecycle_tests {
                 },
             )
             .expect("spawn printenv");
-            // The stored command stays as typed.
             assert_eq!(spawned.meta.command, "printenv");
         };
         run("AGENT_TEST_VAR", "agent.txt");
@@ -1535,8 +1481,6 @@ mod spawn_lifecycle_tests {
             );
             std::thread::sleep(Duration::from_millis(20));
         }
-        // Respawning the same id (resume) goes back to the same worktree,
-        // even without asking for isolation again.
         let plain = SpawnOptions {
             shell: Some("/bin/sh".into()),
             ..SpawnOptions::default()

@@ -1,5 +1,3 @@
-//! Coding-agent CLIs Terra Swarm knows and which of them are installed.
-
 use serde::Serialize;
 
 use crate::agent_catalog::catalog;
@@ -16,8 +14,6 @@ pub struct AgentInfo {
     pub available: bool,
 }
 
-/// Whether the catalog agent `id` resolves on the user's PATH. Ids outside
-/// the compiled-in catalog are refused without running anything.
 pub(super) fn command_available(id: &str) -> bool {
     catalog().iter().any(|agent| agent.id == id) && is_on_path(id)
 }
@@ -38,9 +34,6 @@ fn is_on_path(id: &str) -> bool {
     find_on_path(id).is_some()
 }
 
-/// Which of `ids` resolve on the user's PATH. On Unix a single login shell
-/// answers for all of them, so detection costs one shell start, not one per
-/// agent, and sees the same PATH as the terminals the app spawns.
 #[cfg(not(windows))]
 fn available_commands(ids: &[&str]) -> std::collections::HashSet<String> {
     let script = ids
@@ -85,7 +78,6 @@ pub fn detect_agents() -> Vec<AgentInfo> {
             available: found.contains(&agent.id),
         })
         .collect();
-    // Installed agents first, keeping the curated order inside each half.
     agents.sort_by_key(|agent| !agent.available);
     agents.push(AgentInfo {
         id: "shell".into(),

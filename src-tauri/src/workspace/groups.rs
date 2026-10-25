@@ -1,12 +1,8 @@
-//! Project groups: membership, rename, suspend and resume.
-
 use super::*;
 use std::collections::HashSet;
 use std::sync::atomic::Ordering;
 
 impl WorkspaceStore {
-    /// Keep the workspace's group pointer and the group's project list as a
-    /// bidirectional relationship. Passing `None` unassigns the workspace.
     pub fn set_workspace_group(
         &mut self,
         workspace_id: &str,
@@ -93,7 +89,6 @@ impl WorkspaceStore {
         Ok(())
     }
 
-    /// Remove the group metadata but leave projects and terminals untouched.
     pub fn remove_group(&mut self, id: &str) -> Result<(), String> {
         let Some(index) = self.groups.iter().position(|group| group.id == id) else {
             return Err(format!("group {} not found", id));
@@ -120,8 +115,6 @@ impl WorkspaceStore {
         Ok(terminal_ids)
     }
 
-    /// Mark a group and its terminal metadata suspended. This method never
-    /// touches processes.
     pub fn suspend_group(&mut self, id: &str) -> Result<(), String> {
         let suspended_ids: HashSet<String> = self.group_terminal_ids(id)?.into_iter().collect();
         let group = self.group(id)?.clone();

@@ -56,8 +56,6 @@ pub fn create(repo: &mut Repo, actor: &Actor<'_>, new: NewTask) -> StoreResult<T
     shown(repo, actor, &task.id)
 }
 
-/// Take a `todo` task. The write transaction is the lock: of two agents
-/// racing for a task, the second sees the first one's claim.
 pub fn claim(repo: &mut Repo, actor: &Actor<'_>, raw_id: &str) -> StoreResult<Task> {
     let at = now_millis();
     let tx = repo.transaction()?;
@@ -86,9 +84,6 @@ pub fn update(repo: &mut Repo, actor: &Actor<'_>, update: TaskUpdate<'_>) -> Sto
     shown(repo, actor, &id)
 }
 
-/// Hand a task to `to` and tell them in a message: both are written or
-/// neither is. Done tasks and tasks with unfinished dependencies can't be
-/// assigned; a `todo` task moves to `in_progress`.
 pub fn assign(
     repo: &mut Repo,
     actor: &Actor<'_>,
@@ -122,8 +117,6 @@ pub fn assign(
     Ok((task, message))
 }
 
-/// Hand work in for review. Only the assignee (or anyone, while the task
-/// is unassigned) can complete it.
 pub fn complete(
     repo: &mut Repo,
     actor: &Actor<'_>,
@@ -223,8 +216,6 @@ fn new_task(queries: Queries<'_>, actor: &Actor<'_>, new: NewTask) -> StoreResul
     })
 }
 
-/// Resolve dependency ids with one query, keeping their order and dropping
-/// duplicates. Any id that is not a task of the workspace is refused.
 fn dependency_ids(
     queries: Queries<'_>,
     workspace_id: &str,
@@ -251,7 +242,6 @@ fn dependency_ids(
     Ok(depends_on)
 }
 
-/// Next free slot at the end of a status column.
 fn end_of_column(queries: Queries<'_>, workspace_id: &str, status: TaskStatus) -> StoreResult<f64> {
     let max = queries.max_position(workspace_id, status)?;
     Ok(max.map_or(FIRST_POSITION, |max| max.floor() + POSITION_STEP))
@@ -320,8 +310,6 @@ fn assignment_message(task: &Task, note: Option<&str>) -> String {
     }
 }
 
-/// The writes of `update`, inside the caller's transaction. Returns the
-/// resolved task id.
 fn apply_patch(
     queries: Queries<'_>,
     actor: &Actor<'_>,
@@ -389,8 +377,6 @@ fn patched(before: &Task, patch: &TaskPatch) -> Task {
     }
 }
 
-/// A task that changes column goes to the end of the new one unless the
-/// caller placed it explicitly.
 fn new_position(queries: Queries<'_>, before: &Task, patch: &TaskPatch) -> StoreResult<f64> {
     if let Some(position) = patch.position {
         return Ok(position);
@@ -511,7 +497,6 @@ mod tests {
             get(&repo, "ws-1", "T-1"),
             Err(StoreError::NotFound(_))
         ));
-        // Deleting a task cascades to its dependency links and events.
         assert!(get(&repo, "ws-1", "T-2").unwrap().depends_on.is_empty());
         assert_eq!(repo.count("task_deps"), 0);
     }
@@ -519,7 +504,7 @@ mod tests {
     #[test]
     fn list_orders_by_status_priority_and_position() {
         let mut repo = Repo::in_memory();
-        create(&mut repo, &actor("ws-1", "u"), task("medium first")).unwrap(); // T-1
+        create(&mut repo, &actor("ws-1", "u"), task("medium first")).unwrap();
         create(
             &mut repo,
             &actor("ws-1", "u"),
@@ -529,13 +514,12 @@ mod tests {
                 ..NewTask::default()
             },
         )
-        .unwrap(); // T-2
-        create(&mut repo, &actor("ws-1", "u"), task("medium second")).unwrap(); // T-3
-        create(&mut repo, &actor("ws-1", "u"), task("in progress")).unwrap(); // T-4
-        create(&mut repo, &actor("ws-1", "u"), task("finished")).unwrap(); // T-5
+        .unwrap();
+        create(&mut repo, &actor("ws-1", "u"), task("medium second")).unwrap();
+        create(&mut repo, &actor("ws-1", "u"), task("in progress")).unwrap();
+        create(&mut repo, &actor("ws-1", "u"), task("finished")).unwrap();
         set_status(&mut repo, "T-4", TaskStatus::InProgress);
         set_status(&mut repo, "T-5", TaskStatus::Done);
-        // Same priority: T-3 is moved ahead of T-1 inside the column.
         update(
             &mut repo,
             &actor("ws-1", "u"),
@@ -572,7 +556,6 @@ mod tests {
                 .len(),
             3
         );
-        // Moving to a new column without a position lands at its end.
         let moved = update(
             &mut repo,
             &actor("ws-1", "u"),
@@ -986,8 +969,6 @@ mod tests {
 
     #[test]
     fn claim_is_atomic_across_connections() {
-        // Two connections to one file: the write transaction alone must stop
-        // the second claim, even without the in-process mutex.
         let dir = std::env::temp_dir().join(format!("terra-mcp-claim-{}", now_millis()));
         let path = dir.join("mcp.db");
         let mut one = Repo::new(super::super::db::open(&path).unwrap());

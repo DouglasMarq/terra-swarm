@@ -1,7 +1,3 @@
-//! Poison-tolerant locking. A panic on one thread poisons the mutex it held;
-//! the data behind these locks stays consistent across a panic, so taking it
-//! back is safer than letting every later `lock().unwrap()` take the app down.
-
 use std::sync::{Mutex, MutexGuard};
 
 pub trait LockExt<T> {

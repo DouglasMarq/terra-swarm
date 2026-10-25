@@ -1,23 +1,14 @@
-//! Normalization of loaded workspace data before it reaches the UI or PTYs.
-
 use super::*;
 use std::collections::HashSet;
 
 const FIRST_DUPLICATE_SUFFIX: u32 = 2;
 
 impl WorkspaceStore {
-    /// Drops malformed entries and clamps out-of-range values, so a
-    /// hand-edited or corrupted store can never panic or break the layout.
     pub(crate) fn normalize(&mut self) {
         normalize_workspace_ids(&mut self.workspaces);
-        // Terminal ids are the durable PTY/scrollback identity.  They must be
-        // unique across the whole store, not merely inside one workspace:
-        // every PTY command addresses an id without a workspace qualifier.
-        // Keep the first occurrence in deterministic workspace/terminal order
-        // and quarantine later occurrences from the normalized metadata.
-        let mut seen_terminal_ids = HashSet::new();
+        let mut store_wide_terminal_ids = HashSet::new();
         for workspace in &mut self.workspaces {
-            normalize_workspace(workspace, &mut seen_terminal_ids);
+            normalize_workspace(workspace, &mut store_wide_terminal_ids);
         }
         normalize_groups(&mut self.groups);
     }
@@ -117,10 +108,6 @@ fn normalize_panes(workspace: &mut Workspace, duplicates: &HashSet<String>) {
 }
 
 fn normalize_pane(pane: &mut Pane, known: &KnownTerminals) {
-    // A pane tab that points at a duplicate or at a terminal removed during
-    // recovery would otherwise make a later PTY operation ambiguous. Tabs
-    // without a PTY are kept as visual/orphan metadata for the frontend to
-    // reconcile.
     pane.tabs.retain_mut(|tab| {
         trim_in_place(&mut tab.id);
         !tab.id.is_empty() && known.allows(tab)

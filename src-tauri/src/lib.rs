@@ -22,12 +22,9 @@ use std::time::Duration;
 use sync::LockExt;
 use tauri::{Listener, Manager};
 
-/// How long `SWARM_DEMO=1` waits for the window before seeding terminals.
 const DEMO_SEED_DELAY: Duration = Duration::from_millis(800);
 const BUILD_FAILURE_EXIT_CODE: i32 = 1;
 
-/// Remove the old scrollback of terminals the store no longer knows. A
-/// store that could not be read knows no terminals, so it keeps them all.
 fn clean_orphaned_scrollback(
     store: &workspace::WorkspaceStore,
     scrollback_store: &scrollback::ScrollbackStore,
@@ -118,8 +115,6 @@ fn open_mcp_hub(
             error
         ),
     }
-    // Without a database there is nothing to serve: the server stays
-    // off and Settings explains why.
     if hub.available() {
         if let Err(error) = mcp::server::start(Arc::clone(&hub)) {
             eprintln!("failed to start the MCP server: {}", error);
@@ -134,10 +129,8 @@ fn retain_known_workspaces(hub: &mcp::McpHub, store: &workspace::WorkspaceStore)
         .iter()
         .map(|workspace| workspace.id.clone())
         .collect::<std::collections::HashSet<_>>();
-    // Workspaces closed by an older build left their data behind. An
-    // empty list may mean the workspace store failed to load; keep
-    // the board rather than wiping it in that case.
-    if known_workspaces.is_empty() {
+    let has_store_possibly_failed_to_load = known_workspaces.is_empty();
+    if has_store_possibly_failed_to_load {
         return;
     }
     if let Err(error) = hub
@@ -173,8 +166,6 @@ fn seed_demo_later(handle: tauri::AppHandle) {
 fn on_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
     match event {
         tauri::RunEvent::ExitRequested { .. } => {
-            // Flush the workspace store synchronously; the debounced
-            // background writer may not fire before the process exits.
             app.state::<Mutex<workspace::WorkspaceStore>>()
                 .lock_or_recover()
                 .save_now();

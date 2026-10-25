@@ -1,6 +1,3 @@
-//! Which shell runs a terminal: the login shell, `/etc/shells` and, on
-//! Windows, PowerShell, Git Bash and cmd.
-
 #[cfg(unix)]
 const PASSWD_BUFFER_FALLBACK_BYTES: usize = 1024;
 #[cfg(unix)]
@@ -84,10 +81,6 @@ fn valid_shell(shell: &str) -> bool {
 
 #[cfg(windows)]
 pub(super) fn find_on_path(exe: &str) -> Option<String> {
-    // Search PATH directly instead of shelling out to where.exe: its output is
-    // encoded in the console OEM codepage, so any non-ASCII install path
-    // (accented usernames, localized "Program Files") breaks UTF-8 decoding
-    // and the tool is reported missing.
     let paths = std::env::var_os("PATH")?;
     let pathext: Vec<String> = std::env::var("PATHEXT")
         .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string())

@@ -6,18 +6,12 @@ use whisper_rs::{
     FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState,
 };
 
-/// Most tokens Whisper may produce for one dictation.
 const MAX_TOKENS: i32 = 128;
-/// Threads used when the number of cores cannot be read.
 const FALLBACK_THREAD_COUNT: i32 = 4;
-/// Whisper's encoder window: `WINDOW_SECONDS` of audio fill `MAX_AUDIO_CTX`
-/// audio-context frames.
 const WINDOW_SECONDS: f32 = 30.0;
 const MAX_AUDIO_CTX: i32 = 1500;
 const MIN_AUDIO_CTX: i32 = 768;
-/// Frames added to the proportional audio context.
 const AUDIO_CTX_PADDING: f32 = 256.0;
-/// The audio context is rounded up to a multiple of this.
 const AUDIO_CTX_STEP: i32 = 64;
 const MILLIS_PER_SECOND: u32 = 1000;
 const TRIM_CHUNK_SAMPLES: usize = samples_in_millis(100);
@@ -27,8 +21,6 @@ const SILENCE_THRESHOLD: f32 = 0.01;
 pub struct Transcriber {
     ctx: WhisperContext,
     state: Mutex<Option<WhisperState>>,
-    /// With a GPU every logical core runs pre/post-processing; on CPU only
-    /// half of them do, as hyperthreads slow whisper down.
     use_gpu: bool,
 }
 
@@ -135,9 +127,6 @@ fn segments_text(state: &WhisperState) -> String {
     text
 }
 
-/// Compute the audio_ctx parameter for Whisper based on number of 16kHz samples.
-/// Formula from whisper.cpp issue #1855: (duration/30)*1500 + padding.
-/// Minimum 768, maximum 1500, always a multiple of 64.
 fn compute_audio_ctx(num_samples: usize) -> i32 {
     // The frame count is clamped below, so f32 precision and the saturating
     // float-to-int `as` are exact enough for it.
@@ -153,7 +142,6 @@ const fn samples_in_millis(millis: u32) -> usize {
     (TARGET_SAMPLE_RATE / MILLIS_PER_SECOND * millis) as usize
 }
 
-/// Trim trailing silence from audio. Works backwards in 100ms chunks.
 fn trim_trailing_silence(audio: &[f32]) -> &[f32] {
     let mut end = audio.len();
 
@@ -198,7 +186,6 @@ mod tests {
         let mut audio = vec![0.5f32; 16_000];
         audio.extend(vec![0.0f32; 16_000]);
         let trimmed = trim_trailing_silence(&audio);
-        // The loud second plus 100 ms of padding.
         assert_eq!(trimmed.len(), 16_000 + 1600);
     }
 

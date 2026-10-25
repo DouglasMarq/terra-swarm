@@ -1,6 +1,3 @@
-//! Per-terminal bearer tokens. They live only in memory: a restart issues
-//! new ones to the terminals it respawns.
-
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
@@ -9,13 +6,11 @@ use super::model::Actor;
 use super::McpHub;
 use tauri::{Runtime, Wry};
 
-/// Who is calling: resolved from the bearer token, never from the request.
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct AgentIdentity {
     pub terminal_id: String,
     pub workspace_id: String,
     pub agent: String,
-    /// The team role the agent was started with, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<crate::roles::Role>,
 }
@@ -37,7 +32,6 @@ pub fn new_token() -> Result<String, getrandom::Error> {
     Ok(bytes.iter().map(|byte| format!("{:02x}", byte)).collect())
 }
 
-/// `t-2` sorts before `t-10`.
 fn terminal_order(id: &str) -> (u64, String) {
     let number = id
         .strip_prefix("t-")
@@ -52,7 +46,6 @@ pub struct TokenRegistry {
 }
 
 impl TokenRegistry {
-    /// A fresh token for a terminal; any older token of it stops working.
     pub fn issue(&mut self, identity: AgentIdentity) -> Result<String, getrandom::Error> {
         let token = new_token()?;
         self.by_token
@@ -65,7 +58,6 @@ impl TokenRegistry {
         self.by_token.get(token).cloned()
     }
 
-    /// Revoke one token; returns its identity if the terminal now has none.
     pub fn revoke_token(&mut self, token: &str) -> Option<AgentIdentity> {
         let identity = self.by_token.remove(token)?;
         let still_connected = self
@@ -92,7 +84,6 @@ impl TokenRegistry {
             .retain(|_, identity| identity.workspace_id != workspace_id);
     }
 
-    /// Terminals of a workspace that hold a token, in terminal order.
     pub fn peers(&self, workspace_id: &str) -> Vec<AgentIdentity> {
         let mut peers: Vec<AgentIdentity> = self
             .by_token
@@ -106,9 +97,6 @@ impl TokenRegistry {
     }
 }
 
-/// Revokes its token when dropped. A PTY entry owns one, so every way a
-/// terminal goes away (kill, stop, exit, app shutdown) also closes its
-/// access to the MCP server.
 pub struct McpLease<R: Runtime = Wry> {
     hub: Weak<McpHub<R>>,
     token: String,
@@ -153,7 +141,6 @@ mod tests {
         assert_eq!(first.len(), 64);
         assert!(registry.identify(&first).is_none());
         assert_eq!(registry.identify(&second).unwrap().terminal_id, "t-1");
-        // Revoking a token that was already replaced reports nothing.
         assert!(registry.revoke_token(&first).is_none());
         assert_eq!(registry.revoke_token(&second).unwrap().terminal_id, "t-1");
     }

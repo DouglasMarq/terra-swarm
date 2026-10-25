@@ -1,6 +1,3 @@
-//! Team roles. An agent started with a role learns what is expected of it
-//! from `whoami`, and the orchestrator can hand tasks to its teammates.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -33,14 +30,10 @@ impl Role {
         }
     }
 
-    /// Only the orchestrator hands work to other agents (and so may type
-    /// into their terminals through `assign_task`).
     pub fn can_assign(self) -> bool {
         self == Role::Orchestrator
     }
 
-    /// One line for the agent's system prompt; the details come from `whoami`.
-    /// Plain words only, so it needs no escaping in any shell.
     pub fn brief(self) -> String {
         format!(
             "You are the {} of a Terra Swarm agent team. Call the terra MCP tool whoami first: it returns your role instructions and your teammates.",

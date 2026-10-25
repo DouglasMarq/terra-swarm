@@ -1,18 +1,9 @@
-//! The error a Tauri command rejects with when the UI must tell one failure
-//! from another. Most commands reject with a plain message (`Result<T, String>`);
-//! a command returning `IpcError` rejects with `{ "code": ..., "message": ... }`,
-//! which `src/lib/tauri/errors.ts` turns into an error the UI matches by code
-//! instead of by message text.
-
 use serde::Serialize;
 
-/// The failures the UI reacts to; anything else is `Other`.
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum IpcErrorCode {
-    /// The file changed on disk since the editor read it.
     ChangedOnDisk,
-    /// The terminal's input queue is full; the write can be retried.
     Busy,
     Other,
 }
@@ -20,7 +11,6 @@ pub enum IpcErrorCode {
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct IpcError {
     pub code: IpcErrorCode,
-    /// Short English message the UI can show.
     pub message: String,
 }
 
@@ -33,7 +23,6 @@ impl IpcError {
     }
 }
 
-/// Plain messages from module internals keep their text under `Other`.
 impl From<String> for IpcError {
     fn from(message: String) -> Self {
         Self::new(IpcErrorCode::Other, message)

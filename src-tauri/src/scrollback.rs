@@ -1,9 +1,3 @@
-//! Small, local-only durable scrollback store.
-//!
-//! Scrollback is deliberately kept outside the workspace JSON.  The store
-//! never trusts a caller supplied id as a path component and refuses symlinks,
-//! which keeps terminal ids from escaping the app-data directory.
-
 use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
@@ -14,8 +8,6 @@ use std::time::{Duration, SystemTime};
 use crate::paths::is_plain_path_component;
 use crate::sync::LockExt;
 
-/// A terminal's durable log is intentionally smaller than an unbounded
-/// transcript.  The in-memory PTY backlog uses the same cap.
 pub const SCROLLBACK_CAP: usize = 256 * 1024;
 const COMPACTION_THRESHOLD: usize = 2 * SCROLLBACK_CAP;
 const SCROLLBACK_EXTENSION: &str = "scrollback";
@@ -39,7 +31,6 @@ impl ScrollbackStore {
         Self::new(Some(root))
     }
 
-    /// Return a path only for a single, conservative filename component.
     fn path_for(&self, id: &str) -> Option<PathBuf> {
         let root = self.root.as_ref()?;
         if !is_plain_path_component(id) {
@@ -121,7 +112,6 @@ impl ScrollbackStore {
         Self::write_atomic(&path, &retained)
     }
 
-    /// Read the latest durable tail. Missing files are an empty scrollback.
     pub fn read(&self, id: &str) -> io::Result<Vec<u8>> {
         let Some(path) = self.path_for(id) else {
             return Ok(Vec::new());
@@ -129,9 +119,6 @@ impl ScrollbackStore {
         Self::read_path(&path)
     }
 
-    /// Remove a terminal's durable transcript. This is called only by the
-    /// explicit destructive `kill_terminal` command; stopping or application
-    /// shutdown intentionally leaves the file in place.
     pub fn remove(&self, id: &str) -> io::Result<bool> {
         let Some(path) = self.path_for(id) else {
             return Ok(false);
@@ -144,9 +131,6 @@ impl ScrollbackStore {
         }
     }
 
-    /// Remove only old files that are not represented by persisted terminal
-    /// metadata. Recent unknown files are retained so a crash or a delayed
-    /// migration cannot silently lose a user's transcript.
     pub fn cleanup_orphans(&self, known_ids: &HashSet<String>) -> io::Result<usize> {
         self.cleanup_orphans_older_than(known_ids, DEFAULT_ORPHAN_AGE)
     }

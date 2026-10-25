@@ -1,5 +1,3 @@
-//! Containers, panes and tabs inside a workspace.
-
 use super::*;
 
 impl WorkspaceStore {
@@ -42,9 +40,8 @@ impl WorkspaceStore {
         if let Some(index) = Self::container_index(workspace, container_id) {
             return Ok(index);
         }
-        // A legacy workspace has no container records. Creating the first
-        // deterministic record is safe and keeps existing PTYs untouched.
-        if workspace.containers.is_empty() {
+        let is_legacy_workspace = workspace.containers.is_empty();
+        if is_legacy_workspace {
             workspace.containers.push(Self::new_container(
                 workspace.id.as_str(),
                 container_id.to_string(),
@@ -57,9 +54,6 @@ impl WorkspaceStore {
         ))
     }
 
-    /// Place a terminal in a visual pane and sub-tab without touching the
-    /// PTY manager. Existing duplicate references are removed first, then a
-    /// normalized pane/tab pair is created or updated.
     pub fn set_terminal_placement(
         &mut self,
         workspace_id: &str,
@@ -122,9 +116,6 @@ impl WorkspaceStore {
         Ok(())
     }
 
-    /// Reorder visual containers without touching panes or PTYs. Unknown and
-    /// duplicate ids are ignored, and omitted existing containers retain their
-    /// relative order for forward-compatible clients.
     pub fn reorder_containers(
         &mut self,
         workspace_id: &str,
@@ -136,8 +127,6 @@ impl WorkspaceStore {
         Ok(())
     }
 
-    /// Reorder pane ids inside one container. The pane records themselves are
-    /// not deleted or recreated, preserving tab and PTY identity.
     pub fn reorder_panes(
         &mut self,
         workspace_id: &str,
@@ -155,8 +144,6 @@ impl WorkspaceStore {
         Ok(())
     }
 
-    /// Move an existing pane between visual containers. A pane move is pure
-    /// metadata: every terminal tab and its PTY remain untouched.
     pub fn move_pane(&mut self, workspace_id: &str, pane_move: PaneMove) -> Result<(), String> {
         let PaneMove {
             pane_id,
@@ -203,9 +190,6 @@ impl WorkspaceStore {
         Ok(())
     }
 
-    /// Apply a partial container state update. Visible/closed are kept
-    /// complementary when only one side is supplied, and invalid active pane
-    /// ids are rejected rather than persisted as dangling selections.
     pub fn set_container_state(
         &mut self,
         workspace_id: &str,
@@ -313,8 +297,6 @@ fn terminal_mut<'a>(
         })
 }
 
-// One terminal/tab identity can have only one visual location. This
-// also cleans stale references left by interrupted UI reorders.
 fn remove_displaced(workspace: &mut Workspace, placement: &TerminalPlacement) {
     let displaced = displaced_tabs(&workspace.panes, placement);
     for pane in &mut workspace.panes {

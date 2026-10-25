@@ -1,15 +1,8 @@
-//! SQLite connection and schema migrations for `<app_data_dir>/mcp.db`.
-//!
-//! Migrations are an append-only list applied in one transaction on startup;
-//! `PRAGMA user_version` records how many have run. Never edit a shipped
-//! migration: add a new one.
-
 use rusqlite::Connection;
 use std::path::Path;
 use std::time::Duration;
 
 pub const DB_FILE: &str = "mcp.db";
-/// How long a connection waits for another one's write lock.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const OPTIMIZE_ALL_TABLES: &str = "PRAGMA optimize = 0x10002";
 
@@ -130,7 +123,6 @@ fn configure(conn: &Connection, file_backed: bool) -> rusqlite::Result<()> {
     Ok(())
 }
 
-/// Bring the schema up to date. Returns the resulting version.
 pub fn migrate(conn: &mut Connection) -> Result<u32, String> {
     let current: u32 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
@@ -157,8 +149,6 @@ pub fn migrate(conn: &mut Connection) -> Result<u32, String> {
     Ok(target)
 }
 
-/// Open the database file and migrate it. Any failure leaves the file as it
-/// is: the caller runs the app with the MCP server off.
 pub fn open(path: &Path) -> Result<Connection, String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -217,7 +207,6 @@ mod tests {
             )
             .unwrap();
         }
-        // Reopening runs no migration again and keeps the data.
         let mut conn = open(&path).unwrap();
         assert_eq!(migrate(&mut conn).unwrap(), schema_version());
         let kept: String = conn
@@ -248,7 +237,6 @@ mod tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, b"definitely not a database, just some bytes here").unwrap();
         assert!(open(&path).is_err());
-        // The file is left for the user to inspect.
         assert!(path.exists());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }

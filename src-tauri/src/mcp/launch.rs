@@ -4,21 +4,16 @@ pub const ENV_PANE_ID: &str = "TERRA_PANE_ID";
 pub const ENV_WORKSPACE_ID: &str = "TERRA_WORKSPACE_ID";
 pub const ENV_HOOK_URL: &str = "TERRA_HOOK_URL";
 
-/// Name the server is registered under in each CLI.
 pub const SERVER_NAME: &str = "terra";
 
-/// How the shell that runs the command expects arguments to be quoted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Quoting {
-    /// `sh -c`: single quotes.
     Posix,
-    /// PowerShell `-Command` / `cmd /C`: double quotes.
     // Constructed only under cfg(windows) in pty::spawn_terminal_inner.
     #[cfg_attr(unix, allow(dead_code))]
     Windows,
 }
 
-/// The agent id of a command line: its executable's file name.
 pub fn agent_of(command: &str) -> String {
     let executable = command.split_whitespace().next().unwrap_or("");
     if executable.is_empty() || executable == "shell" {

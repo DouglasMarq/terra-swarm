@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
 pub const MAX_TITLE_CHARS: usize = 200;
-/// Guards against runaway input; history itself is never trimmed.
 pub const MAX_BODY_BYTES: usize = 64 * 1024;
 pub const MAX_LABELS: usize = 16;
 pub const MAX_LABEL_CHARS: usize = 40;
@@ -55,7 +54,6 @@ impl TaskStatus {
     }
 }
 
-/// Stored as an integer (0 urgent … 3 low), exposed by name.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskPriority {
@@ -123,11 +121,9 @@ pub struct Task {
     pub labels: Vec<String>,
     pub position: f64,
     pub depends_on: Vec<String>,
-    /// Dependencies that are not `done` yet; non-empty means it can't be claimed.
     pub blocked_by: Vec<String>,
     pub created_at: i64,
     pub updated_at: i64,
-    /// The latest events, oldest first. Omitted from summaries.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub events: Option<Vec<TaskEvent>>,
 }
@@ -204,7 +200,6 @@ pub struct NewTask {
     pub assignee: Option<String>,
 }
 
-/// A partial update. `assignee: Some(None)` unassigns the task.
 #[derive(Default, Clone, Debug)]
 pub struct TaskPatch {
     pub title: Option<String>,
@@ -255,7 +250,6 @@ impl From<rusqlite::Error> for StoreError {
 
 pub type StoreResult<T> = Result<T, StoreError>;
 
-/// Accept `T-12`, `t-12` and a bare `12`, so agents can be sloppy with ids.
 pub fn normalize_task_id(raw: &str) -> Option<String> {
     let raw = raw.trim();
     let digits = raw

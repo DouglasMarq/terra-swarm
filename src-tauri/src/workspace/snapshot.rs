@@ -1,5 +1,3 @@
-//! Explicit import and export of the whole workspace store.
-
 use super::*;
 use crate::sync::LockExt;
 use serde::{Deserialize, Serialize};
@@ -7,11 +5,6 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use tauri::State;
 
-/// Result returned by the explicit snapshot import/export IPC commands.
-/// `path` is the user-selected source (import) or destination (export), while
-/// `backup_path` points to the recoverable pre-import store backup when one
-/// was created.  PTYs are deliberately not represented by this result: a
-/// snapshot only transfers metadata and imported sessions start suspended.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSnapshotTransfer {
@@ -24,10 +17,6 @@ pub struct WorkspaceSnapshotTransfer {
     pub suspended_terminal_count: usize,
 }
 
-/// Explicit paths originate at the UI's file picker, but the IPC boundary is
-/// also callable by untrusted local input. Require an absolute path, reject
-/// traversal components and NUL bytes, and refuse existing symlink components
-/// so a snapshot cannot escape the selected location through a link.
 pub(crate) fn validate_explicit_path(raw: &str) -> Result<PathBuf, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -50,8 +39,6 @@ pub(crate) fn validate_explicit_path(raw: &str) -> Result<PathBuf, String> {
         }
     }
 
-    // Walk only the existing prefix. Once a component does not exist, a
-    // later component cannot be an existing symlink under that missing path.
     let mut current = PathBuf::new();
     for component in path.components() {
         current.push(component.as_os_str());
@@ -77,10 +64,6 @@ pub(crate) fn validate_explicit_path(raw: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// Parse an explicitly imported snapshot strictly.  Startup loading remains
-/// intentionally forgiving and recovers valid entries from a damaged local
-/// store; replacing the active store is different, so a malformed entry must
-/// fail before any process or file state is changed.
 pub(crate) fn parse_import_snapshot(raw: &str) -> Result<WorkspaceStore, String> {
     let decoded = decode_workspace_file(raw)?;
     if decoded.dropped_entries {
@@ -95,9 +78,6 @@ pub(crate) fn parse_import_snapshot(raw: &str) -> Result<WorkspaceStore, String>
         return Err("snapshot failed workspace metadata validation".to_string());
     }
 
-    // Terminal ids are the durable identity used by the resume queue and by
-    // scrollback filenames.  Duplicates across projects would make the
-    // imported state ambiguous even though each project is locally valid.
     let mut terminal_ids = std::collections::HashSet::new();
     for workspace in &candidate.workspaces {
         for terminal in &workspace.terminals {
@@ -112,10 +92,6 @@ pub(crate) fn parse_import_snapshot(raw: &str) -> Result<WorkspaceStore, String>
     Ok(candidate)
 }
 
-/// Import carries logical terminal identities and layout metadata, but never
-/// carries a live process.  Keep ids/placements so resume can recreate the
-/// same tabs, while marking every session explicitly suspended for the first
-/// frontend refresh.
 pub(crate) fn mark_imported_sessions_suspended(store: &mut WorkspaceStore) {
     for workspace in &mut store.workspaces {
         for terminal in &mut workspace.terminals {
@@ -147,9 +123,6 @@ pub(crate) fn transfer_summary(store: &WorkspaceStore, path: &Path) -> Workspace
     }
 }
 
-/// Last time the store file was written, in milliseconds since the Unix
-/// epoch. The store is flushed synchronously on exit, so this is when the
-/// previous session ended; the startup resume dialog shows it as "X ago".
 #[tauri::command(async)]
 pub fn store_saved_at(store: State<'_, Mutex<WorkspaceStore>>) -> Result<Option<u64>, String> {
     let store = store.lock_or_recover();
@@ -159,9 +132,6 @@ pub fn store_saved_at(store: State<'_, Mutex<WorkspaceStore>>) -> Result<Option<
     Ok(modified_millis(path))
 }
 
-/// Export the current metadata snapshot to an explicit, absolute local path.
-/// The destination is written atomically and is never treated as a PTY
-/// registry; only the versioned workspace envelope is transferred.
 #[tauri::command(async)]
 pub fn export_workspace_snapshot(
     store: State<'_, Mutex<WorkspaceStore>>,

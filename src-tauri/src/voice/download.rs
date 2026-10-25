@@ -161,8 +161,6 @@ fn finalize(
     Err(error)
 }
 
-/// Writes every chunk received to a new file at `path` until the sender is
-/// dropped. Blocking: runs on its own thread while the download streams.
 fn write_chunks<C: AsRef<[u8]>>(
     path: &Path,
     mut chunks: tokio::sync::mpsc::Receiver<C>,

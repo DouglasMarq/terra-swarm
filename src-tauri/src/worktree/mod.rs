@@ -1,8 +1,3 @@
-//! Git worktrees that isolate one agent from the others. Each isolated agent
-//! works on its own branch (`terra/<terminal-id>`) in a checkout kept under
-//! the app data directory, so several agents in one repository never edit
-//! the same files.
-
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -17,25 +12,17 @@ const FIRST_BRANCH_SUFFIX: u32 = 2;
 
 const PORCELAIN_PATH_OFFSET: usize = 3;
 
-/// Stored with the terminal record, so a resumed agent returns to it.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeInfo {
-    /// The checkout the agent works in.
     pub path: String,
-    /// Where the agent's shell starts: `path` plus the project's subfolder.
     pub cwd: String,
     pub branch: String,
-    /// The branch (or commit) the worktree was created from.
     pub base: String,
-    /// The main repository's root.
     pub repo: String,
 }
 
 impl WorktreeInfo {
-    /// Refuses values that git could read as an option or that do not name
-    /// an agent branch. Stored worktrees come from `workspaces.json` and
-    /// imported snapshots, and every field ends up on a git command line.
     pub(crate) fn check(&self) -> Result<(), String> {
         let is_agent_branch = self
             .branch
@@ -70,16 +57,12 @@ pub struct WorktreeStatus {
     pub branch: String,
     pub base: String,
     pub path: String,
-    /// Files with uncommitted changes (porcelain paths).
     pub dirty: Vec<String>,
-    /// Commits on the branch that the base does not have.
     pub ahead: u32,
-    /// Commits on the base that the branch does not have.
     pub behind: u32,
     pub exists: bool,
 }
 
-/// A git command run in `dir` that never stops to prompt for credentials.
 pub(crate) fn git_command(dir: &Path) -> Command {
     let mut command = Command::new("git");
     command.arg("-C").arg(dir).env("GIT_TERMINAL_PROMPT", "0");
@@ -113,7 +96,6 @@ pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
     run_command(command, "git", &format!("git {} failed", args.join(" ")))
 }
 
-/// The repository root containing `dir`, if it is inside a git work tree.
 pub fn repo_root(dir: &Path) -> Option<PathBuf> {
     git(dir, &["rev-parse", "--show-toplevel"])
         .ok()
@@ -134,9 +116,6 @@ fn branch_exists(repo: &Path, branch: &str) -> bool {
     .is_ok()
 }
 
-/// Create a worktree for `terminal_id` of the project at `project_cwd`,
-/// under `<root>/<workspace_id>/<terminal_id>`. The agent starts in the
-/// same subfolder of the checkout that the project points at.
 pub fn create(new: NewWorktree<'_>) -> Result<WorktreeInfo, String> {
     let NewWorktree {
         project_cwd,
@@ -220,9 +199,6 @@ fn count(text: &str) -> u32 {
     text.trim().parse().unwrap_or(0)
 }
 
-/// The checkout's uncommitted files and how far the branch and its base
-/// diverged. Fails when git cannot answer, so a failure is never mistaken
-/// for a clean worktree with nothing to lose.
 pub fn status(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
     info.check()?;
     let path = Path::new(&info.path);
@@ -249,8 +225,6 @@ pub fn status(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
     })
 }
 
-/// Commits only the base has and commits only the branch has; none once
-/// the branch itself is gone.
 fn divergence(info: &WorktreeInfo) -> Result<(u32, u32), String> {
     let repo = Path::new(&info.repo);
     let range = format!("{}...{}", info.base, info.branch);
@@ -270,9 +244,6 @@ fn divergence(info: &WorktreeInfo) -> Result<(u32, u32), String> {
     }
 }
 
-/// Remove the checkout (discarding uncommitted changes) and, when asked,
-/// the branch with its commits. A checkout already gone from disk only
-/// has git's record of it pruned.
 pub fn remove(info: &WorktreeInfo, delete_branch: bool) -> Result<(), String> {
     info.check()?;
     let repo = Path::new(&info.repo);
@@ -292,7 +263,6 @@ pub(crate) mod test_repo {
     use super::git;
     use std::path::{Path, PathBuf};
 
-    /// A fresh repository with one commit on `main`.
     pub fn init(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
             "terra-wt-{}-{}-{}",
@@ -354,7 +324,6 @@ mod tests {
         assert!(committed.dirty.is_empty());
         assert_eq!(committed.ahead, 1);
 
-        // A second agent with the same id gets a fresh branch name.
         let again = create(NewWorktree {
             project_cwd: &repo.join("app"),
             root: &root,

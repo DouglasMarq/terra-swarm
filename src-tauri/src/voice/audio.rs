@@ -8,13 +8,11 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use tauri::{AppHandle, Emitter, Runtime};
 
-/// Sample rate, in Hz, of the audio handed to Whisper.
 pub(super) const TARGET_SAMPLE_RATE: u32 = 16000;
 const RESAMPLE_CHUNK_SIZE: usize = 1024;
 const MONO_CHANNELS: usize = 1;
 const AUDIO_LEVEL_EVENT: &str = "voice-audio-level";
 
-/// Wrapper to pass a mono `&[f32]` slice as a single-channel `Adapter` for rubato.
 struct MonoSlice<'a>(&'a [f32]);
 
 // SAFETY: `MonoSlice` reports a fixed channel count of 1 and a frame count
@@ -33,13 +31,9 @@ unsafe impl Adapter<f32> for MonoSlice<'_> {
     }
 }
 
-/// Emit audio-level events roughly every this many samples (at 16kHz ≈ 20Hz)
 const LEVEL_EMIT_INTERVAL: usize = 800;
-/// RMS below this threshold is considered silence
 const SILENCE_THRESHOLD: f32 = 0.01;
-/// Number of consecutive silent checks before triggering (~1.2s at 20Hz)
 const SILENCE_FRAME_COUNT: u32 = 24;
-/// Minimum checks before silence detection activates (~1s)
 const MIN_RECORDING_CHECKS: u32 = 20;
 
 enum Command<R: Runtime> {
@@ -53,7 +47,6 @@ enum Command<R: Runtime> {
     Shutdown,
 }
 
-/// True when at least one usable microphone is present.
 pub fn has_input_device() -> bool {
     !list_input_devices().is_empty()
 }
@@ -80,9 +73,6 @@ pub fn list_input_devices() -> Vec<String> {
     })
 }
 
-/// Suppresses ALSA's noisy stderr output during device enumeration on Linux.
-/// ALSA prints errors like "unable to open slave" and "Cannot open device /dev/dsp"
-/// when probing virtual PCM plugins — these are harmless but spam the terminal.
 #[cfg(target_os = "linux")]
 fn suppress_alsa_stderr<F, R>(f: F) -> R
 where
@@ -159,10 +149,6 @@ where
 fn is_usable_input(name: &str, device: &cpal::Device) -> bool {
     #[cfg(target_os = "linux")]
     {
-        // ALSA exposes hundreds of virtual PCM plugin entries that are not
-        // real microphones. Filter them out by prefix so we never attempt
-        // to query their capabilities (some, like `jack`, try to connect to
-        // a daemon and hang).
         const VIRTUAL_PREFIXES: &[&str] = &[
             "null",
             "speex",
@@ -194,8 +180,6 @@ fn is_usable_input(name: &str, device: &cpal::Device) -> bool {
     device.default_input_config().is_ok()
 }
 
-/// Thread-safe audio controller that manages mic capture on a dedicated thread
-/// (cpal streams are not Send, so the stream must live on one thread).
 pub struct AudioController<R: Runtime = tauri::Wry> {
     tx: mpsc::Sender<Command<R>>,
 }
@@ -207,7 +191,6 @@ impl<R: Runtime> AudioController<R> {
         thread::spawn(move || {
             let mut active_stream: Option<cpal::Stream> = None;
 
-            // Replies are best-effort: the caller may have stopped waiting.
             for cmd in rx {
                 match cmd {
                     Command::Start(buffer, app, device_name, reply) => {
@@ -286,9 +269,6 @@ struct StreamContext<R: Runtime> {
     app: AppHandle<R>,
 }
 
-/// Resolve the requested input device by name, falling back to the system
-/// default when no name was given or the named device is no longer present
-/// (e.g. it was unplugged since the user selected it).
 fn resolve_input_device(host: &cpal::Host, device_name: &Option<String>) -> Option<cpal::Device> {
     if let Some(name) = device_name {
         let found = suppress_alsa_stderr(|| {
@@ -390,15 +370,8 @@ convertible_sample!(i8, i8_to_f32, f32_to_i8);
 convertible_sample!(u8, u8_to_f32, f32_to_u8);
 convertible_sample!(i16, i16_to_f32, f32_to_i16);
 convertible_sample!(u16, u16_to_f32, f32_to_u16);
-// 24-bit USB interfaces (Focusrite & co.) natively report I24/U24.
-// cpal hands these over as dasp I24/U24 (right-justified in a 32-bit
-// container), so the 24-bit full-scale helpers apply — not the I32 one.
 convertible_sample!(cpal::I24, i24_to_f32, f32_to_i24);
 convertible_sample!(cpal::U24, u24_to_f32, f32_to_u24);
-// Several ALSA HDA codecs (e.g. Realtek ALC897) only expose their raw
-// hardware PCM as S32 — PulseAudio/PipeWire normally hide this behind
-// format conversion, but selecting the hw device directly bypasses
-// that, so it must be handled here too.
 convertible_sample!(i32, i32_to_f32, f32_to_i32);
 
 fn build_input<F>(
@@ -487,7 +460,6 @@ fn output_stream_of<T: ConvertibleSample>(
         .map_err(|e| format!("Failed to build output stream: {e}"))
 }
 
-/// Downmix interleaved multi-channel audio to mono by averaging each frame.
 fn mono_downmix(data: &[f32], channels: u16) -> Vec<f32> {
     if channels == 0 {
         return Vec::new();
@@ -497,7 +469,6 @@ fn mono_downmix(data: &[f32], channels: u16) -> Vec<f32> {
         .collect()
 }
 
-/// Compute the RMS (root mean square) of an audio sample buffer.
 pub(super) fn compute_rms(samples: &[f32]) -> f32 {
     if samples.is_empty() {
         return 0.0;
@@ -507,13 +478,7 @@ pub(super) fn compute_rms(samples: &[f32]) -> f32 {
     (samples.iter().map(|s| s * s).sum::<f32>() / count).sqrt()
 }
 
-/// 24-bit full scale (2^23 - 1). cpal delivers I24 samples as dasp `I24`:
-/// the value right-justified in an i32 container, range -(2^23)..=(2^23-1)
-/// — NOT shifted into the high bits. Using the i32::MAX scaling here would
-/// attenuate the signal by 256x.
 const I24_FULL_SCALE: f32 = 8_388_607.0;
-/// 24-bit unsigned midpoint ((2^24 - 1) / 2). dasp `U24` is also an i32
-/// container, range 0..=(2^24-1) with equilibrium at 2^23.
 const U24_MIDPOINT: f32 = 8_388_607.5;
 
 fn i8_to_f32(s: &i8) -> f32 {
@@ -604,7 +569,7 @@ mod conversion_tests {
     fn unsigned_ints_are_centered_on_zero() {
         assert_eq!(u8_to_f32(&0), -1.0);
         assert_eq!(u8_to_f32(&u8::MAX), 1.0);
-        assert!((u8_to_f32(&128)).abs() < 0.01); // midpoint ≈ silence
+        assert!((u8_to_f32(&128)).abs() < 0.01);
         assert_eq!(u16_to_f32(&0), -1.0);
         assert_eq!(u16_to_f32(&u16::MAX), 1.0);
         assert!((u16_to_f32(&32768)).abs() < 1e-4);
@@ -615,8 +580,6 @@ mod conversion_tests {
         assert_eq!(i24_to_f32(&cpal::I24::new(0).unwrap()), 0.0);
         assert_eq!(i24_to_f32(&cpal::I24::new(8_388_607).unwrap()), 1.0);
         assert!((i24_to_f32(&cpal::I24::new(-8_388_608).unwrap()) - -1.0).abs() < EPS);
-        // A value at half of 24-bit range must read as ~0.5; i32::MAX scaling
-        // would wrongly read it as ~0.002.
         assert!((i24_to_f32(&cpal::I24::new(4_194_304).unwrap()) - 0.5).abs() < EPS);
     }
 
@@ -641,7 +604,7 @@ mod conversion_tests {
     fn f32_roundtrips_unsigned_formats_on_equilibrium() {
         assert_eq!(f32_to_u8(1.0), u8::MAX);
         assert_eq!(f32_to_u8(-1.0), 0);
-        assert_eq!(f32_to_u8(0.0), 128); // equilibrium, not 127
+        assert_eq!(f32_to_u8(0.0), 128);
         assert_eq!(f32_to_u16(0.0), 32768);
         assert_eq!(f32_to_u24(1.0).inner(), 16_777_215);
         assert_eq!(f32_to_u24(-1.0).inner(), 0);
@@ -715,8 +678,6 @@ fn check_silence<R: Runtime>(rms: f32, ctx: &StreamContext<R>) {
     *sc = 0;
 }
 
-/// Cap on how much captured audio waits to be played back, so a stalled
-/// output stream can't grow the loopback delay (or memory use) without bound.
 const LOOPBACK_MAX_SAMPLES: usize = 24_000;
 
 enum TestCommand {
@@ -729,10 +690,6 @@ enum TestCommand {
     Shutdown,
 }
 
-/// Owns the paired mic-capture + speaker-playback streams used by the
-/// settings-page microphone test, on their own dedicated thread (same
-/// non-`Send` constraint as `AudioController`, but kept separate so a stuck
-/// or busy test device can never affect a real recording session).
 pub struct MicTestController {
     tx: mpsc::Sender<TestCommand>,
 }
@@ -744,7 +701,6 @@ impl MicTestController {
         thread::spawn(move || {
             let mut active: Option<(cpal::Stream, cpal::Stream)> = None;
 
-            // Replies are best-effort: the caller may have stopped waiting.
             for cmd in rx {
                 match cmd {
                     TestCommand::Start(device_name, app, reply) => {
@@ -830,9 +786,6 @@ impl LoopbackCursor {
         }
     }
 
-    /// Pull one sample per output frame out of the ring buffer, holding the last
-    /// value while `position` catches up (a cheap zero-order-hold resample) and
-    /// falling back to silence — not the stale value — once the buffer runs dry.
     fn next_sample(&mut self, ring: &Mutex<VecDeque<f32>>) -> f32 {
         self.position += self.step;
         if self.position >= 1.0 {
@@ -925,9 +878,6 @@ mod level_tests {
     }
 }
 
-/// Build a live mic-capture -> speaker-playback pair so the settings page can
-/// let the user hear (and see, via `voice-audio-level`) whether the selected
-/// device actually picks up sound.
 fn build_test_streams(
     device_name: Option<String>,
     app: tauri::AppHandle,
@@ -972,7 +922,6 @@ fn open_speaker(host: &cpal::Host) -> Result<(cpal::Device, cpal::SupportedStrea
 mod resample_tests {
     use super::*;
 
-    /// Same setup `start_capture` uses for a 48kHz mic.
     #[test]
     fn downsamples_48k_sine_to_16k_without_losing_level() {
         let mut resampler = Fft::<f32>::new(
@@ -995,8 +944,6 @@ mod resample_tests {
             out.extend((0..output.frames()).map(|i| output.read_sample(0, i).unwrap()));
         }
 
-        // Output runs at a third of the input rate; the FFT block size delays
-        // up to one output chunk, so allow that much shortfall.
         let chunks = input.len() / RESAMPLE_CHUNK_SIZE;
         let expected = chunks * RESAMPLE_CHUNK_SIZE / 3;
         assert!(
@@ -1005,7 +952,6 @@ mod resample_tests {
             out.len()
         );
 
-        // Skip the filter warm-up, then the tone should keep its RMS (A/√2).
         let tail = &out[out.len() / 2..];
         let rms = (tail.iter().map(|s| s * s).sum::<f32>() / tail.len() as f32).sqrt();
         let want = amplitude / std::f32::consts::SQRT_2;

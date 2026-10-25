@@ -1,22 +1,15 @@
-//! `terra-swarm mcp-stdio`: a stdio MCP server that forwards every message to
-//! Terra's HTTP endpoint with the terminal's token. For agent CLIs that can
-//! only launch MCP servers as subprocesses; inside a Terra terminal they run
-//! this command and see the same tools as everyone else.
-
 use serde_json::{json, Value};
 use std::io::{BufRead, Write};
 use std::time::Duration;
 
 use super::{http, loopback_authority, TIMEOUT as CONNECT_TIMEOUT};
 
-/// Tool calls can wait on the database; give them room.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_RESPONSE_BYTES: u64 = 16 * 1024 * 1024;
 const HEADER_END: &[u8] = b"\r\n\r\n";
 const CRLF: &[u8] = b"\r\n";
 const HEX_RADIX: u32 = 16;
 
-/// JSON-RPC 2.0 error codes.
 const JSONRPC_PARSE_ERROR: i64 = -32700;
 const JSONRPC_INTERNAL_ERROR: i64 = -32603;
 
@@ -24,7 +17,6 @@ pub struct Endpoint {
     authority: String,
     path: String,
     token: String,
-    /// The version the server agreed to; later requests carry it.
     protocol_version: Option<String>,
 }
 
@@ -43,7 +35,6 @@ impl Endpoint {
         })
     }
 
-    /// POST one JSON-RPC message; returns the messages the server answered.
     pub fn send(&self, message: &Value) -> Result<Vec<Value>, String> {
         let body = message.to_string();
         let mut headers = vec![("Accept", "application/json, text/event-stream")];
@@ -91,7 +82,6 @@ impl Endpoint {
     }
 }
 
-/// Status code, lower-cased headers and decoded body of an HTTP/1.1 response.
 fn split_response(raw: &[u8]) -> Result<(u16, String, String), String> {
     let end = raw
         .windows(HEADER_END.len())
@@ -133,8 +123,6 @@ fn dechunk(mut data: &[u8]) -> Vec<u8> {
     out
 }
 
-/// The JSON-RPC messages of a reply body. A body that is not JSON is an
-/// error, so the request still gets an answer instead of none.
 fn parse_messages(body: &str, event_stream: bool) -> Result<Vec<Value>, String> {
     if !event_stream {
         return match serde_json::from_str::<Value>(body) {
@@ -154,9 +142,6 @@ fn parse_messages(body: &str, event_stream: bool) -> Result<Vec<Value>, String> 
         .collect()
 }
 
-/// Forward each line of `input` (one JSON-RPC message per line) and write the
-/// answers to `output`, one per line. A failed request still gets an error
-/// reply, so the client never waits forever.
 pub fn bridge(
     endpoint: &mut Endpoint,
     input: impl BufRead,
@@ -245,8 +230,6 @@ mod tests {
         );
     }
 
-    /// A one-shot HTTP server on loopback that answers every request with
-    /// `response`, for replies the real MCP server never sends.
     fn serve_once(response: &'static str) -> String {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -351,7 +334,6 @@ mod tests {
         );
         assert_eq!(replies[2]["error"]["code"], JSONRPC_PARSE_ERROR);
 
-        // A bad token still answers the request, with an error.
         let mut output = Vec::new();
         let ask = json!({ "jsonrpc": "2.0", "id": 7, "method": "tools/list" }).to_string();
         bridge(

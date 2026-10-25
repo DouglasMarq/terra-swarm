@@ -1,5 +1,3 @@
-//! Workspaces and their terminals: create, remove, rename, reorder, resize.
-
 use super::*;
 use std::sync::atomic::Ordering;
 
@@ -67,9 +65,6 @@ impl WorkspaceStore {
         self.workspaces.iter().find(|w| w.id == id)
     }
 
-    /// Return the workspace that owns a terminal identity, if any. Terminal
-    /// ids are global PTY keys, so callers must use this instead of searching
-    /// only the target workspace when validating a forced/resume spawn.
     pub fn terminal_owner(&self, terminal_id: &str) -> Option<&str> {
         self.workspaces.iter().find_map(|workspace| {
             workspace
@@ -109,7 +104,6 @@ impl WorkspaceStore {
         }
     }
 
-    /// A blank name leaves the workspace as it is.
     pub fn rename(&mut self, id: &str, name: String) -> Result<(), String> {
         let name = name.trim().to_string();
         let ws = self.workspace_mut(id)?;

@@ -1,18 +1,12 @@
-//! System font listing for the terminal font picker. The webview has no API
-//! to enumerate installed fonts, so the backend scans the system font
-//! directories once and reports every family, flagging monospaced ones.
-
 use serde::Serialize;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct FontFamily {
     pub name: String,
-    /// True when any face of the family is fixed-pitch.
     pub monospace: bool,
 }
 
-/// Groups faces into families, skipping hidden system families (".SF…").
 fn families_from<'a>(faces: impl Iterator<Item = (&'a str, bool)>) -> Vec<FontFamily> {
     let mut by_name: BTreeMap<String, (String, bool)> = BTreeMap::new();
     for (name, monospace) in faces {
@@ -33,7 +27,6 @@ fn families_from<'a>(faces: impl Iterator<Item = (&'a str, bool)>) -> Vec<FontFa
 
 #[tauri::command]
 pub async fn list_system_fonts() -> Vec<FontFamily> {
-    // Scanning reads every font file header; keep it off the main thread.
     tauri::async_runtime::spawn_blocking(|| {
         let mut db = fontdb::Database::new();
         db.load_system_fonts();

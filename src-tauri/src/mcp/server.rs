@@ -1,10 +1,3 @@
-//! Streamable HTTP transport: rmcp's tower service behind an axum router
-//! that only accepts requests carrying a valid terminal token.
-//!
-//! The server listens on 127.0.0.1 only, answers in plain JSON without
-//! sessions (stateless mode), rejects foreign `Host` headers (DNS rebinding)
-//! and any request that carries a browser `Origin`.
-
 use std::sync::Arc;
 
 use axum::extract::{Request, State};
@@ -28,8 +21,6 @@ use super::{AgentIdentity, McpHub};
 pub const MCP_PATH: &str = "/mcp";
 const MAX_BODY_BYTES: usize = 256 * 1024;
 const TOOL_CALL_FAILED: &str = "the tool call failed";
-/// Tokio workers of the server's own runtime; requests are short and the
-/// blocking work runs on `spawn_blocking` threads.
 const SERVER_WORKER_THREADS: usize = 2;
 
 struct TerraServer<R: Runtime> {
@@ -109,7 +100,6 @@ impl<R: Runtime> ServerHandler for TerraServer<R> {
             .unwrap_or(serde_json::Value::Null);
         let hub = Arc::clone(&self.hub);
         let name = request.name.to_string();
-        // Tool handlers take blocking locks and run SQLite queries.
         let outcome = tokio::task::spawn_blocking(move || {
             tools::call(&hub, &identity, ToolCall { name: &name, args })
         })
@@ -162,8 +152,6 @@ fn unauthorized() -> Response {
         .into_response()
 }
 
-/// Resolve the token to an identity and attach it to the request; rmcp
-/// hands the request parts (with this extension) to `call_tool`.
 async fn authenticate<R: Runtime>(
     State(hub): State<Arc<McpHub<R>>>,
     mut request: Request,
@@ -206,7 +194,6 @@ pub fn router<R: Runtime>(hub: Arc<McpHub<R>>) -> axum::Router {
         .layer(middleware::from_fn_with_state(hub, authenticate::<R>))
 }
 
-/// Serve on an already bound listener until the runtime shuts down.
 pub async fn serve<R: Runtime>(
     listener: std::net::TcpListener,
     hub: Arc<McpHub<R>>,
@@ -216,9 +203,6 @@ pub async fn serve<R: Runtime>(
     axum::serve(listener, router(hub)).await
 }
 
-/// Bind 127.0.0.1 on a free port and run the server on its own tokio
-/// runtime thread. The port is recorded on the hub before this returns, so
-/// terminals spawned right after startup already get the URL.
 pub fn start<R: Runtime>(hub: Arc<McpHub<R>>) -> std::io::Result<u16> {
     let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
     let port = listener.local_addr()?.port();
@@ -298,7 +282,6 @@ mod tests {
             })
         }
 
-        /// Parse a JSON-RPC reply sent either as JSON or as one SSE event.
         fn rpc(&self, token: &str, id: u64, method: &str, params: Value) -> Value {
             let (status, body) = self.post(
                 Some(token),
@@ -386,7 +369,6 @@ mod tests {
         );
         assert_eq!(tool_json(&me)["terminal_id"], "t-1");
 
-        // A failing tool is a tool-level error the agent can read.
         let failed = server.rpc(
             &token,
             5,
@@ -413,7 +395,6 @@ mod tests {
         hub.revoke_terminal("t-1");
         assert_eq!(server.post(Some(&token), ping.clone()).0, 401);
 
-        // A killed terminal drops its PTY entry, and with it the lease.
         let lease_token = hub.issue(identity("t-2", "ws-1", "claude")).unwrap();
         let lease = crate::mcp::McpLease::new(&hub, lease_token.clone());
         assert_eq!(server.post(Some(&lease_token), ping.clone()).0, 200);

@@ -1,7 +1,3 @@
-//! Tauri commands behind the Tasks panel and the Settings toggle. They use
-//! the same `repo` as the MCP tools, log changes as the human ("user") and
-//! emit the same events, so every window refreshes the same way.
-
 use serde::{Deserialize, Deserializer};
 use std::sync::Arc;
 use tauri::State;
@@ -12,7 +8,6 @@ use super::tasks::{self, TaskUpdate};
 use super::{McpHub, ServerInfo};
 
 pub const USER_ACTOR: &str = "user";
-/// History shown on each card of the Tasks panel.
 const PANEL_EVENTS: usize = 20;
 const COMMAND_FAILED: &str = "MCP command failed";
 const MAX_BOARD_TASKS: usize = 500;
@@ -26,7 +21,6 @@ fn user(workspace_id: &str) -> Actor<'_> {
     }
 }
 
-/// Tells "field absent" (`None`) apart from "field is null" (`Some(None)`).
 fn double_option<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
 where
     D: Deserializer<'de>,
@@ -52,8 +46,6 @@ pub fn mcp_server_info(hub: Hub<'_>) -> ServerInfo {
     hub.info()
 }
 
-/// Turn the injection on or off. Running terminals keep their connection;
-/// the setting applies to terminals started afterwards.
 #[tauri::command(async)]
 pub fn mcp_set_enabled(hub: Hub<'_>, enabled: bool) -> Result<ServerInfo, String> {
     hub.repo()
@@ -160,8 +152,6 @@ pub fn mcp_agent_statuses(hub: Hub<'_>, workspace_id: String) -> Vec<AgentStatus
         })
 }
 
-/// Tokens used by each agent of the workspace whose session log is known
-/// (reported by its hooks), read from the agent CLI's own log files.
 #[tauri::command(async)]
 pub fn agent_usage(hub: Hub<'_>, workspace_id: String) -> Vec<crate::usage::AgentUsage> {
     hub.workspace_terminals(&workspace_id)

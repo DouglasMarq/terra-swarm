@@ -111,7 +111,6 @@ mod tests {
         .unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].body, "npm run test:unit");
-        // Prefix and accent-insensitive matching.
         assert_eq!(
             search(
                 repo.queries(),
@@ -125,7 +124,6 @@ mod tests {
             .len(),
             1
         );
-        // The key is searchable too, and FTS syntax is taken literally.
         assert_eq!(
             search(
                 repo.queries(),

@@ -1,13 +1,3 @@
-//! Command-line entry points of the app binary, used by the agent CLIs that
-//! run inside Terra Swarm terminals. They never open a window.
-//!
-//! - `terra-swarm hook <agent> <event> [payload-json]`: report an agent
-//!   lifecycle event (Claude Code hooks, Codex `notify`) to the running app.
-//!   Reads the payload from the last argument, else from stdin. Always exits
-//!   0 and prints nothing, so it can never block or alter the agent.
-//! - `terra-swarm mcp-stdio`: the Terra MCP server as a stdio server, for
-//!   agents that only start MCP servers as subprocesses (see `stdio`).
-
 mod http;
 mod stdio;
 
@@ -15,11 +5,9 @@ use std::io::{IsTerminal, Read};
 use std::time::Duration;
 
 const MAX_PAYLOAD_BYTES: u64 = 256 * 1024;
-/// Only the status line of the hook route's answer is read.
 const MAX_HOOK_RESPONSE_BYTES: u64 = 4096;
 const TIMEOUT: Duration = Duration::from_secs(2);
 
-/// Run a CLI subcommand when the arguments name one; `None` starts the app.
 pub fn run(args: &[String]) -> Option<i32> {
     match args.get(1).map(String::as_str) {
         Some("hook") => {
@@ -43,13 +31,11 @@ fn hook(args: &[String]) {
         std::env::var(crate::mcp::launch::ENV_URL),
         std::env::var(crate::mcp::launch::ENV_TOKEN),
     ) else {
-        // Not started by Terra Swarm (or MCP is off): nothing to report.
         return;
     };
     let body =
         serde_json::json!({ "agent": agent, "event": event, "payload": payload }).to_string();
     if let Err(error) = post_hook(&url, &token, &body) {
-        // stderr only: a failed report must not change what the agent does.
         eprintln!("terra-swarm hook: {}", error);
     }
 }
@@ -71,8 +57,6 @@ fn read_stdin_json() -> serde_json::Value {
     serde_json::from_str(&text).unwrap_or(serde_json::Value::Null)
 }
 
-/// `http://127.0.0.1:<port>/mcp` → `127.0.0.1:<port>`. Only loopback HTTP
-/// is accepted: the token must never travel anywhere else.
 pub fn loopback_authority(url: &str) -> Option<String> {
     let rest = url.strip_prefix("http://")?;
     let authority = rest.split('/').next()?;
@@ -155,7 +139,6 @@ mod tests {
         let status = hub.statuses().unwrap().status_of("t-1").cloned().unwrap();
         assert_eq!(status.state, AgentState::NeedsInput);
         assert_eq!(status.summary, "Allow Bash?");
-        // A wrong token is refused.
         assert!(post_hook(&url, "nope", &body).unwrap_err().contains("401"));
     }
 }

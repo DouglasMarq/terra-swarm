@@ -1,8 +1,3 @@
-//! Connects a new terminal to the MCP server: a token, four environment
-//! variables and, for agent CLIs that support it, the flags that register
-//! the server. The persisted terminal command never contains any of this, so
-//! a token never reaches `workspaces.json`.
-
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{Runtime, Wry};
@@ -38,8 +33,6 @@ pub fn rewrite_command(command: &str, agent: &str, context: &LaunchContext<'_>) 
 }
 
 impl<R: Runtime> McpHub<R> {
-    /// Everything a terminal needs to talk to the server, or `None` when the
-    /// server is off or not running (the terminal then starts unchanged).
     pub fn launch(self: &Arc<Self>, request: LaunchRequest<'_>) -> Option<McpLaunch<R>> {
         let LaunchRequest {
             terminal_id,

@@ -1,20 +1,11 @@
-//! Side-channel readers over raw terminal output: attention signals (BEL,
-//! OSC 9/99/777), window titles (OSC 0/1/2), ANSI stripping, context-window
-//! usage shown by agent CLIs, and UTF-8 chunking of the PTY stream.
-
 use std::ops::RangeInclusive;
 
 const ESC: u8 = 0x1b;
 const BEL: u8 = 0x07;
-/// Longest notification message kept, in characters.
 const MAX_NOTIFICATION_CHARS: usize = 200;
-/// An unterminated title sequence longer than this is skipped as malformed.
 const MAX_TITLE_SEQUENCE_BYTES: usize = 4096;
-/// Text read on each side of "context" when looking for its percentage.
 const CONTEXT_WINDOW_BYTES: usize = 48;
-/// Text read before "token" when looking for an `a / b` ratio.
 const TOKEN_LOOKBEHIND_BYTES: usize = 90;
-/// Widest `(NN%)` footer accepted, from the `(` to the `%`.
 const MAX_FOOTER_PERCENT_BYTES: usize = 5;
 const OSC_NOTIFY: u32 = 9;
 const OSC_KITTY_NOTIFY: u32 = 99;
@@ -34,12 +25,6 @@ struct ContextReading {
     used: f64,
 }
 
-/// Counts attention signals in a terminal output chunk and extracts a
-/// human-readable message for each: BEL characters and OSC 9 / 99 / 777
-/// notification sequences (ESC ] N ; ... terminated by BEL or ST). OSC bodies
-/// carry the text; for bare BELs the last non-empty line of recent output
-/// (`tail`) is used as the message. A BEL burst yields a single fallback
-/// message even though every BEL counts.
 pub(super) fn extract_notifications(data: &[u8], tail: &[u8]) -> (usize, Vec<String>) {
     let mut count = 0;
     let mut messages: Vec<String> = Vec::new();
@@ -127,7 +112,6 @@ fn notification_message(code: u32, body: String) -> String {
     }
 }
 
-// urxvt: OSC 777 ; notify ; title ; body
 fn urxvt_message(body: &str) -> String {
     let mut parts = body.splitn(3, ';');
     let _proto = parts.next();
@@ -140,7 +124,6 @@ fn urxvt_message(body: &str) -> String {
     }
 }
 
-// kitty: OSC 99 ; metadata ; payload
 fn kitty_message(body: &str) -> String {
     match body.split_once(';') {
         Some((_, payload)) => payload.trim().to_string(),
@@ -164,10 +147,6 @@ fn fallback_notification(tail: &[u8]) -> String {
         .unwrap_or_else(|| FALLBACK_NOTIFICATION.to_string())
 }
 
-/// Scans `buf` for OSC 0/1/2 window-title sequences (ESC ] N ; text, ended by
-/// BEL or ST) and pushes any titles found onto `out`. Consumed bytes are
-/// drained; a trailing partial sequence is kept for the next chunk. Sequences
-/// that grow past 4 KB without a terminator are assumed malformed and skipped.
 pub(super) fn scan_titles(buf: &mut Vec<u8>, out: &mut Vec<String>) {
     let mut i = 0;
     while i < buf.len() {
@@ -199,8 +178,6 @@ pub(super) fn scan_titles(buf: &mut Vec<u8>, out: &mut Vec<String>) {
     buf.drain(..i);
 }
 
-/// Strips ANSI escape sequences (CSI, OSC, charset selects) from a chunk so
-/// that status text printed by agent TUIs becomes plain searchable text.
 pub(super) fn strip_ansi(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -288,7 +265,6 @@ fn suffix_multiplier(suffix: u8) -> Option<f64> {
     }
 }
 
-/// Largest index <= i that lies on a char boundary (clamped to s.len()).
 fn floor_boundary(s: &str, i: usize) -> usize {
     let mut i = i.min(s.len());
     while i > 0 && !s.is_char_boundary(i) {
@@ -297,7 +273,6 @@ fn floor_boundary(s: &str, i: usize) -> usize {
     i
 }
 
-/// Smallest index >= i that lies on a char boundary (clamped to s.len()).
 fn ceil_boundary(s: &str, i: usize) -> usize {
     let mut i = i.min(s.len());
     while i < s.len() && !s.is_char_boundary(i) {
@@ -306,11 +281,6 @@ fn ceil_boundary(s: &str, i: usize) -> usize {
     i
 }
 
-/// Best-effort detection of context-window usage in agent output. Understands
-/// "N% context left/remaining" (Claude), "N% (of) context used/full",
-/// "a / b tokens" ratios (Codex), and "12.3K (42%)" footer counts (OpenCode).
-/// Returns percent *used* (0-100). When several indicators are present, the
-/// most recent one wins.
 pub(super) fn detect_context_used(text: &str) -> Option<u8> {
     let lower = text.to_lowercase();
     let context_readings = lower
@@ -334,8 +304,6 @@ fn context_percent_reading(lower: &str, idx: usize) -> Option<ContextReading> {
     let lo = floor_boundary(lower, idx.saturating_sub(CONTEXT_WINDOW_BYTES));
     let hi = ceil_boundary(lower, idx + CONTEXT_WINDOW_BYTES);
     let window = &lower[lo..hi];
-    // The percent belongs to the keyword, so take the one closest before
-    // it; an earlier '%' in the window may belong to a stale indicator.
     let koff = idx - lo;
     let pct = window[..koff].rfind('%')?;
     let v = parse_trailing_number(&window[..pct])?;
@@ -363,8 +331,6 @@ fn token_ratio_reading(lower: &str, idx: usize) -> Option<ContextReading> {
     })
 }
 
-// OpenCode footer: "12.3K (42%)" - a bare parenthesized percent right
-// after a token count, with no "context"/"token" keyword nearby.
 fn footer_percent_reading(lower: &str, pct: usize) -> Option<ContextReading> {
     let open = lower[..pct].rfind('(')?;
     if pct - open > MAX_FOOTER_PERCENT_BYTES {
@@ -391,10 +357,6 @@ fn rounded_percent(used: f64) -> u8 {
     used.round() as u8
 }
 
-/// Drains one decodable chunk from `pending`, replacing invalid bytes with
-/// U+FFFD so a single bad byte can never wedge the output pipeline. Returns
-/// None when the buffer holds only an incomplete trailing sequence (wait for
-/// more bytes) or is empty.
 pub(super) fn take_decodable(pending: &mut Vec<u8>) -> Option<String> {
     if pending.is_empty() {
         return None;
@@ -494,7 +456,6 @@ mod ctx_tests {
         assert_eq!(detect_context_used("42% context left"), Some(58));
         assert_eq!(detect_context_used("12.0k / 200k tokens"), Some(6));
         assert_eq!(detect_context_used("random 50% nothing"), None);
-        // most recent indicator wins
         assert_eq!(
             detect_context_used("10% context left then 5K (33%)"),
             Some(33)
@@ -507,8 +468,6 @@ mod ctx_tests {
 
     #[test]
     fn unicode_near_keywords_does_not_panic() {
-        // Box-drawing / emoji / CJK around the keyword must not panic on
-        // char-boundary slicing.
         assert_eq!(
             detect_context_used("╭─░▒▓ 42% context left ▓▒░─╮"),
             Some(58)

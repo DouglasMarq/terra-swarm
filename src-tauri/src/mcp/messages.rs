@@ -33,8 +33,6 @@ pub fn send(
     })
 }
 
-/// Messages sent to `reader` or to `all`, oldest first, at most `limit`.
-/// Every returned message is recorded as read by `reader`.
 pub fn read_inbox(
     repo: &mut Repo,
     reader: &Actor<'_>,
@@ -154,7 +152,6 @@ mod tests {
             .len(),
             2
         );
-        // t-3 gets both broadcasts and its own direct message; `limit` reads one.
         assert_eq!(repo.queries().unread_count("ws-1", "t-3").unwrap(), 3);
         assert_eq!(
             read_inbox(

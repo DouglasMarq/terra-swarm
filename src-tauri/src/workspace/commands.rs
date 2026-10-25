@@ -1,5 +1,3 @@
-//! Tauri commands for workspaces, layout and groups.
-
 use super::*;
 use crate::sync::LockExt;
 use std::sync::Mutex;

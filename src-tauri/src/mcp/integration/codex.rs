@@ -10,7 +10,6 @@ use crate::usage::{number, SessionLog, TokenUsage};
 
 const ID: &str = "codex";
 
-/// How deep the Codex sessions folder is searched (`YYYY/MM/DD/<log>`).
 const MAX_CODEX_LOG_DEPTH: usize = 4;
 
 pub struct Codex;
@@ -74,8 +73,6 @@ impl AgentIntegration for Codex {
 }
 
 pub fn rewrite(command: &str, registration: &Overrides<'_>, quoting: Quoting) -> String {
-    // `-c` is a global flag, so it is valid before a subcommand such as
-    // `codex resume --last`. The token is read from the environment.
     let rest = command
         .split_once(char::is_whitespace)
         .map(|(_, rest)| rest.trim_start())
@@ -97,8 +94,6 @@ pub fn rewrite(command: &str, registration: &Overrides<'_>, quoting: Quoting) ->
                 quoting
             ),
         ),
-        // Codex reads a value that is not valid TOML as a plain
-        // string, which avoids nesting quotes for cmd/PowerShell.
         Quoting::Windows => format!(
             "-c mcp_servers.{name}.url={url} -c mcp_servers.{name}.bearer_token_env_var={env}",
             name = SERVER_NAME,
@@ -106,9 +101,8 @@ pub fn rewrite(command: &str, registration: &Overrides<'_>, quoting: Quoting) ->
             env = ENV_TOKEN
         ),
     };
-    // `notify` is a TOML array; on Windows shells the nested quotes
-    // are not worth the risk, so the state hook stays POSIX-only.
-    if let (Some(program), Quoting::Posix) = (registration.notify, quoting) {
+    let can_quote_toml_array = quoting == Quoting::Posix;
+    if let (Some(program), true) = (registration.notify, can_quote_toml_array) {
         let program = serde_json::to_string(&program.to_string_lossy()).unwrap_or_default();
         overrides.push_str(&format!(
             " -c {}",
@@ -125,8 +119,6 @@ pub fn rewrite(command: &str, registration: &Overrides<'_>, quoting: Quoting) ->
     }
 }
 
-/// Whether the user's own Codex config already sets `notify`; Terra's hook
-/// would replace it, so it is left out then.
 pub fn user_has_codex_notify() -> bool {
     let Some(home) = codex_home() else {
         return false;
@@ -136,7 +128,6 @@ pub fn user_has_codex_notify() -> bool {
         .unwrap_or(false)
 }
 
-/// A top-level `notify = ...` line, before the first table header.
 pub fn codex_config_sets_notify(config: &str) -> bool {
     for line in config.lines() {
         let line = line.trim();
@@ -152,7 +143,6 @@ pub fn codex_config_sets_notify(config: &str) -> bool {
     false
 }
 
-/// Codex logs running totals; the last `token_count` event has them.
 pub fn codex_usage(path: &Path) -> std::io::Result<TokenUsage> {
     let reader = BufReader::new(std::fs::File::open(path)?);
     let mut total = TokenUsage::default();
@@ -181,7 +171,6 @@ pub fn codex_usage(path: &Path) -> std::io::Result<TokenUsage> {
     Ok(total)
 }
 
-/// The Codex rollout file of `thread_id`, searched newest day first.
 pub fn find_codex_log(sessions: &Path, thread_id: &str) -> Option<PathBuf> {
     if thread_id.is_empty()
         || !thread_id

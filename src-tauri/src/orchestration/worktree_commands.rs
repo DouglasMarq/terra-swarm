@@ -5,7 +5,6 @@ use crate::sync::LockExt;
 use crate::workspace::WorkspaceStore;
 use crate::worktree::{self, review, WorktreeInfo, WorktreeStatus};
 
-/// The worktree recorded for a terminal of a workspace.
 fn recorded(
     store: &Mutex<WorkspaceStore>,
     workspace_id: &str,
@@ -36,9 +35,6 @@ pub fn worktree_status(
     }
 }
 
-/// Delete an agent's worktree, discarding uncommitted changes; the branch
-/// (with its commits) goes too when `delete_branch` is set. Stop the agent
-/// first: its shell must not be running inside the folder.
 #[tauri::command(async)]
 pub fn worktree_remove(
     store: State<'_, Mutex<WorkspaceStore>>,
@@ -78,8 +74,6 @@ pub fn worktree_merge(
     review::merge(&recorded(&store, &workspace_id, &terminal_id)?)
 }
 
-/// Pushes the agent's branch and opens a pull request; the user asks for
-/// this explicitly from the review dialog.
 #[tauri::command(async)]
 pub fn worktree_open_pr(
     store: State<'_, Mutex<WorkspaceStore>>,

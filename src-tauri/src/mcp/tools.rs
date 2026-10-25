@@ -1,6 +1,3 @@
-//! The MCP tool catalogue. Handlers take the caller's identity (from its
-//! token) and plain JSON arguments, so they are tested without HTTP.
-
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::Runtime;
@@ -469,8 +466,6 @@ fn handlers<R: Runtime>() -> [(&'static str, Handler<R>); 13] {
     ]
 }
 
-/// Run one tool for `who`. Every store call uses `who.workspace_id`, so a
-/// caller can never reach another project's data.
 pub fn call<R: Runtime>(
     hub: &McpHub<R>,
     who: &AgentIdentity,
@@ -767,8 +762,6 @@ fn assign_task<R: Runtime>(
         note: args.note.as_deref(),
     };
     let (task, message) = tasks::assign(&mut *hub.repo()?, &who.actor(), &assignment)?;
-    // Typing into a terminal that is busy or waiting on a human could
-    // answer a prompt by accident, so only idle agents are woken.
     let idle = is_idle(hub, to)?;
     hub.emit_tasks_changed(&who.workspace_id);
     hub.emit_message(&message);
@@ -1028,7 +1021,6 @@ mod tests {
             .collect();
         assert_eq!(kinds, vec!["created", "claimed", "completed"]);
 
-        // A dependent task shows what it waits on and can't be claimed yet.
         call(
             &hub,
             &lead,
@@ -1131,7 +1123,6 @@ mod tests {
             .unwrap()["notes"],
             json!([])
         );
-        // Agents of other projects are not addressable either.
         assert!(call(
             &hub,
             &other,
@@ -1420,7 +1411,6 @@ mod tests {
         )
         .unwrap();
 
-        // Only the orchestrator assigns.
         let refused = call(
             &hub,
             &dev,
@@ -1432,7 +1422,6 @@ mod tests {
         assert!(
             matches!(refused, Err(ToolError::InvalidArguments(message)) if message.contains("orchestrator"))
         );
-        // Dependencies come first, and the target must be a running teammate.
         assert!(matches!(
             call(
                 &hub,
@@ -1454,7 +1443,6 @@ mod tests {
         )
         .is_err());
 
-        // A busy agent gets the task and a message, but nothing typed.
         call(
             &hub,
             &dev,
@@ -1495,7 +1483,6 @@ mod tests {
             .iter()
             .any(|(event, _)| event == EVENT_NUDGE));
 
-        // An idle one is woken with a prompt.
         call(
             &hub,
             &dev,

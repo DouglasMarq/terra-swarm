@@ -32,6 +32,14 @@ const hotkeys: Record<HotkeyActionId, Hotkey> = {
   maximizeTerminal: metaKey("Enter"),
   newTerminal: metaKey("t"),
   renameWorkspace: metaKey("r"),
+  newWorkspace: metaKey("n"),
+  deleteWorkspace: metaKey("d"),
+  closeTerminal: metaKey("w"),
+  minimizeTerminal: metaKey("m"),
+  increaseFontSize: metaKey("="),
+  decreaseFontSize: metaKey("-"),
+  resetFontSize: metaKey("0"),
+  toggleVoice: metaKey("v"),
 };
 
 function actions() {
@@ -126,6 +134,62 @@ describe("useGlobalHotkeys", () => {
     expect(handlers.renameWorkspace).toHaveBeenCalledWith(workspaces[0]);
   });
 
+  it("Given an active workspace and a focused agent, when the workspace and agent shortcuts are pressed, then each action runs once", () => {
+    const { handlers } = renderHotkeys({ focusedId: "term-one" });
+
+    press({ key: "n", metaKey: true });
+    press({ key: "d", metaKey: true });
+    press({ key: "w", metaKey: true });
+    press({ key: "v", metaKey: true });
+
+    expect(handlers.openWorkspaceCreator).toHaveBeenCalledTimes(1);
+    expect(handlers.closeWorkspace).toHaveBeenCalledWith("ws-alpha");
+    expect(handlers.closeTerminal).toHaveBeenCalledWith("term-one");
+    expect(handlers.toggleVoice).toHaveBeenCalledTimes(1);
+  });
+
+  it("Given no focused agent, when close agent is pressed, then nothing is closed", () => {
+    const { handlers } = renderHotkeys();
+
+    press({ key: "w", metaKey: true });
+
+    expect(handlers.closeTerminal).not.toHaveBeenCalled();
+  });
+
+  it("Given an expanded agent, when minimize is pressed, then the grid is restored", () => {
+    renderHotkeys();
+    useUiStore.setState({ expandedId: "term-one" });
+
+    press({ key: "m", metaKey: true });
+
+    expect(useUiStore.getState().expandedId).toBeNull();
+  });
+
+  it("Given the default font size, when the font shortcuts are pressed, then the size grows, shrinks and resets", () => {
+    renderHotkeys();
+    usePreferencesStore.getState().resetFontSize();
+    const initial = usePreferencesStore.getState().fontSize;
+
+    press({ key: "=", metaKey: true });
+    expect(usePreferencesStore.getState().fontSize).toBe(initial + 1);
+
+    press({ key: "-", metaKey: true });
+    press({ key: "-", metaKey: true });
+    expect(usePreferencesStore.getState().fontSize).toBe(initial - 1);
+
+    press({ key: "0", metaKey: true });
+    expect(usePreferencesStore.getState().fontSize).toBe(initial);
+  });
+
+  it("Given a slot with no workspace, when its shortcut is pressed, then the active workspace stays", () => {
+    renderHotkeys();
+    usePreferencesStore.setState({ hotkeys: { ...hotkeys, selectWorkspace3: metaKey("3") } });
+
+    press({ key: "3", metaKey: true });
+
+    expect(useUiStore.getState().activeId).toBe("ws-alpha");
+  });
+
   it("Given an open dialog, when a shortcut is pressed, then nothing happens", () => {
     const { handlers } = renderHotkeys({ modalOpen: true });
 
@@ -159,7 +223,7 @@ describe("useGlobalHotkeys", () => {
 
     press({ key: "t", metaKey: true });
 
-    expect(usePreferencesStore.getState().hotkeys.newWorkspace).toEqual(DEFAULT_HOTKEYS.newWorkspace);
+    expect(usePreferencesStore.getState().hotkeys.newWorkspace).toEqual(hotkeys.newWorkspace);
     expect(useTerminalRuntimeStore.getState().notifItems).toHaveLength(1);
     expect(setCapturing).toHaveBeenCalledWith(null);
   });
@@ -178,7 +242,7 @@ describe("useGlobalHotkeys", () => {
 
     press({ key: "Escape" });
 
-    expect(usePreferencesStore.getState().hotkeys.newWorkspace).toEqual(DEFAULT_HOTKEYS.newWorkspace);
+    expect(usePreferencesStore.getState().hotkeys.newWorkspace).toEqual(hotkeys.newWorkspace);
     expect(setCapturing).toHaveBeenCalledWith(null);
   });
 });

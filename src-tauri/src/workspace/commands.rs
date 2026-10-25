@@ -231,3 +231,56 @@ pub fn set_terminal_width(
         store.set_width(&ws_id, &terminal_id, width)
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use tauri::test::{mock_app, MockRuntime};
+    use tauri::{App, Listener};
+
+    fn app_with_store() -> App<MockRuntime> {
+        let app = mock_app();
+        assert!(app.manage(Mutex::new(WorkspaceStore::default())));
+        app
+    }
+
+    fn count_changes(app: &App<MockRuntime>) -> Arc<AtomicUsize> {
+        let changes = Arc::new(AtomicUsize::new(0));
+        let sink = Arc::clone(&changes);
+        app.listen_any("workspaces-changed", move |_| {
+            sink.fetch_add(1, Ordering::SeqCst);
+        });
+        changes
+    }
+
+    #[test]
+    fn given_a_change_that_succeeds_when_updating_then_it_is_kept_and_announced_once() {
+        let app = app_with_store();
+        let changes = count_changes(&app);
+        let state = app.state::<Mutex<WorkspaceStore>>();
+
+        let created = update_and_notify(app.handle(), &state, |store| {
+            Ok(store.create("announced".to_string(), String::new()))
+        })
+        .expect("create workspace");
+
+        assert_eq!(changes.load(Ordering::SeqCst), 1);
+        assert!(state.lock_or_recover().workspace(&created.id).is_ok());
+    }
+
+    #[test]
+    fn given_a_change_that_fails_when_updating_then_nothing_is_announced() {
+        let app = app_with_store();
+        let changes = count_changes(&app);
+        let state = app.state::<Mutex<WorkspaceStore>>();
+
+        let result = update_and_notify(app.handle(), &state, |store| {
+            store.rename("ws-missing", "renamed".to_string())
+        });
+
+        assert!(result.is_err());
+        assert_eq!(changes.load(Ordering::SeqCst), 0);
+    }
+}

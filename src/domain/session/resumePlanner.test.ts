@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { planResume, resumeCandidateKey } from "./resumePlanner";
 
 describe("resume planner", () => {
-  it("groups sessions by project and group while preserving order", () => {
+  it("Given sessions, when planning the resume, then they are grouped by project and group in their original order", () => {
     const plan = planResume([
       { terminalId: "a", projectId: "p1", projectName: "One", groupId: "g1", groupName: "UI" },
       { terminalId: "b", projectId: "p1", projectName: "One", groupId: "g2", groupName: "API" },
@@ -19,7 +19,7 @@ describe("resume planner", () => {
     ]);
   });
 
-  it("keeps the first duplicate and records the skipped candidate", () => {
+  it("Given duplicate sessions, when planning the resume, then the first is kept and the skipped candidate is recorded", () => {
     const first = { terminalId: "same", projectId: "p1", command: "claude" };
     const second = { terminalId: "same", projectId: "p2", command: "codex" };
     const plan = planResume([first, second]);
@@ -29,7 +29,7 @@ describe("resume planner", () => {
     expect(plan.duplicates[0]?.skipped).toBe(second);
   });
 
-  it("derives a stable key for legacy records without terminal IDs", () => {
+  it("Given legacy records without terminal ids, when computing their key, then the key is stable", () => {
     const candidate = { projectId: "p", groupId: "g", cwd: "/repo", command: "claude" };
     expect(resumeCandidateKey(candidate)).toBe(resumeCandidateKey({ ...candidate }));
     expect(planResume([candidate, { ...candidate }]).items).toHaveLength(1);

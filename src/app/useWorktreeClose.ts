@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api } from "../api";
 import type { Workspace } from "../domain/workspace.model";
 import type { WorktreeStatus } from "../domain/worktree.model";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useReviewStore } from "../stores/reviewStore";
@@ -16,26 +16,19 @@ interface PendingClose {
   status: WorktreeStatus;
 }
 
-/**
- * Closing an agent that works in its own worktree. A worktree with nothing
- * to lose is removed with its branch; one with uncommitted changes or
- * unmerged commits asks first.
- */
 export type WorktreeCloseSessions = Pick<TerminalSessions, "close">;
 
 export function useWorktreeClose(workspaces: readonly Workspace[], sessions: WorktreeCloseSessions) {
   const [pending, setPending] = useState<PendingClose | null>(null);
 
-  const removeWorktree = async (workspaceId: string, terminalId: string, deleteBranch: boolean) => {
-    // The agent's shell must not keep running inside the folder.
+  const removeWorktree = async (workspaceId: string, terminalId: string, shouldDeleteBranch: boolean) => {
     await api.stopTerminal(terminalId).catch((error) => console.warn(`failed to stop ${terminalId}:`, error));
-    await api.worktreeRemove(workspaceId, terminalId, deleteBranch).catch((error) => {
+    await api.worktreeRemove(workspaceId, terminalId, shouldDeleteBranch).catch((error) => {
       console.error(`failed to remove the worktree of ${terminalId}:`, error);
-      useTerminalRuntimeStore.getState().pushSystemNotification(t("app.worktreeRemoveFailed", { detail: String(error) }));
+      useTerminalRuntimeStore.getState().pushSystemNotification(translateNow("app.worktreeRemoveFailed", { detail: String(error) }));
     });
   };
 
-  /** Close an agent, asking about its worktree when there is work to lose. */
   const request = async (terminalId: string) => {
     const workspace = workspaces.find((candidate) => candidate.terminals.some((terminal) => terminal.id === terminalId));
     const terminal = workspace?.terminals.find((candidate) => candidate.id === terminalId);
@@ -48,7 +41,7 @@ export function useWorktreeClose(workspaces: readonly Workspace[], sessions: Wor
       status = await api.worktreeStatus(workspace.id, terminalId);
     } catch (error) {
       console.error(`failed to read the worktree status of ${terminalId}:`, error);
-      useTerminalRuntimeStore.getState().pushSystemNotification(t("app.worktreeStatusFailed", { detail: String(error) }));
+      useTerminalRuntimeStore.getState().pushSystemNotification(translateNow("app.worktreeStatusFailed", { detail: String(error) }));
       return;
     }
     if (!status || !status.exists) {
@@ -74,10 +67,10 @@ export function useWorktreeClose(workspaces: readonly Workspace[], sessions: Wor
     await sessions.close(pending.terminalId);
   };
 
-  const remove = async (deleteBranch: boolean) => {
+  const remove = async (shouldDeleteBranch: boolean) => {
     if (!pending) return;
     setPending(null);
-    await removeWorktree(pending.workspaceId, pending.terminalId, deleteBranch);
+    await removeWorktree(pending.workspaceId, pending.terminalId, shouldDeleteBranch);
     await sessions.close(pending.terminalId);
   };
 
@@ -86,9 +79,8 @@ export function useWorktreeClose(workspaces: readonly Workspace[], sessions: Wor
     dialog: {
       target: pending ? { label: pending.label, status: pending.status } : null,
       onKeep: () => void keep(),
-      onDelete: (deleteBranch: boolean) => void remove(deleteBranch),
+      onDelete: (shouldDeleteBranch: boolean) => void remove(shouldDeleteBranch),
       onCancel: () => setPending(null),
-      /** Look at the work before deciding; the agent stays open. */
       onReview: () => {
         if (!pending) return;
         setPending(null);

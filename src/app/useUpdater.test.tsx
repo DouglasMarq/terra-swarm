@@ -30,7 +30,7 @@ describe("useUpdater", () => {
     await waitFor(() => expect(result.current.updateVersion).toBe("2.3.0"));
     expect(result.current.appVersion).toBe("2.2.1");
     act(() => result.current.installUpdate());
-    expect(result.current.updateInstalling).toBe(true);
+    expect(result.current.isUpdateInstalling).toBe(true);
     expect(updater.installUpdate).toHaveBeenCalledWith(update);
   });
 
@@ -60,7 +60,7 @@ describe("useUpdater", () => {
 
     act(() => result.current.installUpdate());
 
-    await waitFor(() => expect(result.current.updateInstalling).toBe(false));
+    await waitFor(() => expect(result.current.isUpdateInstalling).toBe(false));
     expect(updater.installUpdate).toHaveBeenCalledWith(null);
   });
 });

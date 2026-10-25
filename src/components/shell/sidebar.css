@@ -97,8 +97,6 @@
   font-size: var(--terra-font-size-micro);
 }
 
-/* --------------------------------------------------------------- rail */
-
 .terra-rail {
   display: flex;
   min-height: 0;
@@ -168,7 +166,6 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  /* Room for the attention dot that sits on the initials' corner. */
   padding: 4px;
   overflow-x: hidden;
   overflow-y: auto;

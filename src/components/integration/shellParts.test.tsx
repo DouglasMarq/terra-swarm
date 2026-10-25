@@ -3,7 +3,7 @@
 import { act, render, renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { t } from "../../i18n";
+import { translateNow } from "../../i18n";
 import { buildPaneMenu, type PaneMenuActions, type PaneMenuTarget } from "./paneMenu";
 import { shellShortcutLabels } from "./shellShortcuts";
 import { ShellVoiceOverlay, type ShellVoiceProps } from "./ShellVoiceOverlay";
@@ -35,7 +35,7 @@ function menuActions(overrides: Partial<PaneMenuActions> = {}): PaneMenuActions 
 }
 
 function menuItems(menuTarget: PaneMenuTarget, actions: PaneMenuActions) {
-  return buildPaneMenu(menuTarget, actions, { t, shortcuts: shellShortcutLabels("mac") }).flat();
+  return buildPaneMenu(menuTarget, actions, { translate: translateNow, shortcuts: shellShortcutLabels("mac") }).flat();
 }
 
 function menuItem(items: ReturnType<typeof menuItems>, id: string) {
@@ -75,9 +75,9 @@ describe("buildPaneMenu", () => {
   it("Given an agent outside any workspace, when building the menu, then the agent actions are disabled", () => {
     const items = menuItems({ ...target, workspaceId: null }, menuActions());
 
-    expect(menuItem(items, "interrupt").disabled).toBe(true);
-    expect(menuItem(items, "clear-history").disabled).toBe(true);
-    expect(menuItem(items, "kill").disabled).toBe(true);
+    expect(menuItem(items, "interrupt").isDisabled).toBe(true);
+    expect(menuItem(items, "clear-history").isDisabled).toBe(true);
+    expect(menuItem(items, "kill").isDisabled).toBe(true);
   });
 
   it("Given a pane menu, when kill is selected, then a stop-agent confirmation is requested", () => {
@@ -97,11 +97,11 @@ describe("buildPaneMenu", () => {
 });
 
 function voiceProps(overrides: Partial<ShellVoiceProps> = {}): ShellVoiceProps {
-  return { voiceEnabled: true, onToggleVoice: vi.fn(), ...overrides };
+  return { isVoiceEnabled: true, onToggleVoice: vi.fn(), ...overrides };
 }
 
 const voiceTargets = {
-  projects: [{ id: "ws-api", name: "Terra API", status: "working" as const, suspended: false, agents: [{ id: "term-codex", label: "codex", status: "working" as const, detail: "working" }] }],
+  projects: [{ id: "ws-api", name: "Terra API", status: "working" as const, isSuspended: false, agents: [{ id: "term-codex", label: "codex", status: "working" as const, detail: "working" }] }],
   labels: {},
 };
 
@@ -128,9 +128,9 @@ describe("ShellVoiceOverlay", () => {
   });
 
   it("Given disabled voice without feedback, when rendering, then the footer asks to turn voice on", () => {
-    render(<ShellVoiceOverlay voice={voiceProps({ voiceEnabled: false })} state="error" focusedId={null} targets={voiceTargets} shortcut="⌘M" />);
+    render(<ShellVoiceOverlay voice={voiceProps({ isVoiceEnabled: false })} state="error" focusedId={null} targets={voiceTargets} shortcut="⌘M" />);
 
-    expect(screen.getByText(t("shell.voiceDisabled"))).toBeInTheDocument();
+    expect(screen.getByText(translateNow("shell.voiceDisabled"))).toBeInTheDocument();
   });
 });
 
@@ -232,14 +232,14 @@ describe("visual shell terminal maps", () => {
 
   it("Given agents with and without worktrees or roles, when mapping them, then only the isolated or assigned agents appear", () => {
     expect(worktreeBranchesByTerminal(workspaces)).toEqual({ "term-codex": "terra/codex" });
-    expect(roleLabelsByTerminal(workspaces, t)).toEqual({ "term-codex": t("roles.reviewer") });
+    expect(roleLabelsByTerminal(workspaces, translateNow)).toEqual({ "term-codex": translateNow("roles.reviewer") });
   });
 
   it("Given each shell surface, when titling the window, then the surface name is used", () => {
-    expect(shellSurfaceTitle("fleet", t)).toBe(t("common.fleet"));
-    expect(shellSurfaceTitle("board", t)).toBe(t("common.board"));
-    expect(shellSurfaceTitle("settings", t)).toBe(t("common.settings"));
-    expect(shellSurfaceTitle("workbench", t)).toBe(t("common.appName"));
+    expect(shellSurfaceTitle("fleet", translateNow)).toBe(translateNow("common.fleet"));
+    expect(shellSurfaceTitle("board", translateNow)).toBe(translateNow("common.board"));
+    expect(shellSurfaceTitle("settings", translateNow)).toBe(translateNow("common.settings"));
+    expect(shellSurfaceTitle("workbench", translateNow)).toBe(translateNow("common.appName"));
   });
 });
 

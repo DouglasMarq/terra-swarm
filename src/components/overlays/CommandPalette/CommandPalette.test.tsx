@@ -9,7 +9,7 @@ import type { Workspace } from "../../../domain/workspace.model";
 const workspaces: Workspace[] = [{ id: "ws-1", name: "Terra API", cwd: "/tmp/api", terminals: [] }];
 
 describe("CommandPalette", () => {
-  it("searches commands and dispatches the selected route", async () => {
+  it("Given the command palette, when searching and selecting a command, then the selected route is dispatched", async () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();
     const onNavigate = vi.fn();
@@ -17,7 +17,7 @@ describe("CommandPalette", () => {
       <CommandPalette
         callbacks={{ onNavigate }}
         onOpenChange={onOpenChange}
-        open
+        isOpen
         workspaces={workspaces}
       />,
     );

@@ -8,7 +8,6 @@ export interface ShortcutDefinition {
   alt: boolean;
 }
 
-/** Opens the command palette; `meta` reads as Ctrl outside macOS, as its handler accepts either. */
 export const COMMAND_PALETTE_SHORTCUT: ShortcutDefinition = { key: "k", meta: true, shift: false, ctrl: false, alt: false };
 
 export interface PlatformSignals {
@@ -27,7 +26,6 @@ function keyLabel(key: string): string {
   return key.length === 1 ? key.toUpperCase() : key;
 }
 
-/** Formats a persisted hotkey without making platform assumptions in views. */
 export function formatShortcut(
   hotkey: ShortcutDefinition,
   platform: ShortcutPlatform = detectShortcutPlatform(),
@@ -44,8 +42,6 @@ export function formatShortcut(
   }
 
   const modifiers: string[] = [];
-  // Non-macOS defaults use Ctrl. Treat a persisted Meta binding as Ctrl in
-  // the human-facing label too: the application handlers accept either.
   if (hotkey.ctrl || hotkey.meta) modifiers.push("Ctrl");
   if (hotkey.alt) modifiers.push("Alt");
   if (hotkey.shift) modifiers.push("Shift");

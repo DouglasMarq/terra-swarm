@@ -10,61 +10,55 @@ export interface ChromeBreadcrumb {
 }
 
 export interface WindowChromeProps {
-  /** Where the user is; falls back to `title` when no project is active. */
   breadcrumb?: ChromeBreadcrumb;
   title?: string;
-  sidebarCollapsed?: boolean;
+  isSidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
   sidebarShortcut?: string;
   onOpenLauncher?: () => void;
   launcherShortcut?: string;
-  /** Agents that need the user; drives the amber notification button. */
   attentionCount?: number;
-  notificationsOpen?: boolean;
-  onNotificationsOpenChange?: (open: boolean) => void;
+  isNotificationsOpen?: boolean;
+  onNotificationsOpenChange?: (isOpen: boolean) => void;
   notificationsPanel?: ReactNode;
   onToggleVoice?: () => void;
-  voiceActive?: boolean;
+  isVoiceActive?: boolean;
   voiceLabel?: string;
   voiceShortcut?: string;
-  inspectorOpen?: boolean;
+  isInspectorOpen?: boolean;
   onToggleInspector?: () => void;
   inspectorShortcut?: string;
 }
 
-function withShortcut(t: Translate, label: string, shortcut?: string): string {
-  return shortcut ? t("common.withShortcut", { label, shortcut }) : label;
+function withShortcut(translate: Translate, label: string, shortcut?: string): string {
+  return shortcut ? translate("common.withShortcut", { label, shortcut }) : label;
 }
 
-/**
- * Top bar: where you are, one way to search or command (⌘K), what needs you,
- * and the voice and inspector toggles. Everything else lives in the sidebar.
- */
 export function WindowChrome({
   breadcrumb,
   title,
-  sidebarCollapsed = false,
+  isSidebarCollapsed = false,
   onToggleSidebar,
   sidebarShortcut,
   onOpenLauncher,
   launcherShortcut = formatShortcut(COMMAND_PALETTE_SHORTCUT),
   attentionCount = 0,
-  notificationsOpen = false,
+  isNotificationsOpen = false,
   onNotificationsOpenChange,
   notificationsPanel,
   onToggleVoice,
-  voiceActive = false,
+  isVoiceActive = false,
   voiceLabel,
   voiceShortcut,
-  inspectorOpen = false,
+  isInspectorOpen = false,
   onToggleInspector,
   inspectorShortcut,
 }: WindowChromeProps) {
-  const t = useT();
+  const translate = useT();
   const notificationsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!notificationsOpen) return;
+    if (!isNotificationsOpen) return;
     const close = (event: PointerEvent) => {
       if (notificationsRef.current?.contains(event.target as Node)) return;
       onNotificationsOpenChange?.(false);
@@ -78,14 +72,14 @@ export function WindowChrome({
       document.removeEventListener("pointerdown", close);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [notificationsOpen, onNotificationsOpenChange]);
+  }, [isNotificationsOpen, onNotificationsOpenChange]);
 
-  const sidebarLabel = withShortcut(t, t(sidebarCollapsed ? "shell.sidebar.expand" : "shell.sidebar.collapse"), sidebarShortcut);
-  const inspectorLabel = withShortcut(t, t(inspectorOpen ? "shell.inspector.hide" : "shell.inspector.show"), inspectorShortcut);
-  const voiceTitle = withShortcut(t, voiceLabel ?? t("shell.voice"), voiceShortcut);
+  const sidebarLabel = withShortcut(translate, translate(isSidebarCollapsed ? "shell.sidebar.expand" : "shell.sidebar.collapse"), sidebarShortcut);
+  const inspectorLabel = withShortcut(translate, translate(isInspectorOpen ? "shell.inspector.hide" : "shell.inspector.show"), inspectorShortcut);
+  const voiceTitle = withShortcut(translate, voiceLabel ?? translate("shell.voice"), voiceShortcut);
   const notificationLabel = attentionCount > 0
-    ? t("shell.attention.button", { count: attentionCount })
-    : t("shell.attention.notifications");
+    ? translate("shell.attention.button", { count: attentionCount })
+    : translate("shell.attention.notifications");
 
   return (
     <header className="terra-window-chrome" data-tauri-drag-region="true">
@@ -95,14 +89,14 @@ export function WindowChrome({
           type="button"
           onClick={onToggleSidebar}
           aria-label={sidebarLabel}
-          aria-expanded={!sidebarCollapsed}
+          aria-expanded={!isSidebarCollapsed}
           title={sidebarLabel}
         >
           <PanelLeft size={15} aria-hidden="true" />
         </button>
       ) : null}
 
-      <nav className="terra-window-breadcrumb" aria-label={t("shell.location")} data-tauri-drag-region="true">
+      <nav className="terra-window-breadcrumb" aria-label={translate("shell.location")} data-tauri-drag-region="true">
         {breadcrumb?.project ? (
           <>
             <span className="terra-window-breadcrumb-project" data-tauri-drag-region="true">{breadcrumb.project}</span>
@@ -117,7 +111,7 @@ export function WindowChrome({
             ) : null}
           </>
         ) : (
-          <span className="terra-window-breadcrumb-project" data-tauri-drag-region="true">{title ?? t("common.appName")}</span>
+          <span className="terra-window-breadcrumb-project" data-tauri-drag-region="true">{title ?? translate("common.appName")}</span>
         )}
       </nav>
 
@@ -126,11 +120,11 @@ export function WindowChrome({
           className="terra-window-search"
           type="button"
           onClick={onOpenLauncher}
-          aria-label={t("shell.search.open")}
-          title={withShortcut(t, t("shell.search.title"), launcherShortcut)}
+          aria-label={translate("shell.search.open")}
+          title={withShortcut(translate, translate("shell.search.title"), launcherShortcut)}
         >
           <Search size={14} aria-hidden="true" />
-          <span className="terra-window-search-label">{t("shell.search.placeholder")}</span>
+          <span className="terra-window-search-label">{translate("shell.search.placeholder")}</span>
           <kbd>{launcherShortcut}</kbd>
         </button>
       </div>
@@ -142,15 +136,15 @@ export function WindowChrome({
             type="button"
             data-attention={attentionCount > 0}
             aria-haspopup="dialog"
-            aria-expanded={notificationsOpen}
+            aria-expanded={isNotificationsOpen}
             aria-label={notificationLabel}
             title={notificationLabel}
-            onClick={() => onNotificationsOpenChange?.(!notificationsOpen)}
+            onClick={() => onNotificationsOpenChange?.(!isNotificationsOpen)}
           >
             {attentionCount > 0 ? <span className="terra-window-attention-dot" aria-hidden="true" /> : <Bell size={14} aria-hidden="true" />}
             {attentionCount > 0 ? <span>{notificationLabel}</span> : null}
           </button>
-          {notificationsOpen && notificationsPanel ? (
+          {isNotificationsOpen && notificationsPanel ? (
             <div className="terra-window-popover terra-anim-pop">{notificationsPanel}</div>
           ) : null}
         </div>
@@ -158,8 +152,8 @@ export function WindowChrome({
           className="terra-window-icon-button terra-window-voice"
           type="button"
           onClick={onToggleVoice}
-          data-recording={voiceActive}
-          aria-pressed={voiceActive}
+          data-recording={isVoiceActive}
+          aria-pressed={isVoiceActive}
           aria-label={voiceTitle}
           title={voiceTitle}
         >
@@ -170,7 +164,7 @@ export function WindowChrome({
             className="terra-window-icon-button"
             type="button"
             onClick={onToggleInspector}
-            aria-pressed={inspectorOpen}
+            aria-pressed={isInspectorOpen}
             aria-label={inspectorLabel}
             title={inspectorLabel}
           >

@@ -50,7 +50,7 @@ function shellProps(overrides: Partial<VisualShellSurfaceProps> = {}): VisualShe
     detachedTerminalIds: [],
     appVersion: "2.0.0",
     fontSize: 13,
-    voiceEnabled: false,
+    isVoiceEnabled: false,
     voiceStatus: "idle",
     onFocus: vi.fn(),
     onSelectWorkspace: vi.fn(),
@@ -95,7 +95,7 @@ afterEach(() => {
 });
 
 describe("VisualShellSurface smoke flow", () => {
-  it("opens on the Workbench, switches to the Fleet and forwards fleet focus", async () => {
+  it("Given the shell, when it opens, then it shows the Workbench, switches to the Fleet and forwards fleet focus", async () => {
     const user = userEvent.setup();
     const props = shellProps({ contextUsage: { "term-codex": 72 } });
     render(<VisualShellSurface {...props} />);
@@ -114,11 +114,11 @@ describe("VisualShellSurface smoke flow", () => {
     expect(props.onOpenSettings).toHaveBeenCalled();
   });
 
-  it("counts agents that need the user and lists them in the notification center", async () => {
+  it("Given agents that need the user, when the shell renders, then it counts them and lists them in the notification center", async () => {
     const user = userEvent.setup();
     const props = shellProps({
       notifications: { "term-codex": 1 },
-      notificationItems: [{ key: 1, terminalId: "term-codex", workspaceId: workspace.id, message: "Posso rodar npm test?", ts: Date.now(), read: false }],
+      notificationItems: [{ key: 1, terminalId: "term-codex", workspaceId: workspace.id, message: "Posso rodar npm test?", ts: Date.now(), isRead: false }],
     });
     render(<VisualShellSurface {...props} />);
 
@@ -129,7 +129,7 @@ describe("VisualShellSurface smoke flow", () => {
     expect(props.onJumpToNotification).toHaveBeenCalled();
   });
 
-  it("restores the persisted route/focus shell under reduced motion", async () => {
+  it("Given a persisted route and focus, when the shell mounts under reduced motion, then they are restored", async () => {
     const media = vi.fn((query: string) => ({
       matches: query === "(prefers-reduced-motion: reduce)",
       media: query,
@@ -157,14 +157,14 @@ describe("VisualShellSurface smoke flow", () => {
 
   });
 
-  it("collapses the sidebar into a rail with ⌘B", async () => {
+  it("Given the sidebar, when pressing ⌘B, then it collapses into a rail", async () => {
     render(<VisualShellSurface {...shellProps()} />);
     fireEvent.keyDown(window, { key: "b", metaKey: true });
     await waitFor(() => expect(useShellStore.getState().sidebarCollapsed).toBe(true));
     expect(screen.getByRole("navigation", { name: "Barra lateral recolhida" })).toBeInTheDocument();
   });
 
-  it("given the collapsed rail, when the language changes, then the agent status follows it", async () => {
+  it("Given the collapsed rail, when the language changes, then the agent status follows it", async () => {
     render(<VisualShellSurface {...shellProps()} />);
     fireEvent.keyDown(window, { key: "b", metaKey: true });
     const portuguese = (await screen.findByRole("button", { name: /^codex, /i })).getAttribute("aria-label");
@@ -180,7 +180,7 @@ describe("VisualShellSurface smoke flow", () => {
     }
   });
 
-  it("stops compact Inspector runtime polling when its drawer closes", async () => {
+  it("Given a compact Inspector drawer, when it closes, then runtime polling stops", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({
       matches: true,
@@ -212,7 +212,7 @@ describe("VisualShellSurface smoke flow", () => {
     expect(runtimeInfo).toHaveBeenCalledTimes(1);
   });
 
-  it("does not let Ctrl+K escape a focused dialog into the global palette", () => {
+  it("Given a focused dialog, when pressing Ctrl+K, then it does not escape into the global palette", () => {
     const dialog = document.createElement("div");
     dialog.setAttribute("role", "dialog");
     const input = document.createElement("input");
@@ -229,11 +229,11 @@ describe("VisualShellSurface smoke flow", () => {
 });
 
 describe("shellShortcutLabels", () => {
-  it("given macOS, writes the shell shortcuts with the Mac glyphs", () => {
+  it("Given macOS, when writing the shell shortcuts, then they use the Mac glyphs", () => {
     expect(shellShortcutLabels("mac")).toEqual({ interrupt: "⌃C", inspector: "⌘I", sidebar: "⌘B" });
   });
 
-  it("given Windows or Linux, writes the shell shortcuts with Ctrl", () => {
+  it("Given Windows or Linux, when writing the shell shortcuts, then they use Ctrl", () => {
     expect(shellShortcutLabels("other")).toEqual({ interrupt: "Ctrl+C", inspector: "Ctrl+I", sidebar: "Ctrl+B" });
   });
 });

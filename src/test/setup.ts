@@ -4,7 +4,6 @@ import { cleanup } from "@testing-library/react";
 import { afterEach, beforeEach } from "vitest";
 import { useLocaleStore } from "../i18n";
 
-// Component tests assert the Portuguese copy; the i18n suite covers English.
 beforeEach(() => {
   useLocaleStore.setState({ locale: "pt-BR" });
 });
@@ -14,8 +13,6 @@ afterEach(() => {
 });
 
 if (typeof window !== "undefined") {
-  // react-resizable-panels and Radix both expect these browser primitives;
-  // keeping the shims here avoids coupling production code to jsdom.
   if (!window.ResizeObserver) {
     window.ResizeObserver = class ResizeObserver {
       observe() {}

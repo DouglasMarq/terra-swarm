@@ -15,11 +15,9 @@ interface Props {
   onDismiss: (item: ResumeItem) => void | Promise<void>;
   onResumeAll: () => void | Promise<void>;
   onDismissAll: () => void | Promise<void>;
-  /** Hides this queue without mutating it. It can be reopened from ⌘K. */
   onDefer: () => void;
-  /** Resume every saved session on startup without asking. */
-  autoResume?: boolean;
-  onAutoResumeChange?: (enabled: boolean) => void;
+  shouldAutoResume?: boolean;
+  onAutoResumeChange?: (isEnabled: boolean) => void;
 }
 
 interface ResumeGroup {
@@ -39,11 +37,6 @@ function groupByProject(items: readonly ResumeItem[]): ResumeGroup[] {
   return [...groups.values()];
 }
 
-/**
- * Opening screen: "Continue where you left off?". Sessions are grouped by
- * project with checkboxes; unchecked ones stay saved and can be resumed later
- * from ⌘K. Discarding the whole queue still needs an explicit confirmation.
- */
 export function ResumeDialog({
   items,
   onDefer,
@@ -51,19 +44,19 @@ export function ResumeDialog({
   onResume,
   onResumeAll,
   savedAt,
-  autoResume = false,
+  shouldAutoResume = false,
   onAutoResumeChange,
 }: Props) {
-  const t = useT();
+  const translate = useT();
   const groups = useMemo(() => groupByProject(items), [items]);
   const [unchecked, setUnchecked] = useState<ReadonlySet<string>>(new Set());
-  const [confirmDismissAll, setConfirmDismissAll] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [isConfirmingDismissAll, setConfirmDismissAll] = useState(false);
+  const [isBusy, setBusy] = useState(false);
   const selected = items.filter((item) => !unchecked.has(item.terminalId));
 
-  const toggle = (ids: readonly string[], checked: boolean) => setUnchecked((current) => {
+  const toggle = (ids: readonly string[], isChecked: boolean) => setUnchecked((current) => {
     const next = new Set(current);
-    ids.forEach((id) => (checked ? next.delete(id) : next.add(id)));
+    ids.forEach((id) => (isChecked ? next.delete(id) : next.add(id)));
     return next;
   });
 
@@ -91,16 +84,16 @@ export function ResumeDialog({
       <TerraDialog
         className={styles.resumeDialog}
         description={savedLabel
-          ? t("resume.descriptionAt", { count: items.length, when: savedLabel })
-          : t("resume.description", { count: items.length })}
-        onOpenChange={(open) => {
-          if (!open) onDefer();
+          ? translate("resume.descriptionAt", { count: items.length, when: savedLabel })
+          : translate("resume.description", { count: items.length })}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) onDefer();
         }}
         open={items.length > 0}
         title={
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <History aria-hidden="true" size={17} strokeWidth={1.8} />
-            {t("resume.title")}
+            {translate("resume.title")}
           </span>
         }
       >
@@ -121,7 +114,7 @@ export function ResumeDialog({
                       onChange={(event) => toggle(ids, event.target.checked)}
                     />
                     <strong>{group.wsName}</strong>
-                    <span>{t("resume.agentCount", { count: ids.length })}</span>
+                    <span>{translate("resume.agentCount", { count: ids.length })}</span>
                   </label>
                   {group.items.map((item) => (
                     <label className={styles.resumeRow} key={item.terminalId}>
@@ -142,40 +135,40 @@ export function ResumeDialog({
           </div>
 
           <div className={styles.resumeFooter}>
-            <button type="button" className="terra-button terra-button-primary" disabled={busy || selected.length === 0} onClick={() => void resumeSelected()}>
-              {t("resume.resumeSelected", { count: selected.length })}
+            <button type="button" className="terra-button terra-button-primary" disabled={isBusy || selected.length === 0} onClick={() => void resumeSelected()}>
+              {translate("resume.resumeSelected", { count: selected.length })}
             </button>
             <button type="button" className="terra-button" onClick={onDefer}>
-              {t("resume.startFresh")}
+              {translate("resume.startFresh")}
             </button>
             <span className={styles.resumeSpacer} />
             <button type="button" className="terra-link-button" onClick={() => setConfirmDismissAll(true)}>
-              {t("resume.discardAll")}
+              {translate("resume.discardAll")}
             </button>
           </div>
           {onAutoResumeChange ? (
             <label className={styles.resumeAuto}>
-              <input type="checkbox" checked={autoResume} onChange={(event) => onAutoResumeChange(event.target.checked)} />
-              {t("resume.always")}
+              <input type="checkbox" checked={shouldAutoResume} onChange={(event) => onAutoResumeChange(event.target.checked)} />
+              {translate("resume.always")}
             </label>
           ) : null}
-          <p className={styles.resumeHint}>{t("resume.laterHint", { shortcut: formatShortcut(COMMAND_PALETTE_SHORTCUT) })}</p>
+          <p className={styles.resumeHint}>{translate("resume.laterHint", { shortcut: formatShortcut(COMMAND_PALETTE_SHORTCUT) })}</p>
         </div>
       </TerraDialog>
 
       <ConfirmActionDialog
         intent="destructive"
-        description={t("resume.discardDescription")}
-        confirmLabel={t("resume.discardAll")}
+        description={translate("resume.discardDescription")}
+        confirmLabel={translate("resume.discardAll")}
         onConfirm={async () => {
           await onDismissAll();
           setConfirmDismissAll(false);
         }}
-        onOpenChange={(open) => {
-          if (!open) setConfirmDismissAll(false);
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setConfirmDismissAll(false);
         }}
-        open={confirmDismissAll}
-        title={t("resume.discardTitle")}
+        isOpen={isConfirmingDismissAll}
+        title={translate("resume.discardTitle")}
       />
     </>
   );

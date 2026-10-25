@@ -1,8 +1,3 @@
-/**
- * Serializes mount/focus transitions. UI adapters can enqueue effects here;
- * this module itself has no dependency on a renderer or browser APIs.
- */
-
 export type MountFocusPhase = "mount" | "focus";
 export type MountFocusStatus = "completed" | "failed" | "cancelled";
 
@@ -16,7 +11,6 @@ export type MountFocusEffect = {
   id: string;
   mount?: (context: MountFocusContext) => unknown | PromiseLike<unknown>;
   focus?: (context: MountFocusContext) => unknown | PromiseLike<unknown>;
-  /** Pending effects with the same key may be replaced by a newer request. */
   coalesceKey?: string;
 };
 
@@ -46,7 +40,7 @@ export type MountFocusQueue = {
 type InternalEffect = MountFocusEffect & {
   controller: AbortController;
   status: "pending" | "running";
-  cancelRequested: boolean;
+  isCancelRequested: boolean;
   cancelReason?: unknown;
   startedAt: number;
   resolve: (result: MountFocusResult) => void;
@@ -62,7 +56,6 @@ function reasonFor(reason: unknown): unknown {
   return reason ?? new Error("mount/focus effect cancelled");
 }
 
-/** `now` is the clock for `startedAt` / `finishedAt`, in milliseconds. */
 export function createMountFocusQueue(now: () => number): MountFocusQueue {
   const effects = new Map<string, InternalEffect>();
   const settled = new Map<string, MountFocusResult>();
@@ -100,7 +93,7 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
   };
 
   const process = async (effect: InternalEffect): Promise<void> => {
-    if (effect.cancelRequested) {
+    if (effect.isCancelRequested) {
       finish(effect, { status: "cancelled", error: effect.cancelReason });
       return;
     }
@@ -108,18 +101,18 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
     const context: MountFocusContext = {
       id: effect.id,
       signal: effect.controller.signal,
-      isCancelled: () => effect.cancelRequested,
+      isCancelled: () => effect.isCancelRequested,
     };
 
     if (effect.mount) {
       try {
         await effect.mount(context);
       } catch (error) {
-        if (effect.cancelRequested) finish(effect, { status: "cancelled", phase: "mount", error: effect.cancelReason ?? error });
+        if (effect.isCancelRequested) finish(effect, { status: "cancelled", phase: "mount", error: effect.cancelReason ?? error });
         else finish(effect, { status: "failed", phase: "mount", error });
         return;
       }
-      if (effect.cancelRequested) {
+      if (effect.isCancelRequested) {
         finish(effect, { status: "cancelled", phase: "mount", error: effect.cancelReason });
         return;
       }
@@ -129,11 +122,11 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
       try {
         await effect.focus(context);
       } catch (error) {
-        if (effect.cancelRequested) finish(effect, { status: "cancelled", phase: "focus", error: effect.cancelReason ?? error });
+        if (effect.isCancelRequested) finish(effect, { status: "cancelled", phase: "focus", error: effect.cancelReason ?? error });
         else finish(effect, { status: "failed", phase: "focus", error });
         return;
       }
-      if (effect.cancelRequested) {
+      if (effect.isCancelRequested) {
         finish(effect, { status: "cancelled", phase: "focus", error: effect.cancelReason });
         return;
       }
@@ -152,9 +145,7 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
     effect.status = "running";
     running = 1;
     void process(effect).then(startNext, (error: unknown) => {
-      // Effect functions are already guarded, but keep a final safety net so
-      // one malformed thenable cannot leave the serial queue blocked.
-      finish(effect, { status: effect.cancelRequested ? "cancelled" : "failed", error });
+      finish(effect, { status: effect.isCancelRequested ? "cancelled" : "failed", error });
       startNext();
     });
   };
@@ -166,7 +157,7 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
     if (input.coalesceKey) {
       for (const current of effects.values()) {
         if (current.status === "pending" && current.coalesceKey === input.coalesceKey) {
-          current.cancelRequested = true;
+          current.isCancelRequested = true;
           current.cancelReason = new Error("replaced by a newer mount/focus effect");
           current.controller.abort(current.cancelReason);
           finish(current, { status: "cancelled", error: current.cancelReason });
@@ -183,7 +174,7 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
       id,
       controller: new AbortController(),
       status: "pending",
-      cancelRequested: false,
+      isCancelRequested: false,
       startedAt: now(),
       resolve,
     });
@@ -194,7 +185,7 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
   const cancel = (id: string, reason?: unknown): boolean => {
     const effect = effects.get(id);
     if (!effect) return false;
-    effect.cancelRequested = true;
+    effect.isCancelRequested = true;
     effect.cancelReason = reasonFor(reason);
     effect.controller.abort(effect.cancelReason);
     if (effect.status === "pending") {

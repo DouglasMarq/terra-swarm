@@ -71,21 +71,18 @@ export interface VisualShellSurfaceProps extends ShellVoiceProps {
   branches: Readonly<Record<string, string>>;
   notificationItems: readonly NotificationItem[];
   resumeCount?: number;
-  /** Runtime version resolved once by App from Tauri's app metadata. */
   appVersion?: string;
   onOpenResume?: () => void;
   detachedTerminalIds: readonly string[];
   fontSize: number;
   voiceStatus: VoiceStatus;
   voiceState?: VoiceCapsuleState;
-  /** Settings rendered as a page when the shell surface is "settings". */
   settingsPage?: ReactNode;
   onRenameAgent?: (terminalId: string) => void;
   onFocus: (id: string) => void;
   onSelectWorkspace: (id: string, focusedTerminalId?: string) => void;
   onNewWorkspace: () => void;
   onNewAgent: (workspaceId: string, paneId?: string | null, agentId?: string) => void;
-  /** Starts the default agent (⌘T); opens the picker when there is none. */
   onQuickNewAgent?: (workspaceId: string) => void;
   onClearNotifications: (id: string) => void;
   onMarkAllRead: () => void;
@@ -134,10 +131,10 @@ function toWireGroup(group: Group): WorkspaceGroup {
 }
 
 export function VisualShellSurface(props: VisualShellSurfaceProps) {
-  const t = useT();
+  const translate = useT();
   const shortcutLabels = shellShortcutLabels();
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [isNotificationsOpen, setNotificationsOpen] = useState(false);
   const notificationMute = useNotificationMute();
   const [navigatorActivity, setNavigatorActivity] = useState<ActivityTab>("projects");
   const [pendingCommandConfirmation, setPendingCommandConfirmation] = useState<CommandConfirmRequest | null>(null);
@@ -175,13 +172,13 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     reorderWorkspaceTabs: state.reorderWorkspaceTabs,
   })));
 
-  const inspectorActive = shell.dock.open && shell.dock.activeTab === "inspector";
+  const isInspectorActive = shell.dock.open && shell.dock.activeTab === "inspector";
   useEffect(() => startMcpEventBridge(nudgeAgent), []);
   useEffect(() => startPreviewBridge(), []);
 
   useShellShortcuts({
     toggleSidebar: shell.toggleSidebar,
-    dockOpen: shell.dock.open,
+    isDockOpen: shell.dock.open,
     setDockOpen: shell.setDockOpen,
     setCommandPaletteOpen,
   });
@@ -251,30 +248,27 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       props.onReattach(target.terminalId);
       return;
     }
-    // Restarting and terminating a PTY are lifecycle mutations. Keep their
-    // callbacks behind the same explicit confirmation affordance used by the
-    // command palette and Fleet.
     if (inspectorActionRequiresConfirmation(action)) {
       setPendingInspectorAction({ action, target });
     }
   };
 
   const visualVoiceState = shellVoiceState(props.voiceState, props.voiceStatus);
-  const voiceActive = visualVoiceState === "listening" || visualVoiceState === "transcribing";
-  const voiceRecording = visualVoiceState === "listening";
-  const voiceLabel = shellVoiceLabel(visualVoiceState, t);
+  const isVoiceActive = visualVoiceState === "listening" || visualVoiceState === "transcribing";
+  const isVoiceRecording = visualVoiceState === "listening";
+  const voiceLabel = shellVoiceLabel(visualVoiceState, translate);
   const voiceShortcut = formatHotkey(hotkeys.toggleVoice ?? DEFAULT_HOTKEYS.toggleVoice);
 
   const { agentLabels, agentStatus, reported, attentionCount, activeCount, railProjects } = useShellAgentOverview(props);
   const exitedIds = useMemo(() => Object.keys(props.exited), [props.exited]);
   const workspaceNames = useMemo(() => Object.fromEntries(props.workspaces.map((workspace) => [workspace.id, workspace.name])), [props.workspaces]);
-  const inspectorProps = useShellInspector(props, { agentLabels, agentStatus }, { isActive: inspectorActive, onAction: handleInspectorAction });
+  const inspectorProps = useShellInspector(props, { agentLabels, agentStatus }, { isActive: isInspectorActive, onAction: handleInspectorAction });
   const contextAlerts = nearlyFullContexts(props.workspaces, props.exited, props.contextUsage);
   const activeWorkspace = props.workspaces.find((workspace) => workspace.id === props.activeId) ?? null;
   const activeAgents = (activeWorkspace?.terminals ?? []).map((terminal) => ({
     id: terminal.id,
     label: agentLabels[terminal.id]?.primary ?? terminal.command,
-    running: isTerminalRunning(terminal, props.exited),
+    isRunning: isTerminalRunning(terminal, props.exited),
   }));
   const tasksPanel = (
     <TasksPanel
@@ -292,14 +286,14 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     />
   );
   const dockTabs = [
-    { id: "inspector", label: t("shell.dock.inspector") },
-    { id: "tasks", label: t("shell.dock.tasks") },
-    { id: "preview", label: t("shell.dock.preview") },
+    { id: "inspector", label: translate("shell.dock.inspector") },
+    { id: "tasks", label: translate("shell.dock.tasks") },
+    { id: "preview", label: translate("shell.dock.preview") },
   ] as const;
   const focusedLabel = props.focusedId ? agentLabels[props.focusedId] ?? null : null;
   useFullscreenExit({
     snapshot: props.snapshot,
-    dockOpen: shell.dock.open,
+    isDockOpen: shell.dock.open,
     setContainerFullscreen: orchestration.setContainerFullscreen,
   });
 
@@ -318,7 +312,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const workspaceIdFor = (terminalId: string) => props.workspaces.find((workspace) => workspace.terminals.some((terminal) => terminal.id === terminalId))?.id ?? null;
 
   const worktreeBranches = worktreeBranchesByTerminal(props.workspaces);
-  const roleLabels = roleLabelsByTerminal(props.workspaces, t);
+  const roleLabels = roleLabelsByTerminal(props.workspaces, translate);
   const openReview = (terminalId: string) => {
     const workspaceId = workspaceIdFor(terminalId);
     if (!workspaceId) return;
@@ -344,7 +338,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       hasWorktree: Boolean(worktreeBranches[ptyId]),
     },
     paneMenuActions,
-    { t, shortcuts: shortcutLabels },
+    { translate, shortcuts: shortcutLabels },
   );
 
   const terminalTabView: ShellTerminalTabView = {
@@ -381,7 +375,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const navigator = (
     <NavigatorPanel
       {...navigatorActivityProps}
-      flatten
+      shouldFlatten
       agentLabels={agentLabels}
       agentMenu={buildMenu}
       headerSlot={<SurfaceSwitch surface={surface} attentionCount={attentionCount} onNavigate={(next) => navigate(next)} />}
@@ -439,7 +433,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       onFocusAgent={(terminalId) => { setNotificationsOpen(false); focusTerminal(terminalId); }}
       labels={agentLabels}
       workspaceNames={workspaceNames}
-      muted={notificationMute.isMuted}
+      isMuted={notificationMute.isMuted}
       onJump={(item) => { setNotificationsOpen(false); props.onJumpToNotification(item); }}
       onMarkRead={props.onClearNotifications}
       onMarkAllRead={props.onMarkAllRead}
@@ -469,28 +463,28 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       onLayoutChanged={shell.setPanelLayout}
       sidebar={sidebar}
       collapsedSidebar={collapsedSidebar}
-      sidebarCollapsed={shell.sidebarCollapsed}
+      isSidebarCollapsed={shell.sidebarCollapsed}
       chrome={{
         breadcrumb: surface !== "workbench" ? undefined : { project: activeWorkspace?.name ?? null, agent: focusedLabel?.primary ?? null, branch: props.activeId ? props.branches[props.activeId] ?? null : null },
-        title: shellSurfaceTitle(surface, t),
-        sidebarCollapsed: shell.sidebarCollapsed,
+        title: shellSurfaceTitle(surface, translate),
+        isSidebarCollapsed: shell.sidebarCollapsed,
         onToggleSidebar: shell.toggleSidebar,
         sidebarShortcut: shortcutLabels.sidebar,
         onOpenLauncher: () => setCommandPaletteOpen(true),
         attentionCount: notificationMute.isMuted ? 0 : attentionCount,
-        notificationsOpen,
+        isNotificationsOpen,
         onNotificationsOpenChange: setNotificationsOpen,
         notificationsPanel,
         onToggleVoice: props.onToggleVoice,
-        voiceActive,
+        isVoiceActive,
         voiceLabel,
         voiceShortcut,
-        inspectorOpen: shell.dock.open,
+        isInspectorOpen: shell.dock.open,
         onToggleInspector: () => shell.setDockOpen(!shell.dock.open),
         inspectorShortcut: shortcutLabels.inspector,
       }}
       rightDock={{
-        open: shell.dock.open,
+        isOpen: shell.dock.open,
         onOpen: () => shell.setDockOpen(true),
         onClose: () => shell.setDockOpen(false),
         tabs: dockTabs,
@@ -503,7 +497,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       {content}
     </ApplicationShell>
     <CommandPalette
-      open={commandPaletteOpen}
+      isOpen={isCommandPaletteOpen}
       onOpenChange={setCommandPaletteOpen}
       workspaces={props.workspaces}
       groups={wireGroups}
@@ -515,9 +509,9 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       agentLabels={agentLabels}
       resumeCount={props.resumeCount ?? 0}
       exitedTerminalIds={exitedIds}
-      dockOpen={shell.dock.open}
-      voiceEnabled={props.voiceEnabled}
-      voiceRecording={voiceRecording}
+      isDockOpen={shell.dock.open}
+      isVoiceEnabled={props.isVoiceEnabled}
+      isVoiceRecording={isVoiceRecording}
       callbacks={paletteCallbacks}
       onRequestConfirm={(request) => {
         setPendingCommandConfirmation(request);

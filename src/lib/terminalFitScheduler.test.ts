@@ -20,7 +20,7 @@ describe("isUsableDimensions", () => {
 });
 
 describe("terminal fit scheduler", () => {
-  it("coalesces geometry signals into one animation frame", () => {
+  it("Given several geometry signals, when they arrive in one frame, then they are coalesced into one animation frame", () => {
     const frames: Array<() => void> = [];
     const fit = vi.fn();
     const scheduler = createFitScheduler(fit, {
@@ -44,7 +44,7 @@ describe("terminal fit scheduler", () => {
     expect(frames).toHaveLength(0);
   });
 
-  it("serializes resize IPC and keeps only the latest pending dimensions", async () => {
+  it("Given resizes while an IPC call is pending, when it completes, then resizes are serialized and only the latest pending dimensions are kept", async () => {
     const sent: TerminalDimensions[] = [];
     const resolvers: Array<() => void> = [];
     const send = vi.fn((dimensions: TerminalDimensions) => {
@@ -72,7 +72,7 @@ describe("terminal fit scheduler", () => {
     expect(send).toHaveBeenCalledTimes(2);
   });
 
-  it("invalidates an old geometry after a PTY lifecycle restart", async () => {
+  it("Given a PTY lifecycle restart, when the geometry is requested again, then the old geometry is invalidated", async () => {
     const resolvers: Array<() => void> = [];
     const send = vi.fn((dimensions: TerminalDimensions) => new Promise<void>((resolve) => {
       void dimensions;

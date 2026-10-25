@@ -54,7 +54,7 @@ function actions() {
 }
 
 interface HotkeyHarness {
-  modalOpen?: boolean;
+  isModalOpen?: boolean;
   capturing?: HotkeyActionId | null;
   focusedId?: string | null;
 }
@@ -64,10 +64,10 @@ function renderHotkeys(harness: HotkeyHarness = {}) {
   const setCapturing = vi.fn();
   renderHook(() =>
     useGlobalHotkeys({
-      modalOpen: harness.modalOpen ?? false,
+      isModalOpen: harness.isModalOpen ?? false,
       capturing: harness.capturing ?? null,
       setCapturing,
-      shortcutsSectionOpen: true,
+      isShortcutsSectionOpen: true,
       active: workspaces[0] ?? null,
       focusedId: harness.focusedId ?? null,
       workspaces,
@@ -191,7 +191,7 @@ describe("useGlobalHotkeys", () => {
   });
 
   it("Given an open dialog, when a shortcut is pressed, then nothing happens", () => {
-    const { handlers } = renderHotkeys({ modalOpen: true });
+    const { handlers } = renderHotkeys({ isModalOpen: true });
 
     press({ key: "t", metaKey: true });
 

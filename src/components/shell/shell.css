@@ -1,5 +1,4 @@
 .terra-shell {
-  /* Aliases over the single palette in styles/tokens.css. */
   --terra-shell-bg: var(--terra-bg);
   --terra-shell-panel: var(--terra-bg-sidebar);
   --terra-shell-raised: var(--terra-bg-elevated);
@@ -25,7 +24,6 @@
   line-height: 18px;
 }
 
-/* Zero-specificity reset so component classes (.terra-button-primary…) win. */
 :where(.terra-shell) button {
   font: inherit;
   color: inherit;
@@ -39,8 +37,6 @@
   outline: none;
   box-shadow: var(--terra-focus-ring), 0 0 0 1px var(--terra-border-focus);
 }
-
-/* ---------------------------------------------------------------- top bar */
 
 .terra-window-chrome {
   position: relative;
@@ -57,8 +53,6 @@
   user-select: none;
 }
 
-/* With Tauri's overlay title bar, macOS places the native traffic lights over
- * the webview. Reserve their horizontal footprint before chrome content. */
 .terra-shell[data-platform="mac"] .terra-window-chrome {
   padding-left: 80px;
 }
@@ -116,7 +110,6 @@
 
 .terra-window-breadcrumb > *,
 .terra-window-search-slot {
-  /* Text in the chrome must not swallow window drags. */
   pointer-events: none;
 }
 
@@ -246,8 +239,6 @@
   transform-origin: top right;
 }
 
-/* ------------------------------------------------------------------ body */
-
 .terra-shell-body {
   position: relative;
   display: flex;
@@ -319,8 +310,6 @@
   background: var(--terra-border-focus);
 }
 
-/* -------------------------------------------------------------- compact */
-
 .terra-shell-compact-content {
   position: relative;
   display: flex;
@@ -372,8 +361,6 @@
   background: var(--terra-scrim-soft);
   cursor: pointer;
 }
-
-/* -------------------------------------------------------------- inspector */
 
 .terra-right-dock {
   display: flex;

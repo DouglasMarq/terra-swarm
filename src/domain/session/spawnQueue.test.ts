@@ -12,7 +12,7 @@ function deferred<T>() {
 const clock = () => 0;
 
 describe("spawn queue", () => {
-  it("respects concurrency and reports one result per item", async () => {
+  it("Given more items than slots, when the queue runs, then concurrency is respected and each item reports one result", async () => {
     const gate = deferred<void>();
     let active = 0;
     let maximum = 0;
@@ -45,7 +45,7 @@ describe("spawn queue", () => {
     expect(results.map((result) => result.value)).toEqual([2, 4, 6]);
   });
 
-  it("cancels pending items immediately and aborts running items", async () => {
+  it("Given pending and running items, when cancelling, then pending items cancel immediately and running items are aborted", async () => {
     const gate = deferred<void>();
     let signal!: AbortSignal;
     const queue = createSpawnQueue<string, string>({
@@ -70,7 +70,7 @@ describe("spawn queue", () => {
     expect(queue.cancel("missing")).toBe(false);
   });
 
-  it("continues after a runner failure and exposes idle results", async () => {
+  it("Given a runner that fails, when the queue runs, then it continues and exposes the idle results", async () => {
     const onResult = vi.fn();
     const queue = createSpawnQueue<string, string>({
       now: clock,
@@ -87,7 +87,7 @@ describe("spawn queue", () => {
     expect(onResult).toHaveBeenCalledTimes(2);
   });
 
-  it("given a clock, stamps start and finish times from it", async () => {
+  it("Given a clock, when items run, then start and finish times are stamped from it", async () => {
     let time = 100;
     const queue = createSpawnQueue<string, string>({ now: () => time++, run: (input) => input });
     expect(await queue.enqueue("one", "a")).toMatchObject({ status: "succeeded", startedAt: 100, finishedAt: 101 });

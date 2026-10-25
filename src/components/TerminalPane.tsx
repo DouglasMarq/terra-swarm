@@ -21,7 +21,7 @@ import { createRetryingWriter } from "../lib/terminalInputWriter";
 import { isPlainShiftEnter } from "../lib/terminalKeys";
 import { throttle } from "../lib/async/throttle";
 import { Maximize2, Minimize2, GitBranch } from "lucide-react";
-import { t as translateNow, useT } from "../i18n";
+import { translateNow, useT } from "../i18n";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { terminalFontStack } from "../lib/terminalFonts";
 import { detectDropPlatform, dropPointToClient, formatDroppedPaths } from "../domain/terminalDrop";
@@ -32,50 +32,38 @@ import "./terminal-pane.css";
 import { FULL_PERCENT } from "../lib/math/percent";
 
 const SCROLLBACK_LINES = 10_000;
-/** Minimum gap between console warnings for one terminal's failed IPC calls. */
 const WARN_THROTTLE_MS = 2000;
 
 interface Props {
   id: string;
   command: string;
   fontSize: number;
-  exited: boolean;
-  expanded: boolean;
+  hasExited: boolean;
+  isExpanded: boolean;
   basis: number;
   height: string;
-  entering: boolean;
-  dragOver: boolean;
+  isEntering: boolean;
+  isDragOver: boolean;
   notifications: number;
   contextUsed?: number;
   title?: string;
   branch?: string;
-  /** Branch of the agent's own git worktree, when it is isolated. */
   worktreeBranch?: string;
-  /** The agent's team role, already translated. */
   roleLabel?: string;
-  /** Opens the review of the worktree's changes. */
   onOpenReview?: () => void;
-  /** Task title (or name) shown first; falls back to the command. */
   label?: string;
-  /** "claude 2" / "Lyra · claude" under or beside the label. */
   tag?: string;
-  /** Latest unread message from the agent, shown in the attention strip. */
   attentionMessage?: string | null;
-  /** Lifecycle actions for the "…" menu. */
   menu?: PaneMenuGroups;
   onClearNotifications: () => void;
-  focused: boolean;
+  isFocused: boolean;
   onFocus: () => void;
   onToggleExpand: () => void;
   onRestart: () => void;
-  /** Legacy close means the visual terminal close action. */
   onClose: () => void;
-  /** Detach a tab without ending its PTY, when the orchestration model is on. */
   onDetach?: () => void;
-  /** Explicitly destructive PTY action; intentionally separate from detach. */
   onKill?: () => void;
-  /** Hidden tabs remain mounted so switching tabs never kills a PTY. */
-  hidden?: boolean;
+  isHidden?: boolean;
 }
 
 export function TerminalPane(props: Props) {
@@ -83,23 +71,23 @@ export function TerminalPane(props: Props) {
     id,
     command,
     fontSize,
-    exited,
-    expanded,
+    hasExited,
+    isExpanded,
     basis,
     height,
-    entering,
-    dragOver,
+    isEntering,
+    isDragOver,
     notifications,
     contextUsed,
     title,
-    focused,
-    hidden = false,
+    isFocused,
+    isHidden = false,
     label,
     tag,
     attentionMessage,
     menu,
   } = props;
-  const t = useT();
+  const translate = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<(() => void) | null>(null);
@@ -107,14 +95,10 @@ export function TerminalPane(props: Props) {
   const appliedFontSize = useRef(fontSize);
   const fontFamily = terminalFontStack(usePreferencesStore((state) => state.terminalFontFamily));
   const appliedFontFamily = useRef(fontFamily);
-  // Keep the long-lived xterm effect aware of the latest backend lifecycle.
-  // The component intentionally survives a PTY exit so it can show scrollback
-  // and restart controls, but geometry observers must stop addressing a PTY
-  // that no longer exists.
-  const exitedRef = useRef(exited);
-  exitedRef.current = exited;
-  const hiddenRef = useRef(hidden);
-  hiddenRef.current = hidden;
+  const exitedRef = useRef(hasExited);
+  exitedRef.current = hasExited;
+  const hiddenRef = useRef(isHidden);
+  hiddenRef.current = isHidden;
   const onFocusRef = useRef(props.onFocus);
   onFocusRef.current = props.onFocus;
   const [isDropTarget, setIsDropTarget] = useState(false);
@@ -144,8 +128,8 @@ export function TerminalPane(props: Props) {
     term.open(container);
     registerTerminal(id, term);
 
-    let disposed = false;
-    const isStopped = (): boolean => disposed || exitedRef.current;
+    let isDisposed = false;
+    const isStopped = (): boolean => isDisposed || exitedRef.current;
     const warnThrottled = throttle(
       (what: string, err: unknown) => console.warn(`[terminal ${id}] ${what} failed:`, err),
       WARN_THROTTLE_MS,
@@ -163,21 +147,13 @@ export function TerminalPane(props: Props) {
     });
 
     const resizeQueue = createTerminalResizeQueue(({ cols, rows }) => {
-      // A skipped resize must reject rather than resolve: the queue only
-      // remembers dimensions after a successful send, and a PTY exit can be
-      // followed by a restart with the same geometry.
       if (exitedRef.current) return Promise.reject(new Error("terminal exited"));
       return api.resizeTerminal(id, cols, rows).catch((err) => {
-        // An exit event can race an in-flight resize. Once the UI knows the
-        // process is gone this is expected lifecycle, not an actionable error.
         if (!exitedRef.current) warnThrottled("resize", err);
         throw err;
       });
     });
 
-    // FitAddon intentionally returns a minimum 2x1 geometry even for a
-    // display:none parent. Check the real box first so a zero-sized mount
-    // never poisons the PTY with a tiny resize.
     const fitAndSend = (): void => {
       try {
         if (exitedRef.current || !hasVisibleBox(container)) return;
@@ -185,11 +161,7 @@ export function TerminalPane(props: Props) {
         fit.fit();
         if (term.cols < 1 || term.rows < 1) return;
         resizeQueue.request({ cols: term.cols, rows: term.rows });
-      } catch {
-        // The renderer can still be measuring while the pane is entering the
-        // layout. The observer/focus/visibility signals will schedule a new
-        // coalesced fit once a real box exists.
-      }
+      } catch {}
     };
 
     const fitScheduler = createFitScheduler(fitAndSend);
@@ -229,7 +201,7 @@ export function TerminalPane(props: Props) {
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
-      disposed = true;
+      isDisposed = true;
       output.dispose();
       fitScheduler.dispose();
       resizeQueue.dispose();
@@ -246,8 +218,6 @@ export function TerminalPane(props: Props) {
     };
   }, [id]);
 
-  // Every pane hears every drop; only the one under the cursor takes it, and
-  // the paths are pasted as a native terminal does so agents see the file.
   useEffect(() => {
     const platform = detectDropPlatform();
     const isUnderCursor = (position: { x: number; y: number }): boolean => {
@@ -256,10 +226,10 @@ export function TerminalPane(props: Props) {
       const target = document.elementFromPoint(point.x, point.y);
       return Boolean(target && rootRef.current?.contains(target));
     };
-    let disposed = false;
+    let isDisposed = false;
     let unlisten: UnlistenFn | null = null;
     onFileDrop((event) => {
-      if (disposed) return;
+      if (isDisposed) return;
       if (event.type === "leave") {
         setIsDropTarget(false);
         return;
@@ -278,18 +248,18 @@ export function TerminalPane(props: Props) {
       term.paste(text);
     })
       .then((un) => {
-        if (disposed) un();
+        if (isDisposed) un();
         else unlisten = un;
       })
       .catch((err) => console.warn(`[terminal ${id}] file drop unavailable:`, err));
     return () => {
-      disposed = true;
+      isDisposed = true;
       unlisten?.();
       setIsDropTarget(false);
     };
   }, [id]);
 
-  const previousExited = useRef(exited);
+  const previousExited = useRef(hasExited);
 
   useEffect(() => {
     if (appliedFontSize.current === fontSize) return;
@@ -309,47 +279,41 @@ export function TerminalPane(props: Props) {
     fitRef.current?.();
   }, [fontFamily, id]);
 
-  // A hidden workbench tab can keep the same box dimensions while its
-  // `display` state changes. ResizeObserver is not guaranteed to report that
-  // transition, so treat visibility/focus/preset changes as explicit fit
-  // signals as well.
   useEffect(() => {
-    const resumed = previousExited.current && !exited;
-    previousExited.current = exited;
-    if (resumed) resizeQueueRef.current?.reset();
+    const isResumed = previousExited.current && !hasExited;
+    previousExited.current = hasExited;
+    if (isResumed) resizeQueueRef.current?.reset();
     fitRef.current?.();
-  }, [basis, exited, expanded, focused, height, hidden, id]);
+  }, [basis, hasExited, isExpanded, isFocused, height, isHidden, id]);
 
   const reported = useMcpStore((state) => state.statuses[id]?.state);
   const kind = agentKind(command);
   const primary = label || kind;
   const secondary = tag && tag !== primary ? tag : null;
-  const attention = notifications > 0 && Boolean(attentionMessage);
-  const status = deriveAgentStatus({ exited, notifications, contextUsed: contextUsed ?? undefined, reported });
+  const hasAttention = notifications > 0 && Boolean(attentionMessage);
+  const status = deriveAgentStatus({ hasExited, notifications, contextUsed: contextUsed ?? undefined, reported });
 
   return (
     <div
       ref={rootRef}
       data-term-id={id}
-      className={`pane ${expanded ? "expanded" : ""} ${entering ? "pane-enter" : ""} ${
-        dragOver ? "drag-over" : ""
-      } ${focused ? "focused" : ""} ${isDropTarget ? "drop-target" : ""}`}
+      className={`pane ${isExpanded ? "expanded" : ""} ${isEntering ? "pane-enter" : ""} ${
+        isDragOver ? "drag-over" : ""
+      } ${isFocused ? "focused" : ""} ${isDropTarget ? "drop-target" : ""}`}
       data-status={status}
       style={{
         flex: `1 1 calc(${basis}% - 12px)`,
         height,
-        display: hidden ? "none" : undefined,
+        display: isHidden ? "none" : undefined,
       }}
-      aria-hidden={hidden}
+      aria-hidden={isHidden}
       onMouseDown={() => {
-        if (hidden) return;
+        if (isHidden) return;
         props.onFocus();
         if (notifications > 0) props.onClearNotifications();
       }}
-      // Tabbing into the terminal must move focus too, or ⌘Enter and the
-      // other focused-pane shortcuts act on the previously clicked pane.
       onFocusCapture={() => {
-        if (!hidden && !focused) props.onFocus();
+        if (!isHidden && !isFocused) props.onFocus();
       }}
     >
       <div className="pane-header">
@@ -361,7 +325,7 @@ export function TerminalPane(props: Props) {
           <button
             type="button"
             className="terra-tag pane-worktree"
-            title={t("pane.worktree", { branch: props.worktreeBranch })}
+            title={translate("pane.worktree", { branch: props.worktreeBranch })}
             disabled={!props.onOpenReview}
             onClick={(event) => {
               event.stopPropagation();
@@ -377,10 +341,10 @@ export function TerminalPane(props: Props) {
             {title}
           </span>
         ) : <span className="pane-title" />}
-        {contextUsed != null && !exited && (
+        {contextUsed != null && !hasExited && (
           <span
             className={`pane-ctx ${contextUsed >= CONTEXT_ATTENTION_PERCENT ? "high" : contextUsed >= CONTEXT_WARNING_PERCENT ? "mid" : ""}`}
-            title={t("pane.contextUsed", { count: contextUsed })}
+            title={translate("pane.contextUsed", { count: contextUsed })}
           >
             <span className="pane-ctx-bar">
               <span style={{ transform: `scaleX(${contextUsed / FULL_PERCENT})` }} />
@@ -392,37 +356,37 @@ export function TerminalPane(props: Props) {
           <button
             type="button"
             className="pane-btn"
-            aria-label={expanded ? t("pane.restore") : t("pane.maximize")}
-            title={expanded ? t("pane.restore") : t("pane.maximize")}
-            onMouseDown={(e) => e.stopPropagation()}
+            aria-label={isExpanded ? translate("pane.restore") : translate("pane.maximize")}
+            title={isExpanded ? translate("pane.restore") : translate("pane.maximize")}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={props.onToggleExpand}
           >
-            {expanded ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
+            {isExpanded ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
           </button>
-          {menu ? <PaneActionsMenu label={t("pane.moreActions")} groups={menu} /> : null}
+          {menu ? <PaneActionsMenu label={translate("pane.moreActions")} groups={menu} /> : null}
         </div>
       </div>
       <div className="pane-body" ref={containerRef} />
-      {attention && !exited ? (
+      {hasAttention && !hasExited ? (
         <div className="pane-attention" role="status">
           <span className="pane-attention-message">{attentionMessage}</span>
           <button
             type="button"
             className="terra-button"
-            onMouseDown={(e) => e.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={props.onClearNotifications}
           >
-            {t("pane.markRead")}
+            {translate("pane.markRead")}
           </button>
         </div>
       ) : null}
-      {exited && (
+      {hasExited && (
         <div className="pane-overlay" role="status">
-          <strong>{t("pane.exited")}</strong>
-          <span>{t("pane.exitedDetail")}</span>
+          <strong>{translate("pane.exited")}</strong>
+          <span>{translate("pane.exitedDetail")}</span>
           <div className="pane-overlay-actions">
-            <button type="button" className="terra-button" onClick={props.onRestart}>{t("pane.restart")}</button>
-            <button type="button" className="terra-button" onClick={props.onClose}>{t("pane.closePane")}</button>
+            <button type="button" className="terra-button" onClick={props.onRestart}>{translate("pane.restart")}</button>
+            <button type="button" className="terra-button" onClick={props.onClose}>{translate("pane.closePane")}</button>
           </div>
         </div>
       )}

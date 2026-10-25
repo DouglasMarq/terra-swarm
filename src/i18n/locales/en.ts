@@ -1,4 +1,3 @@
-/** English — the source dictionary. Every key here must exist in pt-BR.ts. */
 export const en = {
   common: {
     agent: "agent",

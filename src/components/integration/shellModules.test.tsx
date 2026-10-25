@@ -54,12 +54,12 @@ const inspectorTarget: InspectorTarget = {
   cwd: "/work/alpha",
   state: "ativo",
   contextUsage: null,
-  detached: false,
+  isDetached: false,
 };
 
 describe("useShellShortcuts", () => {
-  function renderShortcuts(dockOpen: boolean) {
-    const handlers = { toggleSidebar: vi.fn(), dockOpen, setDockOpen: vi.fn(), setCommandPaletteOpen: vi.fn() };
+  function renderShortcuts(isDockOpen: boolean) {
+    const handlers = { toggleSidebar: vi.fn(), isDockOpen, setDockOpen: vi.fn(), setCommandPaletteOpen: vi.fn() };
     renderHook(() => useShellShortcuts(handlers));
     return handlers;
   }
@@ -97,7 +97,7 @@ describe("useFullscreenExit", () => {
 
   it("Given a fullscreen container, when Escape is pressed outside a terminal, then it leaves fullscreen", () => {
     const setContainerFullscreen = vi.fn();
-    renderHook(() => useFullscreenExit({ snapshot: snapshotWithFullscreen(["container-a"]), dockOpen: false, setContainerFullscreen }));
+    renderHook(() => useFullscreenExit({ snapshot: snapshotWithFullscreen(["container-a"]), isDockOpen: false, setContainerFullscreen }));
 
     pressKey({ key: "Escape" }, document.body);
 
@@ -109,7 +109,7 @@ describe("useFullscreenExit", () => {
     const terminal = document.createElement("div");
     terminal.className = "xterm";
     document.body.append(terminal);
-    renderHook(() => useFullscreenExit({ snapshot: snapshotWithFullscreen(["container-a"]), dockOpen: false, setContainerFullscreen }));
+    renderHook(() => useFullscreenExit({ snapshot: snapshotWithFullscreen(["container-a"]), isDockOpen: false, setContainerFullscreen }));
 
     pressKey({ key: "Escape" }, terminal);
 
@@ -120,12 +120,12 @@ describe("useFullscreenExit", () => {
     const setContainerFullscreen = vi.fn();
     const snapshot = snapshotWithFullscreen(["container-a"]);
     const { rerender } = renderHook(
-      ({ dockOpen }) => useFullscreenExit({ snapshot, dockOpen, setContainerFullscreen }),
-      { initialProps: { dockOpen: false } },
+      ({ isDockOpen }) => useFullscreenExit({ snapshot, isDockOpen, setContainerFullscreen }),
+      { initialProps: { isDockOpen: false } },
     );
 
     expect(setContainerFullscreen).not.toHaveBeenCalled();
-    rerender({ dockOpen: true });
+    rerender({ isDockOpen: true });
 
     expect(setContainerFullscreen).toHaveBeenCalledWith("container-a", false);
   });

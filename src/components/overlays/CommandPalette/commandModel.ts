@@ -1,4 +1,4 @@
-import { t } from "../../../i18n";
+import { translateNow } from "../../../i18n";
 import type { AgentInfo } from "../../../domain/agent.model";
 import type { TerminalMeta } from "../../../domain/terminal.model";
 import type { Workspace, WorkspaceGroup } from "../../../domain/workspace.model";
@@ -28,7 +28,6 @@ export interface FocusedAgentContext {
   workspaceName: string;
   terminalId: string;
   command: string;
-  /** Readable agent label ("Animações · claude 2"); falls back to the command. */
   label?: string;
 }
 
@@ -54,15 +53,11 @@ export interface CommandPaletteData {
   recentCommandIds?: readonly string[];
   hasDetachedTabs?: boolean;
   hasRecentlyClosedTabs?: boolean;
-  dockOpen?: boolean;
-  voiceEnabled?: boolean;
-  /** True only while the runtime is actively capturing audio. */
-  voiceRecording?: boolean;
-  /** Task title / numbered kind per terminal id (domain/agentLabels). */
+  isDockOpen?: boolean;
+  isVoiceEnabled?: boolean;
+  isVoiceRecording?: boolean;
   agentLabels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
-  /** Saved sessions waiting to be resumed. */
   resumeCount?: number;
-  /** Agents whose process has exited; only these can be resumed in place. */
   exitedTerminalIds?: readonly string[];
 }
 
@@ -79,13 +74,10 @@ export interface CommandPaletteCallbacks {
   onStartVoice?: () => void;
   onStopVoice?: () => void;
   onExportWorkspace?: () => void;
-  /** Import is intentionally not called by executeCommand; use the typed confirmation request. */
   onImportWorkspace?: () => void;
-  /** Reattach a detached terminal; distinct from reopening a closed workspace tab. */
   onReattachTerminal?: () => void;
   onReopenTab?: () => void;
   onOpenResume?: () => void;
-  /** The prompt library or the team templates. */
   onOpenLibrary?: (dialog: "prompts" | "team") => void;
   onFocusedAgentAction?: (action: FocusedAgentAction, context: FocusedAgentContext) => void;
 }
@@ -139,12 +131,10 @@ export interface CommandDescriptor {
   keywords: readonly string[];
   icon: CommandIconName;
   shortcut?: string;
-  disabled?: boolean;
+  isDisabled?: boolean;
   intent: CommandIntent;
   confirmation?: CommandConfirmRequest;
-  /** Search text is exposed for a host that wants to render its own list. */
   searchText: string;
-  /** The source command id when this item is mirrored under Recentes. */
   recentOf?: string;
 }
 
@@ -167,13 +157,12 @@ const COMMAND_GROUP_ORDER: readonly CommandGroupId[] = [
   "settings",
 ];
 
-/** Group headings, translated on read so the palette follows the locale. */
 const COMMAND_GROUP_LABELS: Readonly<Record<CommandGroupId, string>> = {
-  get recent() { return t("palette.groups.recent"); },
-  get navigation() { return t("palette.groups.navigation"); },
-  get create() { return t("palette.groups.create"); },
-  get agent() { return t("palette.groups.agent"); },
-  get settings() { return t("palette.groups.settings"); },
+  get recent() { return translateNow("palette.groups.recent"); },
+  get navigation() { return translateNow("palette.groups.navigation"); },
+  get create() { return translateNow("palette.groups.create"); },
+  get agent() { return translateNow("palette.groups.agent"); },
+  get settings() { return translateNow("palette.groups.settings"); },
 };
 
 
@@ -195,7 +184,7 @@ function command(
 }
 
 function workspaceLabel(workspace: Workspace): string {
-  return workspace.name.trim() || workspace.cwd || t("palette.unnamedProject");
+  return workspace.name.trim() || workspace.cwd || translateNow("palette.unnamedProject");
 }
 
 function terminalLabel(terminal: TerminalMeta): string {
@@ -242,7 +231,7 @@ function destructiveRequest(candidate: DestructiveFocusedCommand, context: Focus
     kind: candidate.kind,
     commandId: candidate.id,
     title: candidate.title,
-    description: t("palette.descriptionNeedsConfirm", { description: candidate.description }),
+    description: translateNow("palette.descriptionNeedsConfirm", { description: candidate.description }),
     resourceId: context.terminalId,
     resourceLabel: `${context.label ?? context.command} · ${context.workspaceName}`,
     workspaceId: context.workspaceId,
@@ -273,8 +262,8 @@ function routeCommands(): CommandDescriptor[] {
   return [
     command({
       id: "navigate:workbench",
-      label: t("palette.goWorkbench"),
-      description: t("palette.goWorkbenchDesc"),
+      label: translateNow("palette.goWorkbench"),
+      description: translateNow("palette.goWorkbenchDesc"),
       group: "navigation",
       keywords: ["terminal", "projetos", "projects", "workspace", "bancada", "workbench"],
       icon: "workbench",
@@ -282,8 +271,8 @@ function routeCommands(): CommandDescriptor[] {
     }),
     command({
       id: "navigate:fleet",
-      label: t("palette.openFleet"),
-      description: t("palette.openFleetDesc"),
+      label: translateNow("palette.openFleet"),
+      description: translateNow("palette.openFleetDesc"),
       group: "navigation",
       keywords: ["fleet", "frota", "agentes", "status"],
       icon: "fleet",
@@ -291,8 +280,8 @@ function routeCommands(): CommandDescriptor[] {
     }),
     command({
       id: "navigate:board",
-      label: t("palette.openBoard"),
-      description: t("palette.openBoardDesc"),
+      label: translateNow("palette.openBoard"),
+      description: translateNow("palette.openBoardDesc"),
       group: "navigation",
       keywords: ["board", "kanban", "quadro", "tarefas", "tasks"],
       icon: "board",
@@ -300,8 +289,8 @@ function routeCommands(): CommandDescriptor[] {
     }),
     command({
       id: "navigate:settings",
-      label: t("palette.openSettings"),
-      description: t("palette.openSettingsDesc"),
+      label: translateNow("palette.openSettings"),
+      description: translateNow("palette.openSettingsDesc"),
       group: "navigation",
       keywords: ["configuracoes", "configurações", "preferencias", "preferências", "settings"],
       icon: "settings",
@@ -318,8 +307,8 @@ function openGroupCommand(group: WorkspaceGroup): CommandDescriptor {
   const name = groupName(group);
   return command({
     id: `open-group:${safeIdPart(group.id)}`,
-    label: t("palette.openGroup", { name }),
-    description: t("palette.openGroupDesc"),
+    label: translateNow("palette.openGroup", { name }),
+    description: translateNow("palette.openGroupDesc"),
     group: "navigation",
     keywords: [name, "grupo", "projeto", "abrir"],
     icon: "group",
@@ -331,8 +320,8 @@ function openWorkspaceCommand(workspace: Workspace): CommandDescriptor {
   const name = workspaceLabel(workspace);
   return command({
     id: `open-workspace:${safeIdPart(workspace.id)}`,
-    label: t("palette.openProject", { name }),
-    description: workspace.cwd || t("palette.openProjectDesc"),
+    label: translateNow("palette.openProject", { name }),
+    description: workspace.cwd || translateNow("palette.openProjectDesc"),
     group: "navigation",
     keywords: [name, workspace.cwd, "projeto", "workspace", "abrir"],
     icon: "folder",
@@ -348,8 +337,8 @@ function openTerminalCommand(data: CommandPaletteData, workspace: Workspace, ter
   const tag = agentLabel?.tag ?? terminalName;
   return command({
     id: `open-terminal:${safeIdPart(workspace.id)}:${safeIdPart(terminal.id)}`,
-    label: agentLabel ? `${primary} · ${name}` : t("palette.openAgent", { name: terminalName, project: name }),
-    description: agentLabel ? t("palette.openAgentDescTagged", { tag }) : t("palette.openAgentDesc"),
+    label: agentLabel ? `${primary} · ${name}` : translateNow("palette.openAgent", { name: terminalName, project: name }),
+    description: agentLabel ? translateNow("palette.openAgentDescTagged", { tag }) : translateNow("palette.openAgentDesc"),
     group: "navigation",
     keywords: [terminalName, primary, tag, name, workspace.cwd, "agente", "terminal", "focar"],
     icon: "terminal",
@@ -369,8 +358,8 @@ function createCommands(data: CommandPaletteData, focusedWorkspaceId: string | n
   return [
     command({
       id: "create:project",
-      label: t("palette.newProject"),
-      description: t("palette.newProjectDesc"),
+      label: translateNow("palette.newProject"),
+      description: translateNow("palette.newProjectDesc"),
       group: "create",
       keywords: ["criar", "projeto", "workspace", "novo"],
       icon: "plus",
@@ -378,8 +367,8 @@ function createCommands(data: CommandPaletteData, focusedWorkspaceId: string | n
     }),
     command({
       id: "create:group",
-      label: t("palette.newGroup"),
-      description: t("palette.newGroupDesc"),
+      label: translateNow("palette.newGroup"),
+      description: translateNow("palette.newGroupDesc"),
       group: "create",
       keywords: ["criar", "grupo", "organizar", "novo"],
       icon: "group",
@@ -387,30 +376,30 @@ function createCommands(data: CommandPaletteData, focusedWorkspaceId: string | n
     }),
     command({
       id: "create:agent",
-      label: hasAgentWorkspace ? t("palette.newAgent") : t("palette.newAgentNoProject"),
+      label: hasAgentWorkspace ? translateNow("palette.newAgent") : translateNow("palette.newAgentNoProject"),
       description: hasAgentWorkspace
-        ? t("palette.newAgentDesc")
-        : t("palette.pickProjectFirst"),
+        ? translateNow("palette.newAgentDesc")
+        : translateNow("palette.pickProjectFirst"),
       group: "create",
       keywords: ["criar", "agente", "terminal", "novo"],
       icon: "agent",
-      disabled: !hasAgentWorkspace,
+      isDisabled: !hasAgentWorkspace,
       intent: { kind: "create-agent", workspaceId: focusedWorkspaceId },
     }),
     command({
       id: "create:team",
-      label: t("palette.startTeam"),
-      description: hasAgentWorkspace ? t("palette.startTeamDesc") : t("palette.pickProjectFirst"),
+      label: translateNow("palette.startTeam"),
+      description: hasAgentWorkspace ? translateNow("palette.startTeamDesc") : translateNow("palette.pickProjectFirst"),
       group: "create",
       keywords: ["time", "team", "orquestrador", "orchestrator", "papéis", "roles", "template"],
       icon: "agent",
-      disabled: !hasAgentWorkspace,
+      isDisabled: !hasAgentWorkspace,
       intent: { kind: "open-library", dialog: "team" },
     }),
     command({
       id: "agent:prompts",
-      label: t("palette.promptLibrary"),
-      description: t("palette.promptLibraryDesc"),
+      label: translateNow("palette.promptLibrary"),
+      description: translateNow("palette.promptLibraryDesc"),
       group: "agent",
       keywords: ["prompt", "biblioteca", "library", "salvos", "snippets", "enviar"],
       icon: "agent",
@@ -423,8 +412,8 @@ function createInGroupCommand(group: WorkspaceGroup): CommandDescriptor {
   const name = groupName(group);
   return command({
     id: `create:project:${safeIdPart(group.id)}`,
-    label: t("palette.newProjectIn", { name }),
-    description: t("palette.newProjectInDesc"),
+    label: translateNow("palette.newProjectIn", { name }),
+    description: translateNow("palette.newProjectInDesc"),
     group: "create",
     keywords: ["criar", "projeto", name, "grupo"],
     icon: "folder",
@@ -434,13 +423,13 @@ function createInGroupCommand(group: WorkspaceGroup): CommandDescriptor {
 
 function startAgentLabel(agent: AgentInfo, hasAgentWorkspace: boolean): string {
   const name = agent.label.trim() || agent.id;
-  if (!agent.available) return t("palette.agentUnavailable", { name });
-  return hasAgentWorkspace ? t("palette.startAgent", { name }) : t("palette.startAgentNoProject", { name });
+  if (!agent.available) return translateNow("palette.agentUnavailable", { name });
+  return hasAgentWorkspace ? translateNow("palette.startAgent", { name }) : translateNow("palette.startAgentNoProject", { name });
 }
 
 function startAgentDescription(agent: AgentInfo, hasAgentWorkspace: boolean): string {
-  if (!agent.available) return t("palette.agentUnavailableDesc");
-  return hasAgentWorkspace ? t("palette.startAgentDesc") : t("palette.pickProjectFirst");
+  if (!agent.available) return translateNow("palette.agentUnavailableDesc");
+  return hasAgentWorkspace ? translateNow("palette.startAgentDesc") : translateNow("palette.pickProjectFirst");
 }
 
 function startAgentCommand(agent: AgentInfo, focusedWorkspaceId: string | null): CommandDescriptor {
@@ -453,7 +442,7 @@ function startAgentCommand(agent: AgentInfo, focusedWorkspaceId: string | null):
     group: "create",
     keywords: [agentName, agent.id, "agente", "iniciar", "disponível", "disponivel"],
     icon: "agent",
-    disabled: !(agent.available && hasAgentWorkspace),
+    isDisabled: !(agent.available && hasAgentWorkspace),
     intent: {
       kind: "create-agent",
       workspaceId: focusedWorkspaceId,
@@ -471,43 +460,43 @@ function destructiveFocusedCommands(context: FocusedAgentContext): readonly Dest
   return [
     {
       id: "agent:interrupt-focused",
-      label: t("palette.interrupt", { name: contextLabel }),
-      description: t("palette.interruptDesc"),
+      label: translateNow("palette.interrupt", { name: contextLabel }),
+      description: translateNow("palette.interruptDesc"),
       keywords: ["interromper", "parar", "cancelar", "agente"],
       icon: "stop",
       kind: "interrupt-agent",
       action: "interrupt",
-      title: t("palette.interruptTitle"),
+      title: translateNow("palette.interruptTitle"),
     },
     {
       id: "agent:restart-focused",
-      label: t("palette.restart", { name: contextLabel }),
-      description: t("palette.restartDesc"),
+      label: translateNow("palette.restart", { name: contextLabel }),
+      description: translateNow("palette.restartDesc"),
       keywords: ["reiniciar", "restart", "agente"],
       icon: "restart",
       kind: "restart-agent",
       action: "restart",
-      title: t("palette.restartTitle"),
+      title: translateNow("palette.restartTitle"),
     },
     {
       id: "agent:stop-focused",
-      label: t("palette.stop", { name: contextLabel }),
-      description: t("palette.stopDesc"),
+      label: translateNow("palette.stop", { name: contextLabel }),
+      description: translateNow("palette.stopDesc"),
       keywords: ["encerrar", "parar", "stop", "matar", "kill", "agente"],
       icon: "stop",
       kind: "stop-agent",
       action: "stop",
-      title: t("palette.stopTitle"),
+      title: translateNow("palette.stopTitle"),
     },
     {
       id: "agent:clear-focused",
-      label: t("palette.clear", { name: contextLabel }),
-      description: t("palette.clearDesc"),
+      label: translateNow("palette.clear", { name: contextLabel }),
+      description: translateNow("palette.clearDesc"),
       keywords: ["limpar", "histórico", "historico", "scrollback", "agente"],
       icon: "clear",
       kind: "clear-scrollback",
       action: "clear-scrollback",
-      title: t("palette.clearTitle"),
+      title: translateNow("palette.clearTitle"),
     },
   ];
 }
@@ -528,8 +517,8 @@ function destructiveCommand(candidate: DestructiveFocusedCommand, context: Focus
 function focusAgentCommand(context: FocusedAgentContext): CommandDescriptor {
   return command({
     id: "agent:open-focused",
-    label: t("palette.focus", { name: contextLabelOf(context) }),
-    description: t("palette.focusDesc"),
+    label: translateNow("palette.focus", { name: contextLabelOf(context) }),
+    description: translateNow("palette.focusDesc"),
     group: "agent",
     keywords: ["agente", "focar", "selecionado", context.command, context.workspaceName],
     icon: "terminal",
@@ -540,8 +529,8 @@ function focusAgentCommand(context: FocusedAgentContext): CommandDescriptor {
 function resumeAgentCommand(context: FocusedAgentContext): CommandDescriptor {
   return command({
     id: "agent:resume-focused",
-    label: t("palette.resume", { name: contextLabelOf(context) }),
-    description: t("palette.resumeDesc"),
+    label: translateNow("palette.resume", { name: contextLabelOf(context) }),
+    description: translateNow("palette.resumeDesc"),
     group: "agent",
     keywords: ["retomar", "resume", "continuar", "agente", context.command],
     icon: "play",
@@ -551,8 +540,6 @@ function resumeAgentCommand(context: FocusedAgentContext): CommandDescriptor {
 
 function focusedAgentCommands(data: CommandPaletteData, context: FocusedAgentContext | null): CommandDescriptor[] {
   if (!context) return [];
-  // Resuming spawns into the same id, which the backend refuses while the
-  // process is alive, so it is offered only once the agent has exited.
   const isExited = data.exitedTerminalIds?.includes(context.terminalId) ?? false;
   return [
     focusAgentCommand(context),
@@ -563,21 +550,21 @@ function focusedAgentCommands(data: CommandPaletteData, context: FocusedAgentCon
 
 function voiceCommand(data: CommandPaletteData): CommandDescriptor {
   return command(
-    data.voiceEnabled === false
+    data.isVoiceEnabled === false
       ? {
           id: "settings:voice",
-          label: t("palette.voiceSetup"),
-          description: t("palette.voiceSetupDesc"),
+          label: translateNow("palette.voiceSetup"),
+          description: translateNow("palette.voiceSetupDesc"),
           group: "settings",
           keywords: ["voz", "voice", "microfone", "configurar", "ativar"],
           icon: "voice",
           intent: { kind: "voice-settings" },
         }
-      : data.voiceRecording
+      : data.isVoiceRecording
         ? {
             id: "voice:stop",
-            label: t("palette.voiceStop"),
-            description: t("palette.voiceStopDesc"),
+            label: translateNow("palette.voiceStop"),
+            description: translateNow("palette.voiceStopDesc"),
             group: "settings",
             keywords: ["voz", "voice", "microfone", "parar", "gravar", "captura"],
             icon: "voice",
@@ -585,8 +572,8 @@ function voiceCommand(data: CommandPaletteData): CommandDescriptor {
           }
         : {
             id: "voice:start",
-            label: t("palette.voiceStart"),
-            description: t("palette.voiceStartDesc"),
+            label: translateNow("palette.voiceStart"),
+            description: translateNow("palette.voiceStartDesc"),
             group: "settings",
             keywords: ["voz", "voice", "microfone", "iniciar", "gravar", "captura"],
             icon: "voice",
@@ -599,8 +586,8 @@ function snapshotCommands(): CommandDescriptor[] {
   return [
     command({
       id: "settings:export",
-      label: t("palette.export"),
-      description: t("palette.exportDesc"),
+      label: translateNow("palette.export"),
+      description: translateNow("palette.exportDesc"),
       group: "settings",
       keywords: ["exportar", "backup", "snapshot", "salvar", "workspace"],
       icon: "export",
@@ -608,8 +595,8 @@ function snapshotCommands(): CommandDescriptor[] {
     }),
     command({
       id: "settings:import",
-      label: t("palette.import"),
-      description: t("palette.importDesc"),
+      label: translateNow("palette.import"),
+      description: translateNow("palette.importDesc"),
       group: "settings",
       keywords: ["importar", "restaurar", "snapshot", "backup", "workspace"],
       icon: "import",
@@ -617,10 +604,10 @@ function snapshotCommands(): CommandDescriptor[] {
       confirmation: {
         kind: "import-snapshot",
         commandId: "settings:import",
-        title: t("palette.importTitle"),
-        description: t("palette.importConfirm"),
+        title: translateNow("palette.importTitle"),
+        description: translateNow("palette.importConfirm"),
         resourceId: "workspace-snapshot",
-        resourceLabel: t("palette.currentWorkspace"),
+        resourceLabel: translateNow("palette.currentWorkspace"),
       },
     }),
   ];
@@ -630,32 +617,32 @@ function restoreCommands(data: CommandPaletteData): CommandDescriptor[] {
   return [
     command({
       id: "settings:reattach-terminal",
-      label: t("palette.reattach"),
-      description: t("palette.reattachDesc"),
+      label: translateNow("palette.reattach"),
+      description: translateNow("palette.reattachDesc"),
       group: "settings",
       keywords: ["reanexar", "reattach", "terminal", "destacado", "anexar"],
       icon: "reopen",
-      disabled: !data.hasDetachedTabs,
+      isDisabled: !data.hasDetachedTabs,
       intent: { kind: "reattach-terminal" },
     }),
     command({
       id: "settings:resume-sessions",
-      label: t("palette.resumeSessions"),
-      description: t("palette.resumeSessionsDesc", { count: data.resumeCount ?? 0 }),
+      label: translateNow("palette.resumeSessions"),
+      description: translateNow("palette.resumeSessionsDesc", { count: data.resumeCount ?? 0 }),
       group: "settings",
       keywords: ["retomar", "sessões", "resume", "continuar", "abertura"],
       icon: "agent",
-      disabled: !data.resumeCount,
+      isDisabled: !data.resumeCount,
       intent: { kind: "open-resume" },
     }),
     command({
       id: "settings:reopen-tab",
-      label: t("palette.reopen"),
-      description: t("palette.reopenDesc"),
+      label: translateNow("palette.reopen"),
+      description: translateNow("palette.reopenDesc"),
       group: "settings",
       keywords: ["reabrir", "aba", "tab", "workspace", "fechado"],
       icon: "reopen",
-      disabled: !data.hasRecentlyClosedTabs,
+      isDisabled: !data.hasRecentlyClosedTabs,
       intent: { kind: "reopen-tab" },
     }),
   ];
@@ -665,8 +652,8 @@ function settingsCommands(data: CommandPaletteData): CommandDescriptor[] {
   return [
     command({
       id: "settings:toggle-dock",
-      label: data.dockOpen === false ? t("palette.openInspector") : t("palette.closeInspector"),
-      description: t("palette.toggleInspectorDesc"),
+      label: data.isDockOpen === false ? translateNow("palette.openInspector") : translateNow("palette.closeInspector"),
+      description: translateNow("palette.toggleInspectorDesc"),
       group: "settings",
       keywords: ["dock", "painel", "lateral", "direita", "alternar"],
       icon: "dock",
@@ -679,15 +666,11 @@ function settingsCommands(data: CommandPaletteData): CommandDescriptor[] {
 }
 
 function agentWorkspaceId(data: CommandPaletteData): string | null {
-  // Starting an agent needs a real workspace target. Keep the command visible
-  // so the palette explains what is missing, but never dispatch an empty id
-  // to the host (which would turn into a failed spawn request).
   const focusedWorkspaceId = data.focusedWorkspaceId;
   if (!focusedWorkspaceId) return null;
   return data.workspaces.some((workspace) => workspace.id === focusedWorkspaceId) ? focusedWorkspaceId : null;
 }
 
-/** Build the complete, callback-free command model for the current Terra state. */
 export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[] {
   const groups = data.groups ?? [];
   const agents = data.agents ?? [];
@@ -738,15 +721,11 @@ function unavailable(commandId: string): CommandRunResult {
   return { kind: "unavailable", commandId };
 }
 
-/**
- * Dispatch a command through host callbacks. Confirmation-required intents are
- * returned without invoking any side effect, so the host owns the final dialog.
- */
 export function executeCommand(
   command: CommandDescriptor,
   callbacks: CommandPaletteCallbacks,
 ): CommandRunResult {
-  if (command.disabled) return unavailable(command.id);
+  if (command.isDisabled) return unavailable(command.id);
   if (command.confirmation) {
     return { kind: "requestConfirm", commandId: command.id, request: command.confirmation };
   }

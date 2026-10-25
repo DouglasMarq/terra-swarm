@@ -29,7 +29,7 @@ describe("NavigatorPanel", () => {
   beforeEach(() => useEditorStore.setState({ target: null }));
   afterEach(() => useEditorStore.setState({ target: null }));
 
-  it("filters projects and agents by text and keeps keyboard activation available", async () => {
+  it("Given the navigator, when filtering by text, then projects and agents are filtered and keyboard activation stays available", async () => {
     const user = userEvent.setup();
     const onOpenTerminal = vi.fn();
     render(<NavigatorPanel onOpenTerminal={onOpenTerminal} workspaces={workspaces} groups={groups} />);
@@ -37,7 +37,6 @@ describe("NavigatorPanel", () => {
     const search = screen.getByRole("searchbox", { name: "Buscar projetos e agentes" });
     await user.type(search, "luna");
     expect(screen.getByRole("treeitem", { name: "Agente luna-max" })).toBeInTheDocument();
-    // Search keeps the matching agent's project ancestor visible for context.
     expect(screen.getByRole("treeitem", { name: "Projeto Terra API" })).toBeInTheDocument();
 
     const agent = screen.getByRole("treeitem", { name: "Agente luna-max" });
@@ -56,7 +55,7 @@ describe("NavigatorPanel", () => {
     expect(screen.getByRole("treeitem", { name: "Projeto Terra API" }).style.paddingInlineStart).toBe("24px");
   });
 
-  it("exposes activity tabs and forwards the selected surface", async () => {
+  it("Given the activity tabs, when one is selected, then the selected surface is forwarded", async () => {
     const onActivityChange = vi.fn();
     render(<NavigatorPanel onActivityChange={onActivityChange} workspaces={[]} />);
 
@@ -65,7 +64,7 @@ describe("NavigatorPanel", () => {
     expect(onActivityChange).not.toHaveBeenCalled();
   });
 
-  it("keeps the three activity tabs aligned and keyboard focusable", () => {
+  it("Given the three activity tabs, when they render, then they stay aligned and keyboard focusable", () => {
     const loadFiles = vi.fn(async () => ({ path: "", entries: [], truncated: false, limit: 200 }));
     const loadGitStatus = vi.fn(async () => ({
       branch: "main",
@@ -92,7 +91,7 @@ describe("NavigatorPanel", () => {
     expect(document.activeElement).toBe(tabs[1]);
   });
 
-  it("opens a project on row click and keeps group expansion explicit", async () => {
+  it("Given a project row, when it is clicked, then the project opens and group expansion stays explicit", async () => {
     const user = userEvent.setup();
     const onOpenWorkspace = vi.fn();
     render(<NavigatorPanel onOpenWorkspace={onOpenWorkspace} workspaces={workspaces} groups={groups} />);
@@ -108,7 +107,7 @@ describe("NavigatorPanel", () => {
     expect(screen.getByRole("treeitem", { name: "Projeto Terra API" })).toBeInTheDocument();
   });
 
-  it("does not expose drag affordances and supports project deletion on hover", async () => {
+  it("Given project rows, when hovering one, then no drag affordance shows and the project can be deleted", async () => {
     const user = userEvent.setup();
     const onDeleteWorkspace = vi.fn();
     render(
@@ -125,7 +124,7 @@ describe("NavigatorPanel", () => {
     expect(onDeleteWorkspace).toHaveBeenCalledWith("ws-api");
   });
 
-  it("opens a delete action from the project context menu", async () => {
+  it("Given a project, when opening its context menu, then a delete action is offered", async () => {
     const user = userEvent.setup();
     const onDeleteWorkspace = vi.fn();
     render(
@@ -146,11 +145,11 @@ describe("NavigatorPanel", () => {
     expect(onDeleteWorkspace).toHaveBeenCalledWith("ws-api");
   });
 
-  it("opens the agent actions from the agent row's … button", async () => {
+  it("Given an agent row, when pressing its … button, then the agent actions open", async () => {
     const user = userEvent.setup();
     const restart = vi.fn();
     const agentMenu = vi.fn(() => [[{ id: "restart", label: "Reiniciar", onSelect: restart }]]);
-    render(<NavigatorPanel agentMenu={agentMenu} flatten workspaces={workspaces} groups={groups} />);
+    render(<NavigatorPanel agentMenu={agentMenu} shouldFlatten workspaces={workspaces} groups={groups} />);
 
     const row = screen.getByRole("treeitem", { name: "Agente luna-max" });
     await user.click(within(row).getByRole("button", { name: "Abrir menu de contexto" }));
@@ -161,7 +160,7 @@ describe("NavigatorPanel", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
-  it("keeps group creation contextual to the groups section", async () => {
+  it("Given the groups section, when creating a group, then the action stays in that section", async () => {
     const onCreateGroup = vi.fn();
     render(<NavigatorPanel onCreateGroup={onCreateGroup} workspaces={workspaces} groups={groups} />);
 
@@ -171,7 +170,7 @@ describe("NavigatorPanel", () => {
     expect(onCreateGroup).toHaveBeenCalledTimes(1);
   });
 
-  it("emits durable collapsed ids when a branch is toggled", async () => {
+  it("Given a branch, when it is toggled, then durable collapsed ids are emitted", async () => {
     const user = userEvent.setup();
     const onCollapsedChange = vi.fn();
     render(<NavigatorPanel onCollapsedChange={onCollapsedChange} workspaces={workspaces} groups={groups} />);
@@ -182,7 +181,7 @@ describe("NavigatorPanel", () => {
     expect(onCollapsedChange).toHaveBeenLastCalledWith([]);
   });
 
-  it("only exposes rename for host-supported group and project nodes", () => {
+  it("Given group, project and other nodes, when listing actions, then rename is offered only for host-supported group and project nodes", () => {
     const snapshot: WorkspaceSnapshotV2 = {
       version: 2,
       projects: [{
@@ -243,7 +242,7 @@ describe("NavigatorPanel", () => {
     expect(within(screen.getByRole("treeitem", { name: "Agente luna-max" })).queryByRole("button", { name: "Renomear" })).not.toBeInTheDocument();
   });
 
-  it("renders provider activities only when the host advertises them", async () => {
+  it("Given provider activities, when the host advertises them, then only those are rendered", async () => {
     const user = userEvent.setup();
     const onActivityChange = vi.fn();
     const loadGitStatus = vi.fn(async () => ({
@@ -262,7 +261,7 @@ describe("NavigatorPanel", () => {
     expect(onActivityChange).toHaveBeenCalledWith("git");
   });
 
-  it("loads and expands metadata-only files lazily for the selected project", async () => {
+  it("Given the selected project, when expanding files, then metadata-only files load lazily", async () => {
     const user = userEvent.setup();
     const onSelectWorkspace = vi.fn();
     const loadFiles = vi.fn(async (_workspaceId: string, relativePath: string) => relativePath === ""
@@ -286,12 +285,11 @@ describe("NavigatorPanel", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /Abrir main\.ts/ })).toBeInTheDocument());
     expect(loadFiles).toHaveBeenLastCalledWith("ws-api", "src", 200);
     expect(screen.queryByText("fn main")).not.toBeInTheDocument();
-    // A file opens in the editor; the listing itself never reads contents.
     await user.click(screen.getByRole("button", { name: /Abrir main\.ts/ }));
     expect(useEditorStore.getState().target).toEqual({ workspaceId: "ws-api", path: "src/main.ts" });
   });
 
-  it("renders structured Git status and exposes refresh/project selection", async () => {
+  it("Given a structured Git status, when it renders, then refresh and project selection are exposed", async () => {
     const user = userEvent.setup();
     const onSelectWorkspace = vi.fn();
     const loadGitStatus = vi.fn(async () => ({
@@ -313,7 +311,7 @@ describe("NavigatorPanel", () => {
     expect(loadGitStatus).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps a clean Git status compact without repeated empty sections", async () => {
+  it("Given a clean Git status, when it renders, then it stays compact without repeated empty sections", async () => {
     const loadGitStatus = vi.fn(async () => ({
       branch: "main",
       ahead: 0,

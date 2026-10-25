@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { translateNow } from "../../i18n";
 import { normalizeSearchText } from "../../lib/text/normalizeSearchText";
 
 export const SETTINGS_SECTION_IDS = [
@@ -15,7 +15,6 @@ export type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number];
 
 export interface SettingsSectionDefinition {
   id: SettingsSectionId;
-  /** Translated on read, so the current locale always wins. */
   readonly label: string;
   readonly description: string;
   keywords: readonly string[];
@@ -26,15 +25,14 @@ function section(id: SettingsSectionId, keywords: readonly string[]): SettingsSe
     id,
     keywords,
     get label() {
-      return t(`settings.sections.${id}.label` as const);
+      return translateNow(`settings.sections.${id}.label` as const);
     },
     get description() {
-      return t(`settings.sections.${id}.description` as const);
+      return translateNow(`settings.sections.${id}.description` as const);
     },
   };
 }
 
-/** Stable registry: ordering is part of the settings navigation contract. */
 export const SETTINGS_SECTIONS: readonly SettingsSectionDefinition[] = [
   section("general", ["perfil", "profile", "aparência", "appearance", "idioma", "language", "movimento", "motion", "labs", "orquestração", "fleet", "frota", "grupo"]),
   section("terminal", ["shell", "fonte", "font", "scrollback", "grade", "grid", "colunas", "pty", "comando"]),

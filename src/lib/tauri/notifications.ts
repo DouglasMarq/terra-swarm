@@ -4,7 +4,7 @@ import { isPermissionGranted, requestPermission, sendNotification } from "@tauri
 let permission: Promise<boolean> | null = null;
 export function ensureNotificationPermission(): Promise<boolean> {
   permission ??= isPermissionGranted()
-    .then((granted) => granted || requestPermission().then((answer) => answer === "granted"))
+    .then((isGranted) => isGranted || requestPermission().then((answer) => answer === "granted"))
     .catch((error) => {
       console.warn("notification permission check failed:", error);
       return false;

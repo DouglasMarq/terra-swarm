@@ -1,30 +1,26 @@
 import { useEffect, useRef } from "react";
 import type { Workspace } from "../domain/workspace.model";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { hotkeyActionLabel, matchHotkey, type HotkeyActionId, usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { conflictingAction, isEditableTarget, recordedHotkey, runHotkeyAction, type HotkeyActionHandlers } from "./hotkeyActions";
 
 interface GlobalHotkeysInput {
-  /** A dialog is open: shortcuts stay off. */
-  modalOpen: boolean;
-  /** The action whose shortcut is being recorded in Settings, if any. */
+  isModalOpen: boolean;
   capturing: HotkeyActionId | null;
   setCapturing: (action: HotkeyActionId | null) => void;
-  /** Settings → Shortcuts is on screen; capture ends when it is left. */
-  shortcutsSectionOpen: boolean;
+  isShortcutsSectionOpen: boolean;
   active: Workspace | null;
   focusedId: string | null;
   workspaces: readonly Workspace[];
   actions: HotkeyActionHandlers;
 }
 
-/** The app-wide keyboard shortcuts and recording a new one in Settings. */
 export function useGlobalHotkeys({
-  modalOpen,
+  isModalOpen,
   capturing,
   setCapturing,
-  shortcutsSectionOpen,
+  isShortcutsSectionOpen,
   active,
   focusedId,
   workspaces,
@@ -32,31 +28,27 @@ export function useGlobalHotkeys({
 }: GlobalHotkeysInput) {
   const hotkeys = usePreferencesStore((state) => state.hotkeys);
 
-  // Recording ends when the Shortcuts section is left: left on, it would
-  // swallow every key in the app and save the next ⌘-combo as a shortcut.
   useEffect(() => {
-    if (shortcutsSectionOpen) return;
+    if (isShortcutsSectionOpen) return;
     setCapturing(null);
-  }, [shortcutsSectionOpen, setCapturing]);
+  }, [isShortcutsSectionOpen, setCapturing]);
 
-  // Latest-values ref so the global hotkey listener can be registered once
-  // instead of being torn down and re-added on every render.
-  const hotkeyCtx = useRef({ modalOpen, capturing, hotkeys, active, focusedId, workspaces });
-  hotkeyCtx.current = { modalOpen, capturing, hotkeys, active, focusedId, workspaces };
-  const hotkeyActions = useRef(actions);
-  hotkeyActions.current = actions;
+  const latestHotkeyContext = useRef({ isModalOpen, capturing, hotkeys, active, focusedId, workspaces });
+  latestHotkeyContext.current = { isModalOpen, capturing, hotkeys, active, focusedId, workspaces };
+  const latestHotkeyActions = useRef(actions);
+  latestHotkeyActions.current = actions;
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const { modalOpen, capturing, hotkeys, active, focusedId, workspaces } =
-        hotkeyCtx.current;
-      if (modalOpen || capturing) return;
-      if (isEditableTarget(e.target)) return;
-      const matched = Object.entries(hotkeys).find(([, hk]) => matchHotkey(e, hk));
+    const handler = (event: KeyboardEvent) => {
+      const { isModalOpen, capturing, hotkeys, active, focusedId, workspaces } =
+        latestHotkeyContext.current;
+      if (isModalOpen || capturing) return;
+      if (isEditableTarget(event.target)) return;
+      const matched = Object.entries(hotkeys).find(([, hk]) => matchHotkey(event, hk));
       if (!matched) return;
-      e.preventDefault();
-      e.stopPropagation();
-      runHotkeyAction(matched[0], { active, focusedId, workspaces, actions: hotkeyActions.current });
+      event.preventDefault();
+      event.stopPropagation();
+      runHotkeyAction(matched[0], { active, focusedId, workspaces, actions: latestHotkeyActions.current });
     };
     window.addEventListener("keydown", handler, { capture: true });
     return () =>
@@ -65,21 +57,19 @@ export function useGlobalHotkeys({
 
   useEffect(() => {
     if (!capturing) return;
-    const handler = (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.key === "Escape") {
+    const handler = (event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") {
         setCapturing(null);
         return;
       }
-      const hk = recordedHotkey(e);
+      const hk = recordedHotkey(event);
       if (!hk) return;
-      // Reject duplicates: dispatch stops at the first match, so a combo
-      // already bound to another action would silently never fire.
       const conflict = conflictingAction(hk, { hotkeys, capturing });
       if (conflict) {
         useTerminalRuntimeStore.getState().pushSystemNotification(
-          t("app.shortcutTaken", { action: hotkeyActionLabel(conflict) }),
+          translateNow("app.shortcutTaken", { action: hotkeyActionLabel(conflict) }),
         );
         setCapturing(null);
         return;

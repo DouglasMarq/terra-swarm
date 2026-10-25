@@ -3,7 +3,6 @@ import type { McpAgentStatus, McpServerInfo, McpTask, McpTaskPatch, McpTaskPrior
 import { invokeCommand } from "./commands";
 import { listenPayload, type UnlistenFn } from "./events";
 
-/** Window events emitted by the embedded MCP server (see `src-tauri/src/mcp`). */
 export const MCP_EVENTS = {
   tasksChanged: "mcp-tasks-changed",
   message: "mcp-message",
@@ -11,7 +10,6 @@ export const MCP_EVENTS = {
   nudge: "mcp-nudge",
 } as const;
 
-/** The orchestrator assigned a task to an idle agent: type this prompt into it. */
 export interface McpNudgePayload {
   workspace_id: string;
   terminal_id: string;
@@ -22,7 +20,6 @@ export interface McpTasksChangedPayload {
   workspace_id: string;
 }
 
-/** `status: null` means the terminal disconnected. */
 export interface McpAgentStatusPayload {
   workspace_id: string;
   terminal_id: string;
@@ -33,8 +30,8 @@ export function mcpServerInfo(): Promise<McpServerInfo> {
   return invokeCommand("mcpServerInfo");
 }
 
-export function mcpSetEnabled(enabled: boolean): Promise<McpServerInfo> {
-  return invokeCommand("mcpSetEnabled", { enabled });
+export function mcpSetEnabled(isEnabled: boolean): Promise<McpServerInfo> {
+  return invokeCommand("mcpSetEnabled", { enabled: isEnabled });
 }
 
 export function mcpListTasks(workspaceId: string): Promise<McpTask[]> {
@@ -66,7 +63,6 @@ export function mcpAgentStatuses(workspaceId: string): Promise<McpAgentStatus[]>
   return invokeCommand("mcpAgentStatuses", { workspaceId });
 }
 
-/** Token usage of the workspace's agents, from the session logs their hooks reported. */
 export function agentUsage(workspaceId: string): Promise<AgentTokenUsage[]> {
   return invokeCommand("agentUsage", { workspaceId });
 }

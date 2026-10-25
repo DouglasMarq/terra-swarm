@@ -9,7 +9,7 @@ describe("terminal runtime store", () => {
     useTerminalRuntimeStore.getState().reset();
   });
 
-  it("keeps unread counts and a bounded notification history", () => {
+  it("Given notifications, when they arrive, then unread counts and a bounded history are kept", () => {
     const store = useTerminalRuntimeStore.getState();
     store.addNotification({
       id: "term-1",
@@ -29,7 +29,7 @@ describe("terminal runtime store", () => {
       count: MAX_NOTIF_ITEMS,
       messages: Array.from(
         { length: MAX_NOTIF_ITEMS },
-        (_, index) => `n-${index}`,
+        (_message, index) => `n-${index}`,
       ),
     });
 
@@ -41,7 +41,7 @@ describe("terminal runtime store", () => {
     );
   });
 
-  it("clears every runtime slice for a closed terminal", () => {
+  it("Given a closed terminal, when clearing it, then every runtime slice for it is cleared", () => {
     const store = useTerminalRuntimeStore.getState();
     store.setExited({ "term-1": 1 });
     store.setContextUsage({ "term-1": 80 });

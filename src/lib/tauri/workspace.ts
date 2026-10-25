@@ -8,10 +8,8 @@ export function listWorkspaces(): Promise<Workspace[]> {
   return invokeCommand("listWorkspaces");
 }
 
-/** Entries listed per directory unless asked otherwise; mirrors `DEFAULT_FILE_LIST_LIMIT` in `src-tauri/src/workspace/files.rs`. */
 export const DEFAULT_FILE_LIST_LIMIT = 200;
 
-/** Load one workspace-relative directory without reading file contents. */
 export function listWorkspaceFiles(
   workspaceId: string,
   relativePath = "",
@@ -24,12 +22,10 @@ export function listWorkspaceFiles(
   });
 }
 
-/** One text file for the editor (at most 2 MB). */
 export function readWorkspaceFile(workspaceId: string, relativePath: string): Promise<WorkspaceFileContent> {
   return invokeCommand("readWorkspaceFile", { workspaceId, relativePath });
 }
 
-/** Save the editor's text; fails with a `changedOnDisk` `IpcError` when the file changed since `expectedModified` (pass null to overwrite). */
 export function writeWorkspaceFile(
   workspaceId: string,
   relativePath: string,
@@ -148,9 +144,9 @@ export function setWorkspaceLayout(
 
 export function setWorkspaceCollapsed(
   workspaceId: string,
-  collapsed: boolean,
+  isCollapsed: boolean,
 ): Promise<void> {
-  return invokeCommand("setWorkspaceCollapsed", { workspaceId, collapsed });
+  return invokeCommand("setWorkspaceCollapsed", { workspaceId, collapsed: isCollapsed });
 }
 
 export function reorderWorkspaces(order: string[]): Promise<void> {

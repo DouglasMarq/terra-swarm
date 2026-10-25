@@ -7,7 +7,7 @@ describe("prompt library", () => {
     useLibraryStore.setState(useLibraryStore.getInitialState(), true);
   });
 
-  it("starts with defaults, then adds, edits and deletes", () => {
+  it("Given a fresh library, when adding, editing and deleting prompts, then it starts with defaults and applies each change", () => {
     const store = useLibraryStore.getState();
     expect(store.prompts.length).toBeGreaterThan(0);
     const added = store.savePrompt({ title: "", body: "Fix the flaky login test please now" });

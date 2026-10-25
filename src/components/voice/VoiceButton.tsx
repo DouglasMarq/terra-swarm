@@ -6,31 +6,27 @@ import styles from "./voice.module.css";
 
 export interface VoiceButtonProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick"> {
-  listening?: boolean;
+  isListening?: boolean;
   onStart?: () => void;
   onStop?: () => void;
   shortcut?: string;
-  pushToTalk?: boolean;
+  isPushToTalk?: boolean;
 }
 
-/**
- * Small, composable microphone control.  The parent owns recording state;
- * this button only emits the intent to start/stop and advertises the shortcut.
- */
 export function VoiceButton({
   ariaLabel,
   className,
-  listening = false,
+  isListening = false,
   onStart,
   onStop,
-  pushToTalk = false,
+  isPushToTalk = false,
   shortcut,
   title,
   ...buttonProps
 }: VoiceButtonProps & { ariaLabel?: string }) {
-  const t = useT();
-  const label = ariaLabel ?? (listening ? t("palette.voiceStop") : t("palette.voiceStart"));
-  const hint = [pushToTalk ? t("voiceCapsule.holdToTalk") : null, shortcut].filter(Boolean).join(" · ");
+  const translate = useT();
+  const label = ariaLabel ?? (isListening ? translate("palette.voiceStop") : translate("palette.voiceStart"));
+  const hint = [isPushToTalk ? translate("voiceCapsule.holdToTalk") : null, shortcut].filter(Boolean).join(" · ");
   const classes = [styles.voiceButton, className].filter(Boolean).join(" ");
 
   return (
@@ -39,12 +35,12 @@ export function VoiceButton({
       type={buttonProps.type ?? "button"}
       className={classes}
       aria-label={label}
-      aria-pressed={listening}
-      data-listening={listening || undefined}
+      aria-pressed={isListening}
+      data-listening={isListening || undefined}
       title={title ?? (hint ? `${label} (${hint})` : label)}
-      onClick={() => (listening ? onStop?.() : onStart?.())}
+      onClick={() => (isListening ? onStop?.() : onStart?.())}
     >
-      {listening ? <MicOff aria-hidden="true" size={16} /> : <Mic aria-hidden="true" size={16} />}
+      {isListening ? <MicOff aria-hidden="true" size={16} /> : <Mic aria-hidden="true" size={16} />}
       <span className={styles.srOnly}>{label}</span>
     </button>
   );

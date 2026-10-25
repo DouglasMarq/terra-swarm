@@ -7,14 +7,14 @@ import { SettingsDialog } from "./SettingsDialog";
 import settingsStyles from "./SettingsDialog.module.css?raw";
 
 describe("SettingsDialog", () => {
-  it("navigates settings sections and renders the selected slot", async () => {
+  it("Given the settings, when navigating sections, then the selected slot is rendered", async () => {
     const user = userEvent.setup();
     const onActiveSectionChange = vi.fn();
     render(
       <SettingsDialog
         onActiveSectionChange={onActiveSectionChange}
         onOpenChange={vi.fn()}
-        open
+        isOpen
         slots={{
           voice: ({ section }) => <p>Voice settings for {section.label}</p>,
         }}
@@ -27,9 +27,9 @@ describe("SettingsDialog", () => {
     expect(screen.getByText("Voice settings for Voz")).toBeInTheDocument();
   });
 
-  it("filters categories through the accessible settings search", async () => {
+  it("Given the settings search, when typing, then categories are filtered", async () => {
     const user = userEvent.setup();
-    render(<SettingsDialog onOpenChange={vi.fn()} open />);
+    render(<SettingsDialog onOpenChange={vi.fn()} isOpen />);
 
     const search = screen.getByRole("searchbox", { name: "Buscar configurações" });
     await user.type(search, "voz");
@@ -38,8 +38,8 @@ describe("SettingsDialog", () => {
     expect(screen.getByText("1 resultado")).toBeInTheDocument();
   });
 
-  it("keeps Ctrl+K inside settings and focuses the search", () => {
-    render(<SettingsDialog onOpenChange={vi.fn()} open />);
+  it("Given the settings, when pressing Ctrl+K, then it stays inside settings and focuses the search", () => {
+    render(<SettingsDialog onOpenChange={vi.fn()} isOpen />);
 
     const search = screen.getByRole("searchbox", { name: "Buscar configurações" });
     screen.getByRole("tab", { name: "Voz" }).focus();
@@ -48,7 +48,7 @@ describe("SettingsDialog", () => {
     expect(search).toHaveFocus();
   });
 
-  it("lets the settings content scroll only when its content needs it", () => {
+  it("Given settings content, when it renders, then it scrolls only when its content needs it", () => {
     expect(settingsStyles).toMatch(
       /\.sectionContent\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?box-sizing:\s*border-box;/,
     );

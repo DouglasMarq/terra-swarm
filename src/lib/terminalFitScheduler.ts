@@ -21,7 +21,6 @@ const cancelAnimationFrameSafe = (handle: number): void => {
   }
 };
 
-/** Coalesces every geometry signal that arrives during one animation frame. */
 export function createFitScheduler(
   fit: () => void,
   options: FitSchedulerOptions = {},
@@ -29,19 +28,19 @@ export function createFitScheduler(
   const requestFrame = options.requestFrame ?? requestAnimationFrameSafe;
   const cancelFrame = options.cancelFrame ?? cancelAnimationFrameSafe;
   let frame: number | null = null;
-  let disposed = false;
+  let isDisposed = false;
 
   return {
     schedule() {
-      if (disposed || frame !== null) return;
+      if (isDisposed || frame !== null) return;
       frame = requestFrame(() => {
         frame = null;
-        if (!disposed) fit();
+        if (!isDisposed) fit();
       });
     },
     dispose() {
-      if (disposed) return;
-      disposed = true;
+      if (isDisposed) return;
+      isDisposed = true;
       if (frame !== null) cancelFrame(frame);
       frame = null;
     },
@@ -65,24 +64,18 @@ export function isUsableDimensions(dimensions: TerminalDimensions | undefined): 
   );
 }
 
-function sameDimensions(a: TerminalDimensions | null, b: TerminalDimensions): boolean {
-  return a?.cols === b.cols && a.rows === b.rows;
+function sameDimensions(previous: TerminalDimensions | null, next: TerminalDimensions): boolean {
+  return previous?.cols === next.cols && previous.rows === next.rows;
 }
 
-/**
- * Sends PTY dimensions in order while collapsing intermediate layout states.
- * A resize observer can produce several values in one drag/fullscreen change;
- * only the latest value is relevant once the current IPC call completes.
- */
 export function createTerminalResizeQueue(
   send: (dimensions: TerminalDimensions) => Promise<void>,
 ): {
   request: (dimensions: TerminalDimensions) => void;
-  /** Forget the last PTY geometry after a lifecycle restart. */
   reset: () => void;
   dispose: () => void;
 } {
-  let disposed = false;
+  let isDisposed = false;
   let lastSent: TerminalDimensions | null = null;
   let queued: TerminalDimensions | null = null;
   let inFlight: TerminalDimensions | null = null;
@@ -90,7 +83,7 @@ export function createTerminalResizeQueue(
   let generation = 0;
 
   const pump = () => {
-    if (disposed || inFlight || !queued) return;
+    if (isDisposed || inFlight || !queued) return;
     const next = queued;
     queued = null;
     if (sameDimensions(lastSent, next)) {
@@ -102,12 +95,9 @@ export function createTerminalResizeQueue(
     inFlightGeneration = requestGeneration;
     Promise.resolve(send(next)).then(
       () => {
-        if (!disposed && requestGeneration === generation) lastSent = next;
+        if (!isDisposed && requestGeneration === generation) lastSent = next;
       },
-      () => {
-        // A later observer/focus signal may retry the same dimensions. Do not
-        // manufacture a timer here: resize events are the source of truth.
-      },
+      () => {},
     ).finally(() => {
       inFlight = null;
       pump();
@@ -116,7 +106,7 @@ export function createTerminalResizeQueue(
 
   return {
     request(dimensions) {
-      if (disposed || dimensions.cols < 1 || dimensions.rows < 1) return;
+      if (isDisposed || dimensions.cols < 1 || dimensions.rows < 1) return;
       if (sameDimensions(lastSent, dimensions)) return;
       if (sameDimensions(inFlight, dimensions) && inFlightGeneration === generation) return;
       if (queued && sameDimensions(queued, dimensions)) return;
@@ -124,13 +114,13 @@ export function createTerminalResizeQueue(
       pump();
     },
     reset() {
-      if (disposed) return;
+      if (isDisposed) return;
       generation += 1;
       lastSent = null;
       queued = null;
     },
     dispose() {
-      disposed = true;
+      isDisposed = true;
       queued = null;
     },
   };

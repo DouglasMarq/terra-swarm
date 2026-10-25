@@ -20,19 +20,19 @@ interface ShellConfirmDialogsProps {
 }
 
 export function ShellConfirmDialogs(props: ShellConfirmDialogsProps) {
-  const t = useT();
+  const translate = useT();
   const pendingCommandConfirmation = props.commandRequest;
   const pendingInspectorAction = props.inspectorRequest;
   return <>
     <ConfirmActionDialog
-      open={pendingCommandConfirmation !== null}
-      onOpenChange={(open) => {
-        if (!open) props.onCommandRequestChange(null);
+      isOpen={pendingCommandConfirmation !== null}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) props.onCommandRequestChange(null);
       }}
       title={pendingCommandConfirmation?.title}
-      description={pendingCommandConfirmation ? t("dialogs.resourceDescription", { resource: pendingCommandConfirmation.resourceLabel, description: pendingCommandConfirmation.description }) : ""}
+      description={pendingCommandConfirmation ? translate("dialogs.resourceDescription", { resource: pendingCommandConfirmation.resourceLabel, description: pendingCommandConfirmation.description }) : ""}
       intent={pendingCommandConfirmation?.kind === "stop-agent" ? "destructive" : "default"}
-      confirmLabel={pendingCommandConfirmation?.kind === "import-snapshot" ? t("system.continueImport") : pendingCommandConfirmation?.kind === "stop-agent" ? t("pane.confirmKill.confirm") : t("dialogs.confirmTitle")}
+      confirmLabel={pendingCommandConfirmation?.kind === "import-snapshot" ? translate("system.continueImport") : pendingCommandConfirmation?.kind === "stop-agent" ? translate("pane.confirmKill.confirm") : translate("dialogs.confirmTitle")}
       onConfirm={() => {
         const request = pendingCommandConfirmation;
         if (!request) return;
@@ -51,16 +51,16 @@ export function ShellConfirmDialogs(props: ShellConfirmDialogsProps) {
       }}
     />
     <ConfirmActionDialog
-      open={pendingInspectorAction !== null}
-      onOpenChange={(open) => {
-        if (!open) props.onInspectorRequestChange(null);
+      isOpen={pendingInspectorAction !== null}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) props.onInspectorRequestChange(null);
       }}
-      title={pendingInspectorAction?.action === "kill" ? t("pane.confirmKill.confirm") : t("system.restartSession")}
+      title={pendingInspectorAction?.action === "kill" ? translate("pane.confirmKill.confirm") : translate("system.restartSession")}
       description={pendingInspectorAction
         ? `${pendingInspectorAction.target.displayName} · ${pendingInspectorAction.target.command}`
         : ""}
       intent={pendingInspectorAction?.action === "kill" ? "destructive" : "default"}
-      confirmLabel={pendingInspectorAction?.action === "kill" ? t("pane.confirmKill.confirm") : t("system.restartSession")}
+      confirmLabel={pendingInspectorAction?.action === "kill" ? translate("pane.confirmKill.confirm") : translate("system.restartSession")}
       onConfirm={() => {
         const request = pendingInspectorAction;
         if (!request) return;

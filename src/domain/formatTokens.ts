@@ -9,7 +9,6 @@ function scaleOf(value: number): [number, string] {
   return [THOUSAND, "k"];
 }
 
-/** 950 → "950", 12_345 → "12.3k", 4_200_000 → "4.2M". */
 export function formatTokens(value: number): string {
   if (!Number.isFinite(value) || value < THOUSAND) return String(Math.max(0, Math.round(value || 0)));
   const [divisor, suffix] = scaleOf(value);

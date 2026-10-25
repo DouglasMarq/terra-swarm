@@ -10,7 +10,7 @@ const workspace = (terminals: Array<[string, string]>): Workspace => ({
 });
 
 describe("agentKind", () => {
-  it("uses the executable name and folds shells", () => {
+  it("Given a command, when reading the agent kind, then it uses the executable name and folds shells", () => {
     expect(agentKind("claude --continue")).toBe("claude");
     expect(agentKind("/opt/homebrew/bin/codex resume --last")).toBe("codex");
     expect(agentKind("zsh")).toBe("shell");
@@ -19,7 +19,7 @@ describe("agentKind", () => {
 });
 
 describe("cleanAgentTitle", () => {
-  it("strips spinner glyphs and drops titles that carry no task", () => {
+  it("Given a raw title, when cleaning it, then spinner glyphs are stripped and titles without a task are dropped", () => {
     expect(cleanAgentTitle("✳ Refatorar planejador", "claude", "claude")).toBe("Refatorar planejador");
     expect(cleanAgentTitle("⠂ Revisar PR", "claude", "claude")).toBe("Revisar PR");
     expect(cleanAgentTitle("Claude Code", "claude", "claude")).toBeNull();
@@ -30,7 +30,7 @@ describe("cleanAgentTitle", () => {
 });
 
 describe("buildAgentLabels", () => {
-  it("numbers repeated kinds inside a project and leaves unique kinds bare", () => {
+  it("Given repeated and unique kinds in a project, when building labels, then repeated kinds are numbered and unique ones stay bare", () => {
     const labels = buildAgentLabels([workspace([["a", "claude"], ["b", "codex"], ["c", "claude"]])]);
     expect(labels.a.tag).toBe("claude 1");
     expect(labels.c.tag).toBe("claude 2");
@@ -38,7 +38,7 @@ describe("buildAgentLabels", () => {
     expect(labels.a.primary).toBe("claude 1");
   });
 
-  it("prefers the task title as primary and the name in the tag", () => {
+  it("Given a task title and a name, when building labels, then the title is primary and the name goes in the tag", () => {
     const labels = buildAgentLabels([workspace([["a", "claude"], ["b", "claude"]])], {
       titles: { a: "✳ Animações do Workbench" },
       names: { b: "Lyra" },

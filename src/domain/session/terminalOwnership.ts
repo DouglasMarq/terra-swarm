@@ -1,12 +1,5 @@
 import type { Workspace, WorkspaceSnapshotV2 } from "../workspace.model";
 
-/**
- * Resolves a terminal's owning workspace from current metadata.
- *
- * The focused/active workspace is a view concern and is deliberately not
- * consulted here: commands such as restart must remain scoped to the PTY's
- * actual project when another project is selected in the shell.
- */
 export function workspaceIdForTerminal(
   workspaces: readonly Workspace[],
   snapshot: WorkspaceSnapshotV2 | null | undefined,

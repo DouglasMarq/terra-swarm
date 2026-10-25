@@ -1,7 +1,7 @@
 import { DEFAULT_NAME_LIST, NAME_SETS, type NameSetId, type NamesExhaustedStrategy } from "../domain/agentNames";
 import { create } from "zustand";
 import type { AgentLaunchSettings } from "../domain/agentLaunchEnv";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { isRecord } from "../lib/records/records";
 import { storageGet, storageRemove, storageSet } from "../lib/storage/safeStorage";
 import { DEFAULT_VOICE_LANGUAGE, isVoiceLanguage, type VoiceLanguage } from "../domain/voiceLanguages";
@@ -25,35 +25,32 @@ const mk = (key: string, modifiers: HotkeyModifiers = {}): Hotkey => ({
   ...modifiers,
 });
 
-const IS_MAC = detectShortcutPlatform() === "mac";
+const isMacPlatform = detectShortcutPlatform() === "mac";
 
 const wsSelect = (digit: string): Hotkey =>
-  IS_MAC ? mk(digit, { meta: true }) : mk(digit, { ctrl: true });
+  isMacPlatform ? mk(digit, { meta: true }) : mk(digit, { ctrl: true });
 
 const termSelect = (digit: string): Hotkey =>
-  IS_MAC ? mk(digit, { meta: true, shift: true }) : mk(digit, { shift: true, ctrl: true });
+  isMacPlatform ? mk(digit, { meta: true, shift: true }) : mk(digit, { shift: true, ctrl: true });
 
-// On Windows the meta key is the Win key: Win+W opens Widgets, Win+Enter
-// launches Narrator, Win+= drives the Magnifier, etc. Use Ctrl+Shift / Alt
-// combos there; keep Cmd combos on macOS.
 export const DEFAULT_HOTKEYS: Readonly<Record<HotkeyActionId, Hotkey>> = {
-  newWorkspace: IS_MAC ? mk("n", { meta: true, shift: true }) : mk("n", { shift: true, ctrl: true }),
-  renameWorkspace: IS_MAC ? mk("r", { meta: true, shift: true }) : mk("r", { shift: true, ctrl: true }),
-  deleteWorkspace: IS_MAC
+  newWorkspace: isMacPlatform ? mk("n", { meta: true, shift: true }) : mk("n", { shift: true, ctrl: true }),
+  renameWorkspace: isMacPlatform ? mk("r", { meta: true, shift: true }) : mk("r", { shift: true, ctrl: true }),
+  deleteWorkspace: isMacPlatform
     ? mk("Backspace", { meta: true, shift: true })
     : mk("Backspace", { shift: true, ctrl: true }),
-  newTerminal: IS_MAC ? mk("t", { meta: true }) : mk("t", { shift: true, ctrl: true }),
-  closeTerminal: IS_MAC ? mk("w", { meta: true }) : mk("w", { shift: true, ctrl: true }),
-  maximizeTerminal: IS_MAC
+  newTerminal: isMacPlatform ? mk("t", { meta: true }) : mk("t", { shift: true, ctrl: true }),
+  closeTerminal: isMacPlatform ? mk("w", { meta: true }) : mk("w", { shift: true, ctrl: true }),
+  maximizeTerminal: isMacPlatform
     ? mk("Enter", { meta: true })
     : mk("Enter", { alt: true }),
-  minimizeTerminal: IS_MAC
+  minimizeTerminal: isMacPlatform
     ? mk("Enter", { meta: true, shift: true })
     : mk("Enter", { shift: true, alt: true }),
-  increaseFontSize: IS_MAC ? mk("=", { meta: true }) : mk("=", { ctrl: true }),
-  decreaseFontSize: IS_MAC ? mk("-", { meta: true }) : mk("-", { ctrl: true }),
-  resetFontSize: IS_MAC ? mk("0", { meta: true }) : mk("0", { ctrl: true }),
-  toggleVoice: IS_MAC ? mk(" ", { meta: true, shift: true }) : mk(" ", { shift: true, ctrl: true }),
+  increaseFontSize: isMacPlatform ? mk("=", { meta: true }) : mk("=", { ctrl: true }),
+  decreaseFontSize: isMacPlatform ? mk("-", { meta: true }) : mk("-", { ctrl: true }),
+  resetFontSize: isMacPlatform ? mk("0", { meta: true }) : mk("0", { ctrl: true }),
+  toggleVoice: isMacPlatform ? mk(" ", { meta: true, shift: true }) : mk(" ", { shift: true, ctrl: true }),
   selectWorkspace1: wsSelect("1"),
   selectWorkspace2: wsSelect("2"),
   selectWorkspace3: wsSelect("3"),
@@ -114,14 +111,12 @@ function isNumberedHotkeyAction(id: HotkeyActionId): id is NumberedHotkeyActionI
   return id.startsWith("selectWorkspace") || id.startsWith("selectTerminal");
 }
 
-/** The action's name in the current language. */
 export function hotkeyActionLabel(id: HotkeyActionId): string {
-  if (!isNumberedHotkeyAction(id)) return t(`hotkeys.${id}` as const);
-  const n = id.slice(-1);
-  return id.startsWith("selectWorkspace") ? t("hotkeys.selectWorkspace", { n }) : t("hotkeys.selectTerminal", { n });
+  if (!isNumberedHotkeyAction(id)) return translateNow(`hotkeys.${id}` as const);
+  const slotNumber = id.slice(-1);
+  return id.startsWith("selectWorkspace") ? translateNow("hotkeys.selectWorkspace", { n: slotNumber }) : translateNow("hotkeys.selectTerminal", { n: slotNumber });
 }
 
-/** Keep persisted shortcuts executable when a profile moves between OSes. */
 export function normalizeHotkeyForPlatform(
   hotkey: Hotkey,
   platform: ShortcutPlatform = detectShortcutPlatform(),
@@ -148,23 +143,17 @@ function loadNameSet(): NameSetId {
   return stored === "rivers" || stored === "custom" ? stored : "stars";
 }
 
-/** The user's own list lives apart from the presets, so picking "Stars" and
- * coming back to "Custom" keeps it ("agentNameList" is the legacy key). */
 function loadCustomNameList(): string[] {
   try {
     const parsed = JSON.parse(storageGet("agentNameListCustom") ?? storageGet("agentNameList") ?? "null");
     if (Array.isArray(parsed)) return parsed.filter((name): name is string => typeof name === "string" && name.trim().length > 0);
-  } catch {
-    // Fall back to the default list below.
-  }
+  } catch {}
   return [...DEFAULT_NAME_LIST];
 }
 
 function nameListFor(set: NameSetId): string[] {
   return set === "custom" ? loadCustomNameList() : [...NAME_SETS[set]];
 }
-
-/** User launch settings of one agent: extra arguments and `KEY=VALUE` lines. */
 
 function loadAgentLaunch(): Record<string, AgentLaunchSettings> {
   try {
@@ -191,9 +180,7 @@ function loadAgentNames(): Record<string, string> {
     if (parsed && typeof parsed === "object") {
       return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
     }
-  } catch {
-    // Corrupt storage starts empty.
-  }
+  } catch {}
   return {};
 }
 
@@ -227,9 +214,7 @@ function loadHotkeys(): Record<HotkeyActionId, Hotkey> {
   try {
     const raw = storageGet("hotkeys");
     if (raw) return parseHotkeys(raw);
-  } catch {
-    // Corrupted value; fall back to defaults.
-  }
+  } catch {}
   return { ...DEFAULT_HOTKEYS };
 }
 
@@ -247,7 +232,6 @@ export function matchHotkey(event: KeyboardEvent, hotkey: Hotkey): boolean {
   );
 }
 
-/** Unknown persisted values (an older or edited preference) fall back to auto-detection. */
 function loadVoiceLanguage(): VoiceLanguage {
   const stored = storageGet("voiceLanguage");
   return isVoiceLanguage(stored) ? stored : DEFAULT_VOICE_LANGUAGE;
@@ -270,56 +254,49 @@ function loadGridCols(): number {
 export type PreferencesState = {
   defaultAgent: string | null;
   hotkeys: Record<HotkeyActionId, Hotkey>;
-  sidebarCollapsed: boolean;
+  isSidebarCollapsed: boolean;
   fontSize: number;
-  /** Terminal font family name; empty means the default stack. */
   terminalFontFamily: string;
   defaultShell: string;
-  reduceMotion: boolean;
-  /** Resume every saved session at startup without showing the opening screen. */
-  autoResume: boolean;
-  /** Native notifications and the app icon badge when an agent needs you. */
-  systemNotifications: boolean;
-  /** Dictation goes to the project's orchestrator when one is running. */
-  voiceToOrchestrator: boolean;
-  /** Give each new agent a name from `agentNameList` (off by default). */
-  agentAutoNames: boolean;
+  shouldReduceMotion: boolean;
+  shouldAutoResume: boolean;
+  isSystemNotificationsEnabled: boolean;
+  shouldSendVoiceToOrchestrator: boolean;
+  shouldAutoNameAgents: boolean;
   agentNameSet: NameSetId;
   agentNameList: string[];
-  avoidSimilarNames: boolean;
+  shouldAvoidSimilarNames: boolean;
   namesExhausted: NamesExhaustedStrategy;
-  /** Names given to agents (automatically or through Rename), by terminal id. */
   agentNames: Record<string, string>;
-  /** Extra arguments and environment per agent id. */
   agentLaunch: Record<string, AgentLaunchSettings>;
   gridCols: number;
-  voiceEnabled: boolean;
+  isVoiceEnabled: boolean;
   voiceLang: VoiceLanguage;
   voiceModel: string | null;
   voiceInputDevice: string | null;
   setDefaultAgent: (agent: string | null) => void;
   setHotkeys: (hotkeys: Record<HotkeyActionId, Hotkey>) => void;
   resetHotkeys: () => void;
-  setSidebarCollapsed: (collapsed: boolean) => void;
+  setSidebarCollapsed: (isCollapsed: boolean) => void;
   toggleSidebar: () => void;
   setFontSize: (size: number) => void;
   setTerminalFontFamily: (name: string) => void;
   changeFontSize: (delta: number) => void;
   resetFontSize: () => void;
   setDefaultShell: (shell: string) => void;
-  setReduceMotion: (enabled: boolean) => void;
-  setAutoResume: (enabled: boolean) => void;
-  setSystemNotifications: (enabled: boolean) => void;
-  setVoiceToOrchestrator: (enabled: boolean) => void;
-  setAgentAutoNames: (enabled: boolean) => void;
+  setReduceMotion: (isEnabled: boolean) => void;
+  setAutoResume: (isEnabled: boolean) => void;
+  setSystemNotifications: (isEnabled: boolean) => void;
+  setVoiceToOrchestrator: (isEnabled: boolean) => void;
+  setAgentAutoNames: (isEnabled: boolean) => void;
   setAgentNameSet: (set: NameSetId) => void;
   setAgentNameList: (names: string[]) => void;
-  setAvoidSimilarNames: (enabled: boolean) => void;
+  setAvoidSimilarNames: (isEnabled: boolean) => void;
   setNamesExhausted: (strategy: NamesExhaustedStrategy) => void;
   setAgentName: (terminalId: string, name: string | null) => void;
   setAgentLaunch: (agentId: string, settings: AgentLaunchSettings) => void;
   setGridCols: (cols: number) => void;
-  setVoiceEnabled: (enabled: boolean) => void;
+  setVoiceEnabled: (isEnabled: boolean) => void;
   setVoiceLang: (lang: VoiceLanguage) => void;
   setVoiceModel: (model: string | null) => void;
   setVoiceInputDevice: (device: string | null) => void;
@@ -328,23 +305,23 @@ export type PreferencesState = {
 export const usePreferencesStore = create<PreferencesState>((set) => ({
   defaultAgent: storageGet("defaultAgent"),
   hotkeys: loadHotkeys(),
-  sidebarCollapsed: storageGet("sidebarCollapsed") === "1",
+  isSidebarCollapsed: storageGet("sidebarCollapsed") === "1",
   fontSize: loadFontSize(),
   terminalFontFamily: storageGet("termFontFamily")?.trim() ?? "",
   defaultShell: storageGet("defaultShell") ?? "",
-  reduceMotion: storageGet("reduceMotion") === "1",
-  autoResume: storageGet("autoResume") === "1",
-  systemNotifications: storageGet("systemNotifications") !== "0",
-  voiceToOrchestrator: storageGet("voiceToOrchestrator") !== "0",
-  agentAutoNames: storageGet("agentAutoNames") === "1",
+  shouldReduceMotion: storageGet("reduceMotion") === "1",
+  shouldAutoResume: storageGet("autoResume") === "1",
+  isSystemNotificationsEnabled: storageGet("systemNotifications") !== "0",
+  shouldSendVoiceToOrchestrator: storageGet("voiceToOrchestrator") !== "0",
+  shouldAutoNameAgents: storageGet("agentAutoNames") === "1",
   agentNameSet: loadNameSet(),
   agentNameList: nameListFor(loadNameSet()),
-  avoidSimilarNames: storageGet("avoidSimilarNames") !== "0",
+  shouldAvoidSimilarNames: storageGet("avoidSimilarNames") !== "0",
   namesExhausted: storageGet("namesExhausted") === "repeat" ? "repeat" : "type-number",
   agentNames: loadAgentNames(),
   agentLaunch: loadAgentLaunch(),
   gridCols: loadGridCols(),
-  voiceEnabled: storageGet("voiceEnabled") === "1",
+  isVoiceEnabled: storageGet("voiceEnabled") === "1",
   voiceLang: loadVoiceLanguage(),
   voiceModel: storageGet("voiceModel"),
   voiceInputDevice: storageGet("voiceInputDevice"),
@@ -365,16 +342,16 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
     set({ hotkeys: { ...DEFAULT_HOTKEYS } });
   },
 
-  setSidebarCollapsed: (sidebarCollapsed) => {
-    storageSet("sidebarCollapsed", sidebarCollapsed ? "1" : "0");
-    set({ sidebarCollapsed });
+  setSidebarCollapsed: (isSidebarCollapsed) => {
+    storageSet("sidebarCollapsed", isSidebarCollapsed ? "1" : "0");
+    set({ isSidebarCollapsed });
   },
 
   toggleSidebar: () =>
     set((state) => {
-      const sidebarCollapsed = !state.sidebarCollapsed;
-      storageSet("sidebarCollapsed", sidebarCollapsed ? "1" : "0");
-      return { sidebarCollapsed };
+      const isSidebarCollapsed = !state.isSidebarCollapsed;
+      storageSet("sidebarCollapsed", isSidebarCollapsed ? "1" : "0");
+      return { isSidebarCollapsed };
     }),
 
   setFontSize: (fontSize) => {
@@ -412,9 +389,9 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
     set({ defaultShell });
   },
 
-  setAgentAutoNames: (agentAutoNames) => {
-    storageSet("agentAutoNames", agentAutoNames ? "1" : "0");
-    set({ agentAutoNames });
+  setAgentAutoNames: (shouldAutoNameAgents) => {
+    storageSet("agentAutoNames", shouldAutoNameAgents ? "1" : "0");
+    set({ shouldAutoNameAgents });
   },
 
   setAgentNameSet: (agentNameSet) => {
@@ -429,9 +406,9 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
     set({ agentNameList, agentNameSet: "custom" });
   },
 
-  setAvoidSimilarNames: (avoidSimilarNames) => {
-    storageSet("avoidSimilarNames", avoidSimilarNames ? "1" : "0");
-    set({ avoidSimilarNames });
+  setAvoidSimilarNames: (shouldAvoidSimilarNames) => {
+    storageSet("avoidSimilarNames", shouldAvoidSimilarNames ? "1" : "0");
+    set({ shouldAvoidSimilarNames });
   },
 
   setNamesExhausted: (namesExhausted) => {
@@ -457,24 +434,24 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
       return { agentNames };
     }),
 
-  setAutoResume: (autoResume) => {
-    storageSet("autoResume", autoResume ? "1" : "0");
-    set({ autoResume });
+  setAutoResume: (shouldAutoResume) => {
+    storageSet("autoResume", shouldAutoResume ? "1" : "0");
+    set({ shouldAutoResume });
   },
 
-  setSystemNotifications: (systemNotifications) => {
-    storageSet("systemNotifications", systemNotifications ? "1" : "0");
-    set({ systemNotifications });
+  setSystemNotifications: (isSystemNotificationsEnabled) => {
+    storageSet("systemNotifications", isSystemNotificationsEnabled ? "1" : "0");
+    set({ isSystemNotificationsEnabled });
   },
 
-  setVoiceToOrchestrator: (voiceToOrchestrator) => {
-    storageSet("voiceToOrchestrator", voiceToOrchestrator ? "1" : "0");
-    set({ voiceToOrchestrator });
+  setVoiceToOrchestrator: (shouldSendVoiceToOrchestrator) => {
+    storageSet("voiceToOrchestrator", shouldSendVoiceToOrchestrator ? "1" : "0");
+    set({ shouldSendVoiceToOrchestrator });
   },
 
-  setReduceMotion: (reduceMotion) => {
-    storageSet("reduceMotion", reduceMotion ? "1" : "0");
-    set({ reduceMotion });
+  setReduceMotion: (shouldReduceMotion) => {
+    storageSet("reduceMotion", shouldReduceMotion ? "1" : "0");
+    set({ shouldReduceMotion });
   },
 
   setGridCols: (gridCols) => {
@@ -483,9 +460,9 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
     set({ gridCols });
   },
 
-  setVoiceEnabled: (voiceEnabled) => {
-    storageSet("voiceEnabled", voiceEnabled ? "1" : "0");
-    set({ voiceEnabled });
+  setVoiceEnabled: (isVoiceEnabled) => {
+    storageSet("voiceEnabled", isVoiceEnabled ? "1" : "0");
+    set({ isVoiceEnabled });
   },
 
   setVoiceLang: (voiceLang) => {

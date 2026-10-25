@@ -14,15 +14,12 @@ import {
 import type { ActivityTab, NavigatorActivityCapabilities, NavigatorNode, NavigatorNodeRef, NavigatorPanelProps } from "./types";
 import styles from "./Navigator.module.css";
 
-/** The agent menu is wider and taller than the single "Delete project" item. */
 const AGENT_MENU_WIDTH_PX = 272;
 const AGENT_MENU_HEIGHT_PX = 360;
 const PROJECT_MENU_WIDTH_PX = 196;
 const PROJECT_MENU_HEIGHT_PX = 52;
-/** Keeps context menus clear of the 48px window chrome and the macOS traffic lights. */
 const MENU_MIN_TOP_PX = 56;
 const MENU_MIN_LEFT_PX = 8;
-/** Viewport assumed when there is no window (tests, prerender). */
 const FALLBACK_VIEWPORT_WIDTH_PX = 1024;
 const FALLBACK_VIEWPORT_HEIGHT_PX = 768;
 
@@ -85,8 +82,6 @@ function viewportSize(): { width: number; height: number } {
 }
 
 function menuAnchor(event: MouseEvent<HTMLElement>): MenuPosition {
-  // Opened from the keyboard (ContextMenu key, Shift+F10, Enter on "…")
-  // there is no pointer position: anchor to the row or button instead.
   if (event.clientX !== 0 || event.clientY !== 0) return { x: event.clientX, y: event.clientY };
   const rect = event.currentTarget.getBoundingClientRect();
   return { x: rect.left, y: rect.bottom };
@@ -118,10 +113,6 @@ function useMenuDismiss(isOpen: boolean, onDismiss: () => void): void {
   }, [isOpen, onDismiss]);
 }
 
-/**
- * Full navigator surface. Project ordering is intentionally static; the
- * panel only exposes explicit create, focus, hide and delete actions.
- */
 export function NavigatorPanel({
   workspaces,
   snapshot = null,
@@ -164,16 +155,16 @@ export function NavigatorPanel({
   style,
   emptyState,
   agentLabels,
-  flatten = false,
+  shouldFlatten = false,
   headerSlot,
   agentMenu,
 }: NavigatorPanelProps) {
-  const t = useT();
+  const translate = useT();
   const [query, setQuery] = useState("");
   const [localCollapsed, setLocalCollapsed] = useState<Set<string>>(() => new Set(defaultCollapsedIds));
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
-  const controlledCollapsed = collapsedIds !== undefined;
+  const isCollapseControlled = collapsedIds !== undefined;
   const hasWorkspaces = workspaces.length > 0;
   const enabledActivities = useMemo(
     () => enabledActivityTabs({
@@ -188,8 +179,8 @@ export function NavigatorPanel({
   const collapsed = useMemo(() => new Set(collapsedIds ?? localCollapsed), [collapsedIds, localCollapsed]);
   const reported = useReportedStates();
   const tree = useMemo(
-    () => buildNavigatorTree(workspaces, { snapshot, groups, exited, notifications, contextUsage, statuses, branches, containerVisibility, agentLabels, flatten, reported }),
-    [agentLabels, branches, containerVisibility, contextUsage, exited, flatten, groups, notifications, snapshot, statuses, workspaces, reported],
+    () => buildNavigatorTree(workspaces, { snapshot, groups, exited, notifications, contextUsage, statuses, branches, containerVisibility, agentLabels, shouldFlatten, reported }),
+    [agentLabels, branches, containerVisibility, contextUsage, exited, shouldFlatten, groups, notifications, snapshot, statuses, workspaces, reported],
   );
   const filteredTree = useMemo(() => filterNavigatorTree(tree, query), [query, tree]);
   const expandableIds = useMemo(() => collectExpandable(filteredTree), [filteredTree]);
@@ -200,13 +191,13 @@ export function NavigatorPanel({
     return result;
   }, [collapsed, expandableIds, query]);
   useEffect(() => {
-    if (controlledCollapsed) return;
+    if (isCollapseControlled) return;
     setLocalCollapsed((current) => {
       const valid = new Set(defaultCollapsedIds);
       if (current.size === 0 && valid.size > 0) return valid;
       return current;
     });
-  }, [controlledCollapsed, defaultCollapsedIds]);
+  }, [isCollapseControlled, defaultCollapsedIds]);
 
   useMenuDismiss(contextMenu !== null, closeContextMenu);
 
@@ -214,7 +205,7 @@ export function NavigatorPanel({
     const next = new Set(collapsed);
     if (next.has(id)) next.delete(id);
     else next.add(id);
-    if (!controlledCollapsed) setLocalCollapsed(next);
+    if (!isCollapseControlled) setLocalCollapsed(next);
     onCollapsedChange?.([...next]);
   }
 
@@ -296,21 +287,21 @@ export function NavigatorPanel({
     if (selectedActivity === "git" && loadGitStatus) {
       return <NavigatorGitView activeWorkspaceId={activeWorkspaceId} loadGitStatus={loadGitStatus} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} />;
     }
-    return <div className={styles.integrationView}><div className={styles.integrationEmpty}>{t("nav.unavailable")}</div></div>;
+    return <div className={styles.integrationView}><div className={styles.integrationEmpty}>{translate("nav.unavailable")}</div></div>;
   }
 
   return (
-    <aside aria-label={title ?? t("shell.sidebar.label")} className={classes(styles.panel, className)} style={style}>
+    <aside aria-label={title ?? translate("shell.sidebar.label")} className={classes(styles.panel, className)} style={style}>
       <header className={styles.header}>
         {headerSlot ?? (
           <div className={styles.headerTop}>
             <div className={styles.titleCluster}>
               <span aria-hidden="true" className={styles.mark}><Folder size={13} /></span>
-              <h2 className={styles.title}>{title ?? t("shell.sidebar.label")}</h2>
+              <h2 className={styles.title}>{title ?? translate("shell.sidebar.label")}</h2>
             </div>
           </div>
         )}
-        <nav aria-label={t("nav.activity")} className={styles.activityTabs} role="tablist">
+        <nav aria-label={translate("nav.activity")} className={styles.activityTabs} role="tablist">
           {ACTIVITY_TABS.filter((tab) => enabledActivities.includes(tab.id)).map((tab) => (
             <button
               aria-selected={selectedActivity === tab.id}
@@ -321,19 +312,19 @@ export function NavigatorPanel({
               type="button"
             >
               {tab.id === "git" ? <GitBranch aria-hidden="true" size={12} /> : null}
-              <span className={styles.tabLabel}>{t(tab.label)}</span>
+              <span className={styles.tabLabel}>{translate(tab.label)}</span>
             </button>
           ))}
         </nav>
         <label className={styles.searchRow}>
           <Search aria-hidden="true" size={13} />
-          <input aria-label={t("nav.search")} className={styles.searchInput} onChange={handleQuery} placeholder={t("nav.searchPlaceholder")} type="search" value={query} />
+          <input aria-label={translate("nav.search")} className={styles.searchInput} onChange={handleQuery} placeholder={translate("nav.searchPlaceholder")} type="search" value={query} />
         </label>
       </header>
       {renderActivityView()}
       <footer className={styles.footer}>
-        <span>{t("nav.projectCount", { count: projectCount })}</span>
-        {createProject ? <button className={styles.footerAction} onClick={() => createProject(null)} type="button"><Plus aria-hidden="true" size={12} /> {t("palette.newProject")}</button> : null}
+        <span>{translate("nav.projectCount", { count: projectCount })}</span>
+        {createProject ? <button className={styles.footerAction} onClick={() => createProject(null)} type="button"><Plus aria-hidden="true" size={12} /> {translate("palette.newProject")}</button> : null}
       </footer>
     </aside>
   );

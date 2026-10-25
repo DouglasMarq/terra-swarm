@@ -84,12 +84,12 @@ function actionSet(props: ProjectTreeViewProps): NavigatorNodeActions {
 }
 
 function renderNode(node: NavigatorNode, props: ProjectTreeViewProps, actions: NavigatorNodeActions): ReactNode {
-  const expanded = props.expandedIds.has(node.id);
+  const isExpanded = props.expandedIds.has(node.id);
   const common = {
-    active: nodeActive(node, props),
-    expanded,
-    selected: nodeSelected(node, props),
-    visible: node.kind === "project" ? node.visible : true,
+    isActive: nodeActive(node, props),
+    isExpanded,
+    isSelected: nodeSelected(node, props),
+    isVisible: node.kind === "project" ? node.isVisible : true,
   };
   let row: ReactNode;
   if (node.kind === "group") {
@@ -106,35 +106,34 @@ function renderNode(node: NavigatorNode, props: ProjectTreeViewProps, actions: N
   return (
     <div key={`${node.kind}:${node.id}`}>
       {row}
-      {expanded && node.children.length > 0 ? node.children.map((child) => renderNode(child, props, actions)) : null}
+      {isExpanded && node.children.length > 0 ? node.children.map((child) => renderNode(child, props, actions)) : null}
     </div>
   );
 }
 
-/** Tree renderer kept separate so the panel can own headers and actions. */
 export function ProjectTree({ tree, expandedIds, onToggle, onCreateGroup, ...props }: ProjectTreeViewProps) {
-  const t = useT();
+  const translate = useT();
   const viewProps: ProjectTreeViewProps = { tree, expandedIds, onToggle, onCreateGroup, ...props };
   const actions = actionSet(viewProps);
   const groups = tree.roots.filter((node): node is NavigatorGroupNode => node.kind === "group");
   const ungrouped = tree.roots.filter((node): node is NavigatorProjectNode => node.kind === "project");
   const hasAny = groups.length > 0 || ungrouped.length > 0;
   return (
-    <div aria-label={t("nav.projects")} className={styles.tree} role="tree">
+    <div aria-label={translate("nav.projects")} className={styles.tree} role="tree">
       {groups.length > 0 ? (
         <div className={styles.sectionHeader}>
-          <span className={styles.sectionHeaderText}><Folder aria-hidden="true" size={12} /> {t("nav.groups")} <span className={styles.sectionCount}>{groups.length}</span></span>
-          {onCreateGroup ? <button aria-label={t("nav.createGroup")} className={`${styles.createButton} ${styles.sectionCreate}`} onClick={onCreateGroup} type="button"><Plus aria-hidden="true" size={13} /></button> : null}
+          <span className={styles.sectionHeaderText}><Folder aria-hidden="true" size={12} /> {translate("nav.groups")} <span className={styles.sectionCount}>{groups.length}</span></span>
+          {onCreateGroup ? <button aria-label={translate("nav.createGroup")} className={`${styles.createButton} ${styles.sectionCreate}`} onClick={onCreateGroup} type="button"><Plus aria-hidden="true" size={13} /></button> : null}
         </div>
       ) : null}
       {groups.map((group) => renderNode(group, viewProps, actions))}
       {ungrouped.length > 0 && groups.length > 0 ? (
         <div className={styles.sectionHeader}>
-          <span className={styles.sectionHeaderText}><Folder aria-hidden="true" size={12} /> {t("nav.ungrouped")} <span className={styles.sectionCount}>{ungrouped.length}</span></span>
+          <span className={styles.sectionHeaderText}><Folder aria-hidden="true" size={12} /> {translate("nav.ungrouped")} <span className={styles.sectionCount}>{ungrouped.length}</span></span>
         </div>
       ) : null}
       {ungrouped.map((project) => renderNode(project, viewProps, actions))}
-      {!hasAny ? <div className={styles.emptyState}><div><strong>{t("nav.noProjects")}</strong>{t("nav.noProjectsHint")}</div></div> : null}
+      {!hasAny ? <div className={styles.emptyState}><div><strong>{translate("nav.noProjects")}</strong>{translate("nav.noProjectsHint")}</div></div> : null}
     </div>
   );
 }

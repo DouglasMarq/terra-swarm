@@ -14,7 +14,7 @@ import { loopbackUrl, startPreviewBridge, usePreviewStore } from "./previewStore
 describe("preview store", () => {
   afterEach(() => usePreviewStore.getState().reset());
 
-  it("accepts only loopback pages", () => {
+  it("Given page URLs, when accepting them, then only loopback pages are accepted", () => {
     expect(loopbackUrl("5173")).toBe("http://localhost:5173/");
     expect(loopbackUrl("localhost:3000/app")).toBe("http://localhost:3000/app");
     expect(loopbackUrl("http://127.0.0.1:8000")).toBe("http://127.0.0.1:8000/");
@@ -25,7 +25,7 @@ describe("preview store", () => {
     expect(loopbackUrl("")).toBeNull();
   });
 
-  it("keeps the newest detection first and selects the first one found", () => {
+  it("Given several detections, when storing them, then the newest is first and the first one found is selected", () => {
     const store = usePreviewStore.getState();
     store.addDetected("ws", "http://localhost:5173/");
     store.addDetected("ws", "http://localhost:3000/");
@@ -35,7 +35,7 @@ describe("preview store", () => {
     expect(usePreviewStore.getState().selected.ws).toBe("http://localhost:5173/");
   });
 
-  it("probes common ports without Terra's own", async () => {
+  it("Given common ports, when probing, then Terra's own port is left out", async () => {
     api.probeDevServers.mockResolvedValue([3000, 8080]);
     await usePreviewStore.getState().probe("ws", 5173);
     expect(api.probeDevServers.mock.calls[0][0]).not.toContain(5173);
@@ -44,7 +44,7 @@ describe("preview store", () => {
 });
 
 describe("startPreviewBridge", () => {
-  it("given the listener fails to register, warns when stopped instead of swallowing it", async () => {
+  it("Given the listener fails to register, when the bridge is stopped, then it warns instead of swallowing the failure", async () => {
     vi.mocked(listen).mockRejectedValueOnce(new Error("no event bus"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const stop = startPreviewBridge();

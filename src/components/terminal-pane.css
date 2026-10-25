@@ -1,5 +1,3 @@
-/* Terminal pane: header with status, task and kind; attention strip; exit overlay. */
-
 .pane {
   position: relative;
   container-type: inline-size;
@@ -28,9 +26,6 @@
   height: 100% !important;
 }
 
-/* The selected terminal: a zinc focus ring. An agent that needs you gets the
- * amber edge, the pulsing glow below and the message strip, so the two stay
- * distinct. */
 .pane.focused {
   box-shadow: var(--terra-pane-focus-ring), var(--terra-shadow-pane);
 }
@@ -147,7 +142,6 @@
   display: inline-grid;
   width: 26px;
   height: 26px;
-  /* The global button style adds 6px 12px padding; it pushed icons off-centre. */
   padding: 0;
   place-items: center;
   border: 0;
@@ -176,10 +170,6 @@
   overflow: hidden;
 }
 
-/* The padding sits on .xterm, not on .pane-body: FitAddon subtracts the
- * padding of this element only, so padding on the parent made xterm wider
- * and taller than its box and the last column and row were cut off. No
- * right padding: FitAddon already keeps the 14px scrollbar strip free. */
 .pane-body .xterm {
   height: 100%;
   padding: var(--terra-space-1) 0 var(--terra-space-1) var(--terra-space-2);
@@ -206,7 +196,7 @@
 
 .pane-overlay {
   position: absolute;
-  z-index: 10; /* pane-local: topmost layer inside a pane */
+  z-index: 10;
   inset: 36px 0 0;
   display: flex;
   flex-direction: column;
@@ -230,8 +220,6 @@
   gap: 8px;
 }
 
-/* Narrow panes (dense grids, Foco side column): keep the name and the
- * Maximize/… buttons; drop the secondary details first. */
 @container (max-width: 380px) {
   .pane-ctx,
   .pane-title {
@@ -245,16 +233,12 @@
   }
 }
 
-/* ---------------------------------------------------------------- menu */
-
 .pane-menu {
   position: relative;
   display: inline-flex;
 }
 
 .pane-menu-list {
-  /* Portalled to <body> and placed by PaneActionsMenu, so the pane's
-   * overflow: hidden never clips it. Above the fullscreen project (250). */
   position: fixed;
   z-index: 400;
   display: flex;
@@ -336,7 +320,6 @@
 .pane-worktree {
   display: inline-flex;
   flex: 0 1 auto;
-  /* Shrinks after the title, and never to an empty box. */
   min-width: 56px;
   align-items: center;
   gap: 4px;
@@ -347,7 +330,6 @@
   white-space: nowrap;
 }
 
-/* A button that keeps the tag's look. */
 button.pane-worktree {
   background: transparent;
   cursor: pointer;

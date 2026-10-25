@@ -5,7 +5,7 @@ import { mergeWorkspaceSnapshot } from "./snapshotMerge";
 import { normalizeSnapshotV2 } from "./snapshotNormalize";
 
 describe("migrateLegacyWorkspaces", () => {
-  it("maps each legacy workspace terminal to one project, container, pane, and tab", () => {
+  it("Given legacy workspaces, when migrating, then each terminal maps to one project, container, pane and tab", () => {
     const snapshot = migrateLegacyWorkspaces([
       {
         id: "ws-alpha",
@@ -104,7 +104,7 @@ describe("migrateLegacyWorkspaces", () => {
     });
   });
 
-  it("is deterministic and keeps the old workspace ids", () => {
+  it("Given legacy workspaces, when migrating twice, then the result is deterministic and keeps the old workspace ids", () => {
     const legacy = [
       {
         id: "same",
@@ -126,7 +126,7 @@ describe("migrateLegacyWorkspaces", () => {
     expect(first.projects[1]?.containerIds[0]).toBe("container-same-2");
   });
 
-  it("retains malformed and duplicate terminals as orphaned tabs", () => {
+  it("Given malformed and duplicate terminals, when migrating, then they are kept as orphaned tabs", () => {
     const snapshot = migrateLegacyWorkspaces([
       {
         id: "ws-1",
@@ -159,7 +159,7 @@ describe("migrateLegacyWorkspaces", () => {
 });
 
 describe("normalizeSnapshotV2", () => {
-  it("repairs invalid references without silently dropping tabs", () => {
+  it("Given invalid references, when normalizing a snapshot, then they are repaired without silently dropping tabs", () => {
     const normalized = normalizeSnapshotV2({
       version: 2,
       projects: [
@@ -242,7 +242,7 @@ describe("normalizeSnapshotV2", () => {
     expect(normalized.activeTabId).toBe("tab-1");
   });
 
-  it("normalizes duplicate entity ids deterministically", () => {
+  it("Given duplicate entity ids, when normalizing a snapshot, then they are normalized deterministically", () => {
     const normalized = normalizeSnapshotV2({
       version: 900,
       projects: [
@@ -285,7 +285,7 @@ describe("mergeWorkspaceSnapshot", () => {
     },
   ];
 
-  it("keeps stable pane/tab ids and makes an identical refresh idempotent", () => {
+  it("Given an identical refresh, when merging the snapshot, then pane and tab ids stay stable and the merge is idempotent", () => {
     const first = mergeWorkspaceSnapshot(sharedPaneWorkspaces, null);
     const refreshed = mergeWorkspaceSnapshot(sharedPaneWorkspaces, first);
 
@@ -333,7 +333,7 @@ describe("mergeWorkspaceSnapshot", () => {
     expect(refreshed.projects.map((project) => project.groupId)).toEqual(["group-agents"]);
   });
 
-  it("preserves visual active state and layout while removing a stale PTY", () => {
+  it("Given a stale PTY, when merging the snapshot, then it is removed while the visual active state and layout are kept", () => {
     const first = mergeWorkspaceSnapshot(sharedPaneWorkspaces, null);
     const visualState = {
       ...first,
@@ -364,7 +364,7 @@ describe("mergeWorkspaceSnapshot", () => {
     expect(refreshed.panes[0]?.layout.mode).toBe("horizontal");
   });
 
-  it("uses nested pane/tab placement when terminal metadata comes from the backend envelope", () => {
+  it("Given terminal metadata from the backend envelope, when merging the snapshot, then nested pane and tab placement is used", () => {
     const snapshot = mergeWorkspaceSnapshot([
       {
         id: "workspace-nested",

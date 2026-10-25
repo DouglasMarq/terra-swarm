@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 describe("shell store", () => {
-  it("keeps back/forward history and truncates the forward branch", () => {
+  it("Given navigation history, when going back and forward, then history is kept and the forward branch is truncated", () => {
     const store = useShellStore.getState();
     store.navigate("workbench", "workspace-a");
     store.navigate("fleet");
@@ -36,7 +36,7 @@ describe("shell store", () => {
     );
   });
 
-  it("closes an active workspace tab without losing its reopen record", () => {
+  it("Given an active workspace tab, when closing it, then its reopen record is kept", () => {
     const store = useShellStore.getState();
     store.openWorkspaceTab({ id: "workspace-a", workspaceId: "workspace-a", label: "Alpha" });
     store.openWorkspaceTab({ id: "workspace-b", workspaceId: "workspace-b", label: "Beta" });
@@ -65,7 +65,7 @@ describe("shell store", () => {
     expect(useShellStore.getState().recentlyClosedTabs).toEqual([]);
   });
 
-  it("reorders workspace tabs durably without letting refreshes append them", () => {
+  it("Given workspace tabs, when reordering them, then the order is durable and refreshes do not append them", () => {
     const store = useShellStore.getState();
     store.openWorkspaceTab({ id: "workspace-a", workspaceId: "workspace-a", label: "Alpha" });
     store.openWorkspaceTab({ id: "workspace-b", workspaceId: "workspace-b", label: "Beta" });
@@ -95,7 +95,7 @@ describe("shell store", () => {
     });
   });
 
-  it("normalizes versioned persisted data and drops malformed entries", () => {
+  it("Given versioned persisted data, when loading it, then it is normalized and malformed entries are dropped", () => {
     const normalized = normalizeShellState({
       version: 0,
       activeSurface: "unknown",
@@ -125,14 +125,14 @@ describe("shell store", () => {
     expect(normalized.historyIndex).toBe(1);
   });
 
-  it("opens the dock when the inspector tab is selected", () => {
+  it("Given the inspector tab, when it is selected, then the dock opens", () => {
     const store = useShellStore.getState();
     store.setDockOpen(false);
     store.setDockTab("inspector");
     expect(useShellStore.getState().dock).toEqual({ open: true, activeTab: "inspector" });
   });
 
-  it("normalizes and persists navigator disclosure and shell panel layout", () => {
+  it("Given navigator disclosure and shell panel layout, when persisting, then they are normalized and kept", () => {
     const normalized = normalizeShellState({
       navigatorCollapsedIds: [" group-a ", "", "group-a", 4],
       panelLayout: { navigator: 24, content: 76, dock: 999, invalid: "x" },
@@ -150,7 +150,7 @@ describe("shell store", () => {
     });
   });
 
-  it("migrates v2 Home and Events surfaces into the v3 shell", () => {
+  it("Given v2 Home and Events surfaces, when loading, then they migrate into the v3 shell", () => {
     const normalized = normalizeShellState({
       version: 2,
       activeSurface: "events",
@@ -166,7 +166,7 @@ describe("shell store", () => {
     expect(normalized.sidebarCollapsed).toBe(true);
   });
 
-  it("toggles the sidebar", () => {
+  it("Given an expanded sidebar, when toggling it, then it collapses", () => {
     const store = useShellStore.getState();
     store.setSidebarCollapsed(false);
     store.toggleSidebar();

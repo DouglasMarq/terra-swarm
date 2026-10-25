@@ -94,9 +94,9 @@ export function deriveSnapshot(
   }
 
   for (const container of snapshot.containers) {
-    const visible = visibility[container.id] ?? true;
-    container.visible = visible;
-    container.closed = !visible;
+    const isVisible = visibility[container.id] ?? true;
+    container.visible = isVisible;
+    container.closed = !isVisible;
   }
 
   const groups = toDomainGroups(source, snapshot, previous?.groups ?? snapshot.groups);

@@ -1,14 +1,3 @@
-/**
- * A small, runtime-agnostic queue for starting sessions.
- *
- * The queue deliberately knows nothing about PTYs, Tauri, or React.  A caller
- * supplies a runner for each item (or one default runner when creating the
- * queue), and receives a settled result for that item.  Cancelling a running
- * item aborts its signal, but cannot forcibly interrupt a promise that does
- * not observe the signal; the queue keeps the slot occupied until that
- * promise settles.
- */
-
 export type SpawnQueueStatus = "succeeded" | "failed" | "cancelled";
 
 export type SpawnTaskContext = {
@@ -42,13 +31,11 @@ type SpawnOutcome<Output> = Pick<SpawnQueueResult<Output>, "status" | "value" | 
 export type SpawnQueueOptions<Input, Output> = {
   concurrency?: number;
   run?: SpawnTaskRunner<Input, Output>;
-  /** Clock for `startedAt` / `finishedAt`, in milliseconds. */
   now: () => number;
   onResult?: (result: SpawnQueueResult<Output>) => void;
 };
 
 export type SpawnQueue<Input, Output> = {
-  /** Add an item. IDs must be unique until the item has settled. */
   enqueue: {
     (item: SpawnQueueItem<Input, Output>): Promise<SpawnQueueResult<Output>>;
     (
@@ -57,23 +44,14 @@ export type SpawnQueue<Input, Output> = {
       run?: SpawnTaskRunner<Input, Output>,
     ): Promise<SpawnQueueResult<Output>>;
   };
-  /** Alias useful at call sites that treat the queue as a work list. */
   add: SpawnQueue<Input, Output>["enqueue"];
-  /** Request cancellation. Returns false when the ID is not in the queue. */
   cancel: (id: string, reason?: unknown) => boolean;
-  /** Cancel pending work and request cancellation for running work. */
   cancelAll: (reason?: unknown) => number;
-  /** Change the maximum number of concurrently running runners. */
   setConcurrency: (concurrency: number) => void;
-  /** Wait until all work known at the time of the call has settled. */
   whenIdle: () => Promise<readonly SpawnQueueResult<Output>[]>;
-  /** Same as whenIdle; named for callers that think in batches. */
   drain: () => Promise<readonly SpawnQueueResult<Output>[]>;
-  /** Snapshot of settled results, in enqueue order. */
   results: () => readonly SpawnQueueResult<Output>[];
-  /** Number of queued (not yet started) items. */
   pending: () => number;
-  /** Number of runners currently occupying a concurrency slot. */
   active: () => number;
 };
 
@@ -81,7 +59,7 @@ type InternalItem<Input, Output> = SpawnQueueItem<Input, Output> & {
   controller: AbortController;
   status: "pending" | "running";
   startedAt: number | null;
-  cancelRequested: boolean;
+  isCancelRequested: boolean;
   cancelReason?: unknown;
   resolve: (result: SpawnQueueResult<Output>) => void;
 };
@@ -106,11 +84,6 @@ function cancellationReason(reason: unknown): unknown {
   return reason ?? new Error("spawn task cancelled");
 }
 
-/**
- * Creates a bounded spawn queue.  The queue starts work as soon as an item is
- * enqueued, which makes it suitable for both startup resume and user-created
- * sessions.
- */
 export function createSpawnQueue<Input, Output>(
   options: SpawnQueueOptions<Input, Output>,
 ): SpawnQueue<Input, Output> {
@@ -152,9 +125,7 @@ export function createSpawnQueue<Input, Output>(
     if (item.status === "running") running -= 1;
     try {
       options.onResult?.(result);
-    } catch {
-      // Observers must not be able to strand a queue slot or an item promise.
-    }
+    } catch {}
     item.resolve(result);
     notifyIdle();
   };
@@ -164,7 +135,7 @@ export function createSpawnQueue<Input, Output>(
       const item = [...items.values()].find((candidate) => candidate.status === "pending");
       if (!item) break;
 
-      if (item.cancelRequested) {
+      if (item.isCancelRequested) {
         finish(item, { status: "cancelled", error: item.cancelReason });
         continue;
       }
@@ -184,12 +155,12 @@ export function createSpawnQueue<Input, Output>(
           runner(item.input, {
             id: item.id,
             signal: item.controller.signal,
-            isCancelled: () => item.cancelRequested,
+            isCancelled: () => item.isCancelRequested,
           }),
         )
         .then(
           (value) => {
-            if (item.cancelRequested) {
+            if (item.isCancelRequested) {
               finish(item, { status: "cancelled", error: item.cancelReason });
             } else {
               finish(item, { status: "succeeded", value });
@@ -197,7 +168,7 @@ export function createSpawnQueue<Input, Output>(
             startNext();
           },
           (error: unknown) => {
-            if (item.cancelRequested) {
+            if (item.isCancelRequested) {
               finish(item, { status: "cancelled", error: item.cancelReason ?? error });
             } else {
               finish(item, { status: "failed", error });
@@ -231,7 +202,7 @@ export function createSpawnQueue<Input, Output>(
       controller: new AbortController(),
       status: "pending",
       startedAt: null,
-      cancelRequested: false,
+      isCancelRequested: false,
       resolve,
     });
     startNext();
@@ -241,7 +212,7 @@ export function createSpawnQueue<Input, Output>(
   const cancel = (id: string, reason?: unknown): boolean => {
     const item = items.get(id);
     if (!item) return false;
-    item.cancelRequested = true;
+    item.isCancelRequested = true;
     item.cancelReason = cancellationReason(reason);
     item.controller.abort(item.cancelReason);
     if (item.status === "pending") {

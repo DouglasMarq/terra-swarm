@@ -16,12 +16,12 @@ import {
 } from "./layout";
 
 describe("workbench layout projection", () => {
-  it("retains persisted order and appends new panes deterministically", () => {
+  it("Given a persisted order, when projecting the layout, then the order is kept and new panes are appended deterministically", () => {
     expect(orderedIds(["a", "b", "c"], ["c", "missing", "a", "c"])).toEqual(["c", "a", "b"]);
     expect(defaultPanelSizes(["a", "b"])).toEqual({ a: 50, b: 50 });
   });
 
-  it("normalizes panel sizes and maps modes for the Terra surface", () => {
+  it("Given panel sizes and modes, when projecting the layout, then sizes are normalized and modes are mapped for the Terra surface", () => {
     expect(layoutForPanelIds({ mode: "auto", sizes: { a: 20, b: 80 } }, ["a", "b"])).toEqual({
       a: 20,
       b: 80,
@@ -45,7 +45,7 @@ describe("workbench layout projection", () => {
     });
   });
 
-  it("derives deterministic grid dimensions and preserves layout metadata", () => {
+  it("Given a pane count and layout metadata, when deriving the grid, then the dimensions are deterministic and the metadata is kept", () => {
     expect(defaultGridDimensions(0)).toEqual({ columns: 1, rows: 1 });
     expect(defaultGridDimensions(5)).toEqual({ columns: 3, rows: 2 });
     expect(gridDimensionsForLayout({ mode: "grid", columns: 4, rows: 2 }, 2)).toEqual({
@@ -66,7 +66,7 @@ describe("workbench layout projection", () => {
     });
   });
 
-  it("keeps visual close, detach, and explicit kill semantics distinct", () => {
+  it("Given visual close, detach and kill, when reading their semantics, then they stay distinct", () => {
     expect(CONTAINER_CLOSE_SEMANTICS.killsPtys).toBe(false);
     expect(CONTAINER_CLOSE_SEMANTICS.unmountsPanes).toBe(false);
     expect(TAB_DETACH_SEMANTICS.killsPty).toBe(false);

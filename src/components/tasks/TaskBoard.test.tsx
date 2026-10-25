@@ -16,7 +16,6 @@ const api = vi.hoisted(() => ({
   mcpAgentStatuses: vi.fn(),
 }));
 
-/** The board's drop handler, captured so a test can drop without a pointer. */
 const dnd = vi.hoisted(() => ({ onDragEnd: null as ((event: DragEndEvent) => void) | null }));
 
 vi.mock("@dnd-kit/core", async (importOriginal) => ({
@@ -60,8 +59,8 @@ function info(extra: Partial<McpServerInfo> = {}): McpServerInfo {
 }
 
 const agents = [
-  { id: "t-1", label: "Vega", running: true },
-  { id: "t-2", label: "Lyra", running: false },
+  { id: "t-1", label: "Vega", isRunning: true },
+  { id: "t-2", label: "Lyra", isRunning: false },
 ];
 
 describe("TaskBoard", () => {
@@ -78,7 +77,7 @@ describe("TaskBoard", () => {
 
   afterEach(() => useMcpStore.getState().reset());
 
-  it("lays the tasks out in workflow columns", async () => {
+  it("Given tasks, when the board renders, then they are laid out in workflow columns", async () => {
     render(<TaskBoard workspaceId="ws-1" workspaceName="Alpha" agents={agents} onSendPrompt={vi.fn()} />);
     const todo = await screen.findByRole("region", { name: "A fazer" });
     expect(within(todo).getByText("Task T-1")).toBeTruthy();
@@ -88,14 +87,14 @@ describe("TaskBoard", () => {
     expect(within(screen.getByRole("region", { name: "Em andamento" })).queryAllByRole("article")).toHaveLength(0);
   });
 
-  it("offers only running agents as drop targets", async () => {
+  it("Given agents, when dragging a task, then only running agents are offered as drop targets", async () => {
     render(<TaskBoard workspaceId="ws-1" agents={agents} onSendPrompt={vi.fn()} />);
     const rail = await screen.findByRole("complementary", { name: "Agentes" });
     expect(within(rail).getByText("Vega")).toBeTruthy();
     expect(within(rail).queryByText("Lyra")).toBeNull();
   });
 
-  it("given the hand-off update fails, keeps the error and types nothing into the agent", async () => {
+  it("Given the hand-off update fails, when a task is dropped on an agent, then the error is kept and nothing is typed into the agent", async () => {
     api.mcpUpdateTask.mockRejectedValue("task T-1 not found");
     const onSendPrompt = vi.fn().mockResolvedValue(undefined);
     render(<TaskBoard workspaceId="ws-1" agents={agents} onSendPrompt={onSendPrompt} />);
@@ -107,7 +106,7 @@ describe("TaskBoard", () => {
     expect(onSendPrompt).not.toHaveBeenCalled();
   });
 
-  it("given the hand-off update succeeds, types the task into the agent", async () => {
+  it("Given the hand-off update succeeds, when a task is dropped on an agent, then the task is typed into the agent", async () => {
     api.mcpUpdateTask.mockResolvedValue(task("T-1", { status: "in_progress", assignee: "t-1" }));
     const onSendPrompt = vi.fn().mockResolvedValue(undefined);
     render(<TaskBoard workspaceId="ws-1" agents={agents} onSendPrompt={onSendPrompt} />);

@@ -1,7 +1,6 @@
 import type { Dictionary } from "../dictionary";
 import type { en } from "./en";
 
-/** Português (Brasil). Must mirror every key in en.ts. */
 export const ptBR: Dictionary<typeof en> = {
   common: {
     agent: "agente",

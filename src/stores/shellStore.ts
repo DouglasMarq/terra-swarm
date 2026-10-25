@@ -5,7 +5,6 @@ import { safeStorage } from "../lib/storage/safeStorage";
 
 export const SHELL_STORAGE_KEY = "terra-shell-state";
 export const SHELL_STATE_VERSION = 3;
-/** Back/forward navigation entries kept. */
 const MAX_HISTORY_ENTRIES = 100;
 const MAX_RECENTLY_CLOSED_TABS = 20;
 const ENTRY_ID_RADIX = 36;
@@ -19,14 +18,12 @@ export type ShellSurface =
   | "board"
   | "settings";
 
-/** The right dock hosts the agent inspector, the shared tasks and the dev server preview. */
 export type DockTab = "inspector" | "tasks" | "preview";
 
 export interface ShellWorkspaceTab {
   id: string;
   label: string;
   workspaceId: string;
-  /** A visual hint used by the chrome; it does not control the PTY lifecycle. */
   state?: "ready" | "busy" | "attention" | "paused";
   pinned?: boolean;
 }
@@ -52,11 +49,8 @@ export interface ShellStateData {
   recentlyClosedTabs: ShellWorkspaceTab[];
   history: ShellHistoryEntry[];
   historyIndex: number;
-  /** Last desktop navigator/content/dock proportions reported by the shell. */
   panelLayout: ShellPanelLayout | null;
-  /** Durable disclosure state for the hierarchical Navigator. */
   navigatorCollapsedIds: string[];
-  /** The sidebar collapses to a 56px rail of project initials and agent dots. */
   sidebarCollapsed: boolean;
 }
 
@@ -64,18 +58,17 @@ export interface ShellState extends ShellStateData {
   navigate: (surface: ShellSurface, workspaceId?: string | null) => void;
   goBack: () => void;
   goForward: () => void;
-  setDockOpen: (open: boolean) => void;
+  setDockOpen: (isOpen: boolean) => void;
   toggleDock: () => void;
   setDockTab: (tab: DockTab) => void;
   openWorkspaceTab: (tab: ShellWorkspaceTab) => void;
   closeWorkspaceTab: (workspaceId: string) => void;
   reopenWorkspaceTab: (workspaceId?: string) => void;
   selectWorkspaceTab: (workspaceId: string) => void;
-  /** Reorders the visual workspace strip without affecting workspace lifecycle. */
   reorderWorkspaceTabs: (workspaceIds: readonly string[]) => void;
   setPanelLayout: (layout: ShellPanelLayout) => void;
   setNavigatorCollapsedIds: (ids: readonly string[]) => void;
-  setSidebarCollapsed: (collapsed: boolean) => void;
+  setSidebarCollapsed: (isCollapsed: boolean) => void;
   toggleSidebar: () => void;
   reset: () => void;
 }
@@ -94,7 +87,6 @@ const SURFACES: readonly ShellSurface[] = [
   "settings",
 ];
 
-/** v2 surfaces that v3 folded into others: Home into the Workbench, Events into the Fleet. */
 const LEGACY_SURFACES: Readonly<Record<string, ShellSurface>> = {
   home: "workbench",
   events: "fleet",
@@ -197,12 +189,6 @@ function initialData(): ShellStateData {
   };
 }
 
-/**
- * Keep persisted shell state deliberately small and defensive. The shell can
- * be mounted before the backend has returned its workspace list, so unknown
- * workspace ids are retained as navigation history but never manufacture a
- * terminal or project.
- */
 export function normalizeShellState(value: unknown): ShellStateData {
   const fallback = initialData();
   if (!value || typeof value !== "object") return fallback;
@@ -330,7 +316,7 @@ export const useShellStore = create<ShellState>()(
         });
       },
 
-      setDockOpen: (open) => set((state) => ({ dock: { ...state.dock, open } })),
+      setDockOpen: (isOpen) => set((state) => ({ dock: { ...state.dock, open: isOpen } })),
 
       toggleDock: () =>
         set((state) => ({ dock: { ...state.dock, open: !state.dock.open } })),
@@ -433,9 +419,6 @@ export const useShellStore = create<ShellState>()(
       setPanelLayout: (layout) => {
         const normalized = normalizePanelLayout(layout);
         if (!normalized) return;
-        // A closed desktop dock yields a two-panel callback. Keep its last
-        // known size so reopening the dock restores the full three-panel
-        // composition instead of falling back to defaults.
         set((state) => ({ panelLayout: { ...(state.panelLayout ?? {}), ...normalized } }));
       },
 
@@ -445,7 +428,7 @@ export const useShellStore = create<ShellState>()(
         });
       },
 
-      setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      setSidebarCollapsed: (isSidebarCollapsed) => set({ sidebarCollapsed: isSidebarCollapsed }),
 
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 

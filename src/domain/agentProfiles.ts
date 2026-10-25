@@ -1,5 +1,3 @@
-/** Configurable agent launch/resume/voice behavior, kept independent of UI. */
-
 import agentCatalog from "./agents.json";
 
 export type AgentResumeCommandStrategy =
@@ -40,13 +38,10 @@ const DEFAULT_VOICE_BEHAVIOR: AgentVoicePromptBehavior = {
   suffix: "",
 };
 
-/** One entry of the shared agent catalog (`agents.json`). */
 export interface AgentCatalogEntry {
   id: string;
   label: string;
-  /** Command that continues the last session; absent when unsupported. */
   resume?: string;
-  /** How Terra connects the agent to its MCP server and state hooks. */
   integration?: "claude" | "codex";
 }
 
@@ -62,8 +57,6 @@ export const DEFAULT_AGENT_PROFILES: readonly AgentProfile[] = Object.freeze([
     resumeCommandStrategy: { kind: "original" },
     voicePromptBehavior: { ...DEFAULT_VOICE_BEHAVIOR },
   },
-  // Agents without a stable "continue last session" flag reopen with their
-  // original command.
   ...AGENT_CATALOG.map((agent): AgentProfile => ({
     id: agent.id,
     label: agent.label,
@@ -110,7 +103,6 @@ function strategyFrom(raw: unknown, fallback: AgentResumeCommandStrategy): Agent
     const template = text(value.template);
     return template ? { kind: "template", template } : { ...fallback };
   }
-  // A compact `{ command: "..." }` shape is common in hand-written config.
   const command = text(value.command);
   return command ? { kind: "fixed", command } : { ...fallback };
 }
@@ -142,7 +134,6 @@ function voiceFrom(raw: unknown, fallback: AgentVoicePromptBehavior): AgentVoice
   };
 }
 
-/** The built-in profile for `id`, or a plain one that runs `id` and resumes with the original command. */
 export function fallbackProfile(id: string): AgentProfile {
   return (
     DEFAULT_AGENT_PROFILES.find((profile) => profile.id === id) ?? {
@@ -155,7 +146,6 @@ export function fallbackProfile(id: string): AgentProfile {
   );
 }
 
-/** Normalize one profile, filling malformed or omitted fields with safe defaults. */
 export function normalizeAgentProfile(
   raw: RawAgentProfile | unknown,
   fallback?: AgentProfile,
@@ -176,7 +166,6 @@ export function normalizeAgentProfile(
   };
 }
 
-/** Normalize a user-configured profile list and remove duplicate IDs. */
 export function normalizeAgentProfiles(
   raw: readonly RawAgentProfile[] | unknown,
   defaults: readonly AgentProfile[] = DEFAULT_AGENT_PROFILES,
@@ -221,14 +210,9 @@ export function resolveResumeCommand(
   if (strategy.kind === "append") return `${originalCommand}${strategy.separator}${strategy.suffix}`.trim();
   return strategy.template
     .replace(/\{command\}/g, originalCommand)
-    .replace(/\{(\w+)\}/g, (_, key: string) => values[key] ?? "");
+    .replace(/\{(\w+)\}/g, (_match, key: string) => values[key] ?? "");
 }
 
-/**
- * The command that starts an agent fresh. A continuation command
- * (`claude --continue`) maps back to the agent's own command, so restarting
- * an agent with no saved conversation does not fail every time.
- */
 export function freshCommand(command: string): string {
   const profile = profileForCommand(command);
   const strategy = profile.resumeCommandStrategy;
@@ -246,7 +230,7 @@ export function buildVoicePrompt(
   const rendered = behavior.template
       ? behavior.template
         .replace(/\{text\}/g, transcript)
-        .replace(/\{(\w+)\}/g, (_, key: string) => values[key] ?? "")
+        .replace(/\{(\w+)\}/g, (_match, key: string) => values[key] ?? "")
     : transcript;
   if (behavior.mode === "replace") {
     return behavior.template ? rendered : `${behavior.prefix}${rendered}${behavior.suffix}`;

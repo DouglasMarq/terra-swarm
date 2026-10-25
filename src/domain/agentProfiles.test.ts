@@ -11,7 +11,7 @@ import {
 } from "./agentProfiles";
 
 describe("agent profiles", () => {
-  it("normalizes IDs, labels, commands, and resume strategy", () => {
+  it("Given raw profiles, when normalizing them, then ids, labels, commands and resume strategy are normalized", () => {
     const profile = normalizeAgentProfile({
       id: " custom agent ",
       label: "  Custom  ",
@@ -26,7 +26,7 @@ describe("agent profiles", () => {
     );
   });
 
-  it("deduplicates configured profiles and falls back to built-ins", () => {
+  it("Given configured profiles, when normalizing the list, then duplicates are removed and built-ins are the fallback", () => {
     const profiles = normalizeAgentProfiles([
       { id: "claude", label: "First", command: "claude" },
       { id: "claude", label: "Second", command: "claude" },
@@ -36,7 +36,7 @@ describe("agent profiles", () => {
     expect(profileForCommand("codex --no-alt-screen").id).toBe("codex");
   });
 
-  it("renders voice behavior without coupling to a terminal", () => {
+  it("Given a voice behavior, when rendering it, then it does not depend on a terminal", () => {
     const profile = normalizeAgentProfile({
       id: "voice-agent",
       voicePromptBehavior: { mode: "prepend", prefix: "Review: " },
@@ -48,7 +48,7 @@ describe("agent profiles", () => {
 });
 
 describe("freshCommand", () => {
-  it("maps a continuation command back to the agent's own command", () => {
+  it("Given a continuation command, when computing the fresh command, then it maps back to the agent's own command", () => {
     expect(freshCommand("claude --continue")).toBe("claude");
     expect(freshCommand("codex  resume --last")).toBe("codex");
     expect(freshCommand("claude --model opus")).toBe("claude --model opus");
@@ -57,11 +57,11 @@ describe("freshCommand", () => {
 });
 
 describe("fallbackProfile", () => {
-  it("given a built-in agent id, returns its catalog profile", () => {
+  it("Given a built-in agent id, when asking for its fallback profile, then its catalog profile is returned", () => {
     expect(fallbackProfile("claude")).toBe(DEFAULT_AGENT_PROFILES.find((profile) => profile.id === "claude"));
   });
 
-  it("given an unknown id, returns a profile that runs it and resumes with the original command", () => {
+  it("Given an unknown id, when asking for its fallback profile, then it runs that id and resumes with the original command", () => {
     expect(fallbackProfile("my-agent")).toEqual({
       id: "my-agent",
       label: "my-agent",

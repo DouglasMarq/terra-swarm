@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fillPrompt, promptTitle } from "./prompts";
 
 describe("fillPrompt", () => {
-  it("fills the project placeholder", () => {
+  it("Given a prompt with the project placeholder, when filling it, then the project name is filled in", () => {
     expect(fillPrompt("Review {project} now", { project: "api" })).toBe("Review api now");
     expect(fillPrompt("Review {project}", {})).toBe("Review this project");
   });

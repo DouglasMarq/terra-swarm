@@ -14,23 +14,22 @@ interface SurfaceSwitchProps {
 }
 
 function AttentionCount({ count }: { count: number }) {
-  const t = useT();
+  const translate = useT();
   if (count <= 0) return null;
-  return <span className="terra-sidebar-count" aria-label={t("shell.attention.button", { count })}>{count}</span>;
+  return <span className="terra-sidebar-count" aria-label={translate("shell.attention.button", { count })}>{count}</span>;
 }
 
-/** Workbench | Frota | Quadro. The places work happens. */
 export function SurfaceSwitch({ surface, attentionCount, onNavigate }: SurfaceSwitchProps) {
-  const t = useT();
+  const translate = useT();
   return (
-    <div className="terra-sidebar-switch" role="group" aria-label={t("shell.sidebar.surface")}>
+    <div className="terra-sidebar-switch" role="group" aria-label={translate("shell.sidebar.surface")}>
       <button
         type="button"
         aria-pressed={surface === "workbench"}
         data-active={surface === "workbench"}
         onClick={() => onNavigate("workbench")}
       >
-        {t("common.workbench")}
+        {translate("common.workbench")}
       </button>
       <button
         type="button"
@@ -38,7 +37,7 @@ export function SurfaceSwitch({ surface, attentionCount, onNavigate }: SurfaceSw
         data-active={surface === "fleet"}
         onClick={() => onNavigate("fleet")}
       >
-        {t("common.fleet")}
+        {translate("common.fleet")}
         <AttentionCount count={attentionCount} />
       </button>
       <button
@@ -47,14 +46,13 @@ export function SurfaceSwitch({ surface, attentionCount, onNavigate }: SurfaceSw
         data-active={surface === "board"}
         onClick={() => onNavigate("board")}
       >
-        {t("common.board")}
+        {translate("common.board")}
       </button>
     </div>
   );
 }
 
 export interface SidebarProps extends SurfaceSwitchProps {
-  /** The project → agent navigator, rendered with the switch as its header. */
   children: ReactNode;
   activeAgents: number;
   version?: string;
@@ -62,9 +60,9 @@ export interface SidebarProps extends SurfaceSwitchProps {
 }
 
 export function Sidebar({ children, activeAgents, version, onOpenSettings, surface }: SidebarProps) {
-  const t = useT();
+  const translate = useT();
   return (
-    <div className="terra-sidebar" aria-label={t("shell.sidebar.label")}>
+    <div className="terra-sidebar" aria-label={translate("shell.sidebar.label")}>
       <div className="terra-sidebar-tree">{children}</div>
       <footer className="terra-sidebar-footer">
         <button
@@ -74,10 +72,10 @@ export function Sidebar({ children, activeAgents, version, onOpenSettings, surfa
           onClick={onOpenSettings}
         >
           <Settings2 size={15} aria-hidden="true" />
-          {t("common.settings")}
+          {translate("common.settings")}
         </button>
         <span className="terra-sidebar-meta">
-          {t("shell.sidebar.activeAgents", { count: activeAgents })}
+          {translate("shell.sidebar.activeAgents", { count: activeAgents })}
           {version ? ` · v${version}` : ""}
         </span>
       </footer>
@@ -96,7 +94,7 @@ export interface CollapsedSidebarProject {
   id: string;
   name: string;
   status: CollapsedSidebarAgent["status"] | "idle";
-  suspended: boolean;
+  isSuspended: boolean;
   agents: CollapsedSidebarAgent[];
 }
 
@@ -114,7 +112,6 @@ export interface CollapsedSidebarProps {
   expandShortcut?: string;
 }
 
-/** 56px rail: surfaces, project initials, one dot per agent of the active project. */
 export function CollapsedSidebar({
   surface,
   attentionCount,
@@ -128,15 +125,15 @@ export function CollapsedSidebar({
   onExpand,
   expandShortcut,
 }: CollapsedSidebarProps) {
-  const t = useT();
-  const expandLabel = expandShortcut ? t("shell.sidebar.expandWithShortcut", { shortcut: expandShortcut }) : t("shell.sidebar.expand");
+  const translate = useT();
+  const expandLabel = expandShortcut ? translate("shell.sidebar.expandWithShortcut", { shortcut: expandShortcut }) : translate("shell.sidebar.expand");
   return (
-    <nav className="terra-rail" aria-label={t("shell.sidebar.collapsedLabel")}>
+    <nav className="terra-rail" aria-label={translate("shell.sidebar.collapsedLabel")}>
       <button
         type="button"
         className="terra-rail-button"
-        aria-label={t("common.workbench")}
-        title={t("common.workbench")}
+        aria-label={translate("common.workbench")}
+        title={translate("common.workbench")}
         data-active={surface === "workbench"}
         onClick={() => onNavigate("workbench")}
       >
@@ -145,8 +142,8 @@ export function CollapsedSidebar({
       <button
         type="button"
         className="terra-rail-button"
-        aria-label={attentionCount > 0 ? t("shell.sidebar.fleetAttention", { count: attentionCount }) : t("common.fleet")}
-        title={t("common.fleet")}
+        aria-label={attentionCount > 0 ? translate("shell.sidebar.fleetAttention", { count: attentionCount }) : translate("common.fleet")}
+        title={translate("common.fleet")}
         data-active={surface === "fleet"}
         onClick={() => onNavigate("fleet")}
       >
@@ -156,8 +153,8 @@ export function CollapsedSidebar({
       <button
         type="button"
         className="terra-rail-button"
-        aria-label={t("common.board")}
-        title={t("common.board")}
+        aria-label={translate("common.board")}
+        title={translate("common.board")}
         data-active={surface === "board"}
         onClick={() => onNavigate("board")}
       >
@@ -166,22 +163,22 @@ export function CollapsedSidebar({
       <span className="terra-rail-divider" aria-hidden="true" />
       <div className="terra-rail-projects">
         {projects.map((project) => {
-          const active = project.id === activeWorkspaceId;
+          const isActive = project.id === activeWorkspaceId;
           return (
             <div className="terra-rail-project" key={project.id}>
               <button
                 type="button"
                 className="terra-rail-initials"
-                data-active={active}
-                data-suspended={project.suspended}
-                aria-label={t("shell.sidebar.projectAgents", { name: project.name, count: project.agents.length })}
+                data-active={isActive}
+                data-suspended={project.isSuspended}
+                aria-label={translate("shell.sidebar.projectAgents", { name: project.name, count: project.agents.length })}
                 title={project.name}
                 onClick={() => onOpenWorkspace(project.id)}
               >
                 {initials(project.name)}
                 {project.status === "attention" ? <span className="terra-rail-project-dot" aria-hidden="true" /> : null}
               </button>
-              {active
+              {isActive
                 ? project.agents.map((agent) => (
                   <button
                     type="button"
@@ -200,7 +197,7 @@ export function CollapsedSidebar({
           );
         })}
       </div>
-      <button type="button" className="terra-rail-button" aria-label={t("common.settings")} title={t("common.settings")} data-active={surface === "settings"} onClick={onOpenSettings}>
+      <button type="button" className="terra-rail-button" aria-label={translate("common.settings")} title={translate("common.settings")} data-active={surface === "settings"} onClick={onOpenSettings}>
         <Settings2 size={16} aria-hidden="true" />
       </button>
       <button type="button" className="terra-rail-button" aria-label={expandLabel} title={expandLabel} onClick={onExpand}>

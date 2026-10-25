@@ -1,6 +1,5 @@
 import type { Pane, Project, TerminalTab, WorkspaceContainer, WorkspaceSnapshotV2 } from "./workspace.model";
 
-/** The item with `id`, or null when `id` is empty or not in `items`. */
 export function byId<T extends { id: string }>(items: readonly T[], id: string | null | undefined): T | null {
   if (!id) return null;
   return items.find((item) => item.id === id) ?? null;
@@ -50,7 +49,6 @@ function resolvePaneScope(
   );
 }
 
-/** Returns the active pane for a project, container, or the snapshot itself. */
 export function selectActivePane(
   snapshot: WorkspaceSnapshotV2,
   scope?: string | null,
@@ -93,7 +91,6 @@ export function selectActivePane(
 
 export const getActivePane = selectActivePane;
 
-/** Returns all tabs in a pane in the pane's stable order. */
 export function selectPaneTabs(snapshot: WorkspaceSnapshotV2, paneId: string): TerminalTab[] {
   const pane = selectPane(snapshot, paneId);
   if (!pane) return [];
@@ -102,7 +99,6 @@ export function selectPaneTabs(snapshot: WorkspaceSnapshotV2, paneId: string): T
     .filter((tab): tab is TerminalTab => tab !== null);
 }
 
-/** Returns the active tab in a pane, or the first recoverable tab. */
 function selectActiveTab(
   snapshot: WorkspaceSnapshotV2,
   paneId?: string | null,
@@ -123,13 +119,13 @@ export const getActiveTab = selectActiveTab;
 
 function descendantGroupIds(snapshot: WorkspaceSnapshotV2, groupId: string): Set<string> {
   const result = new Set<string>([groupId]);
-  let changed = true;
-  while (changed) {
-    changed = false;
+  let hasChanged = true;
+  while (hasChanged) {
+    hasChanged = false;
     for (const group of snapshot.groups) {
       if (group.parentGroupId && result.has(group.parentGroupId) && !result.has(group.id)) {
         result.add(group.id);
-        changed = true;
+        hasChanged = true;
       }
     }
   }
@@ -170,7 +166,6 @@ export function selectProjectPtyIds(snapshot: WorkspaceSnapshotV2, projectId: st
   return result;
 }
 
-/** PTYs are selected from project membership, never from container visibility. */
 function selectGroupPtyIds(snapshot: WorkspaceSnapshotV2, groupId: string): string[] {
   const result: string[] = [];
   const seen = new Set<string>();
@@ -197,7 +192,6 @@ export function isContainerVisible(container: WorkspaceContainer | null | undefi
   return Boolean(container && !container.closed && container.visible);
 }
 
-/** Closing a visual container never requires a PTY termination. */
 export function shouldTerminatePtyWhenContainerCloses(): false {
   return false;
 }

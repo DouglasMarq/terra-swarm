@@ -8,7 +8,7 @@ export interface OrchestrationProjection {
   groups: Group[];
   containerVisibility: Record<string, boolean>;
   detachedTerminalIds: string[];
-  hydrated: boolean;
+  isHydrated: boolean;
 }
 
 export interface PersistenceEngineDeps {
@@ -57,10 +57,6 @@ function liveDetachedTerminalIds(workspaces: readonly Workspace[], detachedTermi
 }
 
 export function createPersistenceEngine({ read, apply, reportError }: PersistenceEngineDeps): PersistenceEngine {
-  // Every durable command gets both a global sequence and a set of logical
-  // targets. The global sequence prevents a full backend reload from
-  // clobbering any newer optimistic mutation; target versions make the
-  // ownership explicit for commands that affect one visual surface.
   let persistenceVersion = 0;
   const targetVersions = new Map<string, number>();
   let reconciliationChain: Promise<void> = Promise.resolve();
@@ -78,7 +74,7 @@ export function createPersistenceEngine({ read, apply, reportError }: Persistenc
         groups: [...state.groups],
         containerVisibility: { ...state.containerVisibility },
         detachedTerminalIds: [...state.detachedTerminalIds],
-        hydrated: state.hydrated,
+        isHydrated: state.isHydrated,
       },
     };
   };
@@ -105,13 +101,11 @@ export function createPersistenceEngine({ read, apply, reportError }: Persistenc
       groups: derived.groups,
       containerVisibility: snapshotContainerVisibility(derived.snapshot),
       detachedTerminalIds: liveDetachedTerminalIds(workspaces, read().detachedTerminalIds),
-      hydrated: true,
+      isHydrated: true,
     };
   };
 
   const reconcilePersistence = (transaction: PersistenceTransaction, operation: string): void => {
-    // Roll back synchronously as soon as the command rejects. The subsequent
-    // read replaces this safe baseline with the backend's authoritative state.
     if (isCurrentPersistence(transaction)) apply(transaction.before);
     const run = async (): Promise<void> => {
       if (!isCurrentPersistence(transaction)) return;
@@ -120,16 +114,11 @@ export function createPersistenceEngine({ read, apply, reportError }: Persistenc
         if (projection) apply(projection);
       } catch (reconciliationError) {
         if (!isCurrentPersistence(transaction)) return;
-        // If the authoritative read is unavailable, restore the exact
-        // pre-mutation projection instead of persisting the rejected one.
         apply(transaction.before);
         reportError(`${operation} reconciliation`, reconciliationError);
       }
     };
 
-    // A failed command can arrive while another reconciliation is reading the
-    // backend. Serializing reads avoids applying an older authoritative view
-    // after a newer one.
     const next = reconciliationChain.then(run, run);
     reconciliationChain = next.catch(() => undefined);
   };

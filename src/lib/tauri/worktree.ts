@@ -5,8 +5,8 @@ function worktreeStatus(workspaceId: string, terminalId: string): Promise<Worktr
   return invokeCommand("worktreeStatus", { workspaceId, terminalId });
 }
 
-function worktreeRemove(workspaceId: string, terminalId: string, deleteBranch: boolean): Promise<void> {
-  return invokeCommand("worktreeRemove", { workspaceId, terminalId, deleteBranch });
+function worktreeRemove(workspaceId: string, terminalId: string, shouldDeleteBranch: boolean): Promise<void> {
+  return invokeCommand("worktreeRemove", { workspaceId, terminalId, deleteBranch: shouldDeleteBranch });
 }
 
 function worktreeDiff(workspaceId: string, terminalId: string): Promise<WorktreeDiff> {
@@ -21,7 +21,6 @@ function worktreeMerge(workspaceId: string, terminalId: string): Promise<Worktre
   return invokeCommand("worktreeMerge", { workspaceId, terminalId });
 }
 
-/** Pushes the agent's branch to origin and opens a pull request; returns its URL. */
 function worktreeOpenPr(workspaceId: string, terminalId: string, title: string, body: string): Promise<string> {
   return invokeCommand("worktreeOpenPr", { workspaceId, terminalId, title, body });
 }

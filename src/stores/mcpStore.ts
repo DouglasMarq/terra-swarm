@@ -13,20 +13,17 @@ import type { McpAgentState, McpAgentStatus, McpServerInfo, McpTask, McpTaskPatc
 
 export interface McpState {
   server: McpServerInfo | null;
-  /** Tasks by workspace id; a workspace appears once it has been loaded. */
   tasks: Record<string, McpTask[]>;
-  /** Reported agent states by terminal id. */
   statuses: Record<string, McpAgentStatus>;
   error: string | null;
   loadServer: () => Promise<void>;
-  setEnabled: (enabled: boolean) => Promise<void>;
+  setEnabled: (isEnabled: boolean) => Promise<void>;
   loadTasks: (workspaceId: string) => Promise<void>;
   loadStatuses: (workspaceId: string) => Promise<void>;
   createTask: (
     workspaceId: string,
     input: { title: string; description?: string; priority?: McpTaskPriority; assignee?: string | null },
   ) => Promise<McpTask | null>;
-  /** Resolves to the updated task, or null when the update failed (the reason is in `error`). */
   updateTask: (workspaceId: string, id: string, patch: McpTaskPatch) => Promise<McpTask | null>;
   deleteTask: (workspaceId: string, id: string) => Promise<void>;
   applyStatus: (payload: McpAgentStatusPayload) => void;
@@ -54,9 +51,9 @@ export const useMcpStore = create<McpState>((set, get) => ({
     }
   },
 
-  setEnabled: async (enabled) => {
+  setEnabled: async (isEnabled) => {
     try {
-      set({ server: await mcpApi.mcpSetEnabled(enabled) });
+      set({ server: await mcpApi.mcpSetEnabled(isEnabled) });
     } catch (error) {
       set({ error: errorMessage(error) });
     }
@@ -130,7 +127,6 @@ export const useMcpStore = create<McpState>((set, get) => ({
   reset: () => set({ server: null, tasks: {}, statuses: {}, error: null }),
 }));
 
-/** Reported agent states by terminal id, for the status dots everywhere. */
 export function useReportedStates(): Record<string, McpAgentState> {
   const statuses = useMcpStore((state) => state.statuses);
   return useMemo(
@@ -139,10 +135,6 @@ export function useReportedStates(): Record<string, McpAgentState> {
   );
 }
 
-/**
- * Keep the store in step with agent activity. A board is refetched only for
- * workspaces that have been opened, so idle projects cost nothing.
- */
 export function startMcpEventBridge(onNudge: (payload: McpNudgePayload) => void): () => void {
   const pending = [
     onMcpTasksChanged((payload) => {

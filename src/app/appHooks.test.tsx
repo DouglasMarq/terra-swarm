@@ -48,31 +48,31 @@ describe("useResumeQueue", () => {
     for (const fn of Object.values(api)) fn.mockReset();
     api.storeSavedAt.mockResolvedValue(123);
     api.killTerminal.mockResolvedValue(undefined);
-    usePreferencesStore.setState({ autoResume: false });
+    usePreferencesStore.setState({ shouldAutoResume: false });
   });
   afterEach(() => useTerminalRuntimeStore.getState().reset());
 
-  it("offers sessions, then resumes all and keeps only the failures", async () => {
+  it("Given sessions found at startup, when resuming all, then only the failures stay queued", async () => {
     const sessions = fakeSessions(["t-2"]);
     const refresh = vi.fn(async () => {});
     const { result } = renderHook(() => useResumeQueue(sessions, refresh));
     act(() => result.current.offer([item("t-1"), item("t-2")]));
-    expect(result.current.open).toBe(true);
+    expect(result.current.isOpen).toBe(true);
     await act(() => result.current.resumeAll());
     expect(useTerminalRuntimeStore.getState().resumeItems?.map((entry) => entry.terminalId)).toEqual(["t-2"]);
     expect(refresh).toHaveBeenCalled();
   });
 
-  it("resumes automatically when the user chose it", async () => {
-    usePreferencesStore.setState({ autoResume: true });
+  it("Given the user chose to always resume, when the queue loads, then it resumes automatically", async () => {
+    usePreferencesStore.setState({ shouldAutoResume: true });
     const sessions = fakeSessions();
     const { result } = renderHook(() => useResumeQueue(sessions, vi.fn(async () => {})));
     await act(async () => result.current.offer([item("t-1")]));
     await vi.waitFor(() => expect(sessions.resumeItems).toHaveBeenCalled());
-    expect(result.current.open).toBe(false);
+    expect(result.current.isOpen).toBe(false);
   });
 
-  it("only forgets a dismissed session after the backend deleted it", async () => {
+  it("Given a dismissed session, when the backend first refuses and then confirms the deletion, then it is forgotten only after the confirmation", async () => {
     const sessions = fakeSessions();
     const { result } = renderHook(() => useResumeQueue(sessions, vi.fn(async () => {})));
     act(() => result.current.offer([item("t-1")]));
@@ -87,7 +87,7 @@ describe("useResumeQueue", () => {
 });
 
 describe("useWorkspaces", () => {
-  it("loads projects and keeps a visible active one", async () => {
+  it("Given a visible active project, when the projects load, then they are listed and that project stays active", async () => {
     const list: Workspace[] = [
       { id: "ws-1", name: "one", cwd: "/a", terminals: [] },
       { id: "ws-2", name: "two", cwd: "/b", terminals: [] },

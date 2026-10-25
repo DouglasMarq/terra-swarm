@@ -17,11 +17,11 @@ type PickerSessions = Pick<TerminalSessions, "spawnInto" | "reportSpawnError">;
 
 export function useAgentPicker(agentCatalog: AgentCatalog, sessions: PickerSessions) {
   const defaultAgent = usePreferencesStore((state) => state.defaultAgent);
-  const [open, setOpenState] = useState(false);
+  const [isOpen, setOpenState] = useState(false);
   const [target, setTarget] = useState<string | null>(null);
   const [targetPane, setTargetPane] = useState<string | null>(null);
-  const [saveDefault, setSaveDefault] = useState(false);
-  const [isolate, setIsolate] = useState(false);
+  const [shouldSaveDefault, setSaveDefault] = useState(false);
+  const [shouldIsolate, setIsolate] = useState(false);
   const [role, setRole] = useState<AgentRole | null>(null);
 
   const resetChoice = () => {
@@ -63,10 +63,10 @@ export function useAgentPicker(agentCatalog: AgentCatalog, sessions: PickerSessi
   };
 
   const choose = async (agentId: string) => {
-    if (saveDefault) usePreferencesStore.getState().setDefaultAgent(agentId);
+    if (shouldSaveDefault) usePreferencesStore.getState().setDefaultAgent(agentId);
     setOpenState(false);
     const chosenTarget = target;
-    const options = { worktree: isolate, role, placement: targetPane ? { paneId: targetPane } : undefined };
+    const options = { shouldUseWorktree: shouldIsolate, role, placement: targetPane ? { paneId: targetPane } : undefined };
     resetChoice();
     if (!chosenTarget) return;
     await sessions.spawnInto(chosenTarget, agentId, options)
@@ -79,10 +79,10 @@ export function useAgentPicker(agentCatalog: AgentCatalog, sessions: PickerSessi
   };
 
   return {
-    open,
+    isOpen,
     target,
-    saveDefault,
-    isolate,
+    shouldSaveDefault,
+    shouldIsolate,
     role,
     setOpen,
     setSaveDefault,

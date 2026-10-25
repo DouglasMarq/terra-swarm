@@ -26,11 +26,8 @@ export interface BuildNavigatorTreeOptions {
   statuses?: NavigatorStatusMaps;
   branches?: readonly NavigatorBranch[];
   containerVisibility?: Readonly<Record<string, boolean>>;
-  /** Display labels per terminal id (task title, numbered kind, optional name). */
   agentLabels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
-  /** Put agents directly under their project, skipping container and pane levels. */
-  flatten?: boolean;
-  /** State the agents reported through their hooks, by terminal id. */
+  shouldFlatten?: boolean;
   reported?: Readonly<Record<string, McpAgentState>>;
 }
 
@@ -62,8 +59,8 @@ function agentNodeStatus(
   const explicit = options.statuses?.agents?.[terminalId];
   if (explicit) return explicit;
   return deriveAgentStatus({
-    suspended: source.suspended,
-    exited: terminalId in (options.exited ?? {}),
+    isSuspended: source.suspended,
+    hasExited: terminalId in (options.exited ?? {}),
     notifications: notificationCount(options.notifications ?? {}, terminalId),
     contextUsed: options.contextUsage?.[terminalId],
     reported: options.reported?.[terminalId],
@@ -201,10 +198,6 @@ function hierarchyForWorkspace(
     });
   }
 
-  // Legacy workspaces sometimes carry pane metadata without a copied
-  // container list. Keep the hierarchy truthful by giving those panes a
-  // stable synthetic visual container rather than flattening them into the
-  // project row.
   if (containers.length === 0 && panes.length > 0) {
     const id = `${workspace.id}:container`;
     containers.push({
@@ -220,8 +213,6 @@ function hierarchyForWorkspace(
     });
   }
   if (containers.length > 0 && panes.length === 0 && snapshotProject) {
-    // A partially migrated snapshot may still expose project pane ids while
-    // the pane records arrive in a later refresh. Do not lose that location.
     for (const paneId of snapshotProject.paneIds) {
       panes.push(normalizePane({
         id: paneId,
@@ -294,7 +285,7 @@ function makeGroupNode(group: WorkspaceGroup): NavigatorGroupNode {
     count: 0,
     source: group,
     projectIds: [],
-    suspended: group.suspended,
+    isSuspended: group.suspended,
   };
 }
 
@@ -424,9 +415,9 @@ function makeContainer(build: ProjectBuild, container: WorkspaceContainer): Navi
     projectId: workspace.id,
     containerId: container.id,
     paneIds: effectivePanes.map((pane) => pane.id),
-    visible: container.visible && !container.closed,
-    collapsed: container.collapsed,
-    fullscreen: container.fullscreen,
+    isVisible: container.visible && !container.closed,
+    isCollapsed: container.collapsed,
+    isFullscreen: container.fullscreen,
   };
 }
 
@@ -456,7 +447,7 @@ function makeProject(workspace: Workspace, groupId: string | null, options: Buil
   };
   const structuralChildren = build.hierarchy.containers.map((container) => makeContainer(build, container));
   const agents = projectAgents(build, structuralChildren);
-  const projectChildren: NavigatorNode[] = options.flatten
+  const projectChildren: NavigatorNode[] = options.shouldFlatten
     ? agents.map((agent) => ({ ...agent, parentId: projectId, depth: (groupId ? 1 : 0) + 1 }))
     : structuralChildren.length > 0 ? structuralChildren : agents;
   return {
@@ -471,7 +462,7 @@ function makeProject(workspace: Workspace, groupId: string | null, options: Buil
     source: workspace,
     workspaceId: workspace.id,
     terminalIds: agents.map((agent) => agent.terminalId),
-    visible: options.containerVisibility?.[workspace.id] !== false,
+    isVisible: options.containerVisibility?.[workspace.id] !== false,
   };
 }
 
@@ -516,11 +507,6 @@ function assignDepth(nodes: readonly NavigatorNode[], parentId: string | null, d
   });
 }
 
-/**
- * Converts the legacy workspace/group wire model into one deterministic tree.
- * The model deliberately keeps projects and agents separate from visual containers;
- * hiding a project therefore never removes its terminals from the tree.
- */
 export function buildNavigatorTree(
   workspaces: readonly Workspace[],
   options: BuildNavigatorTreeOptions = {},
@@ -557,15 +543,14 @@ function cloneVisibleNode(node: NavigatorNode, children: NavigatorNode[]): Navig
   return { ...node, children };
 }
 
-/** Keeps matching descendants and their path so search never loses context. */
 export function filterNavigatorTree(tree: NavigatorTree, query: string): NavigatorTree {
   const needle = normalizeSearchText(query);
   if (!needle) return tree;
   const filter = (node: NavigatorNode): NavigatorNode | null => {
     const children = node.children.map(filter).filter((child): child is NavigatorNode => Boolean(child));
-    const matches = normalizeSearchText(searchableText(node)).includes(needle);
-    if (!matches && children.length === 0) return null;
-    return cloneVisibleNode(node, matches ? node.children : children);
+    const isMatch = normalizeSearchText(searchableText(node)).includes(needle);
+    if (!isMatch && children.length === 0) return null;
+    return cloneVisibleNode(node, isMatch ? node.children : children);
   };
   return indexTree(tree.roots.map(filter).filter((node): node is NavigatorNode => Boolean(node)));
 }

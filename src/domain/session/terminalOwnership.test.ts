@@ -10,7 +10,7 @@ const workspace = (id: string, terminalId: string): Workspace => ({
 });
 
 describe("workspaceIdForTerminal", () => {
-  it("resolves a non-active terminal from current workspace state", () => {
+  it("Given a terminal outside the active workspace, when resolving its owner, then current workspace state is used", () => {
     const owner = workspaceIdForTerminal(
       [workspace("project-a", "terminal-a"), workspace("project-b", "terminal-b")],
       null,
@@ -20,7 +20,7 @@ describe("workspaceIdForTerminal", () => {
     expect(owner).toBe("project-b");
   });
 
-  it("falls back to the current orchestration snapshot when legacy metadata is missing", () => {
+  it("Given missing legacy metadata, when resolving the owner, then it falls back to the current orchestration snapshot", () => {
     const snapshot: WorkspaceSnapshotV2 = {
       version: 2,
       projects: [{

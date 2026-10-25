@@ -18,7 +18,6 @@ import styles from "./voice.module.css";
 
 export interface VoiceCapsuleProps {
   state: VoiceCapsuleState;
-  /** Final text takes precedence; `transcript` is a convenient host alias. */
   transcript?: string;
   partialTranscript?: string;
   finalTranscript?: string;
@@ -27,23 +26,19 @@ export interface VoiceCapsuleProps {
   level?: number;
   samples?: readonly number[];
   error?: string | null;
-  /** Keeps a successfully auto-sent dictation visible without allowing a duplicate send. */
-  submitted?: boolean;
-  expanded?: boolean;
-  disabled?: boolean;
+  isSubmitted?: boolean;
+  isExpanded?: boolean;
+  isDisabled?: boolean;
   shortcut?: string;
-  pushToTalk?: boolean;
+  isPushToTalk?: boolean;
   className?: string;
-  /** Optional label rendered beside the target-agent value. */
   agentLabel?: string;
-  /** Additional content for a host-specific status row. */
   footer?: ReactNode;
   onStartListening?: () => void;
   onStopListening?: () => void;
   onCancel?: () => void;
   onRetry?: () => void;
   onSend?: (payload: VoiceSendPayload) => void;
-  /** Called only after an explicit confirmation click for destructive intents. */
   onConfirm?: (payload: VoiceSendPayload) => void;
   onToggleExpanded?: () => void;
 }
@@ -71,7 +66,7 @@ function clampAmplitude(value: number): number {
 }
 
 function Waveform({ level = 0, samples = FALLBACK_SAMPLES }: Pick<VoiceCapsuleProps, "level" | "samples">) {
-  const t = useT();
+  const translate = useT();
   const amplitude = clampAmplitude(level);
   const values = samples.length > 0 ? samples : FALLBACK_SAMPLES;
 
@@ -80,19 +75,19 @@ function Waveform({ level = 0, samples = FALLBACK_SAMPLES }: Pick<VoiceCapsulePr
       className={styles.waveform}
       viewBox={`0 0 ${WAVEFORM_WIDTH} ${WAVEFORM_HEIGHT}`}
       role="img"
-      aria-label={t("settingsPanels.micLevel")}
+      aria-label={translate("settingsPanels.micLevel")}
       preserveAspectRatio="none"
     >
       {values.map((sample, index) => {
         const value = clampAmplitude(sample) * (RESTING_BAR_SCALE + amplitude * LEVEL_BAR_SCALE);
         const height = MIN_BAR_HEIGHT + value * BAR_HEIGHT_RANGE;
-        const x = (index / values.length) * WAVEFORM_WIDTH + BAR_OFFSET;
+        const barX = (index / values.length) * WAVEFORM_WIDTH + BAR_OFFSET;
         const width = Math.max(MIN_BAR_WIDTH, WAVEFORM_WIDTH / values.length - BAR_GAP);
         return (
           <rect
             className={styles.waveformBar}
             key={`${index}-${sample}`}
-            x={x}
+            x={barX}
             y={(WAVEFORM_HEIGHT - height) / 2}
             width={width}
             height={height}
@@ -119,9 +114,9 @@ function intentPayload(intent: VoiceCapsuleProps["intent"]): VoiceCapsuleIntent 
 export function VoiceCapsule({
   agentLabel,
   className,
-  disabled = false,
+  isDisabled = false,
   error,
-  expanded = false,
+  isExpanded = false,
   footer,
   intent,
   level,
@@ -133,29 +128,29 @@ export function VoiceCapsule({
   onStopListening,
   onToggleExpanded,
   partialTranscript,
-  pushToTalk = false,
+  isPushToTalk = false,
   samples,
   shortcut,
   state,
-  submitted = false,
+  isSubmitted = false,
   targetAgent,
   transcript,
   finalTranscript,
 }: VoiceCapsuleProps) {
-  const t = useT();
+  const translate = useT();
   const safeIntent = intentPayload(intent);
   const currentTranscript = resolvedTranscript({ transcript, finalTranscript, partialTranscript });
-  const destructive = isDestructiveVoiceIntent(safeIntent);
+  const isDestructive = isDestructiveVoiceIntent(safeIntent);
   const payload: VoiceSendPayload = {
     transcript: currentTranscript,
     intent: safeIntent,
     agent: targetAgent ?? null,
   };
-  const statusText = error || voiceStateLabel(state, t);
+  const statusText = error || voiceStateLabel(state, translate);
   const isCapturing = state === "listening";
   const isBusy = state === "transcribing";
-  const canSubmit = currentTranscript.length > 0 && !disabled && !isBusy;
-  const classes = [styles.voiceCapsule, expanded && styles.expanded, className].filter(Boolean).join(" ");
+  const canSubmit = currentTranscript.length > 0 && !isDisabled && !isBusy;
+  const classes = [styles.voiceCapsule, isExpanded && styles.expanded, className].filter(Boolean).join(" ");
   const titleId = "terra-voice-title";
   const statusId = "terra-voice-status";
   const transcriptId = "terra-voice-transcript";
@@ -164,17 +159,17 @@ export function VoiceCapsule({
     <section
       className={classes}
       data-state={state}
-      data-expanded={expanded || undefined}
-      data-destructive={destructive || undefined}
+      data-expanded={isExpanded || undefined}
+      data-destructive={isDestructive || undefined}
       aria-labelledby={titleId}
-      aria-describedby={expanded ? `${statusId} ${transcriptId}` : statusId}
-      role={expanded ? "dialog" : undefined}
-      aria-modal={expanded ? "false" : undefined}
+      aria-describedby={isExpanded ? `${statusId} ${transcriptId}` : statusId}
+      role={isExpanded ? "dialog" : undefined}
+      aria-modal={isExpanded ? "false" : undefined}
     >
       <header className={styles.header}>
         <div className={styles.headingGroup}>
           <span className={styles.eyebrow} id={titleId}>
-            <Mic aria-hidden="true" size={13} /> {t("voiceCapsule.title")}
+            <Mic aria-hidden="true" size={13} /> {translate("voiceCapsule.title")}
           </span>
           <span
             className={styles.status}
@@ -191,8 +186,8 @@ export function VoiceCapsule({
           <button
             className={styles.expandButton}
             type="button"
-            aria-label={expanded ? t("voiceCapsule.collapse") : t("voiceCapsule.expand")}
-            aria-expanded={expanded}
+            aria-label={isExpanded ? translate("voiceCapsule.collapse") : translate("voiceCapsule.expand")}
+            aria-expanded={isExpanded}
             onClick={onToggleExpanded}
           >
             <ChevronUp aria-hidden="true" size={15} />
@@ -203,17 +198,17 @@ export function VoiceCapsule({
       <div className={styles.captureRow}>
         <VoiceButton
           className={styles.captureButton}
-          disabled={disabled || isBusy}
-          listening={isCapturing}
+          disabled={isDisabled || isBusy}
+          isListening={isCapturing}
           onStart={onStartListening}
           onStop={onStopListening}
-          pushToTalk={pushToTalk}
+          isPushToTalk={isPushToTalk}
           shortcut={shortcut}
         />
         <div className={styles.waveformFrame} data-active={isCapturing || isBusy || undefined}>
           <Waveform level={level} samples={samples} />
           <span className={styles.captureHint}>
-            {isCapturing ? t("voiceCapsule.speak") : pushToTalk ? t("voiceCapsule.holdToTalk") : t("voiceCapsule.tapToTalk")}
+            {isCapturing ? translate("voiceCapsule.speak") : isPushToTalk ? translate("voiceCapsule.holdToTalk") : translate("voiceCapsule.tapToTalk")}
           </span>
         </div>
       </div>
@@ -226,40 +221,40 @@ export function VoiceCapsule({
           </p>
         ) : (
           <p className={styles.placeholder}>
-            {state === "error" ? t("voiceCapsule.noTranscript") : t("voiceCapsule.placeholder")}
+            {state === "error" ? translate("voiceCapsule.noTranscript") : translate("voiceCapsule.placeholder")}
           </p>
         )}
       </div>
 
       {targetAgent ? (
         <div className={styles.agentRow}>
-          <span className={styles.agentKey}>{agentLabel ?? t("voiceCapsule.target")}</span>
+          <span className={styles.agentKey}>{agentLabel ?? translate("voiceCapsule.target")}</span>
           <span className={styles.agentValue}>{targetAgent}</span>
         </div>
       ) : null}
 
       {state === "preview" && safeIntent ? (
-        <div className={styles.intentPreview} data-destructive={destructive || undefined}>
+        <div className={styles.intentPreview} data-destructive={isDestructive || undefined}>
           <span className={styles.intentIcon} aria-hidden="true">
-            {destructive ? <CircleStop size={14} /> : <Check size={14} />}
+            {isDestructive ? <CircleStop size={14} /> : <Check size={14} />}
           </span>
           <div className={styles.intentCopy}>
-            <span className={styles.intentLabel}>{t("voiceCapsule.recognized")}</span>
-            <strong>{voiceIntentLabel(safeIntent, t)}</strong>
-            {destructive ? <small>{t("voiceCapsule.needsConfirm")}</small> : null}
+            <span className={styles.intentLabel}>{translate("voiceCapsule.recognized")}</span>
+            <strong>{voiceIntentLabel(safeIntent, translate)}</strong>
+            {isDestructive ? <small>{translate("voiceCapsule.needsConfirm")}</small> : null}
           </div>
         </div>
       ) : null}
 
       {state === "error" && onRetry ? (
-        <button className={styles.retryButton} type="button" onClick={onRetry} disabled={disabled}>
-          {t("nav.retry")}
+        <button className={styles.retryButton} type="button" onClick={onRetry} disabled={isDisabled}>
+          {translate("nav.retry")}
         </button>
       ) : null}
 
       <footer className={styles.footer}>
         <span className={styles.shortcutHint}>
-          {shortcut ? <>{t("voiceCapsule.shortcut")} <kbd>{shortcut}</kbd></> : pushToTalk ? t("voiceCapsule.pushToTalkOn") : ""}
+          {shortcut ? <>{translate("voiceCapsule.shortcut")} <kbd>{shortcut}</kbd></> : isPushToTalk ? translate("voiceCapsule.pushToTalkOn") : ""}
         </span>
         <div className={styles.actions}>
           {(state !== "idle" || currentTranscript) && onCancel ? (
@@ -268,27 +263,27 @@ export function VoiceCapsule({
               size="sm"
               variant="ghost"
               onClick={onCancel}
-              disabled={disabled}
+              disabled={isDisabled}
               leadingIcon={<X aria-hidden="true" size={14} />}
             >
-              {t("common.cancel")}
+              {translate("common.cancel")}
             </Button>
           ) : null}
-          {state === "preview" && currentTranscript && !submitted ? (
+          {state === "preview" && currentTranscript && !isSubmitted ? (
             <Button
               type="button"
               size="sm"
-              variant={destructive ? "danger" : "primary"}
+              variant={isDestructive ? "danger" : "primary"}
               disabled={!canSubmit}
-              onClick={() => (destructive ? onConfirm?.(payload) : onSend?.(payload))}
-              leadingIcon={destructive ? <AlertCircle aria-hidden="true" size={14} /> : <Check aria-hidden="true" size={14} />}
+              onClick={() => (isDestructive ? onConfirm?.(payload) : onSend?.(payload))}
+              leadingIcon={isDestructive ? <AlertCircle aria-hidden="true" size={14} /> : <Check aria-hidden="true" size={14} />}
             >
-              {destructive ? t("voiceCapsule.confirmRun") : t("voiceCapsule.send")}
+              {isDestructive ? translate("voiceCapsule.confirmRun") : translate("voiceCapsule.send")}
             </Button>
           ) : null}
           {isBusy ? (
             <span className={styles.busyLabel}>
-              <LoaderCircle aria-hidden="true" size={14} /> {t("voiceCapsule.processing")}
+              <LoaderCircle aria-hidden="true" size={14} /> {translate("voiceCapsule.processing")}
             </span>
           ) : null}
         </div>

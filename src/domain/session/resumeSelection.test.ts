@@ -22,7 +22,7 @@ const groups: WorkspaceGroup[] = [
 ];
 
 describe("resume selection", () => {
-  it("identifies terminal and group suspension independently", () => {
+  it("Given terminal and group suspension, when selecting sessions to resume, then each is identified independently", () => {
     const suspended = suspendedGroupIds(groups);
     expect(
       isTerminalSuspended(
@@ -40,7 +40,7 @@ describe("resume selection", () => {
     ).toBe(true);
   });
 
-  it("leaves an unsuspended terminal eligible for resume", () => {
+  it("Given an unsuspended terminal, when selecting sessions to resume, then it stays eligible", () => {
     expect(
       isTerminalSuspended(
         { groupId: "group-live" },

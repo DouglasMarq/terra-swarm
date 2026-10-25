@@ -11,8 +11,8 @@ import { Button } from "../../ui/Button";
 import styles from "./ModalForms.module.css";
 
 export interface WorkspaceDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
   name: string;
   cwd: string;
   groupName?: string | null;
@@ -22,7 +22,6 @@ export interface WorkspaceDialogProps {
   onSubmit: () => void | Promise<void>;
 }
 
-/** Controlled workspace form used by both the home launcher and navigator. */
 export function WorkspaceDialog({
   cwd,
   groupName,
@@ -32,67 +31,67 @@ export function WorkspaceDialog({
   onNameChange,
   onOpenChange,
   onSubmit,
-  open,
+  isOpen,
 }: WorkspaceDialogProps) {
-  const t = useT();
-  const [submitted, setSubmitted] = useState(false);
-  const nameIsValid = name.trim().length > 0;
+  const translate = useT();
+  const [isSubmitted, setSubmitted] = useState(false);
+  const isNameValid = name.trim().length > 0;
 
   useEffect(() => {
-    if (!open) setSubmitted(false);
-  }, [open]);
+    if (!isOpen) setSubmitted(false);
+  }, [isOpen]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitted(true);
-    if (!nameIsValid) return;
+    if (!isNameValid) return;
     void onSubmit();
   }
 
   return (
     <TerraDialog
       className={styles.dialog}
-      description={t("dialogs.workspace.description")}
+      description={translate("dialogs.workspace.description")}
       onOpenChange={onOpenChange}
-      open={open}
-      title={t("shell.newWorkspace")}
+      open={isOpen}
+      title={translate("shell.newWorkspace")}
     >
       <form className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.field}>
           <label className={styles.label} htmlFor="terra-new-workspace-name">
-            {t("rename.name")}
+            {translate("rename.name")}
           </label>
           <input
-            aria-describedby={submitted && !nameIsValid ? "terra-workspace-name-error" : undefined}
-            aria-invalid={submitted && !nameIsValid}
+            aria-describedby={isSubmitted && !isNameValid ? "terra-workspace-name-error" : undefined}
+            aria-invalid={isSubmitted && !isNameValid}
             autoFocus
             className={styles.input}
-            data-invalid={submitted && !nameIsValid ? "true" : undefined}
+            data-invalid={isSubmitted && !isNameValid ? "true" : undefined}
             id="terra-new-workspace-name"
             onChange={(event) => onNameChange(event.target.value)}
-            placeholder={t("dialogs.workspace.namePlaceholder")}
+            placeholder={translate("dialogs.workspace.namePlaceholder")}
             type="text"
             value={name}
           />
-          {submitted && !nameIsValid ? (
+          {isSubmitted && !isNameValid ? (
             <span className={styles.error} id="terra-workspace-name-error" role="alert">
-              {t("dialogs.workspace.nameRequired")}
+              {translate("dialogs.workspace.nameRequired")}
             </span>
           ) : (
-            <span className={styles.hint}>{t("dialogs.workspace.renameLater")}</span>
+            <span className={styles.hint}>{translate("dialogs.workspace.renameLater")}</span>
           )}
         </div>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="terra-new-workspace-cwd">
-            {t("dialogs.workspace.folder")} <span className={styles.hint}>{t("dialogs.workspace.optional")}</span>
+            {translate("dialogs.workspace.folder")} <span className={styles.hint}>{translate("dialogs.workspace.optional")}</span>
           </label>
           <div className={styles.folderRow}>
             <input
               className={styles.folderInput}
               id="terra-new-workspace-cwd"
               onChange={(event) => onCwdChange(event.target.value)}
-              placeholder={t("dialogs.workspace.currentFolder")}
+              placeholder={translate("dialogs.workspace.currentFolder")}
               type="text"
               value={cwd}
             />
@@ -104,21 +103,21 @@ export function WorkspaceDialog({
               type="button"
               variant="ghost"
             >
-              {t("dialogs.workspace.browse")}
+              {translate("dialogs.workspace.browse")}
             </Button>
           </div>
         </div>
 
-        {groupName ? <div className={styles.context}>{t("dialogs.workspace.inGroup", { name: groupName })}</div> : null}
+        {groupName ? <div className={styles.context}>{translate("dialogs.workspace.inGroup", { name: groupName })}</div> : null}
 
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="ghost">
-              {t("common.cancel")}
+              {translate("common.cancel")}
             </Button>
           </DialogClose>
           <Button type="submit" variant="primary">
-            {t("dialogs.workspace.create")}
+            {translate("dialogs.workspace.create")}
           </Button>
         </DialogFooter>
       </form>

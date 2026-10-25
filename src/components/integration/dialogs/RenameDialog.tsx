@@ -9,12 +9,12 @@ import styles from "./ModalForms.module.css";
 export type RenameTargetKind = "workspace" | "group" | "terminal";
 
 export interface RenameDialogProps {
-  open: boolean;
+  isOpen: boolean;
   kind: RenameTargetKind;
   mode?: "rename" | "create";
   value: string;
   onChange: (value: string) => void;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (isOpen: boolean) => void;
   onSubmit: () => void | Promise<void>;
 }
 
@@ -24,65 +24,64 @@ export function RenameDialog({
   onChange,
   onOpenChange,
   onSubmit,
-  open,
+  isOpen,
   value,
 }: RenameDialogProps) {
-  const t = useT();
-  const [submitted, setSubmitted] = useState(false);
-  // Agents may clear their name; projects and groups need one.
-  const valid = kind === "terminal" || value.trim().length > 0;
-  const noun = t(`rename.noun.${kind}`);
+  const translate = useT();
+  const [isSubmitted, setSubmitted] = useState(false);
+  const isValid = kind === "terminal" || value.trim().length > 0;
+  const noun = translate(`rename.noun.${kind}`);
   const isCreate = mode === "create";
 
   useEffect(() => {
-    if (!open) setSubmitted(false);
-  }, [open]);
+    if (!isOpen) setSubmitted(false);
+  }, [isOpen]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitted(true);
-    if (!valid) return;
+    if (!isValid) return;
     void onSubmit();
   }
 
   return (
     <TerraDialog
       className={styles.dialog}
-      description={isCreate ? t("rename.createDescription", { noun }) : t("rename.description", { noun })}
+      description={isCreate ? translate("rename.createDescription", { noun }) : translate("rename.description", { noun })}
       onOpenChange={onOpenChange}
-      open={open}
-      title={isCreate ? t("rename.createTitle", { noun }) : t("rename.title", { noun })}
+      open={isOpen}
+      title={isCreate ? translate("rename.createTitle", { noun }) : translate("rename.title", { noun })}
     >
       <form className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.field}>
           <label className={styles.label} htmlFor="terra-rename-value">
-            {t("rename.name")}
+            {translate("rename.name")}
           </label>
           <input
-            aria-describedby={submitted && !valid ? "terra-rename-error" : undefined}
-            aria-invalid={submitted && !valid}
+            aria-describedby={isSubmitted && !isValid ? "terra-rename-error" : undefined}
+            aria-invalid={isSubmitted && !isValid}
             autoFocus
             className={styles.input}
-            data-invalid={submitted && !valid ? "true" : undefined}
+            data-invalid={isSubmitted && !isValid ? "true" : undefined}
             id="terra-rename-value"
             onChange={(event) => onChange(event.target.value)}
             type="text"
             value={value}
           />
-          {submitted && !valid ? (
+          {isSubmitted && !isValid ? (
             <span className={styles.error} id="terra-rename-error" role="alert">
-              {t("rename.required")}
+              {translate("rename.required")}
             </span>
           ) : null}
         </div>
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="ghost">
-              {t("common.cancel")}
+              {translate("common.cancel")}
             </Button>
           </DialogClose>
           <Button leadingIcon={<Pencil aria-hidden="true" size={14} />} type="submit" variant="primary">
-            {isCreate ? t("rename.create", { noun }) : t("rename.save")}
+            {isCreate ? translate("rename.create", { noun }) : translate("rename.save")}
           </Button>
         </DialogFooter>
       </form>

@@ -11,7 +11,7 @@ export interface NotificationItem {
   workspaceId: string;
   message: string;
   ts: number;
-  read: boolean;
-  system?: boolean;
-  update?: boolean;
+  isRead: boolean;
+  isSystem?: boolean;
+  isUpdate?: boolean;
 }

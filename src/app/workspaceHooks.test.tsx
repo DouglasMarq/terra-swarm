@@ -99,7 +99,7 @@ describe("useWorkspaceCreator", () => {
     expect(api.setWorkspaceGroup).toHaveBeenCalledWith("ws-new", "group-front");
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(useUiStore.getState().activeId).toBe("ws-new");
-    expect(result.current.open).toBe(false);
+    expect(result.current.isOpen).toBe(false);
     expect(result.current.groupId).toBeNull();
     expect(result.current.name).toBe("");
   });
@@ -113,7 +113,7 @@ describe("useWorkspaceCreator", () => {
     await act(() => result.current.create());
 
     expect(api.setWorkspaceGroup).not.toHaveBeenCalled();
-    expect(result.current.open).toBe(true);
+    expect(result.current.isOpen).toBe(true);
     expect(useTerminalRuntimeStore.getState().notifItems).toHaveLength(1);
     consoleError.mockRestore();
   });
@@ -128,7 +128,7 @@ describe("useAgentPicker", () => {
     await act(() => result.current.quickNewTerminal("ws-alpha", "pane-1"));
 
     expect(sessions.spawnInto).toHaveBeenCalledWith("ws-alpha", "claude", { placement: { paneId: "pane-1" } });
-    expect(result.current.open).toBe(false);
+    expect(result.current.isOpen).toBe(false);
     expect(useUiStore.getState().activeId).toBe("ws-alpha");
     expect(useUiStore.getState().expandedId).toBeNull();
   });
@@ -141,9 +141,9 @@ describe("useAgentPicker", () => {
     await act(() => result.current.quickNewTerminal("ws-alpha"));
 
     expect(sessions.spawnInto).not.toHaveBeenCalled();
-    expect(result.current.open).toBe(true);
+    expect(result.current.isOpen).toBe(true);
     expect(result.current.target).toBe("ws-alpha");
-    expect(result.current.saveDefault).toBe(false);
+    expect(result.current.shouldSaveDefault).toBe(false);
   });
 
   it("Given the panel chooser with isolation and a role, when an agent is chosen, then it becomes the default and spawns with those options", async () => {
@@ -156,10 +156,10 @@ describe("useAgentPicker", () => {
     await act(() => result.current.choose("codex"));
 
     expect(usePreferencesStore.getState().defaultAgent).toBe("codex");
-    expect(sessions.spawnInto).toHaveBeenCalledWith("ws-alpha", "codex", { placement: { paneId: "pane-2" }, worktree: true, role: "executor" });
-    expect(result.current.open).toBe(false);
+    expect(sessions.spawnInto).toHaveBeenCalledWith("ws-alpha", "codex", { placement: { paneId: "pane-2" }, shouldUseWorktree: true, role: "executor" });
+    expect(result.current.isOpen).toBe(false);
     expect(result.current.target).toBeNull();
-    expect(result.current.isolate).toBe(false);
+    expect(result.current.shouldIsolate).toBe(false);
     expect(result.current.role).toBeNull();
   });
 
@@ -171,7 +171,7 @@ describe("useAgentPicker", () => {
     act(() => result.current.setOpen(false));
 
     expect(result.current.target).toBeNull();
-    expect(result.current.saveDefault).toBe(false);
+    expect(result.current.shouldSaveDefault).toBe(false);
     await act(() => result.current.choose("claude"));
     expect(sessions.spawnInto).not.toHaveBeenCalled();
   });

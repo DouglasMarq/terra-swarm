@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { storageGet, storageSet } from "../lib/storage/safeStorage";
 import { promptTitle, type SavedPrompt } from "../domain/prompts";
 
@@ -8,12 +8,11 @@ const RANDOM_ID_END = 6;
 
 const STORAGE_KEY = "terra-prompt-library";
 
-/** Starting points in the user's language; they can edit or delete them. */
 function defaultPrompts(): SavedPrompt[] {
   return [
-    { id: "review-diff", title: t("library.defaults.reviewTitle"), body: t("library.defaults.reviewBody") },
-    { id: "write-tests", title: t("library.defaults.testsTitle"), body: t("library.defaults.testsBody") },
-    { id: "plan-goal", title: t("library.defaults.planTitle"), body: t("library.defaults.planBody") },
+    { id: "review-diff", title: translateNow("library.defaults.reviewTitle"), body: translateNow("library.defaults.reviewBody") },
+    { id: "write-tests", title: translateNow("library.defaults.testsTitle"), body: translateNow("library.defaults.testsBody") },
+    { id: "plan-goal", title: translateNow("library.defaults.planTitle"), body: translateNow("library.defaults.planBody") },
   ];
 }
 
@@ -58,8 +57,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       title: promptTitle(title, body),
       body,
     };
-    const exists = get().prompts.some((prompt) => prompt.id === saved.id);
-    const prompts = exists ? get().prompts.map((prompt) => (prompt.id === saved.id ? saved : prompt)) : [...get().prompts, saved];
+    const isExisting = get().prompts.some((prompt) => prompt.id === saved.id);
+    const prompts = isExisting ? get().prompts.map((prompt) => (prompt.id === saved.id ? saved : prompt)) : [...get().prompts, saved];
     persist(prompts);
     set({ prompts });
     return saved;

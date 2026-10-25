@@ -1,12 +1,3 @@
-/*
- * Terra Swarm motion vocabulary.
- *
- * Small, quiet movements only: entrances rise 6px, overlays scale from 0.96,
- * meters fill from the left, and status dots breathe. Every animation reads
- * its curve and durations from tokens.css, and the reduce-motion rules in
- * App.css collapse all of them.
- */
-
 @keyframes terra-rise {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
@@ -52,7 +43,6 @@
   50% { transform: scaleY(1); }
 }
 
-/* Reusable classes */
 .terra-anim-rise { animation: terra-rise 320ms var(--terra-ease-out) both; }
 .terra-anim-pop { animation: terra-pop 160ms var(--terra-ease-out) both; }
 .terra-anim-slide-in { animation: terra-slide-in 280ms var(--terra-ease-out) both; }
@@ -69,6 +59,5 @@
   animation: terra-fill 700ms var(--terra-ease-out) 120ms both;
 }
 
-/* Status dots: green pulses softly, amber (needs you) breathes. */
 .terra-dot[data-status="working"] { animation: terra-pulse-green 2.4s ease-out infinite; }
 .terra-dot[data-status="attention"] { animation: terra-breathe 2s ease-in-out infinite; }

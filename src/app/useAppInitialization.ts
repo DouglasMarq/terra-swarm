@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { api } from "../api";
 import type { ResumeItem } from "../domain/terminal.model";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
 import { createInitializationGate, type InitializationGate } from "../domain/session/initializationGate";
 import { isTerminalSuspended, suspendedGroupIds } from "../domain/session/resumeSelection";
@@ -21,14 +21,9 @@ interface InitializationInput {
   voiceSettings: ReturnType<typeof useVoiceSettings>;
 }
 
-/**
- * First load: projects, which persisted terminals are still alive (the rest
- * go to the resume queue), agent detection and voice settings. A gate
- * coalesces StrictMode and concurrent attempts; a failure can be retried.
- */
 export function useAppInitialization({ workspaces, sessions, resumeQueue, agentCatalog, voiceSettings }: InitializationInput) {
   const [error, setError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  const [isRunning, setRunning] = useState(false);
   const started = useRef(false);
   const gate = useRef<InitializationGate | null>(null);
   if (!gate.current) gate.current = createInitializationGate();
@@ -51,7 +46,6 @@ export function useAppInitialization({ workspaces, sessions, resumeQueue, agentC
     for (const workspace of list) {
       for (const terminal of workspace.terminals) {
         if (liveIds.has(terminal.id)) continue;
-        // Suspended sessions are deliberately dormant (imported snapshots too).
         if (isTerminalSuspended(workspace, terminal, suspendedGroups) || suspendedProjects.has(workspace.id)) continue;
         items.push(resumeItemFor(workspace, terminal));
       }
@@ -80,7 +74,7 @@ export function useAppInitialization({ workspaces, sessions, resumeQueue, agentC
       (failure) => {
         console.error("initialization failed:", failure);
         started.current = false;
-        setError(errorMessage(failure, t("app.loadFailed")));
+        setError(errorMessage(failure, translateNow("app.loadFailed")));
         setRunning(false);
       },
     );
@@ -93,8 +87,7 @@ export function useAppInitialization({ workspaces, sessions, resumeQueue, agentC
 
   useEffect(() => {
     startOnMount();
-    // Mount only: later attempts go through `retry`.
   }, []);
 
-  return { error, running, retry: start };
+  return { error, isRunning, retry: start };
 }

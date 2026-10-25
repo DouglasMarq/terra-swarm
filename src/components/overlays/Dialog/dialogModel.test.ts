@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { t } from "../../../i18n";
+import { translateNow } from "../../../i18n";
 import { getConfirmationCopy, requiresConfirmation } from "./dialogModel";
 
 describe("dialog action policy", () => {
-  it("requires an explicit confirmation for destructive actions", () => {
+  it("Given a destructive action, when reading its policy, then an explicit confirmation is required", () => {
     expect(requiresConfirmation("destructive")).toBe(true);
-    expect(getConfirmationCopy("destructive", t).confirmLabel).toContain("exclusão");
+    expect(getConfirmationCopy("destructive", translateNow).confirmLabel).toContain("exclusão");
   });
 
-  it("keeps non-destructive actions confirmable without destructive language", () => {
+  it("Given a non-destructive action, when reading its policy, then it stays confirmable without destructive language", () => {
     expect(requiresConfirmation("default")).toBe(false);
-    expect(getConfirmationCopy("default", t).confirmLabel).toBe("Confirmar");
+    expect(getConfirmationCopy("default", translateNow).confirmLabel).toBe("Confirmar");
   });
 });
 

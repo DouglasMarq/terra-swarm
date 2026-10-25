@@ -6,19 +6,18 @@ import type { VoiceCapsuleIntent, VoiceCapsuleState, VoiceSendPayload } from "..
 import type { CollapsedSidebarProject } from "../shell/Sidebar";
 
 export interface ShellVoiceProps {
-  voiceEnabled: boolean;
+  isVoiceEnabled: boolean;
   voiceTranscript?: string;
   voicePartialTranscript?: string;
   voiceFinalTranscript?: string;
   voiceIntent?: VoiceCapsuleIntent | null;
   voiceTargetAgent?: string | null;
-  /** Terminal that receives dictation (explicit choice or the focused one). */
   voiceTargetId?: string | null;
   onVoiceTargetChange?: (terminalId: string | null) => void;
   voiceLevel?: number;
   voiceSamples?: readonly number[];
   voiceError?: string | null;
-  voiceSubmitted?: boolean;
+  isVoiceSubmitted?: boolean;
   voiceFeedback?: string | null;
   onToggleVoice: () => void;
   onVoiceStartListening?: () => void;
@@ -57,7 +56,7 @@ function voiceTargetProjects({ projects, labels }: VoiceTargetSource): VoiceTarg
 }
 
 export function ShellVoiceOverlay({ voice, state, focusedId, targets, shortcut }: ShellVoiceOverlayProps) {
-  const t = useT();
+  const translate = useT();
   if (state === "idle") return null;
   return (
     <div className="terra-voice-overlay">
@@ -66,7 +65,7 @@ export function ShellVoiceOverlay({ voice, state, focusedId, targets, shortcut }
       ) : null}
       <VoiceCapsule
         state={state}
-        disabled={!voice.voiceEnabled}
+        isDisabled={!voice.isVoiceEnabled}
         shortcut={shortcut}
         transcript={voice.voiceTranscript}
         partialTranscript={voice.voicePartialTranscript}
@@ -76,14 +75,14 @@ export function ShellVoiceOverlay({ voice, state, focusedId, targets, shortcut }
         level={voice.voiceLevel}
         samples={voice.voiceSamples}
         error={voice.voiceError}
-        submitted={voice.voiceSubmitted}
+        isSubmitted={voice.isVoiceSubmitted}
         onStartListening={voice.onVoiceStartListening ?? voice.onToggleVoice}
         onStopListening={voice.onVoiceStopListening ?? voice.onToggleVoice}
         onCancel={voice.onVoiceCancel ?? voice.onToggleVoice}
         onRetry={voice.onVoiceRetry}
         onSend={voice.onVoiceSend}
         onConfirm={voice.onVoiceConfirm}
-        footer={<span role="status">{voice.voiceFeedback || (voice.voiceEnabled ? t("shell.voiceReady") : t("shell.voiceDisabled"))}</span>}
+        footer={<span role="status">{voice.voiceFeedback || (voice.isVoiceEnabled ? translate("shell.voiceReady") : translate("shell.voiceDisabled"))}</span>}
       />
     </div>
   );

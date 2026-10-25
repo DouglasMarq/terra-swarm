@@ -22,10 +22,10 @@ const LazyCommandPalette = lazy(async () => {
 });
 
 export function SurfaceLoading() {
-  const t = useT();
+  const translate = useT();
   return (
     <div className="terra-surface-loading" role="status" aria-live="polite">
-      {t("shell.loading")}
+      {translate("shell.loading")}
     </div>
   );
 }
@@ -47,7 +47,7 @@ export function WorkspaceWorkbench(props: ComponentProps<typeof LazyWorkspaceWor
 }
 
 export function CommandPalette(props: ComponentProps<typeof LazyCommandPalette>) {
-  if (!props.open) return null;
+  if (!props.isOpen) return null;
   return (
     <Suspense fallback={null}>
       <LazyCommandPalette {...props} />

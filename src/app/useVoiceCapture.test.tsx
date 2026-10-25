@@ -50,8 +50,8 @@ function renderVoiceCapture() {
       activeWorkspace: null,
       focusedId: null,
       titles: {},
-      voiceEnabled: true,
-      voiceCommandsEnabled: true,
+      isVoiceEnabled: true,
+      isVoiceCommandsEnabled: true,
       sessions,
       openVoiceSettings,
       actions,
@@ -73,7 +73,7 @@ describe("useVoiceCapture", () => {
     );
 
     expect(actions.suspendGroup).toHaveBeenCalledWith("group-front");
-    expect(result.current.submitted).toBe(true);
+    expect(result.current.isSubmitted).toBe(true);
   });
 
   it("Given a resume intent for an unknown group, when sent, then nothing resumes and the user is told", async () => {
@@ -84,7 +84,7 @@ describe("useVoiceCapture", () => {
     );
 
     expect(actions.resumeGroup).not.toHaveBeenCalled();
-    expect(result.current.submitted).toBe(false);
+    expect(result.current.isSubmitted).toBe(false);
     expect(useTerminalRuntimeStore.getState().notifItems).toHaveLength(1);
   });
 

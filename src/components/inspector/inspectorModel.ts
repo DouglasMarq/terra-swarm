@@ -5,16 +5,10 @@ import { profileForCommand } from "../../domain/agentProfiles";
 export type InspectorRuntimeState = "ativo" | "suspenso" | "encerrado";
 export type InspectorActionKind = "focus" | "restart" | "detach" | "reattach" | "kill";
 
-/** Lifecycle mutations must be routed through the explicit confirmation UI. */
 export function inspectorActionRequiresConfirmation(action: InspectorActionKind): boolean {
   return action === "restart" || action === "kill";
 }
 
-/**
- * The Inspector is deliberately a projection of existing workspace metadata.
- * It does not manufacture process metrics: the current PTY API exposes the
- * PTY id and lifecycle state, but not a PID/CPU/memory telemetry contract.
- */
 export interface InspectorTarget {
   terminalId: string;
   displayName: string;
@@ -31,7 +25,7 @@ export interface InspectorTarget {
   cwd: string;
   state: InspectorRuntimeState;
   contextUsage: number | null;
-  detached: boolean;
+  isDetached: boolean;
 }
 
 export interface ResolveInspectorTargetOptions {
@@ -45,7 +39,6 @@ export interface ResolveInspectorTargetOptions {
   detachedTerminalIds?: readonly string[];
 }
 
-/** Resolve the focused PTY to its project/group/container/pane/tab chain. */
 export function resolveInspectorTarget(
   options: ResolveInspectorTargetOptions,
 ): InspectorTarget | null {
@@ -83,13 +76,13 @@ export function resolveInspectorTarget(
     ?? snapshot?.groups.find((candidate) => candidate.id === groupId)
     ?? null;
   const profile = profileForCommand(terminal.command);
-  const tabSuspended = tab !== null
+  const isTabSuspended = tab !== null
     && typeof tab === "object"
     && "suspended" in tab
     && Boolean((tab as { suspended?: unknown }).suspended);
   const state: InspectorRuntimeState = terminal.id in exited
     ? "encerrado"
-    : terminal.suspended || tabSuspended || group?.suspended
+    : terminal.suspended || isTabSuspended || group?.suspended
       ? "suspenso"
       : "ativo";
   const usage = contextUsage[terminal.id];
@@ -110,11 +103,10 @@ export function resolveInspectorTarget(
     cwd: tab?.cwd || workspace.cwd,
     state,
     contextUsage: typeof usage === "number" && Number.isFinite(usage) ? usage : null,
-    detached: detachedTerminalIds.includes(terminal.id),
+    isDetached: detachedTerminalIds.includes(terminal.id),
   };
 }
 
-/** Every token the agent's session spent: input, output and both cache directions. */
 export function totalTokens(usage: AgentTokenUsage): number {
   return usage.input_tokens + usage.output_tokens + usage.cache_read_tokens + usage.cache_write_tokens;
 }

@@ -1,11 +1,3 @@
-/**
- * Browser preview of the app without the Rust backend.
- *
- * Loaded only in `vite dev` when the URL carries `?mock` and no Tauri runtime
- * is present. It answers every IPC command with sample data and emits a few
- * terminal events so the Workbench, Fleet, notifications and inspector have
- * something to show. Never shipped: the import is behind import.meta.env.DEV.
- */
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { AgentInfo } from "../domain/agent.model";
@@ -95,10 +87,10 @@ const mcpStatuses: McpAgentStatus[] = [
   { terminal_id: "pty-claude-1", workspace_id: "ws-terra", state: "working", summary: "Editando resumePlanner.ts", updated_at: now },
   { terminal_id: "pty-codex", workspace_id: "ws-terra", state: "needs_input", summary: "Posso rodar npm test?", updated_at: now },
 ];
-let mcpEnabled = true;
+let isMcpEnabled = true;
 const mockFiles: Record<string, string> = {};
 const mcpInfo = () => ({
-  enabled: mcpEnabled,
+  enabled: isMcpEnabled,
   available: true,
   running: true,
   url: "http://127.0.0.1:52817/mcp",
@@ -157,7 +149,6 @@ const backlog: Record<string, string> = {
 };
 
 export function installMockBackend(): void {
-  // ?mock=resume: nothing is running, so every agent lands in the resume queue.
   const scenario = new URLSearchParams(window.location.search).get("mock");
   mockWindows("main");
   mockIPC((cmd, payload) => {
@@ -179,7 +170,7 @@ export function installMockBackend(): void {
       case "import_workspace_snapshot": return snapshotTransfer(String(args.path), "/Users/me/.terra-swarm/backups/workspaces.json");
       case "git_status": return gitStatus;
       case "detect_agents": return agents;
-      case "running_terminals": return scenario === "resume" ? [] : workspaces.flatMap((ws) => ws.terminals.filter((t) => !t.suspended).map((t) => ({ id: t.id, seq: 1 })));
+      case "running_terminals": return scenario === "resume" ? [] : workspaces.flatMap((ws) => ws.terminals.filter((terminal) => !terminal.suspended).map((terminal) => ({ id: terminal.id, seq: 1 })));
       case "terminal_backlog": {
         const data = backlog[String(args.id)] ?? "";
         return { data, total: data.length };
@@ -237,7 +228,7 @@ export function installMockBackend(): void {
         return { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: [], ahead: 1, behind: 0, exists: true };
       case "worktree_open_pr": return "https://github.com/example/terra-swarm/pull/42";
       case "mcp_server_info": return mcpInfo();
-      case "mcp_set_enabled": mcpEnabled = Boolean(args.enabled); return mcpInfo();
+      case "mcp_set_enabled": isMcpEnabled = Boolean(args.enabled); return mcpInfo();
       case "mcp_list_tasks": return mcpTasks.filter((task) => task.workspace_id === args.workspaceId);
       case "mcp_agent_statuses": return mcpStatuses.filter((status) => status.workspace_id === args.workspaceId);
       case "mcp_create_task": {
@@ -261,7 +252,6 @@ export function installMockBackend(): void {
     }
   }, { shouldMockEvents: true });
 
-  // Signals that arrive after the app has mounted.
   window.setTimeout(() => {
     void emit("terminal-title", { id: "pty-claude-1", workspace_id: "ws-terra", title: "✳ Refatorar planejador de retomada" });
     void emit("terminal-title", { id: "pty-claude-2", workspace_id: "ws-terra", title: "✳ Animações do Workbench" });
@@ -274,7 +264,6 @@ export function installMockBackend(): void {
     void emit("terminal-exit", { id: "pty-shell", workspace_id: "ws-terra", code: 1, seq: 1 });
   }, 1200);
 
-  // An agent claims a task a few seconds in, so the Tasks panel updates live.
   window.setTimeout(() => {
     const task = mcpTasks.find((candidate) => candidate.id === "T-4");
     if (task && !task.assignee) {

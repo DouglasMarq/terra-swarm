@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import { api } from "../api";
 import type { AgentInfo } from "../domain/agent.model";
 
-/** The agent CLIs found on the PATH, detected once at startup. */
 export function useAgentCatalog() {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const latest = useRef<AgentInfo[]>([]);
@@ -22,7 +21,6 @@ export function useAgentCatalog() {
   return {
     agents,
     detect,
-    /** Wait for detection: right after startup the list is still empty. */
     whenReady: () => ready.current,
     isAvailable: (id: string) => latest.current.some((agent) => agent.id === id && agent.available),
   };

@@ -1,10 +1,5 @@
 import { normalizeSearchText } from "../lib/text/normalizeSearchText";
 
-/**
- * Commands understood by the voice orchestration layer.  This module only
- * classifies text: it never invokes a shell, evaluates an expression, or
- * interpolates user text into a command.
- */
 export type VoiceIntent =
   | { type: "focus"; target: string }
   | { type: "open-fleet" }
@@ -16,7 +11,6 @@ const UNSAFE_TARGET = /[\u0000-\u001f\u007f;&|`$<>]/;
 const MAX_TARGET_CHARS = 128;
 const MAX_TRANSCRIPT_CHARS = 512;
 
-/** Folds spoken text for matching: search folding, no trailing punctuation, single spaces. */
 export function normalizeVoiceText(raw: string): string {
   return normalizeSearchText(raw.replace(/[!?.,:]+$/g, "").replace(/\s+/g, " "));
 }
@@ -43,13 +37,6 @@ function matchTarget(
   return undefined;
 }
 
-/**
- * Parse an explicit pt-BR or English orchestration command.
- *
- * The returned targets are opaque labels/ids for the caller to resolve. An
- * unrecognised or unsafe transcript returns null and must be ignored by the
- * host; no free-form speech is ever treated as a terminal command.
- */
 export function parseVoiceCommand(input: unknown): VoiceIntent | null {
   if (typeof input !== "string" || input.length > MAX_TRANSCRIPT_CHARS) return null;
   let source = normalizeVoiceText(input);
@@ -96,8 +83,6 @@ export function parseVoiceCommand(input: unknown): VoiceIntent | null {
     const match = pattern.exec(source);
     if (match) {
       const agent = safeTarget(match[1]);
-      // A present but unsafe name is rejected; an omitted name is a valid
-      // request for the host's default agent picker.
       if (match[1] && !agent) return null;
       return agent ? { type: "new-agent", agent } : { type: "new-agent" };
     }

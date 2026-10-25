@@ -103,7 +103,11 @@ CREATE TRIGGER notes_au AFTER UPDATE ON notes BEGIN
 END;
 "#;
 
-const MIGRATIONS: &[&str] = &[MIGRATION_1];
+const MIGRATION_2: &str = r#"
+CREATE INDEX idx_task_deps_depends_on ON task_deps(depends_on);
+"#;
+
+const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2];
 
 pub fn schema_version() -> u32 {
     MIGRATIONS.len() as u32
@@ -232,6 +236,41 @@ mod tests {
         // The file is left for the user to inspect.
         assert!(path.exists());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn given_a_version_1_database_when_migrating_then_it_gains_the_depends_on_index() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        configure(&conn, false).unwrap();
+        conn.execute_batch(MIGRATION_1).unwrap();
+        conn.pragma_update(None, "user_version", 1).unwrap();
+
+        assert_eq!(migrate(&mut conn).unwrap(), schema_version());
+
+        let indexes: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_task_deps_depends_on'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(indexes, 1);
+    }
+
+    #[test]
+    fn given_a_migrated_database_when_finding_the_tasks_that_depend_on_one_then_the_plan_uses_the_index(
+    ) {
+        let conn = open_in_memory();
+
+        let plan: String = conn
+            .query_row(
+                "EXPLAIN QUERY PLAN SELECT task_id FROM task_deps WHERE depends_on = 'task'",
+                [],
+                |row| row.get(3),
+            )
+            .unwrap();
+
+        assert!(plan.contains("idx_task_deps_depends_on"), "{}", plan);
     }
 
     #[test]

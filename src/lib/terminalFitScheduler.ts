@@ -48,6 +48,23 @@ export function createFitScheduler(
   };
 }
 
+const MIN_TERMINAL_CELLS = 1;
+
+export function hasVisibleBox(element: Element): boolean {
+  const box = element.getBoundingClientRect();
+  return box.width > 0 && box.height > 0;
+}
+
+export function isUsableDimensions(dimensions: TerminalDimensions | undefined): dimensions is TerminalDimensions {
+  if (!dimensions) return false;
+  return (
+    Number.isFinite(dimensions.cols) &&
+    Number.isFinite(dimensions.rows) &&
+    dimensions.cols >= MIN_TERMINAL_CELLS &&
+    dimensions.rows >= MIN_TERMINAL_CELLS
+  );
+}
+
 function sameDimensions(a: TerminalDimensions | null, b: TerminalDimensions): boolean {
   return a?.cols === b.cols && a.rows === b.rows;
 }

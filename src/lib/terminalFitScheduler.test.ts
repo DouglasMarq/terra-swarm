@@ -2,8 +2,22 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createFitScheduler,
   createTerminalResizeQueue,
+  isUsableDimensions,
   type TerminalDimensions,
 } from "./terminalFitScheduler";
+
+describe("isUsableDimensions", () => {
+  it("Given finite dimensions of at least one cell, when checked, then they are usable", () => {
+    expect(isUsableDimensions({ cols: 80, rows: 24 })).toBe(true);
+  });
+
+  it("Given missing, zero or non-finite dimensions, when checked, then they are not usable", () => {
+    expect(isUsableDimensions(undefined)).toBe(false);
+    expect(isUsableDimensions({ cols: 0, rows: 24 })).toBe(false);
+    expect(isUsableDimensions({ cols: 80, rows: Number.NaN })).toBe(false);
+    expect(isUsableDimensions({ cols: Number.POSITIVE_INFINITY, rows: 24 })).toBe(false);
+  });
+});
 
 describe("terminal fit scheduler", () => {
   it("coalesces geometry signals into one animation frame", () => {

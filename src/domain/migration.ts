@@ -11,6 +11,7 @@ import type {
   WorkspaceSnapshotV2,
 } from "../types";
 import { asRecord, type UnknownRecord } from "../lib/records/records";
+import { uniqueStrings } from "../lib/collections/uniqueStrings";
 
 const DOMAIN_SNAPSHOT_VERSION = 2 as const;
 
@@ -48,17 +49,6 @@ function uniqueId(preferred: string, fallback: string, used: Set<string>): strin
   }
   used.add(candidate);
   return candidate;
-}
-
-function uniqueStrings(values: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
-    result.push(value);
-  }
-  return result;
 }
 
 function cloneLayout(layout: WorkspaceLayout): WorkspaceLayout {

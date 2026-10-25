@@ -1,6 +1,7 @@
 import { t } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
 import { asRecord } from "../lib/records/records";
+import { uniqueStrings } from "../lib/collections/uniqueStrings";
 import { storageGet, storageSet } from "../lib/storage/safeStorage";
 import { create } from "zustand";
 import type {
@@ -138,10 +139,6 @@ function persist(
   storageSet(ORCHESTRATION_STORAGE_KEY, JSON.stringify(value));
 }
 
-function uniqueIds(values: readonly string[]): string[] {
-  return [...new Set(values.filter(Boolean))];
-}
-
 function sourceGroupLayout(source: WorkspaceGroup): ReturnType<typeof normalizeLayout> {
   const candidate = source as unknown as Record<string, unknown>;
   const mode = typeof candidate.layout === "object" ? candidate.layout : {
@@ -178,7 +175,7 @@ function toDomainGroups(
   return effectiveGroups
     .filter((source) => Boolean(source.id))
     .map((source): Group => {
-      const projectIdsForGroup = uniqueIds([
+      const projectIdsForGroup = uniqueStrings([
         ...source.projectIds.filter((projectId) => {
           const workspace = workspaceById.get(projectId);
           return !workspace || workspace.groupId === undefined || workspace.groupId === source.id;
@@ -279,7 +276,7 @@ function updateSnapshotPaneTabs(
   const pane = snapshot.panes.find((candidate) => candidate.id === paneId);
   if (!pane) return snapshot;
   const allowed = new Set(pane.tabIds);
-  const sortedTabIds = uniqueIds([...order, ...pane.tabIds]).filter((id) => allowed.has(id));
+  const sortedTabIds = uniqueStrings([...order, ...pane.tabIds]).filter((id) => allowed.has(id));
   return {
     ...snapshot,
     panes: snapshot.panes.map((candidate) =>
@@ -334,7 +331,7 @@ function patchProjectGroup(
     ...group,
     projectIds:
       group.id === groupId
-        ? uniqueIds([...group.projectIds, projectId])
+        ? uniqueStrings([...group.projectIds, projectId])
         : group.projectIds.filter((id) => id !== projectId),
   }));
   return {
@@ -421,7 +418,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
   let reconciliationChain: Promise<void> = Promise.resolve();
 
   const beginPersistence = (targets: readonly string[]): PersistenceTransaction => {
-    const normalizedTargets = uniqueIds(targets);
+    const normalizedTargets = uniqueStrings(targets);
     const version = ++persistenceVersion;
     normalizedTargets.forEach((target) => targetVersions.set(target, version));
     const state = get();

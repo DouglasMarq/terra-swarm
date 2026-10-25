@@ -38,6 +38,12 @@ pub(crate) const WORKSPACE_FILE_VERSION: u32 = 2;
 
 pub(crate) const LEGACY_WORKSPACE_FILE_VERSION: u32 = 1;
 
+const DEFAULT_STORE_FILE_NAME: &str = "workspaces.json";
+
+const DEFAULT_SNAPSHOT_FILE_NAME: &str = "workspace-snapshot";
+
+const FIRST_NUMBERED_BACKUP: u64 = 1;
+
 #[derive(Serialize, Deserialize)]
 pub(crate) struct WorkspaceFile {
     version: u32,
@@ -191,7 +197,7 @@ pub(crate) fn write_atomic(path: &std::path::Path, json: &str) -> std::io::Resul
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
-        .unwrap_or("workspace-snapshot");
+        .unwrap_or(DEFAULT_SNAPSHOT_FILE_NAME);
     let temp_id = ATOMIC_TEMP_SEQ.fetch_add(1, Ordering::Relaxed);
     let tmp = path.with_file_name(format!(
         ".{}.tmp-{}-{}",
@@ -239,27 +245,27 @@ pub(crate) fn backup_store(path: &std::path::Path) -> std::io::Result<Option<Pat
         return Ok(None);
     }
 
-    let backup = path.with_extension("json.bak");
-    let target = if !backup.exists() {
-        backup
-    } else {
-        let mut index = 1u64;
-        loop {
-            let candidate = path.with_file_name(format!(
-                "{}.bak-{}",
-                path.file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or("workspaces.json"),
-                index
-            ));
-            if !candidate.exists() {
-                break candidate;
-            }
-            index = index.saturating_add(1);
-        }
-    };
-
+    let target = free_backup_path(path);
     std::fs::rename(path, &target).map(|()| Some(target))
+}
+
+fn free_backup_path(path: &Path) -> PathBuf {
+    let backup = path.with_extension("json.bak");
+    if !backup.exists() {
+        return backup;
+    }
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(DEFAULT_STORE_FILE_NAME);
+    let mut index = FIRST_NUMBERED_BACKUP;
+    loop {
+        let candidate = path.with_file_name(format!("{}.bak-{}", file_name, index));
+        if !candidate.exists() {
+            return candidate;
+        }
+        index = index.saturating_add(1);
+    }
 }
 
 /// Replace the active on-disk store while preserving a recoverable copy of
@@ -276,26 +282,38 @@ pub(crate) fn replace_store_file(path: &Path, json: &str) -> Result<Option<PathB
         )
     })?;
     if let Err(error) = write_atomic(path, json) {
-        if let Some(backup_path) = backup.as_deref() {
-            if let Err(restore_error) = std::fs::rename(backup_path, path) {
-                return Err(format!(
-                    "failed to write imported workspace store ({}); backup restore also failed ({}): {}",
-                    error, restore_error, backup_path.display()
-                ));
-            }
-        }
-        return Err(format!(
-            "failed to write imported workspace store: {}",
-            error
-        ));
+        return Err(match restore_backup(backup.as_deref(), path) {
+            Ok(()) => format!("failed to write imported workspace store: {}", error),
+            Err(restore_error) => format!(
+                "failed to write imported workspace store ({}); {}",
+                error, restore_error
+            ),
+        });
     }
 
-    let seq = SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
+    let seq = next_save_seq();
     LAST_WRITTEN
         .get_or_init(|| Mutex::new(HashMap::new()))
         .lock_or_recover()
         .insert(path.to_path_buf(), seq);
     Ok(backup)
+}
+
+fn restore_backup(backup: Option<&Path>, path: &Path) -> Result<(), String> {
+    let Some(backup_path) = backup else {
+        return Ok(());
+    };
+    std::fs::rename(backup_path, path).map_err(|restore_error| {
+        format!(
+            "backup restore also failed ({}): {}",
+            restore_error,
+            backup_path.display()
+        )
+    })
+}
+
+fn next_save_seq() -> u64 {
+    SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1
 }
 
 /// Background writer: coalesces a burst of save requests into the newest one
@@ -324,77 +342,120 @@ fn back_up_unusable_store(path: &Path) {
     }
 }
 
+struct LoadedStore {
+    store: WorkspaceStore,
+    is_legacy: bool,
+    has_dropped_entries: bool,
+    is_unusable: bool,
+}
+
+impl LoadedStore {
+    fn empty(save_path: Option<PathBuf>) -> Self {
+        Self {
+            store: WorkspaceStore {
+                workspaces: Vec::new(),
+                groups: Vec::new(),
+                save_path,
+            },
+            is_legacy: false,
+            has_dropped_entries: false,
+            is_unusable: false,
+        }
+    }
+
+    fn unusable(path: &Path) -> Self {
+        Self {
+            is_unusable: true,
+            ..Self::empty(Some(path.to_path_buf()))
+        }
+    }
+}
+
+fn read_store(path: &Path) -> LoadedStore {
+    match std::fs::read_to_string(path) {
+        Ok(raw) => decode_store(path, &raw),
+        Err(error) => unreadable_store(path, error),
+    }
+}
+
+fn decode_store(path: &Path, raw: &str) -> LoadedStore {
+    let decoded = match decode_workspace_file(raw) {
+        Ok(decoded) => decoded,
+        Err(error) => {
+            eprintln!(
+                "workspaces store is corrupt ({}); backing up to .bak and starting fresh",
+                error
+            );
+            return LoadedStore::unusable(path);
+        }
+    };
+    LoadedStore {
+        store: WorkspaceStore {
+            workspaces: decoded.workspaces,
+            groups: decoded.groups,
+            save_path: Some(path.to_path_buf()),
+        },
+        is_legacy: decoded.legacy,
+        has_dropped_entries: decoded.dropped_entries,
+        is_unusable: false,
+    }
+}
+
+fn unreadable_store(path: &Path, error: std::io::Error) -> LoadedStore {
+    match error.kind() {
+        std::io::ErrorKind::NotFound => LoadedStore::empty(Some(path.to_path_buf())),
+        std::io::ErrorKind::InvalidData => {
+            eprintln!(
+                "workspaces store is not UTF-8 ({}); backing up to .bak and starting fresh",
+                error
+            );
+            LoadedStore::unusable(path)
+        }
+        _ => {
+            eprintln!(
+                "cannot read the workspaces store {} ({}); leaving it untouched and not saving this session",
+                path.display(),
+                error
+            );
+            LoadedStore::empty(None)
+        }
+    }
+}
+
 impl WorkspaceStore {
     /// Load the store at `path`. A missing file starts empty; a file that
     /// cannot be decoded is backed up and replaced; a file that cannot be
     /// read at all is left untouched and this session never saves over it.
     pub fn load(path: PathBuf) -> Self {
-        let mut needs_migration = false;
-        let mut needs_backup = false;
-        let mut save_path = Some(path.clone());
-        let (workspaces, groups) = match std::fs::read_to_string(&path) {
-            Ok(s) => match decode_workspace_file(&s) {
-                Ok(decoded) => {
-                    needs_migration = decoded.legacy;
-                    needs_backup = decoded.dropped_entries;
-                    (decoded.workspaces, decoded.groups)
-                }
-                Err(e) => {
-                    eprintln!(
-                        "workspaces store is corrupt ({}); backing up to .bak and starting fresh",
-                        e
-                    );
-                    back_up_unusable_store(&path);
-                    (Vec::new(), Vec::new())
-                }
-            },
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (Vec::new(), Vec::new()),
-            Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {
-                eprintln!(
-                    "workspaces store is not UTF-8 ({}); backing up to .bak and starting fresh",
-                    error
-                );
-                back_up_unusable_store(&path);
-                (Vec::new(), Vec::new())
-            }
-            Err(error) => {
-                eprintln!(
-                    "cannot read the workspaces store {} ({}); leaving it untouched and not saving this session",
-                    path.display(),
-                    error
-                );
-                save_path = None;
-                (Vec::new(), Vec::new())
-            }
-        };
-        let mut store = Self {
-            workspaces,
-            groups,
-            save_path,
-        };
+        let loaded = read_store(&path);
+        if loaded.is_unusable {
+            back_up_unusable_store(&path);
+        }
+        let mut store = loaded.store;
 
         // Normalize loaded data before it can reach the UI or PTY layer.  If
         // normalization discarded anything, retain the original file before
         // writing the canonical representation.  A legacy array is migrated
         // on load so future app versions only need to understand the envelope.
-        if !store.is_normalized() {
-            needs_backup = true;
-        }
+        let should_back_up = loaded.has_dropped_entries || !store.is_normalized();
         store.normalize();
         for group in &store.groups {
             bump_next_group_id(&group.id);
         }
-        if needs_migration || needs_backup {
-            if needs_backup {
-                if let Some(path) = &store.save_path {
-                    if let Err(error) = backup_store(path) {
-                        eprintln!("failed to back up normalized workspaces store: {}", error);
-                    }
-                }
-            }
+        if should_back_up {
+            store.back_up_before_rewrite();
+        }
+        if loaded.is_legacy || should_back_up {
             store.save_now();
         }
         store
+    }
+
+    fn back_up_before_rewrite(&self) {
+        let Some(path) = &self.save_path else { return };
+        if let Err(error) = backup_store(path) {
+            eprintln!("failed to back up normalized workspaces store: {}", error);
+        }
     }
 
     pub(crate) fn serialized_snapshot(&self) -> Result<String, serde_json::Error> {
@@ -426,7 +487,7 @@ impl WorkspaceStore {
         let request = SaveRequest {
             path: path.clone(),
             json,
-            seq: SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1,
+            seq: next_save_seq(),
         };
         if let Err(error) = save_channel().send(request) {
             eprintln!("failed to queue a workspaces save: {}", error);
@@ -439,8 +500,7 @@ impl WorkspaceStore {
         let Some(path) = &self.save_path else { return };
         match self.serialized_snapshot() {
             Ok(json) => {
-                let seq = SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
-                write_guarded(path, &json, seq);
+                write_guarded(path, &json, next_save_seq());
             }
             Err(e) => eprintln!("failed to serialize workspaces on exit: {}", e),
         }

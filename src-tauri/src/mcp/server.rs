@@ -199,8 +199,8 @@ pub fn router<R: Runtime>(hub: Arc<McpHub<R>>) -> axum::Router {
             axum::routing::post(super::hooks::handle::<R>),
         )
         .route(
-            super::hooks::CLAUDE_HOOKS_PATH,
-            axum::routing::post(super::hooks::handle_claude::<R>),
+            super::hooks::INTEGRATION_HOOKS_PATH,
+            axum::routing::post(super::hooks::handle_integration::<R>),
         )
         .with_state(Arc::clone(&hub))
         .layer(middleware::from_fn_with_state(hub, authenticate::<R>))
@@ -454,5 +454,43 @@ mod tests {
             &[("origin", "https://evil.example")],
         );
         assert_eq!(status, 403);
+    }
+
+    impl TestServer {
+        fn post_hook(&self, token: &str, integration: &str, body: Value) -> u16 {
+            let url = self
+                .url
+                .replace(MCP_PATH, &format!("/hooks/{}", integration));
+            self.runtime.block_on(async {
+                self.client
+                    .post(url)
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(body.to_string())
+                    .send()
+                    .await
+                    .unwrap()
+                    .status()
+                    .as_u16()
+            })
+        }
+    }
+
+    #[test]
+    fn given_integration_hook_routes_when_posting_events_then_only_integrations_with_http_hooks_accept_them(
+    ) {
+        let (hub, _) = hub();
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
+        let server = TestServer::start(Arc::clone(&hub));
+        let event = json!({ "hook_event_name": "Notification", "message": "Approve?" });
+
+        assert_eq!(server.post_hook(&token, "claude", event.clone()), 200);
+        assert_eq!(server.post_hook(&token, "codex", event.clone()), 404);
+        assert_eq!(server.post_hook(&token, "unknown", event), 404);
+        assert_eq!(
+            server.post_hook(&token, "claude", json!({ "message": "no event" })),
+            400
+        );
+        let status = hub.statuses().unwrap().status_of("t-1").cloned().unwrap();
+        assert_eq!(status.state, crate::mcp::model::AgentState::NeedsInput);
     }
 }

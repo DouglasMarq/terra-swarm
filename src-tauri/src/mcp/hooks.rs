@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use axum::body::Body;
-use axum::extract::{Request, State};
+use axum::extract::{Path, Request, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use futures_util::StreamExt;
@@ -21,8 +21,8 @@ use super::{AgentIdentity, McpHub};
 use crate::usage::SessionLog;
 
 pub const HOOKS_PATH: &str = "/hooks";
-/// Where a Claude Code HTTP hook posts its raw event JSON.
-pub const CLAUDE_HOOKS_PATH: &str = "/hooks/claude";
+/// Where an agent CLI's HTTP hook posts its raw event JSON.
+pub const INTEGRATION_HOOKS_PATH: &str = "/hooks/{integration}";
 pub const EVENT_AGENT_ATTENTION: &str = "agent-attention";
 const MAX_HOOK_BODY: usize = 256 * 1024;
 
@@ -89,16 +89,23 @@ pub async fn handle<R: Runtime>(State(hub): State<Arc<McpHub<R>>>, request: Requ
     .await
 }
 
-/// `POST /hooks/claude`: a Claude Code HTTP hook posts its event JSON as is.
-pub async fn handle_claude<R: Runtime>(
+/// `POST /hooks/{integration}`: an agent CLI's HTTP hook posts its event JSON as is.
+pub async fn handle_integration<R: Runtime>(
     State(hub): State<Arc<McpHub<R>>>,
+    Path(id): Path<String>,
     request: Request,
 ) -> Response {
+    let Some(integration) = integration::by_id(&id) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    if !integration.has_http_hooks() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
     receive(hub, request, |body| {
         let payload: Value = serde_json::from_slice(body).ok()?;
-        let event = payload.get("hook_event_name")?.as_str()?.to_string();
+        let event = integration.http_hook_event(&payload)?;
         Some(HookCall {
-            agent: "claude".into(),
+            agent: integration.id().into(),
             event,
             payload,
         })

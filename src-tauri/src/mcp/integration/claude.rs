@@ -30,6 +30,14 @@ impl AgentIntegration for Claude {
         ID
     }
 
+    fn has_http_hooks(&self) -> bool {
+        true
+    }
+
+    fn http_hook_event(&self, payload: &Value) -> Option<String> {
+        Some(payload.get("hook_event_name")?.as_str()?.to_string())
+    }
+
     fn launch_command(&self, command: &str, context: &LaunchContext<'_>) -> String {
         let Some(dir) = context.config_dir else {
             let flags = Flags {

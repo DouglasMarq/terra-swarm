@@ -61,7 +61,12 @@ pub fn set_terminal_placement(
     tab_id: String,
 ) -> Result<(), String> {
     update_and_notify(&app, &store, |store| {
-        store.set_terminal_placement(&workspace_id, &terminal_id, pane_id, tab_id)
+        let placement = TerminalPlacement {
+            terminal_id,
+            pane_id,
+            tab_id,
+        };
+        store.set_terminal_placement(&workspace_id, placement)
     })
 }
 
@@ -112,7 +117,12 @@ pub fn move_workspace_pane(
     index: Option<usize>,
 ) -> Result<(), String> {
     update_and_notify(&app, &store, |store| {
-        store.move_pane(&workspace_id, &pane_id, &to_container_id, index)
+        let pane_move = PaneMove {
+            pane_id,
+            to_container_id,
+            index,
+        };
+        store.move_pane(&workspace_id, pane_move)
     })
 }
 

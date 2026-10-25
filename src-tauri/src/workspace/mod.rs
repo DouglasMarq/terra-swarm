@@ -369,6 +369,18 @@ pub struct WorkspaceContainerPatch {
     pub layout: Option<WorkspaceLayout>,
 }
 
+pub struct TerminalPlacement {
+    pub terminal_id: String,
+    pub pane_id: String,
+    pub tab_id: String,
+}
+
+pub struct PaneMove {
+    pub pane_id: String,
+    pub to_container_id: String,
+    pub index: Option<usize>,
+}
+
 #[derive(Default)]
 pub struct WorkspaceStore {
     pub workspaces: Vec<Workspace>,

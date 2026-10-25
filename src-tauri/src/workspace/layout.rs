@@ -63,142 +63,20 @@ impl WorkspaceStore {
     pub fn set_terminal_placement(
         &mut self,
         workspace_id: &str,
-        terminal_id: &str,
-        pane_id: String,
-        tab_id: String,
+        placement: TerminalPlacement,
     ) -> Result<(), String> {
-        let pane_id = pane_id.trim().to_string();
-        let tab_id = tab_id.trim().to_string();
-        if pane_id.is_empty() || tab_id.is_empty() {
-            return Err("pane id and tab id cannot be empty".to_string());
-        }
+        let placement = placement.trimmed()?;
         let workspace = self.workspace_mut(workspace_id)?;
-        let terminal = workspace
-            .terminals
-            .iter_mut()
-            .find(|terminal| terminal.id == terminal_id)
-            .ok_or_else(|| {
-                format!(
-                    "terminal {} not found in workspace {}",
-                    terminal_id, workspace_id
-                )
-            })?;
+        let cwd = workspace.cwd.clone();
+        let terminal = terminal_mut(workspace, &placement.terminal_id)?;
+        let tab = placement.tab_for(terminal, cwd);
         let command = terminal.command.clone();
-        let suspended = terminal.suspended;
-        terminal.pane_id = Some(pane_id.clone());
-        terminal.tab_id = Some(tab_id.clone());
-
-        // One terminal/tab identity can have only one visual location. This
-        // also cleans stale references left by interrupted UI reorders.
-        let mut displaced_tabs: Vec<(Option<String>, String)> = Vec::new();
-        for pane in &mut workspace.panes {
-            pane.tabs.retain(|tab| {
-                let displaced = tab.pty_id.as_deref() != Some(terminal_id)
-                    && tab.id.as_str() == tab_id.as_str();
-                let remove = tab.pty_id.as_deref() == Some(terminal_id) || displaced;
-                if remove {
-                    displaced_tabs.push((tab.pty_id.clone(), tab.id.clone()));
-                }
-                !remove
-            });
-            if pane.active_tab_id.as_deref() == Some(tab_id.as_str()) {
-                pane.active_tab_id = pane.tabs.first().map(|tab| tab.id.clone());
-            }
-        }
-        for other_terminal in &mut workspace.terminals {
-            if other_terminal.id == terminal_id {
-                continue;
-            }
-            if displaced_tabs.iter().any(|(pty_id, displaced_tab_id)| {
-                pty_id.as_deref() == Some(other_terminal.id.as_str())
-                    || other_terminal.tab_id.as_deref() == Some(displaced_tab_id.as_str())
-            }) {
-                other_terminal.pane_id = None;
-                other_terminal.tab_id = None;
-            }
-        }
-
-        let pane_index =
-            if let Some(index) = workspace.panes.iter().position(|pane| pane.id == pane_id) {
-                index
-            } else {
-                workspace.panes.push(Pane {
-                    id: pane_id.clone(),
-                    name: if command.trim().is_empty() {
-                        "Terminal".to_string()
-                    } else {
-                        command.clone()
-                    },
-                    cwd: workspace.cwd.clone(),
-                    tabs: Vec::new(),
-                    active_tab_id: None,
-                    kind: Some("terminal".to_string()),
-                    disabled: false,
-                    collapsed: false,
-                    width: None,
-                    height: None,
-                    container_id: None,
-                    layout: None,
-                });
-                workspace.panes.len() - 1
-            };
-        let container_id = workspace.panes[pane_index]
-            .container_id
-            .clone()
-            .or_else(|| {
-                workspace
-                    .containers
-                    .first()
-                    .map(|container| container.id.clone())
-            })
-            .unwrap_or_else(|| Self::default_container_id(workspace_id));
-        let container_index = Self::ensure_container(workspace, &container_id)?;
-        if workspace.panes[pane_index].container_id.is_none() {
-            workspace.panes[pane_index].container_id = Some(container_id.clone());
-        }
-        if !workspace.containers[container_index]
-            .pane_ids
-            .iter()
-            .any(|id| id == &pane_id)
-        {
-            workspace.containers[container_index]
-                .pane_ids
-                .push(pane_id.clone());
-        }
-        let pane = &mut workspace.panes[pane_index];
-        if let Some(tab) = pane.tabs.iter_mut().find(|tab| tab.id == tab_id) {
-            tab.kind = if tab.kind.trim().is_empty() {
-                default_tab_kind()
-            } else {
-                tab.kind.clone()
-            };
-            tab.name = if tab.name.trim().is_empty() {
-                command.clone()
-            } else {
-                tab.name.clone()
-            };
-            tab.cwd = workspace.cwd.clone();
-            tab.pty_id = Some(terminal_id.to_string());
-            tab.suspended = suspended;
-        } else {
-            pane.tabs.push(TerminalTab {
-                id: tab_id.clone(),
-                kind: default_tab_kind(),
-                name: if command.trim().is_empty() {
-                    "Terminal".to_string()
-                } else {
-                    command.clone()
-                },
-                cwd: workspace.cwd.clone(),
-                pty_id: Some(terminal_id.to_string()),
-                session_id: None,
-                last_used_at: Some(crate::clock::now_epoch_millis()),
-                completion_unread: false,
-                extra_args: Vec::new(),
-                suspended,
-            });
-        }
-        pane.active_tab_id = Some(tab_id);
+        terminal.pane_id = Some(placement.pane_id.clone());
+        terminal.tab_id = Some(placement.tab_id.clone());
+        remove_displaced(workspace, &placement);
+        let pane_index = ensure_terminal_pane(workspace, &placement.pane_id, &command);
+        attach_to_container(workspace, pane_index)?;
+        place_tab(&mut workspace.panes[pane_index], tab, &command);
         Ok(())
     }
 
@@ -267,18 +145,7 @@ impl WorkspaceStore {
         order: &[String],
     ) -> Result<(), String> {
         let workspace = self.workspace_mut(workspace_id)?;
-        let container_index = match Self::container_index(workspace, container_id) {
-            Some(index) => index,
-            None if workspace.containers.is_empty() => {
-                Self::ensure_container(workspace, container_id)?
-            }
-            None => {
-                return Err(format!(
-                    "container {} not found in workspace {}",
-                    container_id, workspace_id
-                ));
-            }
-        };
+        let container_index = resolve_container(workspace, container_id)?;
         let container = &mut workspace.containers[container_index];
         let pane_ids = std::mem::take(&mut container.pane_ids);
         container.pane_ids = reorder_by_ids(pane_ids, order, String::as_str);
@@ -290,13 +157,14 @@ impl WorkspaceStore {
 
     /// Move an existing pane between visual containers. A pane move is pure
     /// metadata: every terminal tab and its PTY remain untouched.
-    pub fn move_pane(
-        &mut self,
-        workspace_id: &str,
-        pane_id: &str,
-        to_container_id: &str,
-        index: Option<usize>,
-    ) -> Result<(), String> {
+    pub fn move_pane(&mut self, workspace_id: &str, pane_move: PaneMove) -> Result<(), String> {
+        let PaneMove {
+            pane_id,
+            to_container_id,
+            index,
+        } = pane_move;
+        let pane_id = pane_id.as_str();
+        let to_container_id = to_container_id.as_str();
         let workspace = self.workspace_mut(workspace_id)?;
         if !workspace.panes.iter().any(|pane| pane.id == pane_id) {
             return Err(format!(
@@ -345,69 +213,19 @@ impl WorkspaceStore {
         patch: WorkspaceContainerPatch,
     ) -> Result<(), String> {
         let workspace = self.workspace_mut(workspace_id)?;
-        let container_index = match Self::container_index(workspace, container_id) {
-            Some(index) => index,
-            None if workspace.containers.is_empty() => {
-                Self::ensure_container(workspace, container_id)?
-            }
-            None => {
-                return Err(format!(
-                    "container {} not found in workspace {}",
-                    container_id, workspace_id
-                ));
-            }
-        };
-        let valid_panes = workspace.containers[container_index]
-            .pane_ids
-            .iter()
-            .cloned()
-            .collect::<std::collections::HashSet<_>>();
-        if let Some(active_pane_id) = patch.active_pane_id.as_deref() {
-            if !valid_panes.contains(active_pane_id) {
-                return Err(format!(
-                    "pane {} is not in container {}",
-                    active_pane_id, container_id
-                ));
-            }
-        }
+        let container_index = resolve_container(workspace, container_id)?;
         let container = &mut workspace.containers[container_index];
-        if let Some(visible) = patch.visible {
-            container.visible = visible;
-            if patch.closed.is_none() {
-                container.closed = !visible;
-            }
+        let unknown_active_pane = patch
+            .active_pane_id
+            .as_deref()
+            .filter(|active| !container.pane_ids.iter().any(|id| id == active));
+        if let Some(active_pane_id) = unknown_active_pane {
+            return Err(format!(
+                "pane {} is not in container {}",
+                active_pane_id, container_id
+            ));
         }
-        if let Some(closed) = patch.closed {
-            container.closed = closed;
-            if patch.visible.is_none() {
-                container.visible = !closed;
-            }
-        }
-        if let Some(collapsed) = patch.collapsed {
-            container.collapsed = collapsed;
-        }
-        if let Some(fullscreen) = patch.fullscreen {
-            container.fullscreen = fullscreen;
-        }
-        if patch.clear_active_pane {
-            container.active_pane_id = None;
-        } else if let Some(active_pane_id) = patch.active_pane_id {
-            container.active_pane_id = Some(active_pane_id);
-        }
-        if let Some(internal_layout) = patch.internal_layout {
-            let internal_layout = internal_layout.trim();
-            if !internal_layout.is_empty() {
-                container.internal_layout = internal_layout.to_string();
-            }
-        }
-        if let Some(size) = patch.size.filter(|size| size.is_finite()) {
-            container.size = size.clamp(MIN_CONTAINER_SIZE_PERCENT, MAX_CONTAINER_SIZE_PERCENT);
-        }
-        if let Some(mut layout) = patch.layout {
-            normalize_layout_state(&mut layout);
-            layout.item_ids.retain(|id| valid_panes.contains(id));
-            container.layout = Some(layout);
-        }
+        apply_container_patch(container, patch);
         Ok(())
     }
 
@@ -428,4 +246,246 @@ impl WorkspaceStore {
         workspace.collapsed = collapsed;
         Ok(())
     }
+}
+
+const DEFAULT_TERMINAL_NAME: &str = "Terminal";
+const TERMINAL_PANE_KIND: &str = "terminal";
+
+impl TerminalPlacement {
+    fn trimmed(self) -> Result<Self, String> {
+        let pane_id = self.pane_id.trim().to_string();
+        let tab_id = self.tab_id.trim().to_string();
+        if pane_id.is_empty() || tab_id.is_empty() {
+            return Err("pane id and tab id cannot be empty".to_string());
+        }
+        Ok(Self {
+            terminal_id: self.terminal_id,
+            pane_id,
+            tab_id,
+        })
+    }
+
+    fn displaces(&self, tab: &TerminalTab) -> bool {
+        tab.pty_id.as_deref() == Some(self.terminal_id.as_str()) || tab.id == self.tab_id
+    }
+
+    fn tab_for(&self, terminal: &TerminalMeta, cwd: String) -> TerminalTab {
+        TerminalTab {
+            id: self.tab_id.clone(),
+            kind: default_tab_kind(),
+            name: display_name(&terminal.command),
+            cwd,
+            pty_id: Some(self.terminal_id.clone()),
+            session_id: None,
+            last_used_at: Some(crate::clock::now_epoch_millis()),
+            completion_unread: false,
+            extra_args: Vec::new(),
+            suspended: terminal.suspended,
+        }
+    }
+}
+
+struct DisplacedTab {
+    pty_id: Option<String>,
+    id: String,
+}
+
+fn display_name(command: &str) -> String {
+    if command.trim().is_empty() {
+        return DEFAULT_TERMINAL_NAME.to_string();
+    }
+    command.to_string()
+}
+
+fn terminal_mut<'a>(
+    workspace: &'a mut Workspace,
+    terminal_id: &str,
+) -> Result<&'a mut TerminalMeta, String> {
+    workspace
+        .terminals
+        .iter_mut()
+        .find(|terminal| terminal.id == terminal_id)
+        .ok_or_else(|| {
+            format!(
+                "terminal {} not found in workspace {}",
+                terminal_id, workspace.id
+            )
+        })
+}
+
+// One terminal/tab identity can have only one visual location. This
+// also cleans stale references left by interrupted UI reorders.
+fn remove_displaced(workspace: &mut Workspace, placement: &TerminalPlacement) {
+    let displaced = displaced_tabs(&workspace.panes, placement);
+    for pane in &mut workspace.panes {
+        remove_displaced_tabs(pane, placement);
+    }
+    for terminal in &mut workspace.terminals {
+        if terminal.id != placement.terminal_id && was_displaced(terminal, &displaced) {
+            terminal.pane_id = None;
+            terminal.tab_id = None;
+        }
+    }
+}
+
+fn displaced_tabs(panes: &[Pane], placement: &TerminalPlacement) -> Vec<DisplacedTab> {
+    panes
+        .iter()
+        .flat_map(|pane| &pane.tabs)
+        .filter(|tab| placement.displaces(tab))
+        .map(|tab| DisplacedTab {
+            pty_id: tab.pty_id.clone(),
+            id: tab.id.clone(),
+        })
+        .collect()
+}
+
+fn remove_displaced_tabs(pane: &mut Pane, placement: &TerminalPlacement) {
+    pane.tabs.retain(|tab| !placement.displaces(tab));
+    if pane.active_tab_id.as_deref() == Some(placement.tab_id.as_str()) {
+        pane.active_tab_id = pane.tabs.first().map(|tab| tab.id.clone());
+    }
+}
+
+fn was_displaced(terminal: &TerminalMeta, displaced: &[DisplacedTab]) -> bool {
+    displaced.iter().any(|tab| {
+        tab.pty_id.as_deref() == Some(terminal.id.as_str())
+            || terminal.tab_id.as_deref() == Some(tab.id.as_str())
+    })
+}
+
+fn ensure_terminal_pane(workspace: &mut Workspace, pane_id: &str, command: &str) -> usize {
+    if let Some(index) = workspace.panes.iter().position(|pane| pane.id == pane_id) {
+        return index;
+    }
+    workspace.panes.push(Pane {
+        id: pane_id.to_string(),
+        name: display_name(command),
+        cwd: workspace.cwd.clone(),
+        tabs: Vec::new(),
+        active_tab_id: None,
+        kind: Some(TERMINAL_PANE_KIND.to_string()),
+        disabled: false,
+        collapsed: false,
+        width: None,
+        height: None,
+        container_id: None,
+        layout: None,
+    });
+    workspace.panes.len() - 1
+}
+
+fn attach_to_container(workspace: &mut Workspace, pane_index: usize) -> Result<(), String> {
+    let container_id = pane_container_id(workspace, pane_index);
+    let container_index = WorkspaceStore::ensure_container(workspace, &container_id)?;
+    let pane = &mut workspace.panes[pane_index];
+    pane.container_id.get_or_insert(container_id);
+    let pane_ids = &mut workspace.containers[container_index].pane_ids;
+    if !pane_ids.contains(&pane.id) {
+        pane_ids.push(pane.id.clone());
+    }
+    Ok(())
+}
+
+fn pane_container_id(workspace: &Workspace, pane_index: usize) -> String {
+    workspace.panes[pane_index]
+        .container_id
+        .clone()
+        .or_else(|| {
+            workspace
+                .containers
+                .first()
+                .map(|container| container.id.clone())
+        })
+        .unwrap_or_else(|| WorkspaceStore::default_container_id(&workspace.id))
+}
+
+fn place_tab(pane: &mut Pane, tab: TerminalTab, command: &str) {
+    pane.active_tab_id = Some(tab.id.clone());
+    let Some(existing) = pane.tabs.iter_mut().find(|existing| existing.id == tab.id) else {
+        pane.tabs.push(tab);
+        return;
+    };
+    if existing.kind.trim().is_empty() {
+        existing.kind = default_tab_kind();
+    }
+    if existing.name.trim().is_empty() {
+        existing.name = command.to_string();
+    }
+    existing.cwd = tab.cwd;
+    existing.pty_id = tab.pty_id;
+    existing.suspended = tab.suspended;
+}
+
+fn resolve_container(workspace: &mut Workspace, container_id: &str) -> Result<usize, String> {
+    if let Some(index) = WorkspaceStore::container_index(workspace, container_id) {
+        return Ok(index);
+    }
+    if workspace.containers.is_empty() {
+        return WorkspaceStore::ensure_container(workspace, container_id);
+    }
+    Err(format!(
+        "container {} not found in workspace {}",
+        container_id, workspace.id
+    ))
+}
+
+fn apply_container_patch(container: &mut WorkspaceContainer, patch: WorkspaceContainerPatch) {
+    apply_visibility(container, patch.visible, patch.closed);
+    if let Some(collapsed) = patch.collapsed {
+        container.collapsed = collapsed;
+    }
+    if let Some(fullscreen) = patch.fullscreen {
+        container.fullscreen = fullscreen;
+    }
+    if patch.clear_active_pane {
+        container.active_pane_id = None;
+    } else if let Some(active_pane_id) = patch.active_pane_id {
+        container.active_pane_id = Some(active_pane_id);
+    }
+    if let Some(internal_layout) = patch.internal_layout {
+        apply_internal_layout(container, &internal_layout);
+    }
+    if let Some(size) = patch.size.filter(|size| size.is_finite()) {
+        container.size = size.clamp(MIN_CONTAINER_SIZE_PERCENT, MAX_CONTAINER_SIZE_PERCENT);
+    }
+    if let Some(layout) = patch.layout {
+        apply_layout(container, layout);
+    }
+}
+
+fn apply_visibility(
+    container: &mut WorkspaceContainer,
+    visible: Option<bool>,
+    closed: Option<bool>,
+) {
+    if let Some(visible) = visible {
+        container.visible = visible;
+        if closed.is_none() {
+            container.closed = !visible;
+        }
+    }
+    if let Some(closed) = closed {
+        container.closed = closed;
+        if visible.is_none() {
+            container.visible = !closed;
+        }
+    }
+}
+
+fn apply_internal_layout(container: &mut WorkspaceContainer, internal_layout: &str) {
+    let internal_layout = internal_layout.trim();
+    if !internal_layout.is_empty() {
+        container.internal_layout = internal_layout.to_string();
+    }
+}
+
+fn apply_layout(container: &mut WorkspaceContainer, mut layout: WorkspaceLayout) {
+    normalize_layout_state(&mut layout);
+    let valid_panes = container
+        .pane_ids
+        .iter()
+        .collect::<std::collections::HashSet<_>>();
+    layout.item_ids.retain(|id| valid_panes.contains(id));
+    container.layout = Some(layout);
 }

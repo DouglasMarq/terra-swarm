@@ -201,6 +201,123 @@ export function NavigatorPanel({
   const projectCount = workspaces.length;
   const createProject = onCreateProject ?? onCreateWorkspace;
 
+  function renderAgentMenu() {
+    if (!contextMenu || contextMenu.node.kind !== "agent" || !agentMenu) return null;
+    const agent = tree.byId[contextMenu.node.id];
+    if (!agent || agent.kind !== "agent") return null;
+    const groupsForAgent = agentMenu(agent.terminalId, agent.source.command).filter((group) => group.length > 0);
+    return (
+      <div
+        aria-label={t("nav.agentMenu", { name: agent.name })}
+        className={`${styles.contextMenu} ${styles.agentMenu}`}
+        onPointerDown={(event) => event.stopPropagation()}
+        role="menu"
+        style={{ left: contextMenu.x, top: contextMenu.y }}
+      >
+        {groupsForAgent.map((group, index) => (
+          <div className={styles.agentMenuGroup} role="group" key={group[0]?.id ?? index}>
+            {group.map((item) => (
+              <button
+                className={styles.agentMenuItem}
+                data-danger={item.danger}
+                disabled={item.disabled}
+                key={item.id}
+                onClick={() => {
+                  setContextMenu(null);
+                  item.onSelect();
+                }}
+                role="menuitem"
+                type="button"
+              >
+                <span className={styles.agentMenuIcon} aria-hidden="true">{item.icon}</span>
+                <span className={styles.agentMenuLabel}>{item.label}</span>
+                {item.shortcut ? <kbd>{item.shortcut}</kbd> : null}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  function renderProjectMenu() {
+    if (!contextMenu || contextMenu.node.kind !== "project") return null;
+    const projectId = contextMenu.node.id;
+    return (
+      <div
+        aria-label={t("nav.projectMenu")}
+        className={styles.contextMenu}
+        onPointerDown={(event) => event.stopPropagation()}
+        role="menu"
+        style={{ left: contextMenu.x, top: contextMenu.y }}
+      >
+        <button
+          className={styles.contextMenuItem}
+          onClick={() => {
+            setContextMenu(null);
+            onDeleteWorkspace?.(projectId);
+          }}
+          role="menuitem"
+          type="button"
+        >
+          <Trash2 aria-hidden="true" size={14} />
+          <span>{t("nav.deleteProject")}</span>
+        </button>
+      </div>
+    );
+  }
+
+  function renderProjectsView() {
+    return (
+      <div className={styles.treeViewport}>
+        <ProjectTree
+          activeTerminalId={activeTerminalId}
+          activeWorkspaceId={activeWorkspaceId}
+          activeContainerId={activeContainerId}
+          activePaneId={activePaneId}
+          branches={branches}
+          contextUsage={contextUsage}
+          containerVisibility={containerVisibility}
+          exited={exited}
+          groups={groups}
+          expandedIds={expandedIds}
+          notifications={notifications}
+          onContextMenu={handleContextMenu}
+          onCreateAgent={onCreateAgent}
+          onCreateGroup={onCreateGroup}
+          onCreateProject={createProject}
+          onDeleteWorkspace={onDeleteWorkspace}
+          onFocus={onFocus}
+          onHideContainer={onHideContainer}
+          onHideWorkspace={onHideWorkspace}
+          onOpenTerminal={onOpenTerminal}
+          onOpenWorkspace={onOpenWorkspace}
+          onRenameNode={onRenameNode}
+          onResumeGroup={onResumeGroup}
+          onSuspendGroup={onSuspendGroup}
+          onToggle={toggleNode}
+          statuses={statuses}
+          tree={filteredTree}
+          workspaces={workspaces}
+        />
+        {renderAgentMenu()}
+        {renderProjectMenu()}
+        {emptyState && workspaces.length === 0 ? emptyState : null}
+      </div>
+    );
+  }
+
+  function renderActivityView() {
+    if (selectedActivity === "projects") return renderProjectsView();
+    if (selectedActivity === "files" && loadFiles) {
+      return <NavigatorFilesView activeWorkspaceId={activeWorkspaceId} loadFiles={loadFiles} onSelectWorkspace={onOpenWorkspace} onOpenFile={(workspaceId, path) => useEditorStore.getState().open({ workspaceId, path })} workspaces={workspaces} />;
+    }
+    if (selectedActivity === "git" && loadGitStatus) {
+      return <NavigatorGitView activeWorkspaceId={activeWorkspaceId} loadGitStatus={loadGitStatus} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} />;
+    }
+    return <div className={styles.integrationView}><div className={styles.integrationEmpty}>{t("nav.unavailable")}</div></div>;
+  }
+
   return (
     <aside aria-label={title ?? t("shell.sidebar.label")} className={classes(styles.panel, className)} style={style}>
       <header className={styles.header}>
@@ -232,99 +349,7 @@ export function NavigatorPanel({
           <input aria-label={t("nav.search")} className={styles.searchInput} onChange={handleQuery} placeholder={t("nav.searchPlaceholder")} type="search" value={query} />
         </label>
       </header>
-      {selectedActivity === "projects" ? <div className={styles.treeViewport}>
-          <ProjectTree
-            activeTerminalId={activeTerminalId}
-            activeWorkspaceId={activeWorkspaceId}
-            activeContainerId={activeContainerId}
-            activePaneId={activePaneId}
-            branches={branches}
-            contextUsage={contextUsage}
-            containerVisibility={containerVisibility}
-            exited={exited}
-            groups={groups}
-            expandedIds={expandedIds}
-            notifications={notifications}
-            onContextMenu={handleContextMenu}
-            onCreateAgent={onCreateAgent}
-            onCreateGroup={onCreateGroup}
-            onCreateProject={createProject}
-            onDeleteWorkspace={onDeleteWorkspace}
-            onFocus={onFocus}
-            onHideContainer={onHideContainer}
-            onHideWorkspace={onHideWorkspace}
-            onOpenTerminal={onOpenTerminal}
-            onOpenWorkspace={onOpenWorkspace}
-            onRenameNode={onRenameNode}
-            onResumeGroup={onResumeGroup}
-            onSuspendGroup={onSuspendGroup}
-            onToggle={toggleNode}
-            statuses={statuses}
-            tree={filteredTree}
-            workspaces={workspaces}
-          />
-        {contextMenu && contextMenu.node.kind === "agent" && agentMenu ? (() => {
-          const agent = tree.byId[contextMenu.node.id];
-          if (!agent || agent.kind !== "agent") return null;
-          const groupsForAgent = agentMenu(agent.terminalId, agent.source.command).filter((group) => group.length > 0);
-          return (
-            <div
-              aria-label={t("nav.agentMenu", { name: agent.name })}
-              className={`${styles.contextMenu} ${styles.agentMenu}`}
-              onPointerDown={(event) => event.stopPropagation()}
-              role="menu"
-              style={{ left: contextMenu.x, top: contextMenu.y }}
-            >
-              {groupsForAgent.map((group, index) => (
-                <div className={styles.agentMenuGroup} role="group" key={group[0]?.id ?? index}>
-                  {group.map((item) => (
-                    <button
-                      className={styles.agentMenuItem}
-                      data-danger={item.danger}
-                      disabled={item.disabled}
-                      key={item.id}
-                      onClick={() => {
-                        setContextMenu(null);
-                        item.onSelect();
-                      }}
-                      role="menuitem"
-                      type="button"
-                    >
-                      <span className={styles.agentMenuIcon} aria-hidden="true">{item.icon}</span>
-                      <span className={styles.agentMenuLabel}>{item.label}</span>
-                      {item.shortcut ? <kbd>{item.shortcut}</kbd> : null}
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          );
-        })() : null}
-        {contextMenu && contextMenu.node.kind === "project" ? (
-          <div
-            aria-label={t("nav.projectMenu")}
-            className={styles.contextMenu}
-            onPointerDown={(event) => event.stopPropagation()}
-            role="menu"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-          >
-            <button
-              className={styles.contextMenuItem}
-              onClick={() => {
-                const projectId = contextMenu.node.id;
-                setContextMenu(null);
-                onDeleteWorkspace?.(projectId);
-              }}
-              role="menuitem"
-              type="button"
-            >
-              <Trash2 aria-hidden="true" size={14} />
-              <span>{t("nav.deleteProject")}</span>
-            </button>
-          </div>
-        ) : null}
-        {emptyState && workspaces.length === 0 ? emptyState : null}
-      </div> : selectedActivity === "files" && loadFiles ? <NavigatorFilesView activeWorkspaceId={activeWorkspaceId} loadFiles={loadFiles} onSelectWorkspace={onOpenWorkspace} onOpenFile={(workspaceId, path) => useEditorStore.getState().open({ workspaceId, path })} workspaces={workspaces} /> : selectedActivity === "git" && loadGitStatus ? <NavigatorGitView activeWorkspaceId={activeWorkspaceId} loadGitStatus={loadGitStatus} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} /> : <div className={styles.integrationView}><div className={styles.integrationEmpty}>{t("nav.unavailable")}</div></div>}
+      {renderActivityView()}
       <footer className={styles.footer}>
         <span>{t("nav.projectCount", { count: projectCount })}</span>
         {createProject ? <button className={styles.footerAction} onClick={() => createProject(null)} type="button"><Plus aria-hidden="true" size={12} /> {t("palette.newProject")}</button> : null}

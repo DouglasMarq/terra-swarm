@@ -296,15 +296,7 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
 
     rerenderPane(view, { exited: true });
     terminal?.dataHandler?.("echo should not be sent after exit");
-    terminal?.keyHandler?.({
-      altKey: false,
-      ctrlKey: false,
-      key: "Enter",
-      metaKey: false,
-      preventDefault: vi.fn(),
-      shiftKey: true,
-      type: "keydown",
-    } as unknown as KeyboardEvent);
+    terminal?.keyHandler?.(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true }));
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();

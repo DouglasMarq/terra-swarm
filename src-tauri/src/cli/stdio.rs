@@ -4,11 +4,10 @@
 //! this command and see the same tools as everyone else.
 
 use serde_json::{json, Value};
-use std::io::{BufRead, Read, Write};
-use std::net::TcpStream;
+use std::io::{BufRead, Write};
 use std::time::Duration;
 
-use super::{loopback_authority, TIMEOUT as CONNECT_TIMEOUT};
+use super::{http, loopback_authority, TIMEOUT as CONNECT_TIMEOUT};
 
 /// Tool calls can wait on the database; give them room.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
@@ -44,45 +43,30 @@ impl Endpoint {
     /// POST one JSON-RPC message; returns the messages the server answered.
     pub fn send(&self, message: &Value) -> Result<Vec<Value>, String> {
         let body = message.to_string();
-        let address = self
-            .authority
-            .parse()
-            .map_err(|error| format!("bad address: {}", error))?;
-        let mut stream = TcpStream::connect_timeout(&address, CONNECT_TIMEOUT)
-            .map_err(|error| error.to_string())?;
-        stream
-            .set_read_timeout(Some(REQUEST_TIMEOUT))
-            .map_err(|error| error.to_string())?;
-        stream
-            .set_write_timeout(Some(REQUEST_TIMEOUT))
-            .map_err(|error| error.to_string())?;
-        let version = self
-            .protocol_version
-            .as_deref()
-            .map(|version| format!("MCP-Protocol-Version: {}\r\n", version))
-            .unwrap_or_default();
-        let request = format!(
-            "POST {path} HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\n{version}Content-Length: {length}\r\nConnection: close\r\n\r\n{body}",
-            path = self.path,
-            host = self.authority,
-            token = self.token,
-            version = version,
-            length = body.len(),
-            body = body,
-        );
-        stream
-            .write_all(request.as_bytes())
-            .map_err(|error| error.to_string())?;
-        let mut raw = Vec::new();
-        stream
-            .take(MAX_RESPONSE_BYTES)
-            .read_to_end(&mut raw)
-            .map_err(|error| error.to_string())?;
+        let mut headers = vec![("Accept", "application/json, text/event-stream")];
+        if let Some(version) = self.protocol_version.as_deref() {
+            headers.push(("MCP-Protocol-Version", version));
+        }
+        let post = http::Post {
+            authority: &self.authority,
+            path: &self.path,
+            token: &self.token,
+            headers: &headers,
+            body: &body,
+        };
+        let limits = http::Limits {
+            connect_timeout: CONNECT_TIMEOUT,
+            io_timeout: REQUEST_TIMEOUT,
+            max_response_bytes: MAX_RESPONSE_BYTES,
+        };
+        let response = http::post(&post, &limits)?;
+        response.read?;
+        let raw = response.bytes;
         let (status, headers, body) = split_response(&raw)?;
-        if status == 202 || (status == 200 && body.trim().is_empty()) {
+        if status == http::HTTP_ACCEPTED || (status == http::HTTP_OK && body.trim().is_empty()) {
             return Ok(Vec::new());
         }
-        if status != 200 {
+        if status != http::HTTP_OK {
             return Err(format!(
                 "the Terra MCP server answered {}: {}",
                 status,
@@ -244,6 +228,7 @@ pub fn run() -> i32 {
 mod tests {
     use super::*;
     use crate::mcp::test_support::{hub, identity};
+    use std::io::Read;
     use std::sync::Arc;
 
     #[test]

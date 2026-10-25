@@ -36,6 +36,7 @@ import {
 import { ConfirmActionDialog } from "./components/overlays/Dialog";
 import type { FocusedAgentAction } from "./components/overlays/CommandPalette";
 import { getTerminal } from "./terminalRegistry";
+import { basename } from "./lib/path/basename";
 import {
   GRID_COL_OPTIONS,
   usePreferencesStore,
@@ -456,7 +457,7 @@ function App() {
       if (typeof dir === "string") {
         setNewWsCwd(dir);
         if (!newWsName) {
-          const base = dir.split(/[\\/]/).filter(Boolean).pop();
+          const base = basename(dir);
           if (base) setNewWsName(base);
         }
       }

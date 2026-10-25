@@ -4,6 +4,7 @@ import type { McpAgentState } from "../../types";
 import { DEFAULT_AGENT_PROFILES } from "../../lib/features/agentProfiles";
 import type { Translate } from "../../i18n";
 import { elapsedTime } from "../../domain/elapsedTime";
+import { clamp } from "../../lib/math/clamp";
 import type { TerminalMeta, Workspace, WorkspaceGroup } from "../../types";
 
 /** The four states exposed by the fleet command center. */
@@ -130,9 +131,12 @@ function agentLabelFromCommand(command: string, t: Translate): string {
   return KNOWN_AGENT_LABELS[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
+const MIN_CONTEXT_USAGE = 0;
+const MAX_CONTEXT_USAGE = 100;
+
 function clampContext(value: number | undefined): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return Math.max(0, Math.min(100, value));
+  return clamp(value, MIN_CONTEXT_USAGE, MAX_CONTEXT_USAGE);
 }
 
 function membershipByWorkspace(

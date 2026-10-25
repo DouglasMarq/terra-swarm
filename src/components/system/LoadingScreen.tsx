@@ -1,6 +1,7 @@
 import { useT, type MessageKey } from "../../i18n";
 import { CheckCircle2, LoaderCircle, Orbit } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
+import { clamp } from "../../lib/math/clamp";
 
 import styles from "./system.module.css";
 
@@ -24,8 +25,11 @@ const PHASE_LABELS: Record<LoadingScreenPhase, MessageKey> = {
   ready: "system.ready",
 };
 
+const MIN_PROGRESS = 0;
+const MAX_PROGRESS = 100;
+
 function clampProgress(progress: number) {
-  return Math.min(100, Math.max(0, progress));
+  return clamp(progress, MIN_PROGRESS, MAX_PROGRESS);
 }
 
 /**

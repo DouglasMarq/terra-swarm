@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 
 import type { VoiceIntent } from "../../lib/voiceCommands";
 import { Button } from "../ui/Button";
+import { clamp } from "../../lib/math/clamp";
 import { VoiceButton } from "./VoiceButton";
 import {
   isDestructiveVoiceIntent,
@@ -52,13 +53,16 @@ const FALLBACK_SAMPLES = [
   0.44, 0.62, 0.36, 0.28, 0.52, 0.72, 0.4, 0.26,
 ];
 
-function clamp(value: number, min = 0, max = 1): number {
-  return Math.max(min, Math.min(max, Number.isFinite(value) ? value : 0));
+const MIN_AMPLITUDE = 0;
+const MAX_AMPLITUDE = 1;
+
+function clampAmplitude(value: number): number {
+  return clamp(Number.isFinite(value) ? value : MIN_AMPLITUDE, MIN_AMPLITUDE, MAX_AMPLITUDE);
 }
 
 function Waveform({ level = 0, samples = FALLBACK_SAMPLES }: Pick<VoiceCapsuleProps, "level" | "samples">) {
   const t = useT();
-  const amplitude = clamp(level);
+  const amplitude = clampAmplitude(level);
   const values = samples.length > 0 ? samples : FALLBACK_SAMPLES;
 
   return (
@@ -70,7 +74,7 @@ function Waveform({ level = 0, samples = FALLBACK_SAMPLES }: Pick<VoiceCapsulePr
       preserveAspectRatio="none"
     >
       {values.map((sample, index) => {
-        const value = clamp(sample) * (0.28 + amplitude * 0.72);
+        const value = clampAmplitude(sample) * (0.28 + amplitude * 0.72);
         const height = 4 + value * 32;
         const x = (index / values.length) * 220 + 1;
         const width = Math.max(2, 220 / values.length - 3);

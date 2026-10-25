@@ -80,7 +80,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn finds_loopback_urls_in_dev_server_banners() {
+    fn given_a_dev_server_banner_when_scanning_then_its_loopback_url_is_found() {
         let vite = "  VITE v7.0.0  ready in 180 ms\n\n  ➜  Local:   http://localhost:5173/\n  ➜  Network: use --host to expose";
         assert_eq!(detect_dev_server_urls(vite), vec!["http://localhost:5173/"]);
         let next = "- Local:        http://127.0.0.1:3000\n- Network:      http://192.168.1.4:3000";
@@ -93,7 +93,7 @@ mod tests {
     }
 
     #[test]
-    fn ignores_remote_hosts_bad_ports_and_terra_itself() {
+    fn given_remote_hosts_bad_ports_or_terra_itself_when_scanning_then_they_are_ignored() {
         assert!(
             detect_dev_server_urls("see https://example.com:443/x and http://localhost:99999")
                 .is_empty()
@@ -103,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn probes_only_ports_that_answer() {
+    fn given_candidate_ports_when_probing_then_only_ports_that_answer_are_kept() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let open = listener.local_addr().unwrap().port();
         let closed = {

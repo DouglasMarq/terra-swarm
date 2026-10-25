@@ -71,7 +71,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn statuses_are_scoped_and_validated() {
+    fn given_statuses_in_several_workspaces_when_setting_and_listing_then_they_are_scoped_and_validated(
+    ) {
         let mut registry = StatusRegistry::default();
         registry
             .report_status(

@@ -561,7 +561,7 @@ mod conversion_tests {
     const EPS: f32 = 1e-6;
 
     #[test]
-    fn signed_ints_scale_to_full_range() {
+    fn given_signed_integer_samples_when_converting_then_they_scale_to_full_range() {
         assert_eq!(i8_to_f32(&0), 0.0);
         assert_eq!(i8_to_f32(&i8::MAX), 1.0);
         assert!((i8_to_f32(&i8::MIN) - -1.0).abs() < 0.01);
@@ -570,7 +570,7 @@ mod conversion_tests {
     }
 
     #[test]
-    fn unsigned_ints_are_centered_on_zero() {
+    fn given_unsigned_integer_samples_when_converting_then_they_are_centered_on_zero() {
         assert_eq!(u8_to_f32(&0), -1.0);
         assert_eq!(u8_to_f32(&u8::MAX), 1.0);
         assert!((u8_to_f32(&128)).abs() < 0.01);
@@ -580,7 +580,7 @@ mod conversion_tests {
     }
 
     #[test]
-    fn i24_uses_24bit_full_scale_not_i32() {
+    fn given_i24_samples_when_converting_then_they_use_the_24_bit_full_scale() {
         assert_eq!(i24_to_f32(&cpal::I24::new(0).unwrap()), 0.0);
         assert_eq!(i24_to_f32(&cpal::I24::new(8_388_607).unwrap()), 1.0);
         assert!((i24_to_f32(&cpal::I24::new(-8_388_608).unwrap()) - -1.0).abs() < EPS);
@@ -588,14 +588,14 @@ mod conversion_tests {
     }
 
     #[test]
-    fn u24_is_centered_on_equilibrium() {
+    fn given_u24_samples_when_converting_then_they_are_centered_on_equilibrium() {
         assert_eq!(u24_to_f32(&cpal::U24::new(0).unwrap()), -1.0);
         assert_eq!(u24_to_f32(&cpal::U24::new(16_777_215).unwrap()), 1.0);
         assert!((u24_to_f32(&cpal::U24::new(8_388_608).unwrap())).abs() < EPS);
     }
 
     #[test]
-    fn f32_roundtrips_signed_formats() {
+    fn given_signed_formats_when_converting_to_f32_and_back_then_they_round_trip() {
         assert_eq!(f32_to_i8(1.0), i8::MAX);
         assert_eq!(f32_to_i16(1.0), i16::MAX);
         assert_eq!(f32_to_i32(1.0), i32::MAX);
@@ -605,7 +605,8 @@ mod conversion_tests {
     }
 
     #[test]
-    fn f32_roundtrips_unsigned_formats_on_equilibrium() {
+    fn given_unsigned_formats_at_equilibrium_when_converting_to_f32_and_back_then_they_round_trip()
+    {
         assert_eq!(f32_to_u8(1.0), u8::MAX);
         assert_eq!(f32_to_u8(-1.0), 0);
         assert_eq!(f32_to_u8(0.0), 128);
@@ -809,7 +810,7 @@ mod loopback_tests {
     use super::*;
 
     #[test]
-    fn upsamples_by_holding_each_sample() {
+    fn given_a_lower_rate_when_resampling_then_each_sample_is_held() {
         let ring = Mutex::new(VecDeque::from([1.0f32, 2.0, 3.0]));
         let mut cursor = LoopbackCursor::new(0.5);
         let out: Vec<f32> = (0..8).map(|_| cursor.next_sample(&ring)).collect();
@@ -817,7 +818,7 @@ mod loopback_tests {
     }
 
     #[test]
-    fn downsamples_by_dropping_samples() {
+    fn given_a_higher_rate_when_resampling_then_samples_are_dropped() {
         let ring = Mutex::new(VecDeque::from([1.0f32, 2.0, 3.0, 4.0]));
         let mut cursor = LoopbackCursor::new(2.0);
         let out: Vec<f32> = (0..3).map(|_| cursor.next_sample(&ring)).collect();
@@ -825,7 +826,7 @@ mod loopback_tests {
     }
 
     #[test]
-    fn push_loopback_caps_and_keeps_latest_samples() {
+    fn given_more_samples_than_the_cap_when_pushing_to_the_loopback_then_the_latest_are_kept() {
         let ring = Mutex::new(VecDeque::new());
         let all: Vec<f32> = (0..LOOPBACK_MAX_SAMPLES + 100)
             .map(|sample| sample as f32)
@@ -930,7 +931,7 @@ mod resample_tests {
     use super::*;
 
     #[test]
-    fn downsamples_48k_sine_to_16k_without_losing_level() {
+    fn given_a_48k_sine_when_downsampling_to_16k_then_its_level_is_kept() {
         let mut resampler = Fft::<f32>::new(
             48000,
             TARGET_SAMPLE_RATE as usize,

@@ -399,7 +399,7 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn dropping_a_lease_revokes_its_token_only() {
+    fn given_two_leases_when_dropping_one_then_only_its_token_is_revoked() {
         let (hub, events) = hub();
         let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let lease = McpLease::new(&hub, token.clone());
@@ -416,7 +416,7 @@ mod tests {
     }
 
     #[test]
-    fn purge_revokes_tokens_and_clears_data() {
+    fn given_a_workspace_with_agents_when_purging_it_then_tokens_are_revoked_and_data_cleared() {
         let (hub, events) = hub();
         let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         tasks::create(
@@ -457,7 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unreadable_database_turns_the_server_off() {
+    fn given_an_unreadable_database_when_starting_then_the_server_is_off() {
         let dir =
             std::env::temp_dir().join(format!("terra-mcp-hub-{}", crate::clock::now_millis()));
         std::fs::create_dir_all(&dir).unwrap();

@@ -438,7 +438,8 @@ mod tests {
     }
 
     #[test]
-    fn task_crud_with_dependencies_and_events() {
+    fn given_tasks_with_dependencies_when_creating_updating_and_deleting_then_events_are_recorded()
+    {
         let mut repo = Repo::in_memory();
         let base = create(&mut repo, &actor("ws-1", "t-1"), task("Lexer")).unwrap();
         let created = create(
@@ -502,7 +503,8 @@ mod tests {
     }
 
     #[test]
-    fn list_orders_by_status_priority_and_position() {
+    fn given_tasks_of_mixed_status_and_priority_when_listing_then_they_are_ordered_by_status_priority_and_position(
+    ) {
         let mut repo = Repo::in_memory();
         create(&mut repo, &actor("ws-1", "u"), task("medium first")).unwrap();
         create(
@@ -572,7 +574,7 @@ mod tests {
     }
 
     #[test]
-    fn tasks_are_invisible_from_other_workspaces() {
+    fn given_a_task_in_one_workspace_when_listing_from_another_then_it_is_invisible() {
         let mut repo = Repo::in_memory();
         create(&mut repo, &actor("ws-1", "t-1"), task("secret")).unwrap();
         assert!(repo
@@ -599,7 +601,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_task_of_another_workspace_task_writes_find_nothing_and_change_nothing() {
+    fn given_a_task_of_another_workspace_when_writing_to_it_then_nothing_is_found_or_changed() {
         let mut repo = Repo::in_memory();
         create(&mut repo, &actor("ws-1", "t-1"), task("private")).unwrap();
         let is_not_found =
@@ -652,7 +654,8 @@ mod tests {
     }
 
     #[test]
-    fn given_a_dependency_link_to_another_workspace_it_neither_shows_nor_blocks() {
+    fn given_a_dependency_link_to_another_workspace_when_loading_then_it_neither_shows_nor_blocks()
+    {
         let mut repo = Repo::in_memory();
         let foreign = create(&mut repo, &actor("ws-1", "t-1"), task("foreign")).unwrap();
         let local = create(&mut repo, &actor("ws-2", "t-5"), task("local")).unwrap();
@@ -667,7 +670,7 @@ mod tests {
     }
 
     #[test]
-    fn given_several_tasks_each_gets_its_own_dependencies_and_latest_events() {
+    fn given_several_tasks_when_listing_then_each_gets_its_own_dependencies_and_latest_events() {
         let mut repo = Repo::in_memory();
         let first = create(&mut repo, &actor("ws-1", "t-1"), task("first")).unwrap();
         let second = create(
@@ -738,7 +741,7 @@ mod tests {
     }
 
     #[test]
-    fn given_an_unknown_dependency_create_task_names_it_and_creates_nothing() {
+    fn given_an_unknown_dependency_when_creating_a_task_then_it_is_named_and_nothing_is_created() {
         let mut repo = Repo::in_memory();
         create(&mut repo, &actor("ws-1", "t-1"), task("base")).unwrap();
         assert_eq!(
@@ -759,7 +762,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_todo_task_assign_task_starts_it_and_messages_the_assignee() {
+    fn given_a_todo_task_when_assigning_it_then_it_starts_and_the_assignee_is_messaged() {
         let mut repo = Repo::in_memory();
         let id = create(&mut repo, &actor("ws-1", "t-1"), task("API"))
             .unwrap()
@@ -796,7 +799,7 @@ mod tests {
     }
 
     #[test]
-    fn given_the_message_cannot_be_written_assign_task_leaves_the_task_untouched() {
+    fn given_the_message_cannot_be_written_when_assigning_a_task_then_the_task_is_untouched() {
         let mut repo = Repo::in_memory();
         let id = create(&mut repo, &actor("ws-1", "t-1"), task("API"))
             .unwrap()
@@ -822,7 +825,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_bad_input() {
+    fn given_bad_input_when_writing_tasks_then_it_is_rejected() {
         let mut repo = Repo::in_memory();
         assert!(matches!(
             create(&mut repo, &actor("ws-1", "t-1"), task("   ")),
@@ -868,7 +871,8 @@ mod tests {
     }
 
     #[test]
-    fn claim_needs_a_free_todo_task_with_finished_dependencies() {
+    fn given_tasks_in_various_states_when_claiming_then_only_a_free_todo_task_with_finished_dependencies_is_claimed(
+    ) {
         let mut repo = Repo::in_memory();
         let first = create(&mut repo, &actor("ws-1", "t-1"), task("first")).unwrap();
         let second = create(
@@ -937,7 +941,7 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_claims_have_exactly_one_winner() {
+    fn given_concurrent_claims_when_claiming_the_same_task_then_exactly_one_wins() {
         let repo = Arc::new(Mutex::new(Repo::in_memory()));
         let id = create(
             &mut repo.lock().unwrap(),
@@ -969,7 +973,7 @@ mod tests {
     }
 
     #[test]
-    fn claim_is_atomic_across_connections() {
+    fn given_two_connections_when_claiming_the_same_task_then_the_claim_is_atomic() {
         let dir = std::env::temp_dir().join(format!("terra-mcp-claim-{}", now_millis()));
         let path = dir.join("mcp.db");
         let mut one = Repo::new(super::super::db::open(&path).unwrap());

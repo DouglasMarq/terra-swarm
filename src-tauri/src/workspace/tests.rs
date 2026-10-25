@@ -21,7 +21,8 @@ fn cleanup(path: &std::path::Path) {
 }
 
 #[test]
-fn lists_workspace_relative_metadata_with_a_bound_and_rejects_escape() {
+fn given_a_workspace_folder_when_listing_files_then_it_returns_bounded_relative_metadata_and_rejects_escapes(
+) {
     let path = test_path("files");
     let root = path.parent().expect("test root");
     fs::create_dir_all(root.join("src")).expect("src directory");
@@ -44,7 +45,7 @@ fn lists_workspace_relative_metadata_with_a_bound_and_rejects_escape() {
 }
 
 #[test]
-fn parses_structured_git_status_categories() {
+fn given_porcelain_git_status_output_when_parsing_then_changes_are_grouped_by_category() {
     let raw = b"## main...origin/main [ahead 2, behind 1]\0M  src/main.rs\0 M README.md\0?? new.txt\0UU conflict.txt\0";
     let status = parse_git_status(raw).expect("git status");
     assert_eq!(status.branch.as_deref(), Some("main"));
@@ -57,7 +58,7 @@ fn parses_structured_git_status_categories() {
 }
 
 #[test]
-fn given_a_repository_with_changes_git_status_lists_them_by_category() {
+fn given_a_repository_with_changes_when_reading_git_status_then_they_are_listed_by_category() {
     let repo = crate::worktree::test_repo::init("workspace-status");
     fs::write(repo.join("app/readme.txt"), "changed\n").expect("edit");
     fs::write(repo.join("new.txt"), "new\n").expect("new file");
@@ -104,7 +105,7 @@ fn workspace(id: &str) -> Workspace {
 }
 
 #[test]
-fn saves_the_current_versioned_envelope() {
+fn given_a_store_when_saving_then_it_writes_the_current_versioned_envelope() {
     let path = test_path("current");
     let store = WorkspaceStore {
         workspaces: vec![workspace("ws-current")],
@@ -122,7 +123,7 @@ fn saves_the_current_versioned_envelope() {
 }
 
 #[test]
-fn loads_legacy_array_and_migrates_it_on_startup() {
+fn given_a_legacy_array_file_when_loading_then_it_is_migrated_on_startup() {
     let path = test_path("legacy");
     let expected = workspace("ws-legacy");
     fs::write(
@@ -142,7 +143,7 @@ fn loads_legacy_array_and_migrates_it_on_startup() {
 }
 
 #[test]
-fn loads_v1_envelope_and_migrates_to_v2_without_losing_terminal_metadata() {
+fn given_a_v1_envelope_when_loading_then_it_migrates_to_v2_without_losing_terminal_metadata() {
     let path = test_path("v1");
     let expected = workspace("ws-v1");
     let raw = serde_json::json!({
@@ -176,7 +177,8 @@ fn loads_v1_envelope_and_migrates_to_v2_without_losing_terminal_metadata() {
 }
 
 #[test]
-fn group_lifecycle_preserves_projects_and_terminal_metadata() {
+fn given_a_group_when_going_through_its_lifecycle_then_projects_and_terminal_metadata_are_preserved(
+) {
     let mut store = WorkspaceStore {
         workspaces: vec![workspace("ws-group")],
         groups: Vec::new(),
@@ -232,7 +234,7 @@ fn group_lifecycle_preserves_projects_and_terminal_metadata() {
 }
 
 #[test]
-fn workspace_group_assignment_keeps_both_sides_consistent() {
+fn given_a_workspace_when_assigning_it_to_a_group_then_both_sides_stay_consistent() {
     let mut store = WorkspaceStore {
         workspaces: vec![workspace("ws-assign")],
         groups: vec![
@@ -289,7 +291,7 @@ fn workspace_group_assignment_keeps_both_sides_consistent() {
 }
 
 #[test]
-fn terminal_placement_creates_and_normalizes_pane_and_tab_metadata() {
+fn given_a_terminal_when_placing_it_then_pane_and_tab_metadata_are_created_and_normalized() {
     let mut store = WorkspaceStore {
         workspaces: vec![workspace("ws-place")],
         groups: Vec::new(),
@@ -353,7 +355,8 @@ fn terminal_placement_creates_and_normalizes_pane_and_tab_metadata() {
 }
 
 #[test]
-fn recovers_valid_entries_and_preserves_a_backup_for_invalid_data() {
+fn given_a_store_with_invalid_entries_when_loading_then_valid_entries_are_recovered_and_a_backup_is_kept(
+) {
     let path = test_path("invalid");
     let mut first = workspace("ws-one");
     first.terminals[0].width = Some(1000.0);
@@ -408,7 +411,8 @@ fn recovers_valid_entries_and_preserves_a_backup_for_invalid_data() {
 }
 
 #[test]
-fn deduplicates_terminal_ids_across_workspaces_without_touching_scrollback() {
+fn given_terminal_ids_repeated_across_workspaces_when_loading_then_they_are_deduplicated_without_touching_scrollback(
+) {
     let path = test_path("cross-workspace-terminal-ids");
     let scrollback_dir = path
         .parent()
@@ -455,7 +459,7 @@ fn deduplicates_terminal_ids_across_workspaces_without_touching_scrollback() {
 }
 
 #[test]
-fn corrupt_json_is_backed_up_without_being_overwritten() {
+fn given_corrupt_json_when_loading_then_it_is_backed_up_without_being_overwritten() {
     let path = test_path("corrupt");
     fs::write(&path, "not valid JSON").expect("corrupt store");
 
@@ -469,7 +473,7 @@ fn corrupt_json_is_backed_up_without_being_overwritten() {
 
 #[cfg(unix)]
 #[test]
-fn given_an_unreadable_store_keeps_the_file_and_does_not_save() {
+fn given_an_unreadable_store_when_loading_then_the_file_is_kept_and_not_saved() {
     use std::os::unix::fs::PermissionsExt;
     let path = test_path("unreadable");
     let original = serde_json::to_string(&vec![workspace("ws-kept")]).expect("store JSON");
@@ -492,7 +496,7 @@ fn given_an_unreadable_store_keeps_the_file_and_does_not_save() {
 }
 
 #[test]
-fn given_a_store_that_is_not_utf8_backs_it_up_before_starting_fresh() {
+fn given_a_store_that_is_not_utf8_when_loading_then_it_is_backed_up_before_starting_fresh() {
     let path = test_path("not-utf8");
     fs::write(&path, [0xff, 0xfe, 0x00]).expect("store");
 
@@ -507,7 +511,8 @@ fn given_a_store_that_is_not_utf8_backs_it_up_before_starting_fresh() {
 }
 
 #[test]
-fn reorder_workspaces_is_stable_and_ignores_unknown_or_duplicate_ids() {
+fn given_unknown_or_duplicate_ids_when_reordering_workspaces_then_the_order_is_stable_and_they_are_ignored(
+) {
     let first = workspace("ws-one");
     let second = workspace("ws-two");
     let mut store = WorkspaceStore {
@@ -532,7 +537,7 @@ fn reorder_workspaces_is_stable_and_ignores_unknown_or_duplicate_ids() {
 }
 
 #[test]
-fn visual_layout_operations_are_durable_and_never_remove_ptys() {
+fn given_visual_layout_operations_when_applying_them_then_they_persist_and_never_remove_ptys() {
     let mut first = workspace("ws-layout");
     first.terminals.push(TerminalMeta {
         id: "ws-layout-terminal-two".to_string(),
@@ -655,7 +660,7 @@ fn visual_layout_operations_are_durable_and_never_remove_ptys() {
 }
 
 #[test]
-fn set_width_rejects_non_finite_values_and_clamps_finite_values() {
+fn given_a_width_when_setting_it_then_non_finite_values_are_rejected_and_finite_ones_clamped() {
     let mut store = WorkspaceStore {
         workspaces: vec![workspace("ws-width")],
         groups: Vec::new(),
@@ -681,7 +686,7 @@ fn set_width_rejects_non_finite_values_and_clamps_finite_values() {
 }
 
 #[test]
-fn given_an_unknown_workspace_or_terminal_set_width_reports_not_found() {
+fn given_an_unknown_workspace_or_terminal_when_setting_width_then_it_reports_not_found() {
     let mut store = WorkspaceStore {
         workspaces: vec![workspace("ws-1")],
         groups: Vec::new(),
@@ -700,7 +705,7 @@ fn given_an_unknown_workspace_or_terminal_set_width_reports_not_found() {
 }
 
 #[test]
-fn given_an_unknown_workspace_rename_reports_not_found() {
+fn given_an_unknown_workspace_when_renaming_then_it_reports_not_found() {
     let mut store = WorkspaceStore {
         workspaces: vec![workspace("ws-1")],
         groups: Vec::new(),
@@ -720,7 +725,8 @@ fn given_an_unknown_workspace_rename_reports_not_found() {
 }
 
 #[test]
-fn snapshot_roundtrip_preserves_layout_but_suspends_imported_sessions() {
+fn given_an_exported_snapshot_when_importing_it_then_the_layout_is_preserved_and_sessions_are_suspended(
+) {
     let source = test_path("transfer-roundtrip-source");
     let mut original = WorkspaceStore {
         workspaces: vec![workspace("ws-transfer")],
@@ -763,7 +769,7 @@ fn snapshot_roundtrip_preserves_layout_but_suspends_imported_sessions() {
 }
 
 #[test]
-fn import_rejects_unknown_versions_before_replacing_state() {
+fn given_an_unknown_snapshot_version_when_importing_then_it_is_rejected_before_replacing_state() {
     let raw = serde_json::json!({
         "version": WORKSPACE_FILE_VERSION + 1,
         "workspaces": [],
@@ -773,7 +779,7 @@ fn import_rejects_unknown_versions_before_replacing_state() {
 }
 
 #[test]
-fn import_rejects_malformed_json_and_entries() {
+fn given_malformed_json_or_entries_when_importing_then_they_are_rejected() {
     assert!(parse_import_snapshot("{not json").is_err());
     let malformed_entry = serde_json::json!({
         "version": WORKSPACE_FILE_VERSION,
@@ -787,7 +793,8 @@ fn import_rejects_malformed_json_and_entries() {
 }
 
 #[test]
-fn replacing_store_keeps_a_recoverable_backup_and_current_file_atomic() {
+fn given_an_existing_store_when_replacing_it_then_a_recoverable_backup_is_kept_and_the_file_is_written_atomically(
+) {
     let current = test_path("transfer-backup");
     fs::write(&current, "previous workspace file").expect("current store");
     let replacement = WorkspaceStore {
@@ -831,7 +838,7 @@ fn replacing_store_keeps_a_recoverable_backup_and_current_file_atomic() {
 }
 
 #[test]
-fn explicit_snapshot_paths_reject_relative_and_traversal_input() {
+fn given_a_relative_or_traversal_snapshot_path_when_resolving_it_then_it_is_rejected() {
     assert!(validate_explicit_path("snapshot.json").is_err());
     assert!(validate_explicit_path("/tmp/../snapshot.json").is_err());
     assert!(validate_explicit_path("\0snapshot.json").is_err());
@@ -851,7 +858,7 @@ fn workspace_with_worktree_branch(id: &str, branch: &str) -> Workspace {
 }
 
 #[test]
-fn given_a_stored_worktree_with_an_option_like_branch_drops_it_on_load() {
+fn given_a_stored_worktree_with_an_option_like_branch_when_loading_then_it_is_dropped() {
     let mut store = WorkspaceStore {
         workspaces: vec![
             workspace_with_worktree_branch("ws-1", "--receive-pack=touch /tmp/x"),
@@ -869,7 +876,7 @@ fn given_a_stored_worktree_with_an_option_like_branch_drops_it_on_load() {
 }
 
 #[test]
-fn given_a_snapshot_with_an_invalid_worktree_refuses_to_import() {
+fn given_a_snapshot_with_an_invalid_worktree_when_importing_then_it_is_refused() {
     let raw = serde_json::json!({
         "version": WORKSPACE_FILE_VERSION,
         "workspaces": [workspace_with_worktree_branch("ws-1", "terra/../../main")],

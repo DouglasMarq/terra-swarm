@@ -173,7 +173,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn patch_distinguishes_missing_and_null_assignee() {
+    fn given_a_patch_with_a_missing_or_null_assignee_when_parsing_then_the_two_are_distinguished() {
         let missing: TaskPatchInput =
             serde_json::from_str(r#"{"status":"done","position":2.5}"#).unwrap();
         assert_eq!(missing.assignee, None);

@@ -763,7 +763,7 @@ mod tests {
     }
 
     #[test]
-    fn given_ids_of_another_workspace_the_loaders_find_nothing() {
+    fn given_ids_of_another_workspace_when_loading_then_nothing_is_found() {
         let mut repo = Repo::in_memory();
         let task_id = tasks::create(&mut repo, &actor("ws-1", "t-1"), task("private"))
             .unwrap()
@@ -803,7 +803,7 @@ mod tests {
     }
 
     #[test]
-    fn given_unreadable_labels_the_task_loads_with_none() {
+    fn given_unreadable_labels_when_loading_the_task_then_it_has_none() {
         let mut repo = Repo::in_memory();
         let id = tasks::create(&mut repo, &actor("ws-1", "t-1"), task("x"))
             .unwrap()
@@ -951,7 +951,7 @@ mod tests {
     }
 
     #[test]
-    fn purge_removes_only_that_workspace() {
+    fn given_two_workspaces_when_purging_one_then_only_its_data_is_removed() {
         let mut repo = Repo::in_memory();
         for workspace_id in ["ws-1", "ws-2"] {
             let first = tasks::create(&mut repo, &actor(workspace_id, "t-1"), task("a")).unwrap();
@@ -1028,14 +1028,14 @@ mod tests {
     }
 
     #[test]
-    fn given_an_unreadable_setting_the_server_stays_enabled() {
+    fn given_an_unreadable_setting_when_reading_it_then_the_server_stays_enabled() {
         let repo = Repo::in_memory();
         repo.execute("ALTER TABLE settings RENAME TO settings_gone", &[]);
         assert!(repo.is_enabled());
     }
 
     #[test]
-    fn data_and_setting_survive_a_reopen() {
+    fn given_stored_data_and_settings_when_reopening_then_they_survive() {
         let dir = std::env::temp_dir().join(format!("terra-mcp-reopen-{}", now_millis()));
         let path = dir.join("mcp.db");
         {

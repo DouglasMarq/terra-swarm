@@ -68,7 +68,8 @@ mod tests {
     }
 
     #[test]
-    fn inbox_separates_direct_and_broadcast_and_marks_read() {
+    fn given_direct_and_broadcast_messages_when_reading_the_inbox_then_they_are_separated_and_marked_read(
+    ) {
         let mut repo = Repo::in_memory();
         send(
             repo.queries(),
@@ -172,7 +173,7 @@ mod tests {
     }
 
     #[test]
-    fn history_is_kept_in_full() {
+    fn given_many_messages_when_reading_the_history_then_it_is_kept_in_full() {
         let mut repo = Repo::in_memory();
         for message_number in 0..700 {
             send(

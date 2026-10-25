@@ -202,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn appends_and_caps_to_the_newest_bytes() {
+    fn given_appended_output_when_it_exceeds_the_cap_then_only_the_newest_bytes_are_kept() {
         let (store, root) = store("cap");
         store.append("t-1", b"hello").expect("append");
         assert_eq!(store.read("t-1").expect("read"), b"hello");
@@ -254,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_path_traversal_and_symlink_files() {
+    fn given_a_traversal_id_or_a_symlink_file_when_accessing_scrollback_then_it_is_rejected() {
         let (store, root) = store("secure");
         store
             .append("../escape", b"nope")
@@ -264,7 +264,7 @@ mod tests {
     }
 
     #[test]
-    fn cleanup_is_conservative_for_recent_orphans() {
+    fn given_recent_orphan_files_when_cleaning_up_then_they_are_kept() {
         let (store, root) = store("cleanup");
         store.append("t-orphan", b"keep").expect("append");
         let known = HashSet::new();

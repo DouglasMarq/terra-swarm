@@ -174,7 +174,8 @@ mod tests {
     }
 
     #[test]
-    fn audio_ctx_scales_with_duration_within_bounds() {
+    fn given_audio_of_various_lengths_when_computing_the_audio_context_then_it_scales_within_bounds(
+    ) {
         assert_eq!(compute_audio_ctx(0), 768);
         assert_eq!(compute_audio_ctx(16_000 * 30), 1500);
         assert_eq!(compute_audio_ctx(16_000 * 120), 1500);
@@ -184,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn trailing_silence_is_trimmed_with_padding() {
+    fn given_trailing_silence_when_trimming_then_it_is_cut_leaving_padding() {
         let mut audio = vec![0.5f32; 16_000];
         audio.extend(vec![0.0f32; 16_000]);
         let trimmed = trim_trailing_silence(&audio);
@@ -192,7 +193,7 @@ mod tests {
     }
 
     #[test]
-    fn short_or_quiet_audio_keeps_its_minimum() {
+    fn given_short_or_quiet_audio_when_trimming_then_it_keeps_its_minimum() {
         let quiet = vec![0.0f32; 16_000];
         assert_eq!(trim_trailing_silence(&quiet).len(), 4800 + 1600);
         let tiny = vec![0.0f32; 1000];

@@ -222,7 +222,7 @@ mod tests {
     const URL: &str = "http://127.0.0.1:4100/mcp";
 
     #[test]
-    fn codex_gets_overrides_before_its_subcommand() {
+    fn given_a_codex_command_when_rewriting_then_overrides_come_before_its_subcommand() {
         let registration = Overrides {
             url: URL,
             notify: None,
@@ -240,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_notify_runs_this_app_as_a_hook_on_posix_only() {
+    fn given_a_codex_launch_when_rewriting_then_notify_runs_this_app_as_a_hook_on_posix_only() {
         let program = Path::new("/Applications/Terra Swarm.app/Contents/MacOS/terra-swarm");
         let registration = Overrides {
             url: URL,
@@ -254,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    fn an_existing_codex_notify_is_detected() {
+    fn given_a_codex_config_with_notify_when_checking_then_it_is_detected() {
         assert!(has_codex_notify_setting(
             "model = \"o3\"\nnotify = [\"say\", \"done\"]\n"
         ));
@@ -265,7 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_takes_the_last_running_total() {
+    fn given_codex_token_counts_when_reading_usage_then_the_last_running_total_is_taken() {
         let sessions = temp("codex");
         let day = sessions.join("2026/10/20");
         std::fs::create_dir_all(&day).unwrap();

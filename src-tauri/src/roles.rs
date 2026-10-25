@@ -77,7 +77,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn roles_round_trip_and_only_the_orchestrator_assigns() {
+    fn given_every_role_when_serializing_and_checking_assignment_then_it_round_trips_and_only_the_orchestrator_assigns(
+    ) {
         for role in Role::ALL {
             let text = serde_json::to_string(&role).unwrap();
             assert_eq!(text, format!("\"{}\"", role.as_str()));

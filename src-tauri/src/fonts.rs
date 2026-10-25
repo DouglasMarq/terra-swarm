@@ -59,7 +59,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn groups_faces_by_family_case_insensitively() {
+    fn given_faces_of_one_family_in_mixed_case_when_grouping_then_they_form_one_family() {
         let faces = [
             ("JetBrains Mono", true),
             ("jetbrains mono", true),
@@ -84,7 +84,7 @@ mod tests {
     }
 
     #[test]
-    fn a_family_is_monospace_when_any_face_is() {
+    fn given_one_monospace_face_when_grouping_its_family_then_the_family_is_monospace() {
         let families = families_from([("Iosevka", false), ("Iosevka", true)].into_iter());
         assert!(families[0].monospace);
     }

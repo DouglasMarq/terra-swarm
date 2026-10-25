@@ -92,7 +92,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn given_an_id_outside_the_catalog_reports_it_unavailable_without_looking_it_up() {
+    fn given_an_id_outside_the_catalog_when_checking_availability_then_it_is_unavailable_without_a_lookup(
+    ) {
         #[cfg(unix)]
         let installed = "sh";
         #[cfg(windows)]

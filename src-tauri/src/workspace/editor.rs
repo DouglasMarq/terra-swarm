@@ -181,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn reads_and_saves_text_inside_the_workspace() {
+    fn given_a_text_file_inside_the_workspace_when_reading_and_saving_then_both_succeed() {
         let root = temp_root("rw");
         std::fs::write(root.join("src/main.ts"), "let a = 1;\n").unwrap();
         let file = read_file(&root, "src/main.ts").unwrap();
@@ -205,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn refuses_to_overwrite_a_file_an_agent_changed() {
+    fn given_a_file_an_agent_changed_when_saving_then_the_overwrite_is_refused() {
         let root = temp_root("conflict");
         let path = root.join("notes.md");
         std::fs::write(&path, "one").unwrap();
@@ -274,7 +274,7 @@ mod tests {
     }
 
     #[test]
-    fn given_text_over_the_size_limit_save_fails_with_the_other_code() {
+    fn given_text_over_the_size_limit_when_saving_then_it_fails_with_the_other_code() {
         let root = temp_root("too-large");
         std::fs::write(root.join("big.txt"), "x").unwrap();
         let text =
@@ -294,7 +294,8 @@ mod tests {
     }
 
     #[test]
-    fn stays_inside_the_workspace_and_skips_binaries() {
+    fn given_paths_outside_the_workspace_or_binary_files_when_reading_then_they_are_refused_or_skipped(
+    ) {
         let root = temp_root("guard");
         let outside = root.with_extension("outside");
         std::fs::write(&outside, "secret").unwrap();

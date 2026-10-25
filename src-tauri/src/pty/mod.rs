@@ -1141,7 +1141,8 @@ mod scrollback_flag_tests {
     }
 
     #[test]
-    fn durable_scrollback_gate_is_fail_closed_and_non_destructive() {
+    fn given_a_new_manager_when_toggling_durable_scrollback_then_the_gate_starts_closed_and_keeps_stored_bytes(
+    ) {
         let root = root();
         let store = ScrollbackStore::from_root(root.clone());
         store
@@ -1185,14 +1186,14 @@ mod input_tests {
     use std::sync::mpsc::sync_channel;
 
     #[test]
-    fn given_room_in_the_queue_write_queues_the_bytes() {
+    fn given_room_in_the_queue_when_writing_then_the_bytes_are_queued() {
         let (input, output) = sync_channel(1);
         send_input(&input, "t-1", "ls\n".into()).unwrap();
         assert_eq!(output.try_recv().unwrap(), b"ls\n");
     }
 
     #[test]
-    fn given_a_full_input_queue_write_fails_with_the_busy_code() {
+    fn given_a_full_input_queue_when_writing_then_it_fails_with_the_busy_code() {
         let (input, _output) = sync_channel(1);
         send_input(&input, "t-1", "a".into()).unwrap();
         let error = send_input(&input, "t-1", "b".into()).unwrap_err();
@@ -1200,7 +1201,7 @@ mod input_tests {
     }
 
     #[test]
-    fn given_a_closed_input_write_fails_with_the_other_code() {
+    fn given_a_closed_input_when_writing_then_it_fails_with_the_other_code() {
         let (input, output) = sync_channel::<Vec<u8>>(1);
         drop(output);
         let error = send_input(&input, "t-1", "a".into()).unwrap_err();
@@ -1214,7 +1215,7 @@ mod runtime_info_tests {
     use super::{runtime_info_from_manager, runtime_info_from_values, PtyManager, RuntimeFacts};
 
     #[test]
-    fn live_runtime_info_exposes_only_real_process_facts() {
+    fn given_a_live_terminal_when_reading_runtime_info_then_it_exposes_only_real_process_facts() {
         let info = runtime_info_from_values(RuntimeFacts {
             id: "term-live",
             pid: Some(42),
@@ -1232,7 +1233,7 @@ mod runtime_info_tests {
     }
 
     #[test]
-    fn reaped_runtime_info_is_not_reported_as_running() {
+    fn given_a_reaped_terminal_when_reading_runtime_info_then_it_is_not_reported_as_running() {
         let info = runtime_info_from_values(RuntimeFacts {
             id: "term-ended",
             pid: Some(42),
@@ -1247,7 +1248,7 @@ mod runtime_info_tests {
     }
 
     #[test]
-    fn an_empty_manager_has_no_runtime_info_for_unknown_ids() {
+    fn given_an_empty_manager_when_reading_runtime_info_of_an_unknown_id_then_there_is_none() {
         let manager = PtyManager::default();
         assert_eq!(
             runtime_info_from_manager(&manager, "term-missing").expect("runtime query"),
@@ -1327,7 +1328,8 @@ mod spawn_lifecycle_tests {
     }
 
     #[test]
-    fn immediate_exit_is_registered_then_removed_without_a_phantom_runtime() {
+    fn given_a_command_that_exits_immediately_when_spawning_then_it_is_registered_and_removed_without_a_phantom_runtime(
+    ) {
         let app = tauri::test::mock_app();
         assert!(app.manage(Mutex::new(PtyManager::default())));
         assert!(app.manage(Mutex::new(WorkspaceStore::default())));
@@ -1386,7 +1388,8 @@ mod spawn_lifecycle_tests {
 
     #[cfg(unix)]
     #[test]
-    fn per_agent_args_and_env_reach_the_process_but_not_terra_variables() {
+    fn given_per_agent_args_and_env_when_spawning_then_they_reach_the_process_but_terra_variables_do_not(
+    ) {
         let app = tauri::test::mock_app();
         assert!(app.manage(Mutex::new(PtyManager::default())));
         assert!(app.manage(Mutex::new(WorkspaceStore::default())));
@@ -1450,7 +1453,7 @@ mod spawn_lifecycle_tests {
 
     #[cfg(unix)]
     #[test]
-    fn an_isolated_agent_gets_a_worktree_and_keeps_it_on_respawn() {
+    fn given_an_isolated_agent_when_spawning_and_respawning_then_it_gets_a_worktree_and_keeps_it() {
         let app = tauri::test::mock_app();
         assert!(app.manage(Mutex::new(PtyManager::default())));
         assert!(app.manage(Mutex::new(WorkspaceStore::default())));
@@ -1536,7 +1539,7 @@ mod kill_tests {
     use tauri::Manager;
 
     #[test]
-    fn given_a_poisoned_manager_lock_kill_terminal_inner_still_kills_the_process() {
+    fn given_a_poisoned_manager_lock_when_killing_a_terminal_then_the_process_is_still_killed() {
         let app = tauri::test::mock_app();
         assert!(app.manage(Mutex::new(PtyManager::default())));
         assert!(app.manage(Mutex::new(WorkspaceStore::default())));

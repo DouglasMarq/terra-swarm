@@ -293,7 +293,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn creates_an_isolated_branch_and_reports_its_state() {
+    fn given_a_repository_when_creating_a_worktree_then_it_gets_an_isolated_branch_and_reports_its_state(
+    ) {
         let repo = init("create");
         let root = repo.with_extension("worktrees");
         let info = create(NewWorktree {
@@ -342,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn refuses_a_folder_outside_git() {
+    fn given_a_folder_outside_git_when_creating_a_worktree_then_it_is_refused() {
         let dir = std::env::temp_dir().join(format!("terra-wt-plain-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         assert!(create(NewWorktree {
@@ -357,7 +358,7 @@ mod tests {
     }
 
     #[test]
-    fn a_taken_branch_name_gets_a_suffix() {
+    fn given_a_taken_branch_name_when_creating_a_worktree_then_the_branch_gets_a_suffix() {
         let repo = init("suffix");
         let root = repo.with_extension("worktrees");
         git(&repo, &["branch", "terra/t-9"]).unwrap();
@@ -374,7 +375,7 @@ mod tests {
     }
 
     #[test]
-    fn given_ids_that_are_not_plain_folder_names_refuses_to_create_a_worktree() {
+    fn given_ids_that_are_not_plain_folder_names_when_creating_a_worktree_then_it_is_refused() {
         let repo = init("ids");
         let root = repo.with_extension("worktrees");
         let absolute = std::env::temp_dir().join("terra-wt-escape");
@@ -408,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_broken_checkout_status_reports_an_error_instead_of_clean() {
+    fn given_a_broken_checkout_when_reading_status_then_it_reports_an_error_instead_of_clean() {
         let repo = init("broken");
         let root = repo.with_extension("worktrees");
         let info = create(NewWorktree {
@@ -428,7 +429,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_deleted_checkout_status_still_counts_the_branch_commits() {
+    fn given_a_deleted_checkout_when_reading_status_then_it_still_counts_the_branch_commits() {
         let repo = init("deleted");
         let root = repo.with_extension("worktrees");
         let info = create(NewWorktree {
@@ -455,7 +456,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_base_git_cannot_compare_status_reports_an_error() {
+    fn given_a_base_git_cannot_compare_when_reading_status_then_it_reports_an_error() {
         let repo = init("no-base");
         let root = repo.with_extension("worktrees");
         let mut info = create(NewWorktree {
@@ -472,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn given_any_git_command_disables_terminal_prompts() {
+    fn given_any_git_command_when_running_it_then_terminal_prompts_are_disabled() {
         let command = git_command(Path::new("/Users/me/project"));
         assert!(command
             .get_envs()
@@ -492,7 +493,7 @@ mod tests {
     }
 
     #[test]
-    fn given_worktree_values_git_could_read_as_options_refuses_them() {
+    fn given_worktree_values_git_could_read_as_options_when_using_them_then_they_are_refused() {
         assert!(stored_info("terra/t-1", "main").check().is_ok());
         assert!(stored_info("terra/t-1-2", "feature/login").check().is_ok());
         for (branch, base) in [
@@ -515,7 +516,7 @@ mod tests {
     }
 
     #[test]
-    fn given_an_option_like_branch_remove_runs_no_git() {
+    fn given_an_option_like_branch_when_removing_then_no_git_runs() {
         let repo = init("remove-option");
         let root = repo.with_extension("worktrees");
         let mut info = create(NewWorktree {

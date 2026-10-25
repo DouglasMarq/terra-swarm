@@ -278,7 +278,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn diff_covers_commits_edits_and_new_files() {
+    fn given_commits_edits_and_new_files_when_diffing_then_the_diff_covers_them_all() {
         let repo = init("diff");
         let root = repo.with_extension("worktrees");
         let info = create(NewWorktree {
@@ -346,7 +346,7 @@ mod tests {
     }
 
     #[test]
-    fn commit_then_merge_into_the_base() {
+    fn given_changes_in_a_worktree_when_committing_and_merging_then_they_land_in_the_base() {
         let repo = init("merge");
         let root = repo.with_extension("worktrees");
         let info = create(NewWorktree {
@@ -377,7 +377,7 @@ mod tests {
     }
 
     #[test]
-    fn a_conflicting_merge_leaves_the_base_untouched() {
+    fn given_a_conflicting_merge_when_merging_then_the_base_is_left_untouched() {
         let repo = init("conflict");
         let root = repo.with_extension("worktrees");
         let info = create(NewWorktree {
@@ -400,7 +400,8 @@ mod tests {
     }
 
     #[test]
-    fn given_a_worktree_whose_status_fails_refuses_to_merge_or_open_a_pull_request() {
+    fn given_a_worktree_whose_status_fails_when_merging_or_opening_a_pull_request_then_it_is_refused(
+    ) {
         let repo = init("guard");
         let root = repo.with_extension("worktrees");
         let info = create(NewWorktree {
@@ -425,7 +426,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_main_checkout_on_a_detached_head_refuses_to_merge() {
+    fn given_a_main_checkout_on_a_detached_head_when_merging_then_it_is_refused() {
         let repo = init("detached");
         let root = repo.with_extension("worktrees");
         let info = create(NewWorktree {
@@ -445,7 +446,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_merge_that_cannot_start_reports_that_nothing_changed() {
+    fn given_a_merge_that_cannot_start_when_merging_then_it_reports_that_nothing_changed() {
         let repo = init("blocked");
         let root = repo.with_extension("worktrees");
         let info = create(NewWorktree {
@@ -467,7 +468,8 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn given_a_merge_that_cannot_be_aborted_reports_the_checkout_is_mid_merge() {
+    fn given_a_merge_that_cannot_be_aborted_when_merging_then_it_reports_the_checkout_is_mid_merge()
+    {
         use std::os::unix::fs::PermissionsExt;
         let repo = init("abort");
         let root = repo.with_extension("worktrees");
@@ -491,7 +493,7 @@ mod tests {
     }
 
     #[test]
-    fn given_an_option_like_branch_or_base_refuses_to_review_it() {
+    fn given_an_option_like_branch_or_base_when_reviewing_then_it_is_refused() {
         let repo = init("option");
         let root = repo.with_extension("worktrees");
         let info = create(NewWorktree {

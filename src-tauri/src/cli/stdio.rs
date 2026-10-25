@@ -220,7 +220,7 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn decodes_chunked_and_event_stream_bodies() {
+    fn given_chunked_or_event_stream_bodies_when_decoding_then_the_messages_are_read() {
         let raw = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n5\r\ndata:\r\n12\r\n {\"id\":1,\"a\":true}\r\n0\r\n\r\n";
         let (status, headers, body) = split_response(raw).unwrap();
         assert_eq!(status, 200);
@@ -254,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_reply_that_is_not_json_answers_the_request_with_an_error() {
+    fn given_a_reply_that_is_not_json_when_relaying_then_the_request_is_answered_with_an_error() {
         let url = serve_once(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 8\r\nConnection: close\r\n\r\nnot json",
         );
@@ -278,7 +278,7 @@ mod tests {
     }
 
     #[test]
-    fn given_an_event_stream_with_invalid_data_reports_an_error() {
+    fn given_an_event_stream_with_invalid_data_when_decoding_then_it_reports_an_error() {
         assert!(parse_messages("data: {\"id\":1}\n\ndata: oops\n", true).is_err());
         assert_eq!(
             parse_messages("data:\n\ndata: {\"id\":1}\n", true).unwrap(),
@@ -287,7 +287,7 @@ mod tests {
     }
 
     #[test]
-    fn a_stdio_client_talks_to_the_real_server() {
+    fn given_a_stdio_client_when_relaying_then_it_talks_to_the_real_server() {
         let (hub, _) = hub();
         let token = hub.issue(identity("t-4", "ws-1", "opencode")).unwrap();
         let runtime = tokio::runtime::Builder::new_multi_thread()

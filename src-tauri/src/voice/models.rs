@@ -117,7 +117,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_catalog_has_unique_ids_and_matching_files() {
+    fn given_the_model_catalog_when_inspecting_it_then_ids_are_unique_and_files_match() {
         let models = available_models();
         let mut ids: Vec<&str> = models.iter().map(|model| model.id).collect();
         ids.sort_unstable();
@@ -155,7 +155,7 @@ mod tests {
     }
 
     #[test]
-    fn only_present_files_count_as_downloaded() {
+    fn given_model_files_when_checking_downloads_then_only_present_files_count() {
         let dir = std::env::temp_dir().join(format!("terra-voice-models-{}", std::process::id()));
         std::fs::create_dir_all(models_dir(&dir)).unwrap();
         assert!(downloaded_model_ids(&dir).is_empty());

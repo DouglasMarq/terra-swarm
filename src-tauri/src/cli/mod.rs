@@ -98,7 +98,7 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn only_loopback_urls_are_used() {
+    fn given_server_urls_when_reading_their_authority_then_only_loopback_urls_are_used() {
         assert_eq!(
             loopback_authority("http://127.0.0.1:4100/mcp").as_deref(),
             Some("127.0.0.1:4100")
@@ -113,7 +113,7 @@ mod tests {
     }
 
     #[test]
-    fn non_cli_arguments_start_the_app() {
+    fn given_non_cli_arguments_when_running_then_the_app_starts() {
         assert_eq!(run(&["terra-swarm".to_string()]), None);
         assert_eq!(
             run(&["terra-swarm".to_string(), "--flag".to_string()]),
@@ -122,7 +122,7 @@ mod tests {
     }
 
     #[test]
-    fn a_hook_post_reaches_the_server_and_sets_the_state() {
+    fn given_a_hook_post_when_sending_it_then_it_reaches_the_server_and_sets_the_state() {
         let (hub, _) = hub();
         let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let runtime = tokio::runtime::Builder::new_multi_thread()

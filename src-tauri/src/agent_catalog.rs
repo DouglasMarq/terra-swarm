@@ -46,7 +46,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn continuation_commands_are_recognised() {
+    fn given_a_continuation_command_when_checking_for_resume_then_it_is_recognised() {
         assert!(is_resume_command("claude --continue"));
         assert!(is_resume_command("codex  resume --last"));
         assert!(!is_resume_command("claude"));
@@ -54,7 +54,7 @@ mod tests {
     }
 
     #[test]
-    fn the_catalog_parses_with_unique_ids() {
+    fn given_the_bundled_catalog_when_parsing_it_then_every_id_is_unique() {
         let ids: Vec<&str> = catalog().iter().map(|agent| agent.id.as_str()).collect();
         let mut unique = ids.clone();
         unique.sort_unstable();

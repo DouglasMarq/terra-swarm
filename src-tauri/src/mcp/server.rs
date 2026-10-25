@@ -328,7 +328,7 @@ mod tests {
     }
 
     #[test]
-    fn initialize_list_and_call_over_http() {
+    fn given_a_running_server_when_initializing_listing_and_calling_over_http_then_each_succeeds() {
         let (hub, _) = hub();
         let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
@@ -383,7 +383,7 @@ mod tests {
     }
 
     #[test]
-    fn requests_without_a_valid_token_get_401() {
+    fn given_a_request_without_a_valid_token_when_calling_then_it_gets_401() {
         let (hub, _) = hub();
         let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
@@ -403,7 +403,7 @@ mod tests {
     }
 
     #[test]
-    fn a_token_only_sees_its_own_workspace() {
+    fn given_a_token_when_calling_tools_then_it_only_sees_its_own_workspace() {
         let (hub, _) = hub();
         let mine = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let theirs = hub.issue(identity("t-7", "ws-2", "codex")).unwrap();
@@ -425,7 +425,7 @@ mod tests {
     }
 
     #[test]
-    fn browser_origins_are_rejected() {
+    fn given_a_browser_origin_when_calling_then_it_is_rejected() {
         let (hub, _) = hub();
         let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));

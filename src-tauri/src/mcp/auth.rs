@@ -133,7 +133,7 @@ mod tests {
     }
 
     #[test]
-    fn tokens_are_unique_and_replaced_per_terminal() {
+    fn given_a_terminal_when_issuing_tokens_then_they_are_unique_and_replace_the_previous_one() {
         let mut registry = TokenRegistry::default();
         let first = registry.issue(identity("t-1", "ws-1")).unwrap();
         let second = registry.issue(identity("t-1", "ws-1")).unwrap();
@@ -146,7 +146,8 @@ mod tests {
     }
 
     #[test]
-    fn peers_are_per_workspace_and_ordered() {
+    fn given_agents_in_several_workspaces_when_listing_peers_then_they_are_per_workspace_and_ordered(
+    ) {
         let mut registry = TokenRegistry::default();
         registry.issue(identity("t-10", "ws-1")).unwrap();
         registry.issue(identity("t-2", "ws-1")).unwrap();

@@ -16,7 +16,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     #[test]
-    fn a_poisoned_lock_is_recovered() {
+    fn given_a_poisoned_lock_when_locking_or_recovering_then_the_value_is_recovered() {
         let shared = Arc::new(Mutex::new(1));
         let clone = Arc::clone(&shared);
         let _ = std::thread::spawn(move || {

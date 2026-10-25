@@ -49,7 +49,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn keyed_notes_upsert_and_full_text_search() {
+    fn given_keyed_notes_when_writing_and_searching_then_they_upsert_and_match_full_text() {
         let repo = Repo::in_memory();
         let first = add(
             repo.queries(),

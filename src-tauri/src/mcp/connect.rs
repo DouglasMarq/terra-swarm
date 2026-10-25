@@ -119,7 +119,7 @@ mod tests {
     const URL: &str = "http://127.0.0.1:4100/mcp";
 
     #[test]
-    fn other_commands_are_left_alone() {
+    fn given_a_command_without_integration_when_rewriting_then_it_is_left_alone() {
         let context = LaunchContext {
             url: URL,
             hook_url: "http://127.0.0.1:4100/hooks",
@@ -135,7 +135,8 @@ mod tests {
     }
 
     #[test]
-    fn launch_issues_a_token_and_env_only_when_enabled_and_running() {
+    fn given_the_server_state_when_launching_then_a_token_and_env_are_issued_only_when_enabled_and_running(
+    ) {
         let (hub, _) = hub();
         assert!(hub.launch(posix_request("claude")).is_none());
         hub.set_port(4100);

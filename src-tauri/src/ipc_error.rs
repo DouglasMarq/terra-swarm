@@ -35,7 +35,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn given_a_coded_error_serializes_its_code_in_camel_case_and_its_message() {
+    fn given_a_coded_error_when_serializing_then_it_has_its_code_in_camel_case_and_its_message() {
         let error = IpcError::new(IpcErrorCode::ChangedOnDisk, "the file changed");
         assert_eq!(
             serde_json::to_value(&error).unwrap(),
@@ -48,7 +48,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_plain_message_converts_it_to_the_other_code() {
+    fn given_a_plain_message_when_converting_then_it_gets_the_other_code() {
         let error = IpcError::from("terminal t-1 not found".to_string());
         assert_eq!(error.code, IpcErrorCode::Other);
         assert_eq!(

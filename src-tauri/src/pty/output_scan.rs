@@ -408,28 +408,28 @@ mod notif_tests {
     use super::extract_notifications;
 
     #[test]
-    fn bel_uses_last_output_line() {
+    fn given_a_bel_when_extracting_notifications_then_the_last_output_line_is_the_message() {
         let (count, messages) = extract_notifications(b"\x07", b"12 passed, 0 failed\r\n\x07");
         assert_eq!(count, 1);
         assert_eq!(messages, vec!["12 passed, 0 failed".to_string()]);
     }
 
     #[test]
-    fn bel_burst_yields_single_message() {
+    fn given_a_burst_of_bels_when_extracting_notifications_then_a_single_message_is_yielded() {
         let (count, messages) = extract_notifications(b"\x07\x07\x07", b"done\r\n");
         assert_eq!(count, 3);
         assert_eq!(messages.len(), 1);
     }
 
     #[test]
-    fn osc9_carries_message() {
+    fn given_an_osc9_sequence_when_extracting_notifications_then_it_carries_the_message() {
         let (count, messages) = extract_notifications(b"\x1b]9;Build finished\x07", b"");
         assert_eq!(count, 1);
         assert_eq!(messages, vec!["Build finished".to_string()]);
     }
 
     #[test]
-    fn osc777_splits_title_and_body() {
+    fn given_an_osc777_sequence_when_extracting_notifications_then_title_and_body_are_split() {
         let (count, messages) =
             extract_notifications(b"\x1b]777;notify;Tests;12 passed\x1b\\", b"");
         assert_eq!(count, 1);
@@ -437,21 +437,23 @@ mod notif_tests {
     }
 
     #[test]
-    fn osc99_uses_payload_after_metadata() {
+    fn given_an_osc99_sequence_when_extracting_notifications_then_the_payload_after_metadata_is_used(
+    ) {
         let (count, messages) = extract_notifications(b"\x1b]99;i=1:d=0;Hello\x07", b"");
         assert_eq!(count, 1);
         assert_eq!(messages, vec!["Hello".to_string()]);
     }
 
     #[test]
-    fn title_osc_terminator_bel_is_not_counted() {
+    fn given_a_title_osc_ended_by_bel_when_extracting_notifications_then_the_bel_is_not_counted() {
         let (count, messages) = extract_notifications(b"\x1b]0;my title\x07", b"");
         assert_eq!(count, 0);
         assert!(messages.is_empty());
     }
 
     #[test]
-    fn empty_tail_falls_back_to_generic_text() {
+    fn given_a_bel_with_an_empty_tail_when_extracting_notifications_then_it_falls_back_to_generic_text(
+    ) {
         let (count, messages) = extract_notifications(b"\x07", b"\r\n");
         assert_eq!(count, 1);
         assert_eq!(messages, vec!["Terminal notification".to_string()]);
@@ -463,7 +465,7 @@ mod ctx_tests {
     use super::detect_context_used;
 
     #[test]
-    fn opencode_footer() {
+    fn given_context_footers_when_detecting_context_used_then_the_used_percent_is_read() {
         assert_eq!(
             detect_context_used("some output 12.3K (42%) $0.05"),
             Some(42)
@@ -485,7 +487,7 @@ mod ctx_tests {
     }
 
     #[test]
-    fn unicode_near_keywords_does_not_panic() {
+    fn given_unicode_near_the_keywords_when_detecting_context_used_then_it_does_not_panic() {
         assert_eq!(
             detect_context_used("╭─░▒▓ 42% context left ▓▒░─╮"),
             Some(58)

@@ -274,7 +274,8 @@ mod tests {
     }
 
     #[test]
-    fn given_a_store_that_could_not_be_read_keeps_every_transcript() {
+    fn given_a_store_that_could_not_be_read_when_cleaning_transcripts_then_it_keeps_every_transcript(
+    ) {
         let (root, transcript) = old_transcript("unread");
         let store = workspace::WorkspaceStore::default();
 
@@ -288,7 +289,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_loaded_store_removes_old_transcripts_it_does_not_know() {
+    fn given_a_loaded_store_when_cleaning_transcripts_then_it_removes_old_ones_it_does_not_know() {
         let (root, transcript) = old_transcript("loaded");
         let store = workspace::WorkspaceStore {
             save_path: Some(root.join("workspaces.json")),

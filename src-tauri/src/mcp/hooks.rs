@@ -162,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_events_map_to_states() {
+    fn given_claude_hook_events_when_interpreting_then_they_map_to_states() {
         assert_eq!(
             interpret(&call(
                 "claude",
@@ -223,7 +223,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_turn_complete_means_idle() {
+    fn given_a_codex_turn_complete_when_interpreting_then_the_agent_is_idle() {
         let (state, summary) = interpret(&call(
             "codex",
             "notify",
@@ -239,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_hooks_name_their_session() {
+    fn given_a_codex_hook_when_reading_its_session_log_then_it_names_its_session() {
         let log = session_log(&call(
             "codex",
             "notify",
@@ -263,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn long_summaries_are_cut() {
+    fn given_a_long_message_when_interpreting_then_the_summary_is_cut() {
         let (_, summary) = interpret(&call(
             "claude",
             "Notification",
@@ -275,7 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn applying_a_hook_updates_status_and_raises_attention() {
+    fn given_a_hook_when_applying_it_then_the_status_is_updated_and_attention_raised() {
         let (hub, events) = hub();
         let who = identity("t-1", "ws-1", "claude");
         apply(
@@ -295,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn given_an_unavailable_database_a_hook_records_no_state() {
+    fn given_an_unavailable_database_when_applying_a_hook_then_no_state_is_recorded() {
         let dir =
             std::env::temp_dir().join(format!("terra-mcp-hook-{}", crate::clock::now_millis()));
         std::fs::create_dir_all(&dir).unwrap();

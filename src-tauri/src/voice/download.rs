@@ -395,7 +395,7 @@ mod tests {
     }
 
     #[test]
-    fn given_queued_chunks_writes_them_in_order_to_the_file_and_hashes_them() {
+    fn given_queued_chunks_when_writing_then_they_are_written_in_order_and_hashed() {
         let dir = temp_dir("chunks");
         let path = dir.join("model.bin.tmp");
         let (sender, receiver) = tokio::sync::mpsc::channel(4);
@@ -411,7 +411,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_missing_folder_reports_the_write_error() {
+    fn given_a_missing_folder_when_writing_then_it_reports_the_write_error() {
         let dir = temp_dir("missing");
         let path = dir.join("absent").join("model.bin.tmp");
         let (sender, receiver) = tokio::sync::mpsc::channel::<Vec<u8>>(1);

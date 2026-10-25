@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn migrations_apply_from_scratch_and_are_idempotent() {
+    fn given_an_empty_database_when_migrating_twice_then_migrations_apply_and_are_idempotent() {
         let path = temp_path("fresh");
         {
             let conn = open(&path).unwrap();
@@ -221,7 +221,7 @@ mod tests {
     }
 
     #[test]
-    fn a_newer_schema_is_refused_without_touching_the_file() {
+    fn given_a_newer_schema_when_opening_then_it_is_refused_without_touching_the_file() {
         let path = temp_path("newer");
         {
             let conn = open(&path).unwrap();
@@ -234,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn a_file_that_is_not_sqlite_fails_to_open() {
+    fn given_a_file_that_is_not_sqlite_when_opening_then_it_fails() {
         let path = temp_path("garbage");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, b"definitely not a database, just some bytes here").unwrap();
@@ -327,7 +327,7 @@ mod tests {
     }
 
     #[test]
-    fn fts5_is_available() {
+    fn given_an_in_memory_database_when_searching_notes_then_fts5_is_available() {
         let conn = open_in_memory();
         conn.execute(
             "INSERT INTO notes(workspace_id, key, body, author, created_at, updated_at)

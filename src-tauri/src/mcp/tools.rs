@@ -869,7 +869,7 @@ mod tests {
     }
 
     #[test]
-    fn every_tool_has_an_object_schema_and_a_handler() {
+    fn given_the_tool_list_when_inspecting_it_then_every_tool_has_an_object_schema_and_a_handler() {
         let (hub, _) = hub();
         let who = identity("t-1", "ws-1", "claude");
         let defs = definitions();
@@ -905,7 +905,7 @@ mod tests {
     }
 
     #[test]
-    fn two_agents_coordinate_through_the_board() {
+    fn given_two_agents_when_using_the_board_then_they_coordinate_through_it() {
         let (hub, events) = hub();
         hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         hub.issue(identity("t-2", "ws-1", "claude")).unwrap();
@@ -1073,7 +1073,8 @@ mod tests {
     }
 
     #[test]
-    fn tools_are_scoped_to_the_callers_workspace() {
+    fn given_agents_in_several_workspaces_when_calling_tools_then_they_are_scoped_to_the_callers_workspace(
+    ) {
         let (hub, _) = hub();
         hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         hub.issue(identity("t-5", "ws-2", "codex")).unwrap();
@@ -1155,7 +1156,8 @@ mod tests {
     }
 
     #[test]
-    fn given_a_task_of_another_workspace_every_task_tool_reports_not_found_and_changes_nothing() {
+    fn given_a_task_of_another_workspace_when_calling_any_task_tool_then_it_reports_not_found_and_changes_nothing(
+    ) {
         let (hub, _) = hub();
         let owner = identity("t-1", "ws-1", "claude");
         let lead = AgentIdentity {
@@ -1224,7 +1226,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_arguments_are_reported() {
+    fn given_invalid_arguments_when_calling_tools_then_they_are_reported() {
         let (hub, _) = hub();
         let who = identity("t-1", "ws-1", "claude");
         assert!(matches!(
@@ -1294,7 +1296,7 @@ mod tests {
     }
 
     #[test]
-    fn status_and_notes_round_trip() {
+    fn given_a_status_and_notes_when_writing_and_reading_them_then_they_round_trip() {
         let (hub, events) = hub();
         hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         hub.issue(identity("t-2", "ws-1", "codex")).unwrap();
@@ -1367,7 +1369,7 @@ mod tests {
     }
 
     #[test]
-    fn the_orchestrator_assigns_and_wakes_idle_teammates() {
+    fn given_an_orchestrator_when_assigning_tasks_then_idle_teammates_are_woken() {
         let (hub, events) = hub();
         let lead = AgentIdentity {
             role: Some(Role::Orchestrator),

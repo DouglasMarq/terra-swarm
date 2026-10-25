@@ -280,7 +280,7 @@ mod tests {
     use crate::roles::Role;
 
     #[test]
-    fn claude_gets_hooks_and_its_config_file_last() {
+    fn given_a_claude_command_when_rewriting_then_it_gets_hooks_and_its_config_file_last() {
         let mcp = Path::new("/Users/me/Library/Application Support/x/claude-mcp.json");
         let hooks = Path::new("/Users/me/Library/Application Support/x/claude-hooks.json");
         let registration = Flags {
@@ -319,7 +319,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_hooks_settings_hold_no_secret() {
+    fn given_claude_hook_settings_when_writing_them_then_they_hold_no_secret() {
         let json: serde_json::Value = serde_json::from_str(&claude_settings_json(
             "http://127.0.0.1:4100/hooks",
             Some("'/Applications/Terra Swarm.app/Contents/MacOS/terra-swarm' hook claude SessionStart"),
@@ -347,7 +347,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_config_holds_no_secret() {
+    fn given_the_claude_config_when_writing_it_then_it_holds_no_secret() {
         let json: serde_json::Value = serde_json::from_str(&claude_config_json()).unwrap();
         let server = &json["mcpServers"]["terra"];
         assert_eq!(server["type"], "http");
@@ -359,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_replies_count_once_per_message() {
+    fn given_claude_replies_when_counting_usage_then_each_message_counts_once() {
         let dir = temp("claude");
         let log = dir.join("s.jsonl");
         let reply = |id: &str, block: &str| {
@@ -392,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn only_transcripts_inside_claudes_folder_are_read() {
+    fn given_transcript_paths_when_reading_then_only_those_inside_claudes_folder_are_read() {
         let projects = temp("projects");
         let inside = projects.join("p/s.jsonl");
         std::fs::create_dir_all(inside.parent().unwrap()).unwrap();

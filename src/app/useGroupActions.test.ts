@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+
+import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ResumeItem } from "../domain/terminal.model";
 import type { Workspace, WorkspaceGroup } from "../domain/workspace.model";
@@ -40,7 +43,7 @@ function renderActions(statuses: readonly SpawnQueueResult<void>["status"][] = [
   const setWorkspaces = vi.fn((update: Workspace[] | ((previous: Workspace[]) => Workspace[])) => {
     current = typeof update === "function" ? update(current) : update;
   });
-  const actions = useGroupActions({ workspaces, groups, sessions, refresh, setWorkspaces });
+  const actions = renderHook(() => useGroupActions({ workspaces, groups, sessions, refresh, setWorkspaces })).result.current;
   return { actions, sessions, refresh, workspacesNow: () => current };
 }
 

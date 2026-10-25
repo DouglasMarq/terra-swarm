@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+
+import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Workspace, WorkspaceContainer, WorkspaceSnapshotV2 } from "../domain/workspace.model";
 
@@ -61,7 +64,8 @@ const snapshot: WorkspaceSnapshotV2 = {
 };
 
 function navigation(activeId: string | null) {
-  return useWorkspaceNavigation({ workspaces, snapshot: useOrchestrationStore.getState().snapshot, activeId, focusedId: null });
+  const snapshotNow = useOrchestrationStore.getState().snapshot;
+  return renderHook(() => useWorkspaceNavigation({ workspaces, snapshot: snapshotNow, activeId, focusedId: null })).result.current;
 }
 
 function isVisible(containerId: string): boolean | undefined {

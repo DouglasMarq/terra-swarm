@@ -181,4 +181,59 @@ describe("Sidebar", () => {
     await user.click(screen.getByRole("button", { name: "Expandir barra lateral (⌘B)" }));
     expect(onExpand).toHaveBeenCalledOnce();
   });
+
+  it("Given the surface switch, when picking Workbench and Board, then each surface is navigated to", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    render(<SurfaceSwitch surface="fleet" attentionCount={0} onNavigate={onNavigate} />);
+
+    await user.click(screen.getByRole("button", { name: "Workbench" }));
+    await user.click(screen.getByRole("button", { name: "Quadro" }));
+
+    expect(onNavigate).toHaveBeenNthCalledWith(1, "workbench");
+    expect(onNavigate).toHaveBeenNthCalledWith(2, "board");
+  });
+
+  it("Given a sidebar without a version, when it renders, then only the agent count is shown", () => {
+    render(
+      <Sidebar surface="settings" attentionCount={0} onNavigate={vi.fn()} activeAgents={1} onOpenSettings={vi.fn()}>
+        <div>Tree</div>
+      </Sidebar>,
+    );
+
+    expect(screen.getByText("1 agente ativo")).toBeInTheDocument();
+  });
+
+  it("Given a collapsed sidebar with nothing waiting, when using the rail, then surfaces, projects and settings are reached", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    const onOpenWorkspace = vi.fn();
+    const onOpenSettings = vi.fn();
+    render(
+      <CollapsedSidebar
+        surface="board"
+        attentionCount={0}
+        projects={[{ id: "ws-2", name: "site-docs", status: "idle", isSuspended: true, agents: [] }]}
+        activeWorkspaceId={null}
+        focusedAgentId={null}
+        onNavigate={onNavigate}
+        onOpenWorkspace={onOpenWorkspace}
+        onFocusAgent={vi.fn()}
+        onOpenSettings={onOpenSettings}
+        onExpand={vi.fn()}
+      />,
+    );
+
+    const rail = screen.getByRole("navigation", { name: "Barra lateral recolhida" });
+    await user.click(screen.getByRole("button", { name: "Workbench" }));
+    await user.click(screen.getByRole("button", { name: "Frota" }));
+    await user.click(screen.getByRole("button", { name: "Quadro" }));
+    await user.click(screen.getByRole("button", { name: "site-docs, 0 agentes" }));
+    await user.click(screen.getByRole("button", { name: "Configurações" }));
+
+    expect(onNavigate.mock.calls).toEqual([["workbench"], ["fleet"], ["board"]]);
+    expect(onOpenWorkspace).toHaveBeenCalledWith("ws-2");
+    expect(onOpenSettings).toHaveBeenCalledOnce();
+    expect(rail).toContainElement(screen.getByRole("button", { name: "Expandir barra lateral" }));
+  });
 });

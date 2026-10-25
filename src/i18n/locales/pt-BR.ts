@@ -1,4 +1,4 @@
-import type { Dictionary } from "../index";
+import type { Dictionary } from "../dictionary";
 import type { en } from "./en";
 
 /** Português (Brasil). Must mirror every key in en.ts. */

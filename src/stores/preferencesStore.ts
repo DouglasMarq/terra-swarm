@@ -2,6 +2,7 @@ import { DEFAULT_NAME_LIST, NAME_SETS, type NameSetId, type NamesExhaustedStrate
 import { create } from "zustand";
 import type { AgentLaunchSettings } from "../domain/agentLaunchEnv";
 import { t } from "../i18n";
+import { isRecord } from "../lib/records/records";
 import { storageGet, storageRemove, storageSet } from "../lib/storage/safeStorage";
 import { DEFAULT_VOICE_LANGUAGE, isVoiceLanguage, type VoiceLanguage } from "../domain/voiceLanguages";
 import {
@@ -13,61 +14,64 @@ import {
 
 export type Hotkey = ShortcutDefinition;
 
-const mk = (
-  key: string,
-  meta = false,
-  shift = false,
-  ctrl = false,
-  alt = false,
-): Hotkey => ({ key, meta, shift, ctrl, alt });
+type HotkeyModifiers = Partial<Omit<Hotkey, "key">>;
+
+const mk = (key: string, modifiers: HotkeyModifiers = {}): Hotkey => ({
+  key,
+  meta: false,
+  shift: false,
+  ctrl: false,
+  alt: false,
+  ...modifiers,
+});
 
 const IS_MAC = detectShortcutPlatform() === "mac";
 
-const wsSelect = (n: number): Hotkey =>
-  IS_MAC ? mk(String(n), true) : mk(String(n), false, false, true);
+const wsSelect = (digit: string): Hotkey =>
+  IS_MAC ? mk(digit, { meta: true }) : mk(digit, { ctrl: true });
 
-const termSelect = (n: number): Hotkey =>
-  IS_MAC ? mk(String(n), true, true) : mk(String(n), false, true, true);
+const termSelect = (digit: string): Hotkey =>
+  IS_MAC ? mk(digit, { meta: true, shift: true }) : mk(digit, { shift: true, ctrl: true });
 
 // On Windows the meta key is the Win key: Win+W opens Widgets, Win+Enter
 // launches Narrator, Win+= drives the Magnifier, etc. Use Ctrl+Shift / Alt
 // combos there; keep Cmd combos on macOS.
 export const DEFAULT_HOTKEYS: Readonly<Record<HotkeyActionId, Hotkey>> = {
-  newWorkspace: IS_MAC ? mk("n", true, true) : mk("n", false, true, true),
-  renameWorkspace: IS_MAC ? mk("r", true, true) : mk("r", false, true, true),
+  newWorkspace: IS_MAC ? mk("n", { meta: true, shift: true }) : mk("n", { shift: true, ctrl: true }),
+  renameWorkspace: IS_MAC ? mk("r", { meta: true, shift: true }) : mk("r", { shift: true, ctrl: true }),
   deleteWorkspace: IS_MAC
-    ? mk("Backspace", true, true)
-    : mk("Backspace", false, true, true),
-  newTerminal: IS_MAC ? mk("t", true) : mk("t", false, true, true),
-  closeTerminal: IS_MAC ? mk("w", true) : mk("w", false, true, true),
+    ? mk("Backspace", { meta: true, shift: true })
+    : mk("Backspace", { shift: true, ctrl: true }),
+  newTerminal: IS_MAC ? mk("t", { meta: true }) : mk("t", { shift: true, ctrl: true }),
+  closeTerminal: IS_MAC ? mk("w", { meta: true }) : mk("w", { shift: true, ctrl: true }),
   maximizeTerminal: IS_MAC
-    ? mk("Enter", true)
-    : mk("Enter", false, false, false, true),
+    ? mk("Enter", { meta: true })
+    : mk("Enter", { alt: true }),
   minimizeTerminal: IS_MAC
-    ? mk("Enter", true, true)
-    : mk("Enter", false, true, false, true),
-  increaseFontSize: IS_MAC ? mk("=", true) : mk("=", false, false, true),
-  decreaseFontSize: IS_MAC ? mk("-", true) : mk("-", false, false, true),
-  resetFontSize: IS_MAC ? mk("0", true) : mk("0", false, false, true),
-  toggleVoice: IS_MAC ? mk(" ", true, true) : mk(" ", false, true, true),
-  selectWorkspace1: wsSelect(1),
-  selectWorkspace2: wsSelect(2),
-  selectWorkspace3: wsSelect(3),
-  selectWorkspace4: wsSelect(4),
-  selectWorkspace5: wsSelect(5),
-  selectWorkspace6: wsSelect(6),
-  selectWorkspace7: wsSelect(7),
-  selectWorkspace8: wsSelect(8),
-  selectWorkspace9: wsSelect(9),
-  selectTerminal1: termSelect(1),
-  selectTerminal2: termSelect(2),
-  selectTerminal3: termSelect(3),
-  selectTerminal4: termSelect(4),
-  selectTerminal5: termSelect(5),
-  selectTerminal6: termSelect(6),
-  selectTerminal7: termSelect(7),
-  selectTerminal8: termSelect(8),
-  selectTerminal9: termSelect(9),
+    ? mk("Enter", { meta: true, shift: true })
+    : mk("Enter", { shift: true, alt: true }),
+  increaseFontSize: IS_MAC ? mk("=", { meta: true }) : mk("=", { ctrl: true }),
+  decreaseFontSize: IS_MAC ? mk("-", { meta: true }) : mk("-", { ctrl: true }),
+  resetFontSize: IS_MAC ? mk("0", { meta: true }) : mk("0", { ctrl: true }),
+  toggleVoice: IS_MAC ? mk(" ", { meta: true, shift: true }) : mk(" ", { shift: true, ctrl: true }),
+  selectWorkspace1: wsSelect("1"),
+  selectWorkspace2: wsSelect("2"),
+  selectWorkspace3: wsSelect("3"),
+  selectWorkspace4: wsSelect("4"),
+  selectWorkspace5: wsSelect("5"),
+  selectWorkspace6: wsSelect("6"),
+  selectWorkspace7: wsSelect("7"),
+  selectWorkspace8: wsSelect("8"),
+  selectWorkspace9: wsSelect("9"),
+  selectTerminal1: termSelect("1"),
+  selectTerminal2: termSelect("2"),
+  selectTerminal3: termSelect("3"),
+  selectTerminal4: termSelect("4"),
+  selectTerminal5: termSelect("5"),
+  selectTerminal6: termSelect("6"),
+  selectTerminal7: termSelect("7"),
+  selectTerminal8: termSelect("8"),
+  selectTerminal9: termSelect("9"),
 };
 
 export const HOTKEY_ACTIONS = [
@@ -134,7 +138,9 @@ export function normalizeHotkeyForPlatform(
 export const MIN_FONT_SIZE = 8;
 export const MAX_FONT_SIZE = 32;
 const DEFAULT_FONT_SIZE = 13;
-export const GRID_COL_OPTIONS = [2, 3, 4, 5, 6, 7, 8] as const;
+const MIN_GRID_COLS = 2;
+const MAX_GRID_COLS = 8;
+export const GRID_COL_OPTIONS: readonly number[] = [...Array(MAX_GRID_COLS - MIN_GRID_COLS + 1).keys()].map((offset) => MIN_GRID_COLS + offset);
 const DEFAULT_GRID_COLS = 2;
 
 function loadNameSet(): NameSetId {
@@ -191,37 +197,36 @@ function loadAgentNames(): Record<string, string> {
   return {};
 }
 
+const HOTKEY_MODIFIERS = ["meta", "shift", "ctrl", "alt"] as const;
+
+function isStoredHotkey(value: unknown): value is Hotkey {
+  if (!isRecord(value)) return false;
+  if (typeof value.key !== "string" || value.key.length === 0) return false;
+  return HOTKEY_MODIFIERS.every((modifier) => typeof value[modifier] === "boolean");
+}
+
+function parseHotkeys(raw: string): Record<HotkeyActionId, Hotkey> {
+  const parsed: unknown = JSON.parse(raw);
+  const stored = isRecord(parsed) ? parsed : {};
+  const clean: Record<HotkeyActionId, Hotkey> = { ...DEFAULT_HOTKEYS };
+  for (const { id: action } of HOTKEY_ACTIONS) {
+    const hotkey = stored[action];
+    if (!isStoredHotkey(hotkey)) continue;
+    clean[action] = normalizeHotkeyForPlatform({
+      key: hotkey.key,
+      meta: hotkey.meta,
+      shift: hotkey.shift,
+      ctrl: hotkey.ctrl,
+      alt: hotkey.alt,
+    });
+  }
+  return clean;
+}
+
 function loadHotkeys(): Record<HotkeyActionId, Hotkey> {
   try {
     const raw = storageGet("hotkeys");
-    if (raw) {
-      const parsed: unknown = JSON.parse(raw);
-      const clean: Record<HotkeyActionId, Hotkey> = { ...DEFAULT_HOTKEYS };
-      for (const { id: action } of HOTKEY_ACTIONS) {
-        const value = (parsed as Record<string, unknown>)?.[action];
-        if (
-          value &&
-          typeof value === "object" &&
-          typeof (value as Hotkey).key === "string" &&
-          (value as Hotkey).key.length > 0 &&
-          ["meta", "shift", "ctrl", "alt"].every(
-            (modifier) =>
-              typeof (value as unknown as Record<string, unknown>)[modifier] ===
-              "boolean",
-          )
-        ) {
-          const hotkey = value as Hotkey;
-          clean[action] = normalizeHotkeyForPlatform({
-            key: hotkey.key,
-            meta: hotkey.meta,
-            shift: hotkey.shift,
-            ctrl: hotkey.ctrl,
-            alt: hotkey.alt,
-          });
-        }
-      }
-      return clean;
-    }
+    if (raw) return parseHotkeys(raw);
   } catch {
     // Corrupted value; fall back to defaults.
   }
@@ -257,7 +262,7 @@ function loadFontSize(): number {
 
 function loadGridCols(): number {
   const raw = Number(storageGet("gridCols"));
-  return GRID_COL_OPTIONS.includes(raw as (typeof GRID_COL_OPTIONS)[number])
+  return GRID_COL_OPTIONS.includes(raw)
     ? raw
     : DEFAULT_GRID_COLS;
 }
@@ -473,7 +478,7 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   },
 
   setGridCols: (gridCols) => {
-    if (!GRID_COL_OPTIONS.includes(gridCols as (typeof GRID_COL_OPTIONS)[number])) return;
+    if (!GRID_COL_OPTIONS.includes(gridCols)) return;
     storageSet("gridCols", String(gridCols));
     set({ gridCols });
   },

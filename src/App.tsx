@@ -52,6 +52,8 @@ import { t, useLocale, useT } from "./i18n";
 import type { SettingsSectionId } from "./components/settings";
 import "./App.css";
 
+const CTRL_C = "\u0003";
+
 const LazyResumeDialog = lazy(async () => {
   const module = await import("./components/ResumeDialog");
   return { default: module.ResumeDialog };
@@ -438,7 +440,7 @@ function App() {
     if (!workspace || !terminal) return;
     switch (action) {
       case "interrupt":
-        await api.writeTerminal(terminal.id, "\u0003").catch((error) => console.warn(`failed to interrupt ${terminal.id}:`, error));
+        await api.writeTerminal(terminal.id, CTRL_C).catch((error) => console.warn(`failed to interrupt ${terminal.id}:`, error));
         return;
       case "restart":
         await sessions.restart(terminal.id, terminal.command);
@@ -595,7 +597,7 @@ function App() {
             void sessions.spawnInto(
               workspaceId,
               agentId,
-              paneId ? { paneId } : undefined,
+              { placement: paneId ? { paneId } : undefined },
             ).catch(sessions.reportSpawnError);
             return;
           }
@@ -735,7 +737,7 @@ function App() {
         canIsolate={Boolean(active && branches[active.id])}
         onSpawn={async (agent, options) => {
           if (!active) return;
-          await sessions.spawnInto(active.id, agent, undefined, options);
+          await sessions.spawnInto(active.id, agent, options);
         }}
       />
 

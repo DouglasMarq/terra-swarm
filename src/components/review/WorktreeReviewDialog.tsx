@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { Check, Copy, GitBranch, GitMerge, GitPullRequest, RefreshCw } from "lucide-react";
 import { useWorktreeReview } from "../../app/useWorktreeReview";
 import { useT } from "../../i18n";
@@ -34,12 +34,14 @@ export function WorktreeReviewDialog() {
   const [prBody, setPrBody] = useState("");
   const [copied, setCopied] = useState(false);
 
+  const suggestDraftTitle = useEffectEvent((label: string) => suggestTitle(label, summary));
+
   useEffect(() => {
     setChosen(null);
     setConfirmMerge(false);
     setPrOpen(false);
     if (!target) return;
-    const title = suggestTitle(target.label, summary);
+    const title = suggestDraftTitle(target.label);
     setMessage(title);
     setPrTitle(title);
     setPrBody("");

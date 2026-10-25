@@ -21,7 +21,9 @@ interface PendingClose {
  * to lose is removed with its branch; one with uncommitted changes or
  * unmerged commits asks first.
  */
-export function useWorktreeClose(workspaces: readonly Workspace[], sessions: TerminalSessions) {
+export type WorktreeCloseSessions = Pick<TerminalSessions, "close">;
+
+export function useWorktreeClose(workspaces: readonly Workspace[], sessions: WorktreeCloseSessions) {
   const [pending, setPending] = useState<PendingClose | null>(null);
 
   const removeWorktree = async (workspaceId: string, terminalId: string, deleteBranch: boolean) => {

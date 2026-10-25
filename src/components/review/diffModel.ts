@@ -13,6 +13,7 @@ export interface DiffFileSection {
   binary: boolean;
 }
 
+const NEW_PATH_PREFIX = "+++ b/";
 const HUNK = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 
 function pathOf(header: string): string {
@@ -46,7 +47,7 @@ export function parsePatch(patch: string): DiffFileSection[] {
       continue;
     }
     if (!inHunk) {
-      if (text.startsWith("+++ b/")) current.path = text.slice(6);
+      if (text.startsWith(NEW_PATH_PREFIX)) current.path = text.slice(NEW_PATH_PREFIX.length);
       if (text.startsWith("Binary files")) current.binary = true;
       if (text.startsWith("new file") || text.startsWith("deleted file") || text.startsWith("rename ") || text.startsWith("Binary files")) {
         current.lines.push({ kind: "meta", text, oldLine: null, newLine: null });

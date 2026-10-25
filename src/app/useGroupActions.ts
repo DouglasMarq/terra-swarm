@@ -10,10 +10,12 @@ import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { resumeCommandFor } from "../domain/session/resumeItems";
 import type { TerminalSessions } from "./useTerminalSessions";
 
+export type GroupSessions = Pick<TerminalSessions, "resumeItems" | "notifyResumeFailures">;
+
 interface GroupActionsInput {
   workspaces: Workspace[];
   groups: readonly WorkspaceGroup[];
-  sessions: TerminalSessions;
+  sessions: GroupSessions;
   refresh: () => Promise<void>;
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
 }

@@ -5,6 +5,8 @@ import { DialogFooter, TerraDialog } from "../../overlays/Dialog";
 import { Button } from "../../ui/Button";
 import styles from "./ModalForms.module.css";
 
+const MAX_LISTED_DIRTY_FILES = 20;
+
 export interface WorktreeCloseDialogProps {
   /** The agent being closed and its worktree; `null` closes the dialog. */
   target: { label: string; status: WorktreeStatus } | null;
@@ -36,7 +38,7 @@ export function WorktreeCloseDialog({ target, onKeep, onDelete, onCancel, onRevi
             <>
               <span>{t("dialogs.worktree.dirty", { count: status.dirty.length })}</span>
               <ul className={styles.worktreeFiles}>
-                {status.dirty.slice(0, 20).map((file) => (
+                {status.dirty.slice(0, MAX_LISTED_DIRTY_FILES).map((file) => (
                   <li key={file}>{file}</li>
                 ))}
               </ul>

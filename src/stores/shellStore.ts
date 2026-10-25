@@ -1,11 +1,15 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { FULL_PERCENT } from "../lib/math/percent";
 import { safeStorage } from "../lib/storage/safeStorage";
 
 export const SHELL_STORAGE_KEY = "terra-shell-state";
 export const SHELL_STATE_VERSION = 3;
 /** Back/forward navigation entries kept. */
 const MAX_HISTORY_ENTRIES = 100;
+const MAX_RECENTLY_CLOSED_TABS = 20;
+const ENTRY_ID_RADIX = 36;
+const ENTRY_ID_RANDOM_END = 7;
 
 export type ShellPanelLayout = Record<string, number>;
 
@@ -124,7 +128,7 @@ function normalizePanelLayout(value: unknown): ShellPanelLayout | null {
     .filter((entry): entry is readonly [string, number] =>
       entry[0] !== null && typeof entry[1] === "number" && Number.isFinite(entry[1]),
     )
-    .map(([id, size]) => [id, Math.max(0, Math.min(100, size))] as const);
+    .map(([id, size]) => [id, Math.max(0, Math.min(FULL_PERCENT, size))] as const);
   return entries.length > 0 ? Object.fromEntries(entries) : null;
 }
 
@@ -169,7 +173,7 @@ function newHistoryEntry(
   workspaceId: string | null,
 ): ShellHistoryEntry {
   return {
-    id: `${surface}:${workspaceId ?? "none"}:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`,
+    id: `${surface}:${workspaceId ?? "none"}:${Date.now()}:${Math.random().toString(ENTRY_ID_RADIX).slice(2, ENTRY_ID_RANDOM_END)}`,
     surface,
     workspaceId,
     at: Date.now(),
@@ -222,11 +226,11 @@ export function normalizeShellState(value: unknown): ShellStateData {
       !openWorkspaceIds.has(tab.workspaceId) &&
       all.findIndex((other) => other.workspaceId === tab.workspaceId) === index,
     )
-    .slice(0, 20);
+    .slice(0, MAX_RECENTLY_CLOSED_TABS);
   const history = (Array.isArray(candidate.history) ? candidate.history : [])
     .map(normalizeHistoryEntry)
     .filter((entry): entry is ShellHistoryEntry => entry !== null)
-    .slice(-100);
+    .slice(-MAX_HISTORY_ENTRIES);
   const safeHistory = history.length > 0 ? history : fallback.history;
   const requestedIndex = typeof candidate.historyIndex === "number"
     ? Math.floor(candidate.historyIndex)
@@ -366,14 +370,14 @@ export const useShellStore = create<ShellState>()(
           const recentlyClosedTabs = [
             tab,
             ...state.recentlyClosedTabs.filter((item) => item.workspaceId !== id),
-          ].slice(0, 20);
+          ].slice(0, MAX_RECENTLY_CLOSED_TABS);
           if (state.activeWorkspaceId !== id) return { workspaceTabs, recentlyClosedTabs };
           const fallbackEntry = state.history
             .slice(0, state.historyIndex)
             .reverse()
             .find((entry) => entry.workspaceId !== id) ??
             newHistoryEntry("workbench", null);
-          const history = [...state.history, fallbackEntry].slice(-100);
+          const history = [...state.history, fallbackEntry].slice(-MAX_HISTORY_ENTRIES);
           return {
             workspaceTabs,
             recentlyClosedTabs,

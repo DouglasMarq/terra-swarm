@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Workspace, WorkspaceSnapshotV2 } from "../workspace.model";
 import { selectWorkspaceContainerId } from "./workspaceContainerSelection";
+import { defined } from "../../test/defined";
 
 const workspace: Workspace = {
   id: "workspace-a",
@@ -91,7 +92,7 @@ const snapshot: WorkspaceSnapshotV2 = {
 
 describe("selectWorkspaceContainerId", () => {
   it("uses the persisted active container instead of the first split", () => {
-    expect(selectWorkspaceContainerId(snapshot, [workspace], "workspace-a")).toBe(
+    expect(selectWorkspaceContainerId(snapshot, [workspace], { workspaceId: "workspace-a" })).toBe(
       "container-b",
     );
   });
@@ -109,10 +110,9 @@ describe("selectWorkspaceContainerId", () => {
         },
         [{
           ...workspace,
-          terminals: [{ ...workspace.terminals[0]!, paneId: null }],
+          terminals: [{ ...defined(workspace.terminals[0]), paneId: null }],
         }],
-        "workspace-a",
-        { focusedTerminalId: "pty-b" },
+        { workspaceId: "workspace-a", focusedTerminalId: "pty-b" },
       ),
     ).toBe("container-b");
   });

@@ -18,7 +18,7 @@ export interface SnapshotFeedback {
 }
 
 /** Export and import of the whole workspace store (Settings → Data & backup). */
-export function useSnapshotTransfer(sessions: TerminalSessions, refresh: () => Promise<void>) {
+export function useSnapshotTransfer(sessions: Pick<TerminalSessions, "forgetAll">, refresh: () => Promise<void>) {
   const [operation, setOperation] = useState<SnapshotOperation | null>(null);
   const [feedback, setFeedback] = useState<SnapshotFeedback | null>(null);
   /** A file was picked and waits for the user to confirm the import. */

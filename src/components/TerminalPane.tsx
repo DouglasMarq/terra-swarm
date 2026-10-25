@@ -1,7 +1,7 @@
 import { agentKind } from "../domain/agentLabels";
 import { CONTEXT_ATTENTION_PERCENT, CONTEXT_WARNING_PERCENT, deriveAgentStatus } from "../domain/agentStatus";
 import { useMcpStore } from "../stores/mcpStore";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { api } from "../api";
@@ -29,6 +29,7 @@ import { onFileDrop } from "../lib/tauri/fileDrop";
 import { PaneActionsMenu, type PaneMenuGroups } from "./workbench/PaneActionsMenu";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal-pane.css";
+import { FULL_PERCENT } from "../lib/math/percent";
 
 const SCROLLBACK_LINES = 10_000;
 /** Minimum gap between console warnings for one terminal's failed IPC calls. */
@@ -118,9 +119,12 @@ export function TerminalPane(props: Props) {
   onFocusRef.current = props.onFocus;
   const [isDropTarget, setIsDropTarget] = useState(false);
 
+  const currentFont = useEffectEvent(() => ({ fontFamily, fontSize }));
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    const { fontFamily, fontSize } = currentFont();
 
     const term = new Terminal({
       fontFamily,
@@ -379,7 +383,7 @@ export function TerminalPane(props: Props) {
             title={t("pane.contextUsed", { count: contextUsed })}
           >
             <span className="pane-ctx-bar">
-              <span style={{ transform: `scaleX(${contextUsed / 100})` }} />
+              <span style={{ transform: `scaleX(${contextUsed / FULL_PERCENT})` }} />
             </span>
             {contextUsed}%
           </span>

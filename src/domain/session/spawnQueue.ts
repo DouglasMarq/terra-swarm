@@ -37,6 +37,8 @@ export type SpawnQueueResult<Output> = {
   finishedAt: number;
 };
 
+type SpawnOutcome<Output> = Pick<SpawnQueueResult<Output>, "status" | "value" | "error">;
+
 export type SpawnQueueOptions<Input, Output> = {
   concurrency?: number;
   run?: SpawnTaskRunner<Input, Output>;
@@ -135,12 +137,8 @@ export function createSpawnQueue<Input, Output>(
     }
   };
 
-  const finish = (
-    item: InternalItem<Input, Output>,
-    status: SpawnQueueStatus,
-    value?: Output,
-    error?: unknown,
-  ): void => {
+  const finish = (item: InternalItem<Input, Output>, outcome: SpawnOutcome<Output>): void => {
+    const { status, value, error } = outcome;
     const result: SpawnQueueResult<Output> = {
       id: item.id,
       status,
@@ -167,7 +165,7 @@ export function createSpawnQueue<Input, Output>(
       if (!item) break;
 
       if (item.cancelRequested) {
-        finish(item, "cancelled", undefined, item.cancelReason);
+        finish(item, { status: "cancelled", error: item.cancelReason });
         continue;
       }
 
@@ -177,7 +175,7 @@ export function createSpawnQueue<Input, Output>(
       const runner = item.run ?? options.run;
 
       if (!runner) {
-        finish(item, "failed", undefined, new Error("spawn queue item has no runner"));
+        finish(item, { status: "failed", error: new Error("spawn queue item has no runner") });
         continue;
       }
 
@@ -192,17 +190,17 @@ export function createSpawnQueue<Input, Output>(
         .then(
           (value) => {
             if (item.cancelRequested) {
-              finish(item, "cancelled", undefined, item.cancelReason);
+              finish(item, { status: "cancelled", error: item.cancelReason });
             } else {
-              finish(item, "succeeded", value);
+              finish(item, { status: "succeeded", value });
             }
             startNext();
           },
           (error: unknown) => {
             if (item.cancelRequested) {
-              finish(item, "cancelled", undefined, item.cancelReason ?? error);
+              finish(item, { status: "cancelled", error: item.cancelReason ?? error });
             } else {
-              finish(item, "failed", undefined, error);
+              finish(item, { status: "failed", error });
             }
             startNext();
           },
@@ -247,7 +245,7 @@ export function createSpawnQueue<Input, Output>(
     item.cancelReason = cancellationReason(reason);
     item.controller.abort(item.cancelReason);
     if (item.status === "pending") {
-      finish(item, "cancelled", undefined, item.cancelReason);
+      finish(item, { status: "cancelled", error: item.cancelReason });
       startNext();
     }
     return true;

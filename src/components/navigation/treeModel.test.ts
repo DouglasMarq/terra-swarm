@@ -3,7 +3,12 @@ import type { Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../domai
 import { buildNavigatorTree, filterNavigatorTree, flattenNavigatorTree } from "./treeModel";
 import { normalizeSearchText } from "../../lib/text/normalizeSearchText";
 
-function workspace(id: string, name: string, terminalIds: string[] = [], groupId: string | null = null): Workspace {
+interface WorkspacePlacement {
+  terminalIds?: string[];
+  groupId?: string | null;
+}
+
+function workspace(id: string, name: string, { terminalIds = [], groupId = null }: WorkspacePlacement = {}): Workspace {
   return {
     id,
     name,
@@ -13,13 +18,18 @@ function workspace(id: string, name: string, terminalIds: string[] = [], groupId
   };
 }
 
-function group(id: string, name: string, parentGroupId: string | null = null, projectIds: string[] = []): WorkspaceGroup {
+interface GroupPlacement {
+  parentGroupId?: string | null;
+  projectIds?: string[];
+}
+
+function group(id: string, name: string, { parentGroupId = null, projectIds = [] }: GroupPlacement = {}): WorkspaceGroup {
   return { id, name, collapsed: false, projectIds, parentGroupId, layoutMode: "auto", suspended: false };
 }
 
 describe("navigator tree model", () => {
-  const groups = [group("g-core", "Núcleo", null, ["p-one"]), group("g-labs", "Labs", "g-core", ["p-two"])] satisfies WorkspaceGroup[];
-  const workspaces = [workspace("p-one", "Aplicação", ["a-one"], "g-core"), workspace("p-two", "Dados", ["a-two"], "g-labs"), workspace("p-three", "Sem grupo", ["a-three"])] satisfies Workspace[];
+  const groups = [group("g-core", "Núcleo", { projectIds: ["p-one"] }), group("g-labs", "Labs", { parentGroupId: "g-core", projectIds: ["p-two"] })] satisfies WorkspaceGroup[];
+  const workspaces = [workspace("p-one", "Aplicação", { terminalIds: ["a-one"], groupId: "g-core" }), workspace("p-two", "Dados", { terminalIds: ["a-two"], groupId: "g-labs" }), workspace("p-three", "Sem grupo", { terminalIds: ["a-three"] })] satisfies Workspace[];
 
   it("builds group/subgroup/project/agent hierarchy and preserves ungrouped projects", () => {
     const tree = buildNavigatorTree(workspaces, { groups });
@@ -111,7 +121,7 @@ describe("navigator tree model", () => {
       layout: { mode: "auto", itemIds: ["container-one"] },
     };
     const tree = buildNavigatorTree(
-      [workspace("p-one", "Aplicação", ["agent-one"])],
+      [workspace("p-one", "Aplicação", { terminalIds: ["agent-one"] })],
       { snapshot },
     );
     const project = tree.byId["p-one"];

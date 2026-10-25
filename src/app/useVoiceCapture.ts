@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 import { api } from "../api";
 import {
   onVoiceAudioLevel,
@@ -51,7 +51,7 @@ interface VoiceCaptureInput {
   voiceEnabled: boolean;
   /** Parse spoken commands ("foca no claude 2") instead of only dictating. */
   voiceCommandsEnabled: boolean;
-  sessions: TerminalSessions;
+  sessions: Pick<TerminalSessions, "spawnInto" | "close" | "restart">;
   openVoiceSettings: () => void;
   actions: {
     quickNewTerminal: (workspaceId: string) => Promise<void>;
@@ -271,6 +271,8 @@ export function useVoiceCapture({
   // are executed only by the explicit Send/Confirm action below. Everything
   // else becomes a profile-aware prompt; transcript text is never interpreted
   // as a shell command.
+  const openVoiceSettingsFromEvent = useEffectEvent(() => openVoiceSettings());
+
   useEffect(() => {
     const unRecStart = onVoiceRecordingStarted(() => {
       setVoiceStatus("recording");
@@ -330,7 +332,7 @@ export function useVoiceCapture({
       dispatchVoiceCapsule({ type: "fail", message: message || fallback });
       setVoiceFeedback(message || fallback);
       console.error(logLabel, message);
-      if (isVoiceModelError(message)) openVoiceSettings();
+      if (isVoiceModelError(message)) openVoiceSettingsFromEvent();
     };
     const unTrErr = onVoiceTranscriptionError((message) =>
       reportVoiceFailure(message, t("app.voice.transcriptionFailed"), "voice transcription error:"),

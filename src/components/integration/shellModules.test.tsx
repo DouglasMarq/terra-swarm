@@ -2,7 +2,7 @@
 
 import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorkspaceSnapshotV2 } from "../../domain/workspace.model";
+import type { WorkspaceContainer, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import { useLocaleStore } from "../../i18n";
 import type { CommandConfirmRequest } from "../overlays/CommandPalette";
 import type { InspectorTarget } from "../inspector/inspectorModel";
@@ -16,9 +16,26 @@ function pressKey(init: KeyboardEventInit, target: EventTarget = window) {
   });
 }
 
+function fullscreenContainer(id: string): WorkspaceContainer {
+  return { id, projectId: null, paneIds: [], layout: { mode: "grid" }, visible: true, collapsed: false, closed: false, fullscreen: true };
+}
+
 function snapshotWithFullscreen(containerIds: readonly string[]): WorkspaceSnapshotV2 {
-  // The fullscreen hook reads only the containers, so the rest of the snapshot is left out.
-  return { containers: containerIds.map((id) => ({ id, fullscreen: true })) } as unknown as WorkspaceSnapshotV2;
+  return {
+    version: 2,
+    projects: [],
+    groups: [],
+    containers: containerIds.map(fullscreenContainer),
+    panes: [],
+    tabs: [],
+    orphanedTabIds: [],
+    activeProjectId: null,
+    activeGroupId: null,
+    activeContainerId: null,
+    activePaneId: null,
+    activeTabId: null,
+    layout: { mode: "grid" },
+  };
 }
 
 const inspectorTarget: InspectorTarget = {

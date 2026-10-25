@@ -59,21 +59,23 @@ export interface TeamPlan {
  * Which agent fills each seat: the template's choice when installed, else
  * the user's default agent, else the first installed coding agent.
  */
-export function planTeam(
-  template: TeamTemplate,
-  agents: readonly AgentInfo[],
-  defaultAgent: string | null,
-  canIsolate: boolean,
-): TeamPlan {
+export interface TeamRoster {
+  agents: readonly AgentInfo[];
+  defaultAgent: string | null;
+  canIsolate: boolean;
+}
+
+export function planTeam(template: TeamTemplate, roster: TeamRoster): TeamPlan {
+  const { agents, defaultAgent, canIsolate } = roster;
   const available = agents.filter((agent) => agent.available && agent.id !== "shell");
   const has = (id: string | null): id is string => Boolean(id && available.some((agent) => agent.id === id));
   const fallback = has(defaultAgent) ? defaultAgent : available[0]?.id ?? null;
-  if (!fallback && !template.members.some((member) => has(member.agent))) return { members: [], blocked: true };
+  if (!fallback) return { members: [], blocked: true };
   const members = template.members.map((member) => {
     const installed = has(member.agent);
     return {
       role: member.role,
-      agent: installed ? member.agent : fallback!,
+      agent: installed ? member.agent : fallback,
       worktree: Boolean(member.worktree && canIsolate),
       substituted: !installed,
     };

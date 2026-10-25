@@ -6,13 +6,10 @@ import { GroupNode } from "./GroupNode";
 import { NavigatorNodeRow } from "./NavigatorNodeRow";
 import { ProjectNode } from "./ProjectNode";
 import type {
-  NavigatorAgentNode,
-  NavigatorContainerNode,
   NavigatorGroupNode,
   NavigatorNode,
   NavigatorNodeActions,
   NavigatorPanelProps,
-  NavigatorPaneNode,
   NavigatorProjectNode,
   NavigatorTree,
 } from "./types";
@@ -96,15 +93,15 @@ function renderNode(node: NavigatorNode, props: ProjectTreeViewProps, actions: N
   };
   let row: ReactNode;
   if (node.kind === "group") {
-    row = <GroupNode {...common} actions={actions} node={node as NavigatorGroupNode} onToggle={props.onToggle} />;
+    row = <GroupNode {...common} actions={actions} node={node} onToggle={props.onToggle} />;
   } else if (node.kind === "project") {
-    row = <ProjectNode {...common} actions={actions} node={node as NavigatorProjectNode} onToggle={props.onToggle} />;
+    row = <ProjectNode {...common} actions={actions} node={node} onToggle={props.onToggle} />;
   } else if (node.kind === "container") {
-    row = <NavigatorNodeRow {...common} actions={actions} node={node as NavigatorContainerNode} onToggle={props.onToggle} />;
+    row = <NavigatorNodeRow {...common} actions={actions} node={node} onToggle={props.onToggle} />;
   } else if (node.kind === "pane") {
-    row = <NavigatorNodeRow {...common} actions={actions} node={node as NavigatorPaneNode} onToggle={props.onToggle} />;
+    row = <NavigatorNodeRow {...common} actions={actions} node={node} onToggle={props.onToggle} />;
   } else {
-    row = <AgentNode {...common} actions={actions} node={node as NavigatorAgentNode} />;
+    row = <AgentNode {...common} actions={actions} node={node} />;
   }
   return (
     <div key={`${node.kind}:${node.id}`}>

@@ -1,4 +1,4 @@
-import { migrateLegacyWorkspaces } from "../../domain/migration";
+import { migrateLegacyWorkspaces } from "../../domain/migration/legacyMigration";
 import { byId } from "../../domain/selectors";
 import { uniqueStrings } from "../../lib/collections/uniqueStrings";
 import type { Group, Pane, Project, TerminalTab, WorkspaceContainer, WorkspaceSnapshotV2 } from "../../domain/workspace.model";

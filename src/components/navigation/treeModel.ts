@@ -70,21 +70,16 @@ function agentNodeStatus(
   });
 }
 
+const STATUS_RANK: Readonly<Record<NavigatorStatus, number>> = {
+  attention: 4,
+  working: 3,
+  idle: 2.5,
+  suspended: 2,
+  exited: 1,
+};
+
 function statusRank(status: NavigatorStatus): number {
-  switch (status) {
-    case "attention":
-      return 4;
-    case "working":
-      return 3;
-    case "idle":
-      return 2.5;
-    case "suspended":
-      return 2;
-    case "exited":
-      return 1;
-    default:
-      return 0;
-  }
+  return STATUS_RANK[status];
 }
 
 function statusForProject(
@@ -256,6 +251,271 @@ function indexTree(roots: readonly NavigatorNode[]): NavigatorTree {
   return { roots: [...roots], byId, ungrouped };
 }
 
+interface AgentSlot {
+  parentId: string;
+  tabId?: string;
+  paneId?: string;
+  containerId?: string;
+}
+
+interface ProjectBuild {
+  workspace: Workspace;
+  options: BuildNavigatorTreeOptions;
+  hierarchy: WorkspaceHierarchy;
+  terminalById: ReadonlyMap<string, TerminalMeta>;
+  usedTerminalIds: Set<string>;
+}
+
+interface PaneSlot {
+  container: WorkspaceContainer;
+  fallbackTerminals: readonly TerminalMeta[];
+}
+
+interface GroupIndex {
+  groups: readonly WorkspaceGroup[];
+  groupNodes: ReadonlyMap<string, NavigatorGroupNode>;
+  projectsByGroup: ReadonlyMap<string, NavigatorProjectNode[]>;
+  projectNodes: readonly NavigatorProjectNode[];
+}
+
+function aggregateStatus(nodes: readonly NavigatorNode[]): NavigatorStatus {
+  return nodes.reduce<NavigatorStatus>((best, node) => statusRank(node.status) > statusRank(best) ? node.status : best, nodes.length > 0 ? "exited" : "working");
+}
+
+function makeGroupNode(group: WorkspaceGroup): NavigatorGroupNode {
+  return {
+    id: group.id,
+    kind: "group",
+    name: group.name,
+    parentId: group.parentGroupId && group.parentGroupId !== group.id ? group.parentGroupId : null,
+    depth: 0,
+    children: [],
+    status: group.suspended ? "suspended" : "working",
+    count: 0,
+    source: group,
+    projectIds: [],
+    suspended: group.suspended,
+  };
+}
+
+function makeAgent(build: ProjectBuild, terminal: TerminalMeta, slot: AgentSlot): NavigatorAgentNode {
+  const { workspace, options } = build;
+  const branches = options.branches ?? EMPTY_BRANCHES;
+  const { parentId, tabId, paneId, containerId } = slot;
+  return {
+    id: tabId ?? terminal.id,
+    kind: "agent",
+    name: options.agentLabels?.[terminal.id]?.primary ?? (terminal.command || terminal.id),
+    tag: options.agentLabels?.[terminal.id]?.tag,
+    parentId,
+    depth: 2,
+    children: [],
+    status: agentNodeStatus(terminal.id, terminal, options),
+    count: 0,
+    source: terminal,
+    workspaceId: workspace.id,
+    terminalId: terminal.id,
+    ...(tabId ? { tabId } : {}),
+    ...(paneId ? { paneId } : {}),
+    ...(containerId ? { containerId } : {}),
+    branchIds: branches.filter((branch) => branchMatches(branch, workspace.id, terminal.id)).map((branch) => branch.id),
+    contextUsage: options.contextUsage?.[terminal.id] ?? null,
+    notifications: notificationCount(options.notifications ?? {}, terminal.id),
+  };
+}
+
+function terminalForTab(build: ProjectBuild, tab: TerminalTab, paneId: string): TerminalMeta {
+  const { workspace, terminalById } = build;
+  const terminal = (tab.ptyId ? terminalById.get(tab.ptyId) : undefined)
+    ?? terminalById.get(tab.id)
+    ?? workspace.terminals.find((candidate) => candidate.tabId === tab.id)
+    ?? {
+      id: tab.ptyId ?? tab.id,
+      command: tab.command || tab.title || tab.id,
+      width: tab.width,
+      suspended: false,
+    };
+  build.usedTerminalIds.add(terminal.id);
+  return {
+    ...terminal,
+    paneId,
+    tabId: tab.id,
+    command: terminal.command || tab.command || tab.title || tab.id,
+    width: terminal.width ?? tab.width,
+    suspended: terminal.suspended || undefined,
+  };
+}
+
+function paneAgents(build: ProjectBuild, pane: Pane, slot: PaneSlot): NavigatorAgentNode[] {
+  const { container, fallbackTerminals } = slot;
+  const tabChildren: NavigatorAgentNode[] = pane.tabIds
+    .map((tabId) => build.hierarchy.tabs.get(tabId))
+    .filter((tab): tab is TerminalTab => Boolean(tab))
+    .map((tab) => makeAgent(build, terminalForTab(build, tab, pane.id), { parentId: pane.id, tabId: tab.id, paneId: pane.id, containerId: container.id }));
+  if (tabChildren.length > 0) return tabChildren;
+  return fallbackTerminals.map((terminal) => {
+    build.usedTerminalIds.add(terminal.id);
+    return makeAgent(build, { ...terminal, paneId: pane.id }, { parentId: pane.id, tabId: terminal.tabId ?? undefined, paneId: pane.id, containerId: container.id });
+  });
+}
+
+function makePane(build: ProjectBuild, pane: Pane, slot: PaneSlot): NavigatorPaneNode {
+  const { container } = slot;
+  const children = paneAgents(build, pane, slot);
+  return {
+    id: pane.id,
+    kind: "pane",
+    name: pane.id,
+    parentId: container.id,
+    depth: 2,
+    children,
+    status: aggregateStatus(children),
+    count: children.length,
+    source: pane,
+    workspaceId: build.workspace.id,
+    projectId: build.workspace.id,
+    containerId: container.id,
+    paneId: pane.id,
+    tabIds: [...pane.tabIds],
+  };
+}
+
+function containerPanes(build: ProjectBuild, container: WorkspaceContainer): Pane[] {
+  const { workspace, hierarchy } = build;
+  const paneIds = container.paneIds.length > 0
+    ? container.paneIds
+    : hierarchy.panes.filter((pane) => pane.containerId === container.id).map((pane) => pane.id);
+  const panes = paneIds
+    .map((paneId) => hierarchy.panes.find((pane) => pane.id === paneId))
+    .filter((pane): pane is Pane => Boolean(pane));
+  if (panes.length > 0 || workspace.terminals.length === 0) return panes;
+  return [{
+    id: `${container.id}:pane`,
+    projectId: workspace.id,
+    containerId: container.id,
+    tabIds: [],
+    activeTabId: null,
+    layout: { ...EMPTY_LAYOUT, itemIds: [] },
+  } satisfies Pane];
+}
+
+function makeContainer(build: ProjectBuild, container: WorkspaceContainer): NavigatorContainerNode {
+  const { workspace, hierarchy } = build;
+  const effectivePanes = containerPanes(build, container);
+  const fallback = hierarchy.containers.length === 1 && effectivePanes.length === 1
+    ? workspace.terminals.filter((terminal) => !build.usedTerminalIds.has(terminal.id))
+    : [];
+  const paneChildren = effectivePanes.map((pane, index) => makePane(
+    build,
+    pane,
+    { container, fallbackTerminals: index === 0 ? fallback : [] },
+  ));
+  return {
+    id: container.id,
+    kind: "container",
+    name: container.id,
+    parentId: workspace.id,
+    depth: 1,
+    children: paneChildren,
+    status: aggregateStatus(paneChildren),
+    count: paneChildren.reduce((count, pane) => count + pane.count, 0),
+    source: container,
+    workspaceId: workspace.id,
+    projectId: workspace.id,
+    containerId: container.id,
+    paneIds: effectivePanes.map((pane) => pane.id),
+    visible: container.visible && !container.closed,
+    collapsed: container.collapsed,
+    fullscreen: container.fullscreen,
+  };
+}
+
+function projectAgents(build: ProjectBuild, structuralChildren: readonly NavigatorContainerNode[]): NavigatorAgentNode[] {
+  if (structuralChildren.length > 0) {
+    return structuralChildren.flatMap((container) => container.children.flatMap((pane) => pane.children.filter((child): child is NavigatorAgentNode => child.kind === "agent")));
+  }
+  return build.workspace.terminals.map((terminal) => {
+    build.usedTerminalIds.add(terminal.id);
+    return makeAgent(build, terminal, { parentId: build.workspace.id });
+  });
+}
+
+function projectGroupId(workspace: Workspace, index: Pick<GroupIndex, "groups" | "groupNodes">): string | null {
+  if (workspace.groupId && index.groupNodes.has(workspace.groupId)) return workspace.groupId;
+  return index.groups.find((group) => group.projectIds.includes(workspace.id))?.id ?? null;
+}
+
+function makeProject(workspace: Workspace, groupId: string | null, options: BuildNavigatorTreeOptions): NavigatorProjectNode {
+  const projectId = workspace.id;
+  const build: ProjectBuild = {
+    workspace,
+    options,
+    hierarchy: hierarchyForWorkspace(workspace, options),
+    terminalById: new Map(workspace.terminals.map((terminal) => [terminal.id, terminal])),
+    usedTerminalIds: new Set<string>(),
+  };
+  const structuralChildren = build.hierarchy.containers.map((container) => makeContainer(build, container));
+  const agents = projectAgents(build, structuralChildren);
+  const projectChildren: NavigatorNode[] = options.flatten
+    ? agents.map((agent) => ({ ...agent, parentId: projectId, depth: (groupId ? 1 : 0) + 1 }))
+    : structuralChildren.length > 0 ? structuralChildren : agents;
+  return {
+    id: projectId,
+    kind: "project",
+    name: workspace.name || workspace.id,
+    parentId: groupId,
+    depth: groupId ? 1 : 0,
+    children: projectChildren,
+    status: statusForProject(workspace, agents, options),
+    count: agents.length,
+    source: workspace,
+    workspaceId: workspace.id,
+    terminalIds: agents.map((agent) => agent.terminalId),
+    visible: options.containerVisibility?.[workspace.id] !== false,
+  };
+}
+
+function groupProjects(child: NavigatorGroupNode | NavigatorProjectNode, projectNodes: readonly NavigatorProjectNode[]): NavigatorProjectNode[] {
+  if (child.kind !== "group") return [child];
+  return child.projectIds
+    .map((id) => projectNodes.find((project) => project.id === id))
+    .filter((value): value is NavigatorProjectNode => Boolean(value));
+}
+
+function fillGroup(group: WorkspaceGroup, index: GroupIndex, options: BuildNavigatorTreeOptions): void {
+  const node = index.groupNodes.get(group.id);
+  if (!node) return;
+  const childGroups = index.groups
+    .filter((candidate) => candidate.parentGroupId === group.id && candidate.id !== group.id)
+    .map((candidate) => index.groupNodes.get(candidate.id))
+    .filter((candidate): candidate is NavigatorGroupNode => Boolean(candidate));
+  const projects = index.projectsByGroup.get(group.id) ?? [];
+  const descendants = [...childGroups, ...projects];
+  const allProjects = descendants.flatMap((child) => groupProjects(child, index.projectNodes));
+  node.children = descendants;
+  node.count = allProjects.reduce((count, project) => count + project.count, 0);
+  node.status = statusForGroup(group, allProjects, options);
+}
+
+function isRootGroup(group: WorkspaceGroup, groupNodes: ReadonlyMap<string, NavigatorGroupNode>): boolean {
+  return !group.parentGroupId || !groupNodes.has(group.parentGroupId) || group.parentGroupId === group.id;
+}
+
+function rootGroups(index: GroupIndex): NavigatorGroupNode[] {
+  return index.groups
+    .filter((group) => isRootGroup(group, index.groupNodes))
+    .map((group) => index.groupNodes.get(group.id))
+    .filter((node): node is NavigatorGroupNode => Boolean(node));
+}
+
+function assignDepth(nodes: readonly NavigatorNode[], parentId: string | null, depth: number): void {
+  nodes.forEach((node) => {
+    node.parentId = parentId;
+    node.depth = depth;
+    assignDepth(node.children, node.id, depth + 1);
+  });
+}
+
 /**
  * Converts the legacy workspace/group wire model into one deterministic tree.
  * The model deliberately keeps projects and agents separate from visual containers;
@@ -266,186 +526,13 @@ export function buildNavigatorTree(
   options: BuildNavigatorTreeOptions = {},
 ): NavigatorTree {
   const groups = options.groups ?? EMPTY_GROUPS;
-  const branches = options.branches ?? EMPTY_BRANCHES;
-  const groupNodes = new Map<string, NavigatorGroupNode>();
-  const projectsByGroup = new Map<string, NavigatorProjectNode[]>();
+  const groupNodes = new Map(groups.map((group) => [group.id, makeGroupNode(group)]));
+  const projectsByGroup = new Map(groups.map((group): [string, NavigatorProjectNode[]] => [group.id, []]));
   const projectNodes: NavigatorProjectNode[] = [];
 
-  for (const group of groups) {
-    groupNodes.set(group.id, {
-      id: group.id,
-      kind: "group",
-      name: group.name,
-      parentId: group.parentGroupId && group.parentGroupId !== group.id ? group.parentGroupId : null,
-      depth: 0,
-      children: [],
-      status: group.suspended ? "suspended" : "working",
-      count: 0,
-      source: group,
-      projectIds: [],
-      suspended: group.suspended,
-    });
-    projectsByGroup.set(group.id, []);
-  }
-
   for (const workspace of workspaces) {
-    const groupId =
-      workspace.groupId && groupNodes.has(workspace.groupId)
-        ? workspace.groupId
-        : groups.find((group) => group.projectIds.includes(workspace.id))?.id ?? null;
-    const projectId = workspace.id;
-    const hierarchy = hierarchyForWorkspace(workspace, options);
-    const terminalById = new Map(workspace.terminals.map((terminal) => [terminal.id, terminal]));
-    const usedTerminalIds = new Set<string>();
-    const makeAgent = (
-      terminal: TerminalMeta,
-      parentId: string,
-      tabId?: string,
-      paneId?: string,
-      containerId?: string,
-    ): NavigatorAgentNode => ({
-      id: tabId ?? terminal.id,
-      kind: "agent",
-      name: options.agentLabels?.[terminal.id]?.primary ?? (terminal.command || terminal.id),
-      tag: options.agentLabels?.[terminal.id]?.tag,
-      parentId,
-      depth: 2,
-      children: [],
-      status: agentNodeStatus(terminal.id, terminal, options),
-      count: 0,
-      source: terminal,
-      workspaceId: workspace.id,
-      terminalId: terminal.id,
-      ...(tabId ? { tabId } : {}),
-      ...(paneId ? { paneId } : {}),
-      ...(containerId ? { containerId } : {}),
-      branchIds: branches.filter((branch) => branchMatches(branch, workspace.id, terminal.id)).map((branch) => branch.id),
-      contextUsage: options.contextUsage?.[terminal.id] ?? null,
-      notifications: notificationCount(options.notifications ?? {}, terminal.id),
-    });
-
-    const terminalForTab = (tab: TerminalTab, paneId: string): TerminalMeta => {
-      const terminal = (tab.ptyId ? terminalById.get(tab.ptyId) : undefined)
-        ?? terminalById.get(tab.id)
-        ?? workspace.terminals.find((candidate) => candidate.tabId === tab.id)
-        ?? {
-          id: tab.ptyId ?? tab.id,
-          command: tab.command || tab.title || tab.id,
-          width: tab.width,
-          suspended: false,
-        };
-      usedTerminalIds.add(terminal.id);
-      return {
-        ...terminal,
-        paneId,
-        tabId: tab.id,
-        command: terminal.command || tab.command || tab.title || tab.id,
-        width: terminal.width ?? tab.width,
-        suspended: terminal.suspended || undefined,
-      };
-    };
-
-    const makePane = (
-      pane: Pane,
-      container: WorkspaceContainer,
-      fallbackTerminals: readonly TerminalMeta[],
-    ): NavigatorPaneNode => {
-      const tabChildren: NavigatorAgentNode[] = pane.tabIds
-        .map((tabId) => hierarchy.tabs.get(tabId))
-        .filter((tab): tab is TerminalTab => Boolean(tab))
-        .map((tab) => makeAgent(terminalForTab(tab, pane.id), pane.id, tab.id, pane.id, container.id));
-      const fallbackChildren = tabChildren.length === 0
-        ? fallbackTerminals.map((terminal) => {
-          usedTerminalIds.add(terminal.id);
-          return makeAgent({ ...terminal, paneId: pane.id }, pane.id, terminal.tabId ?? undefined, pane.id, container.id);
-        })
-        : [];
-      const children = [...tabChildren, ...fallbackChildren];
-      return {
-        id: pane.id,
-        kind: "pane",
-        name: pane.id,
-        parentId: container.id,
-        depth: 2,
-        children,
-        status: children.reduce<NavigatorStatus>((best, agent) => statusRank(agent.status) > statusRank(best) ? agent.status : best, children.length > 0 ? "exited" : "working"),
-        count: children.length,
-        source: pane,
-        workspaceId: workspace.id,
-        projectId: workspace.id,
-        containerId: container.id,
-        paneId: pane.id,
-        tabIds: [...pane.tabIds],
-      };
-    };
-
-    const structuralChildren: NavigatorContainerNode[] = hierarchy.containers.map((container) => {
-      const paneIds = container.paneIds.length > 0
-        ? container.paneIds
-        : hierarchy.panes.filter((pane) => pane.containerId === container.id).map((pane) => pane.id);
-      const panes = paneIds
-        .map((paneId) => hierarchy.panes.find((pane) => pane.id === paneId))
-        .filter((pane): pane is Pane => Boolean(pane));
-      const effectivePanes = panes.length > 0 || workspace.terminals.length === 0
-        ? panes
-        : [{
-          id: `${container.id}:pane`,
-          projectId: workspace.id,
-          containerId: container.id,
-          tabIds: [],
-          activeTabId: null,
-          layout: { ...EMPTY_LAYOUT, itemIds: [] },
-        } satisfies Pane];
-      const fallback = hierarchy.containers.length === 1 && effectivePanes.length === 1
-        ? workspace.terminals.filter((terminal) => !usedTerminalIds.has(terminal.id))
-        : [];
-      const paneChildren = effectivePanes.map((pane, index) => makePane(
-        pane,
-        container,
-        index === 0 ? fallback : [],
-      ));
-      return {
-        id: container.id,
-        kind: "container",
-        name: container.id,
-        parentId: projectId,
-        depth: 1,
-        children: paneChildren,
-        status: paneChildren.reduce<NavigatorStatus>((best, pane) => statusRank(pane.status) > statusRank(best) ? pane.status : best, paneChildren.length > 0 ? "exited" : "working"),
-        count: paneChildren.reduce((count, pane) => count + pane.count, 0),
-        source: container,
-        workspaceId: workspace.id,
-        projectId,
-        containerId: container.id,
-        paneIds: effectivePanes.map((pane) => pane.id),
-        visible: container.visible && !container.closed,
-        collapsed: container.collapsed,
-        fullscreen: container.fullscreen,
-      };
-    });
-    const agents: NavigatorAgentNode[] = structuralChildren.length === 0
-      ? workspace.terminals.map((terminal) => {
-        usedTerminalIds.add(terminal.id);
-        return makeAgent(terminal, projectId);
-      })
-      : structuralChildren.flatMap((container) => container.children.flatMap((pane) => pane.children.filter((child): child is NavigatorAgentNode => child.kind === "agent")));
-    const projectChildren: NavigatorNode[] = options.flatten
-      ? agents.map((agent) => ({ ...agent, parentId: projectId, depth: (groupId ? 1 : 0) + 1 }))
-      : structuralChildren.length > 0 ? structuralChildren : agents;
-    const project: NavigatorProjectNode = {
-      id: projectId,
-      kind: "project",
-      name: workspace.name || workspace.id,
-      parentId: groupId,
-      depth: groupId ? 1 : 0,
-      children: projectChildren,
-      status: statusForProject(workspace, agents, options),
-      count: agents.length,
-      source: workspace,
-      workspaceId: workspace.id,
-      terminalIds: agents.map((agent) => agent.terminalId),
-      visible: options.containerVisibility?.[workspace.id] !== false,
-    };
+    const groupId = projectGroupId(workspace, { groups, groupNodes });
+    const project = makeProject(workspace, groupId, options);
     projectNodes.push(project);
     if (groupId) {
       projectsByGroup.get(groupId)?.push(project);
@@ -453,34 +540,10 @@ export function buildNavigatorTree(
     }
   }
 
-  const roots: NavigatorNode[] = [];
-  for (const group of groups) {
-    const node = groupNodes.get(group.id);
-    if (!node) continue;
-    const childGroups = groups
-      .filter((candidate) => candidate.parentGroupId === group.id && candidate.id !== group.id)
-      .map((candidate) => groupNodes.get(candidate.id))
-      .filter((candidate): candidate is NavigatorGroupNode => Boolean(candidate));
-    const projects = projectsByGroup.get(group.id) ?? [];
-    const descendants = [...childGroups, ...projects];
-    const allProjects = descendants.flatMap((child) =>
-      child.kind === "group" ? child.projectIds.map((id) => projectNodes.find((project) => project.id === id)).filter((value): value is NavigatorProjectNode => Boolean(value)) : [child],
-    );
-    node.children = descendants;
-    node.count = allProjects.reduce((count, project) => count + project.count, 0);
-    node.status = statusForGroup(group, allProjects, options);
-    if (!group.parentGroupId || !groupNodes.has(group.parentGroupId) || group.parentGroupId === group.id) roots.push(node);
-  }
-
-  roots.push(...projectNodes.filter((project) => project.parentId === null));
-  const setDepth = (nodes: readonly NavigatorNode[], parentId: string | null, depth: number) => {
-    nodes.forEach((node) => {
-      node.parentId = parentId;
-      node.depth = depth;
-      setDepth(node.children, node.id, depth + 1);
-    });
-  };
-  setDepth(roots, null, 0);
+  const index: GroupIndex = { groups, groupNodes, projectsByGroup, projectNodes };
+  groups.forEach((group) => fillGroup(group, index, options));
+  const roots: NavigatorNode[] = [...rootGroups(index), ...projectNodes.filter((project) => project.parentId === null)];
+  assignDepth(roots, null, 0);
   return indexTree(roots);
 }
 
@@ -491,7 +554,7 @@ function searchableText(node: NavigatorNode): string {
 }
 
 function cloneVisibleNode(node: NavigatorNode, children: NavigatorNode[]): NavigatorNode {
-  return { ...node, children } as NavigatorNode;
+  return { ...node, children };
 }
 
 /** Keeps matching descendants and their path so search never loses context. */

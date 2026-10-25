@@ -56,12 +56,13 @@ export type DropPlan =
  * What dropping `task` on the droppable `overId` should do. `runningAgents`
  * are the terminals that can take a task right now.
  */
-export function planDrop(
-  task: McpTask,
-  overId: string | null,
-  tasks: readonly McpTask[],
-  runningAgents: ReadonlySet<string>,
-): DropPlan {
+export interface DropBoard {
+  tasks: readonly McpTask[];
+  runningAgents: ReadonlySet<string>;
+}
+
+export function planDrop(task: McpTask, overId: string | null, board: DropBoard): DropPlan {
+  const { tasks, runningAgents } = board;
   const target = overId ? parseDropTarget(overId, tasks) : null;
   if (!target) return null;
   if (target.kind === "agent") {

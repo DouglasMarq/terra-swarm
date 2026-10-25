@@ -98,7 +98,7 @@ export function createPersistenceEngine({ read, apply, reportError }: Persistenc
     const loadedGroups = await workspaceApi.listGroups();
     if (!Array.isArray(workspaces) || !isCurrentPersistence(transaction)) return null;
     const sourceGroups = Array.isArray(loadedGroups) ? loadedGroups : [];
-    const derived = deriveSnapshot(workspaces, sourceGroups, backendContainerVisibility(workspaces), null);
+    const derived = deriveSnapshot({ workspaces, groups: sourceGroups }, backendContainerVisibility(workspaces), null);
     if (!isCurrentPersistence(transaction)) return null;
     return {
       snapshot: derived.snapshot,

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import { basicSetup, EditorView } from "codemirror";
 import { Compartment, EditorState } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
@@ -36,8 +36,11 @@ export default function CodeEditor({ docKey, path, initial, onChange, onSave }: 
   const handlers = useRef({ onChange, onSave });
   handlers.current = { onChange, onSave };
 
+  const openedDocument = useEffectEvent(() => ({ initial, path }));
+
   useEffect(() => {
     if (!host.current) return;
+    const { initial, path } = openedDocument();
     const language = new Compartment();
     const view = new EditorView({
       parent: host.current,

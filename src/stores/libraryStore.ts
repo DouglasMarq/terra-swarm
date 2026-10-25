@@ -3,6 +3,9 @@ import { t } from "../i18n";
 import { storageGet, storageSet } from "../lib/storage/safeStorage";
 import { promptTitle, type SavedPrompt } from "../domain/prompts";
 
+const ID_RADIX = 36;
+const RANDOM_ID_END = 6;
+
 const STORAGE_KEY = "terra-prompt-library";
 
 /** Starting points in the user's language; they can edit or delete them. */
@@ -51,7 +54,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   closeDialog: () => set({ dialog: null }),
   savePrompt: ({ id, title, body }) => {
     const saved: SavedPrompt = {
-      id: id ?? `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      id: id ?? `p-${Date.now().toString(ID_RADIX)}-${Math.random().toString(ID_RADIX).slice(2, RANDOM_ID_END)}`,
       title: promptTitle(title, body),
       body,
     };

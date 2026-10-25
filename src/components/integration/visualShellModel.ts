@@ -5,6 +5,8 @@ import type { NotificationItem } from "../../domain/notification.model";
 import type { VoiceStatus } from "../../domain/voice.model";
 import type { Workspace, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import type { VoiceCapsuleState } from "../voice/voiceModel";
+import type { ShellSurface } from "../../stores/shellStore";
+import { selectWorkspaceContainerId } from "../../domain/session/workspaceContainerSelection";
 
 /**
  * The snapshot without the tabs of detached terminals. Each pane keeps an
@@ -42,13 +44,15 @@ export function visibleSnapshot(
 }
 
 /** What the Workbench shows: one project at a time, the sidebar switches between them. */
-export function workbenchSnapshot(
-  snapshot: WorkspaceSnapshotV2 | null,
-  detachedTerminalIds: readonly string[],
-  focusedId: string | null,
-  activeProjectId: string | null,
-): WorkspaceSnapshotV2 | null {
-  const visible = visibleSnapshot(snapshot, detachedTerminalIds, focusedId);
+export interface WorkbenchView {
+  detachedTerminalIds: readonly string[];
+  focusedId: string | null;
+  activeProjectId: string | null;
+}
+
+export function workbenchSnapshot(snapshot: WorkspaceSnapshotV2 | null, view: WorkbenchView): WorkspaceSnapshotV2 | null {
+  const visible = visibleSnapshot(snapshot, view.detachedTerminalIds, view.focusedId);
+  const { activeProjectId } = view;
   if (!visible || !activeProjectId) return visible;
   return { ...visible, containers: visible.containers.filter((container) => container.projectId === activeProjectId) };
 }
@@ -115,4 +119,45 @@ export function shellVoiceLabel(state: VoiceCapsuleState, t: Translate): string 
     case "idle":
       return t("shell.voice");
   }
+}
+
+/** The worktree branch of each isolated agent, by terminal id. */
+export function worktreeBranchesByTerminal(workspaces: readonly Workspace[]): Record<string, string> {
+  return Object.fromEntries(
+    workspaces
+      .flatMap((workspace) => workspace.terminals)
+      .flatMap((terminal) => (terminal.worktree ? [[terminal.id, terminal.worktree.branch]] : [])),
+  );
+}
+
+/** The translated team role of each agent that has one, by terminal id. */
+export function roleLabelsByTerminal(workspaces: readonly Workspace[], t: Translate): Record<string, string> {
+  return Object.fromEntries(
+    workspaces
+      .flatMap((workspace) => workspace.terminals)
+      .flatMap((terminal) => (terminal.role ? [[terminal.id, t(`roles.${terminal.role}`)]] : [])),
+  );
+}
+
+/** Whether each workspace's selected container is visible, by workspace id. */
+export function containerVisibilityByWorkspace(
+  snapshot: WorkspaceSnapshotV2 | null,
+  workspaces: readonly Workspace[],
+  focusedId: string | null,
+): Record<string, boolean> {
+  return Object.fromEntries(workspaces.map((workspace) => {
+    const containerId = selectWorkspaceContainerId(snapshot, workspaces, {
+      workspaceId: workspace.id,
+      focusedTerminalId: focusedId,
+    });
+    return [workspace.id, containerId ? snapshot?.containers.find((container) => container.id === containerId)?.visible !== false : true];
+  }));
+}
+
+/** The window title of each shell surface. */
+export function shellSurfaceTitle(surface: ShellSurface, t: Translate): string {
+  if (surface === "fleet") return t("common.fleet");
+  if (surface === "board") return t("common.board");
+  if (surface === "settings") return t("common.settings");
+  return t("common.appName");
 }

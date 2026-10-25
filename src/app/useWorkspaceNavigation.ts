@@ -19,7 +19,8 @@ export function useWorkspaceNavigation({ workspaces, snapshot, activeId, focused
     visibleOnly = false,
     focusedTerminalId = focusedId,
   ): string | null =>
-    selectWorkspaceContainerId(snapshot, workspaces as Workspace[], workspaceId, {
+    selectWorkspaceContainerId(snapshot, workspaces as Workspace[], {
+      workspaceId,
       focusedTerminalId,
       visibleOnly,
     });

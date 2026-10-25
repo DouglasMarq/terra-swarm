@@ -182,6 +182,13 @@ function LanguageCard() {
   );
 }
 
+interface FontOptionRow {
+  name: string;
+  label: string;
+  isMonospace: boolean;
+  note?: string;
+}
+
 /** Font family picker: every installed family, a search box and a
  * monospace-only filter; each row renders in its own font. */
 function TerminalFontPicker({ fontSize }: { fontSize: number }) {
@@ -211,7 +218,7 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
   const missing = fonts !== null && family !== "" && !fonts.some((font) => font.name === family);
   const monoCount = fonts?.filter((font) => font.monospace).length ?? 0;
 
-  const row = (name: string, label: string, monospace: boolean, note?: string) => {
+  const row = ({ name, label, isMonospace, note }: FontOptionRow) => {
     const selected = family === name;
     return (
       <button
@@ -225,7 +232,7 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
         onClick={() => setFamily(name)}
       >
         <span className={styles.fontOptionName} style={{ fontFamily: name ? terminalFontStack(name) : DEFAULT_TERMINAL_FONT_STACK }}>{label}</span>
-        {note ? <span className={styles.fontOptionTag}>{note}</span> : monospace ? <span className={styles.fontOptionTag}>{t("settingsPanels.fontMono")}</span> : null}
+        {note ? <span className={styles.fontOptionTag}>{note}</span> : isMonospace ? <span className={styles.fontOptionTag}>{t("settingsPanels.fontMono")}</span> : null}
       </button>
     );
   };
@@ -260,9 +267,9 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
         </button>
       </div>
       <div className={styles.fontList} role="listbox" aria-label={t("settingsPanels.fontFamily")}>
-        {!query ? row("", t("settingsPanels.fontDefault"), true) : null}
-        {missing ? row(family, family, false, t("settingsPanels.fontMissing")) : null}
-        {shown.map((font) => row(font.name, font.name, font.monospace))}
+        {!query ? row({ name: "", label: t("settingsPanels.fontDefault"), isMonospace: true }) : null}
+        {missing ? row({ name: family, label: family, isMonospace: false, note: t("settingsPanels.fontMissing") }) : null}
+        {shown.map((font) => row({ name: font.name, label: font.name, isMonospace: font.monospace }))}
         {fonts !== null && shown.length === 0 ? <div className={styles.fontEmpty}>{t("settingsPanels.fontNoMatch")}</div> : null}
       </div>
       <div

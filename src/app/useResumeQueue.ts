@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { api } from "../api";
 import type { ResumeItem } from "../domain/terminal.model";
 import { t } from "../i18n";
@@ -13,7 +13,9 @@ import type { TerminalSessions } from "./useTerminalSessions";
  * opening screen (or resumed right away when the user chose that), resumed
  * or discarded one at a time or all together.
  */
-export function useResumeQueue(sessions: TerminalSessions, refresh: () => Promise<void>) {
+export type ResumeSessions = Pick<TerminalSessions, "resumeItem" | "forget" | "resumeItems" | "notifyResumeFailures">;
+
+export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<void>) {
   const items = useTerminalRuntimeStore((state) => state.resumeItems);
   const [visible, setVisible] = useState(false);
   const [autoPending, setAutoPending] = useState(false);
@@ -116,10 +118,14 @@ export function useResumeQueue(sessions: TerminalSessions, refresh: () => Promis
   };
 
   // "Always resume without asking": run the queue once it is loaded.
+  const autoResume = useEffectEvent(() => {
+    void resumeAll();
+  });
+
   useEffect(() => {
     if (!autoPending || !items || items.length === 0) return;
     setAutoPending(false);
-    void resumeAll();
+    autoResume();
     // Keyed on the queue loading only: resumeAll changes every render and reads the latest state itself.
   }, [autoPending, items]);
 

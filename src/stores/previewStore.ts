@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { onDevServer, previewApi } from "../lib/tauri/preview";
 
+const MAX_DETECTED_URLS = 12;
+
 /** Ports dev servers usually take, tried when nothing was printed. */
 export const COMMON_DEV_PORTS: readonly number[] = [3000, 3001, 4200, 4321, 5000, 5173, 5174, 8000, 8080, 8081, 8888, 9000];
 
@@ -43,7 +45,7 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
     const clean = loopbackUrl(url);
     if (!clean) return;
     set((state) => {
-      const list = [clean, ...(state.detected[workspaceId] ?? []).filter((item) => item !== clean)].slice(0, 12);
+      const list = [clean, ...(state.detected[workspaceId] ?? []).filter((item) => item !== clean)].slice(0, MAX_DETECTED_URLS);
       const selected = state.selected[workspaceId] ? state.selected : { ...state.selected, [workspaceId]: clean };
       return { detected: { ...state.detected, [workspaceId]: list }, selected };
     });

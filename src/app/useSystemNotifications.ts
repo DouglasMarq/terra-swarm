@@ -50,7 +50,7 @@ export function useSystemNotifications(workspaces: readonly Workspace[]) {
   useEffect(() => {
     const show = async (terminalId: string, body: string) => {
       const { workspaces: current, enabled: on } = latest.current;
-      if (!on || !shouldNotify(lastShown.current, terminalId, Date.now(), document.hasFocus())) return;
+      if (!on || !shouldNotify(lastShown.current, terminalId, { now: Date.now(), isAppFocused: document.hasFocus() })) return;
       if (!(await ensureNotificationPermission())) return;
       const labels = buildAgentLabels(current as Workspace[], {
         titles: useTerminalRuntimeStore.getState().titles,

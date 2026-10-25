@@ -107,7 +107,7 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
     const task = list.find((candidate) => `task:${candidate.id}` === event.active.id);
     if (!task) return;
     const running = new Set(agents.filter((agent) => agent.running).map((agent) => agent.id));
-    const plan = planDrop(task, event.over ? String(event.over.id) : null, list, running);
+    const plan = planDrop(task, event.over ? String(event.over.id) : null, { tasks: list, runningAgents: running });
     if (plan?.kind === "update") void update(task.id, plan.patch);
     if (plan?.kind === "handoff") {
       const agent = agents.find((candidate) => candidate.id === plan.terminalId);

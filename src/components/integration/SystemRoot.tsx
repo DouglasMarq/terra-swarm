@@ -1,14 +1,10 @@
 import { useT } from "../../i18n";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import { AppErrorBoundary, LoadingScreen } from "../system";
 
 /** Progress shown while the app bundle loads: the shell is up, the workspace is not. */
 const LOADING_SURFACE_PROGRESS_PERCENT = 30;
-
-interface LazyAppProps {
-  attempt: number;
-}
 
 /**
  * Creates a fresh lazy boundary for each recovery attempt. This matters for
@@ -16,13 +12,12 @@ interface LazyAppProps {
  * merely clearing the error boundary would otherwise render the same failure
  * forever.
  */
-function LazyApp({ attempt }: LazyAppProps) {
+function LazyApp() {
   const t = useT();
-  const App = useMemo(() => lazy(() => import("../../App")), [attempt]);
+  const [App] = useState(() => lazy(() => import("../../App")));
 
   return (
     <Suspense
-      key={attempt}
       fallback={
         <LoadingScreen
           phase="booting"
@@ -48,7 +43,7 @@ export function SystemRoot() {
       resetKeys={[attempt]}
       onReset={() => setAttempt((current) => current + 1)}
     >
-      <LazyApp attempt={attempt} />
+      <LazyApp key={attempt} />
     </AppErrorBoundary>
   );
 }

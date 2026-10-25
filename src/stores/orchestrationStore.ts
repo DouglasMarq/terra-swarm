@@ -5,7 +5,8 @@ import { uniqueStrings } from "../lib/collections/uniqueStrings";
 import { storageGet, storageSet } from "../lib/storage/safeStorage";
 import { create } from "zustand";
 import type { Group, Workspace, WorkspaceContainerPatch, WorkspaceContainer, WorkspaceLayout, WorkspaceGroup, WorkspaceSnapshotV2 } from "../domain/workspace.model";
-import { normalizeLayout, normalizeSnapshotV2 } from "../domain/migration";
+import { normalizeLayout } from "../domain/migration/workspaceLayout";
+import { normalizeSnapshotV2 } from "../domain/migration/snapshotNormalize";
 import { deriveSnapshot } from "../domain/workspaceProjection";
 import { createPersistenceEngine } from "./orchestrationPersistence";
 import {
@@ -80,12 +81,15 @@ function readPersisted(): Pick<
 
 const persisted = readPersisted();
 
-function persist(
-  containerVisibility: Record<string, boolean>,
-  flags: FeatureFlags,
-  snapshot: WorkspaceSnapshotV2 | null,
-  detachedTerminalIds: readonly string[] = [],
-): void {
+interface PersistableOrchestration {
+  containerVisibility: Record<string, boolean>;
+  flags: FeatureFlags;
+  snapshot: WorkspaceSnapshotV2 | null;
+  detachedTerminalIds?: readonly string[];
+}
+
+function persist(state: PersistableOrchestration): void {
+  const { containerVisibility, flags, snapshot, detachedTerminalIds = [] } = state;
   const value: PersistedOrchestrationState = {
     version: 1,
     containerVisibility: { ...containerVisibility },
@@ -270,7 +274,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
   const { persistCommand, markNewerProjection } = createPersistenceEngine({
     read: () => get(),
     apply: (projection) => {
-      persist(projection.containerVisibility, get().flags, projection.snapshot, projection.detachedTerminalIds);
+      persist({ containerVisibility: projection.containerVisibility, flags: get().flags, snapshot: projection.snapshot, detachedTerminalIds: projection.detachedTerminalIds });
       set(projection);
     },
     reportError: reportPersistenceError,
@@ -291,8 +295,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     markNewerProjection();
     const state = get();
     const derived = deriveSnapshot(
-      workspaces,
-      sourceGroups,
+      { workspaces, groups: sourceGroups },
       state.containerVisibility,
       state.snapshot,
     );
@@ -308,7 +311,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     for (const container of derived.snapshot.containers) {
       containerVisibility[container.id] = container.visible;
     }
-    persist(containerVisibility, state.flags, derived.snapshot, detachedTerminalIds);
+    persist({ containerVisibility, flags: state.flags, snapshot: derived.snapshot, detachedTerminalIds });
     set({
       snapshot: derived.snapshot,
       groups: derived.groups,
@@ -328,7 +331,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     if (!FEATURE_FLAG_IDS.includes(id)) return;
     markNewerProjection();
     const flags = { ...get().flags, [id]: enabled };
-    persist(get().containerVisibility, flags, get().snapshot, get().detachedTerminalIds);
+    persist({ ...get(), flags });
     set({ flags });
   },
 
@@ -337,7 +340,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
   setFeatureFlags: (partial) => {
     markNewerProjection();
     const flags = normalizeFeatureFlags({ ...get().flags, ...partial });
-    persist(get().containerVisibility, flags, get().snapshot, get().detachedTerminalIds);
+    persist({ ...get(), flags });
     set({ flags });
   },
 
@@ -363,7 +366,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     } else {
       markNewerProjection();
     }
-    persist(containerVisibility, get().flags, snapshot, get().detachedTerminalIds);
+    persist({ ...get(), containerVisibility, snapshot });
     set({ containerVisibility, snapshot });
   },
 
@@ -418,7 +421,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     } else {
       markNewerProjection();
     }
-    persist(containerVisibility, get().flags, snapshot, get().detachedTerminalIds);
+    persist({ ...get(), containerVisibility, snapshot });
     set({ containerVisibility, snapshot });
   },
 
@@ -470,7 +473,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
       "container order",
       [`project:${projectId}:containers`],
     );
-    persist(get().containerVisibility, get().flags, snapshot, get().detachedTerminalIds);
+    persist({ ...get(), snapshot });
     set({ snapshot });
   },
 
@@ -498,7 +501,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
       "pane order",
       [`container:${containerId}:panes`],
     );
-    persist(get().containerVisibility, get().flags, snapshot, get().detachedTerminalIds);
+    persist({ ...get(), snapshot });
     set({ snapshot });
   },
 
@@ -512,7 +515,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     // There is no separate PTY mutation for a visual tab order. The v2
     // snapshot is the durable frontend projection, and `persist` keeps this
     // order through backend refreshes via mergeWorkspaceSnapshot.
-    persist(get().containerVisibility, get().flags, snapshot, get().detachedTerminalIds);
+    persist({ ...get(), snapshot });
     set({ snapshot });
   },
 
@@ -558,7 +561,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
         `project:${target.projectId}`,
       ],
     );
-    persist(get().containerVisibility, get().flags, snapshot, get().detachedTerminalIds);
+    persist({ ...get(), snapshot });
     set({ snapshot });
   },
 
@@ -570,7 +573,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
       "workspace layout",
       [`project:${projectId}`],
     );
-    persist(get().containerVisibility, get().flags, snapshot, get().detachedTerminalIds);
+    persist({ ...get(), snapshot });
     set({ snapshot });
   },
 
@@ -588,14 +591,14 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
       "workspace collapsed",
       [`project:${projectId}`],
     );
-    persist(get().containerVisibility, get().flags, next, get().detachedTerminalIds);
+    persist({ ...get(), snapshot: next });
     set({ snapshot: next });
   },
 
   setGroupSuspended: (groupId, suspended) => {
     markNewerProjection();
     const snapshot = patchGroup(get().snapshot, groupId, { suspended });
-    persist(get().containerVisibility, get().flags, snapshot, get().detachedTerminalIds);
+    persist({ ...get(), snapshot });
     set({
       snapshot,
       groups: get().groups.map((group) =>
@@ -607,7 +610,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
   setProjectGroup: (projectId, groupId) => {
     markNewerProjection();
     const snapshot = patchProjectGroup(get().snapshot, projectId, groupId);
-    persist(get().containerVisibility, get().flags, snapshot, get().detachedTerminalIds);
+    persist({ ...get(), snapshot });
     set({
       snapshot,
       groups: snapshot?.groups ?? get().groups,
@@ -651,7 +654,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     } else {
       markNewerProjection();
     }
-    persist(get().containerVisibility, get().flags, next, get().detachedTerminalIds);
+    persist({ ...get(), snapshot: next });
     set({ snapshot: next });
   },
 
@@ -666,7 +669,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
       : current.filter((id) => id !== normalized);
     if (next.length === current.length && next.every((id, index) => id === current[index])) return;
     markNewerProjection();
-    persist(get().containerVisibility, get().flags, get().snapshot, next);
+    persist({ ...get(), detachedTerminalIds: next });
     set({ detachedTerminalIds: next });
   },
 
@@ -678,7 +681,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     // the state that existed before the reset.
     markNewerProjection();
     const next = emptyState();
-    persist(next.containerVisibility, next.flags, next.snapshot);
+    persist({ containerVisibility: next.containerVisibility, flags: next.flags, snapshot: next.snapshot });
     set(next);
   },
   };

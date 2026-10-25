@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  mergeWorkspaceSnapshot,
-  migrateLegacyWorkspaces,
-  migrateWorkspacesToSnapshotV2,
-  normalizeSnapshotV2,
-} from "./migration";
+import { migrateLegacyWorkspaces, migrateWorkspacesToSnapshotV2 } from "./legacyMigration";
+import { mergeWorkspaceSnapshot } from "./snapshotMerge";
+import { normalizeSnapshotV2 } from "./snapshotNormalize";
 
 describe("migrateLegacyWorkspaces", () => {
   it("maps each legacy workspace terminal to one project, container, pane, and tab", () => {
@@ -320,6 +317,20 @@ describe("mergeWorkspaceSnapshot", () => {
     expect(refreshed.orphanedTabIds).toEqual(["tab-orphan"]);
     expect(refreshed.panes[0]?.tabIds).toEqual(["tab-one", "tab-two", "tab-orphan"]);
     expect(refreshed.containers[0]).toMatchObject({ id: containerId, visible: false, closed: true });
+  });
+
+  it("Given a previous snapshot that placed the project in another group, when refreshing, then the project follows the backend group", () => {
+    const first = mergeWorkspaceSnapshot(sharedPaneWorkspaces, null);
+    const group = { name: "Group", projectIds: [], parentGroupId: null, collapsed: false, suspended: false, layout: first.layout };
+    const previous = {
+      ...first,
+      groups: [{ ...group, id: "group-agents" }, { ...group, id: "group-other" }],
+      projects: first.projects.map((project) => ({ ...project, groupId: "group-other" })),
+    };
+
+    const refreshed = mergeWorkspaceSnapshot(sharedPaneWorkspaces, previous);
+
+    expect(refreshed.projects.map((project) => project.groupId)).toEqual(["group-agents"]);
   });
 
   it("preserves visual active state and layout while removing a stale PTY", () => {

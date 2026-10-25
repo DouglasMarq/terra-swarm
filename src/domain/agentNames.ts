@@ -1,6 +1,8 @@
 import { normalizeSearchText } from "../lib/text/normalizeSearchText";
 import type { Workspace } from "./workspace.model";
 
+const MAX_NAME_ROUNDS = 100;
+
 /**
  * Optional automatic agent names ("Vega", "Lyra"…). Off by default: agents
  * are identified by their task title and numbered kind. When on, every new
@@ -79,7 +81,7 @@ export function pickAgentName(
   if (free.length > 0) return free[0];
   if (exhausted === "type-number" || list.length === 0) return null;
   // "repeat": reuse the list with a number, Vega 2, Lyra 2, …
-  for (let round = 2; round < 100; round += 1) {
+  for (let round = 2; round < MAX_NAME_ROUNDS; round += 1) {
     const candidate = list.map((name) => `${name} ${round}`).find((name) => !taken.has(normalizeSearchText(name)));
     if (candidate) return candidate;
   }

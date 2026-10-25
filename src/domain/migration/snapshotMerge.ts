@@ -491,10 +491,6 @@ export function mergeWorkspaceSnapshot(
     ...group,
     projectIds: group.projectIds.filter((projectId) => finalProjectIds.has(projectId)),
   }));
-  for (const project of finalProjects) {
-    const sourceProject = merge.incomingProjectById.get(project.id);
-    if (sourceProject?.groupId !== undefined) project.groupId = sourceProject.groupId;
-  }
   const activeSelection = selectMergedActiveIds(merge, {
     projects: finalProjects,
     containers: finalContainers,

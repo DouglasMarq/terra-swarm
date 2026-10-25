@@ -144,7 +144,7 @@ fn retain_known_workspaces(hub: &mcp::McpHub, store: &workspace::WorkspaceStore)
         .repo()
         .and_then(|mut repo| repo.retain_workspaces(&known_workspaces))
     {
-        eprintln!("failed to clean orphaned MCP data: {}", error);
+        eprintln!("failed to clean orphaned MCP data: {:?}", error);
     }
 }
 

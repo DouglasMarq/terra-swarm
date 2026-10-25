@@ -350,21 +350,14 @@ pub struct WorkspaceStore {
     pub save_path: Option<PathBuf>,
 }
 
+#[cfg(windows)]
+const FALLBACK_HOME_DIR: &str = "C:\\";
+
+#[cfg(not(windows))]
+const FALLBACK_HOME_DIR: &str = "/";
+
 fn home_dir() -> String {
-    #[cfg(windows)]
-    {
-        if let Ok(p) = std::env::var("USERPROFILE") {
-            if !p.trim().is_empty() {
-                return p;
-            }
-        }
-        if let (Ok(drive), Ok(path)) = (std::env::var("HOMEDRIVE"), std::env::var("HOMEPATH")) {
-            return format!("{}{}", drive, path);
-        }
-        "C:\\".to_string()
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
-    }
+    crate::paths::home_dir()
+        .map(|home| home.to_string_lossy().into_owned())
+        .unwrap_or_else(|| FALLBACK_HOME_DIR.to_string())
 }

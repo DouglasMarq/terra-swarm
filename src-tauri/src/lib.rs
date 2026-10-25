@@ -3,6 +3,7 @@ mod clock;
 mod fonts;
 mod ipc_error;
 mod mcp;
+mod paths;
 mod pty;
 mod scrollback;
 mod sync;

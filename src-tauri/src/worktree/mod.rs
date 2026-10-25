@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::scrollback::is_plain_path_component;
+use crate::paths::is_plain_path_component;
 use crate::sync::LockExt;
 
 pub mod review;

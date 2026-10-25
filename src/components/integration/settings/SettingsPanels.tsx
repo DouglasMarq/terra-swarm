@@ -23,10 +23,10 @@ import {
   MIN_FONT_SIZE,
   DEFAULT_HOTKEYS,
   formatHotkey,
-  parseEnvLines,
   type Hotkey,
   type HotkeyActionId,
 } from "../../../stores/preferencesStore";
+import { parseEnvLines } from "../../../domain/agentLaunchEnv";
 import type {
   SettingsSectionDefinition,
   SettingsSectionId,

@@ -21,7 +21,8 @@ import { isCurrentSpawnedTerminalRunning } from "../domain/session/terminalLifec
 import { workspaceIdForTerminal } from "../domain/session/terminalOwnership";
 import { freshCommand, profileForCommand } from "../domain/agentProfiles";
 import { resumeItemFor } from "../domain/session/resumeItems";
-import { parseEnvLines, usePreferencesStore } from "../stores/preferencesStore";
+import { parseEnvLines } from "../domain/agentLaunchEnv";
+import { usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
 import { errorMessage } from "../lib/errors/errorMessage";

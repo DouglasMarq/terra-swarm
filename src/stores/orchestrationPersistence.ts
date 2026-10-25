@@ -1,7 +1,7 @@
 import { deriveSnapshot } from "../domain/workspaceProjection";
 import { uniqueStrings } from "../lib/collections/uniqueStrings";
 import { workspaceApi } from "../lib/tauri/workspace";
-import type { Group, Workspace, WorkspaceSnapshotV2 } from "../types";
+import type { Group, Workspace, WorkspaceSnapshotV2 } from "../domain/workspace.model";
 
 export interface OrchestrationProjection {
   snapshot: WorkspaceSnapshotV2 | null;

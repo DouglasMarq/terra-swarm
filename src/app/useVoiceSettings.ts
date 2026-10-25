@@ -6,7 +6,7 @@ import {
   onVoiceModelDownloadComplete,
   onVoiceModelDownloadProgress,
 } from "../lib/tauri/voice";
-import type { VoiceModelInfo } from "../types";
+import type { VoiceModelInfo } from "../domain/voice.model";
 import { t } from "../i18n";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import type { VoiceLanguage } from "../domain/voiceLanguages";

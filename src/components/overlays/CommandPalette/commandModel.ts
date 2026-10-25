@@ -1,5 +1,7 @@
 import { t } from "../../../i18n";
-import type { AgentInfo, TerminalMeta, Workspace, WorkspaceGroup } from "../../../types";
+import type { AgentInfo } from "../../../domain/agent.model";
+import type { TerminalMeta } from "../../../domain/terminal.model";
+import type { Workspace, WorkspaceGroup } from "../../../domain/workspace.model";
 import { agentLabelText } from "../../../domain/agentLabels";
 import { normalizeSearchText } from "../../../lib/text/normalizeSearchText";
 

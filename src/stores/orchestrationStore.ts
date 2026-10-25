@@ -4,15 +4,7 @@ import { asRecord } from "../lib/records/records";
 import { uniqueStrings } from "../lib/collections/uniqueStrings";
 import { storageGet, storageSet } from "../lib/storage/safeStorage";
 import { create } from "zustand";
-import type {
-  Group,
-  Workspace,
-  WorkspaceContainerPatch,
-  WorkspaceContainer,
-  WorkspaceLayout,
-  WorkspaceGroup,
-  WorkspaceSnapshotV2,
-} from "../types";
+import type { Group, Workspace, WorkspaceContainerPatch, WorkspaceContainer, WorkspaceLayout, WorkspaceGroup, WorkspaceSnapshotV2 } from "../domain/workspace.model";
 import { normalizeLayout, normalizeSnapshotV2 } from "../domain/migration";
 import { deriveSnapshot } from "../domain/workspaceProjection";
 import { createPersistenceEngine } from "./orchestrationPersistence";

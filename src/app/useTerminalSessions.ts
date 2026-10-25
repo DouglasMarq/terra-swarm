@@ -2,15 +2,9 @@ import { useEffect, useRef } from "react";
 import { api } from "../api";
 import { onTerminalContext, onTerminalExit, onTerminalNotification, onTerminalTitle } from "../lib/tauri/pty";
 import { onWorkspacesChanged } from "../lib/tauri/workspace";
-import type {
-  AgentLaunchExtras,
-  AgentRole,
-  ResumeItem,
-  RunningTerminal,
-  SpawnedTerminal,
-  Workspace,
-  WorkspaceSnapshotV2,
-} from "../types";
+import type { AgentLaunchExtras, AgentRole } from "../domain/agent.model";
+import type { ResumeItem, RunningTerminal, SpawnedTerminal } from "../domain/terminal.model";
+import type { Workspace, WorkspaceSnapshotV2 } from "../domain/workspace.model";
 import { getTerminal } from "../terminalRegistry";
 import { t } from "../i18n";
 import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";

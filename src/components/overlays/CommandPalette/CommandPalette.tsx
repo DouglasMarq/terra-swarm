@@ -23,7 +23,8 @@ import {
 } from "lucide-react";
 import { Command } from "cmdk";
 import { useEffect, useMemo, useState } from "react";
-import type { AgentInfo, Workspace, WorkspaceGroup } from "../../../types";
+import type { AgentInfo } from "../../../domain/agent.model";
+import type { Workspace, WorkspaceGroup } from "../../../domain/workspace.model";
 import {
   buildCommandModel,
   executeCommand,

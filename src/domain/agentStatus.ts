@@ -1,4 +1,5 @@
-import type { McpAgentState, TerminalMeta } from "../types";
+import type { McpAgentState } from "./mcp.model";
+import type { TerminalMeta } from "./terminal.model";
 
 export function isTerminalRunning(
   terminal: Pick<TerminalMeta, "id" | "suspended">,

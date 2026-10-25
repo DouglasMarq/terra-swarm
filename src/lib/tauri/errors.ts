@@ -1,4 +1,4 @@
-import type { IpcErrorCode, IpcErrorPayload } from "../../types";
+import type { IpcErrorCode, IpcErrorPayload } from "./ipcError.model";
 
 const IPC_ERROR_CODES: readonly string[] = ["changedOnDisk", "busy", "other"] satisfies readonly IpcErrorCode[];
 

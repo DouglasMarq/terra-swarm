@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Workspace, WorkspaceGroup } from "../types";
+import type { Workspace, WorkspaceGroup } from "./workspace.model";
 import { deriveSnapshot } from "./workspaceProjection";
 
 const workspace: Workspace = {

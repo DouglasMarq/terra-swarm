@@ -3,7 +3,7 @@ import { api } from "../api";
 import { t } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
 import type { ReviewTarget } from "../stores/reviewStore";
-import type { WorktreeDiff } from "../types";
+import type { WorktreeDiff } from "../domain/worktree.model";
 
 export type WorktreeReviewAction = "load" | "commit" | "merge" | "pr";
 

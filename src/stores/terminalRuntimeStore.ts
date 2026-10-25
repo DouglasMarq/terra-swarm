@@ -1,10 +1,6 @@
 import { create } from "zustand";
-import type {
-  NotificationItem,
-  NotificationPayload,
-  ResumeItem,
-  TitlePayload,
-} from "../types";
+import type { NotificationItem, NotificationPayload } from "../domain/notification.model";
+import type { ResumeItem, TitlePayload } from "../domain/terminal.model";
 
 /** Maximum number of notification entries retained by the desktop client. */
 export const MAX_NOTIF_ITEMS = 50;

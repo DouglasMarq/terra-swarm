@@ -1,4 +1,4 @@
-import type { VoiceDownloadProgress, VoiceModelInfo } from "../../types";
+import type { VoiceDownloadProgress, VoiceModelInfo } from "../../domain/voice.model";
 import { invokeCommand } from "./commands";
 import { listenPayload, type UnlistenFn } from "./events";
 

@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { api } from "../api";
-import type { ResumeItem, Workspace, WorkspaceGroup } from "../types";
+import type { ResumeItem } from "../domain/terminal.model";
+import type { Workspace, WorkspaceGroup } from "../domain/workspace.model";
 import { t } from "../i18n";
 import { agentKind } from "../domain/agentLabels";
 import { planResume } from "../domain/session/resumePlanner";

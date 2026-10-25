@@ -1,14 +1,7 @@
 import { migrateLegacyWorkspaces } from "../../domain/migration";
 import { byId } from "../../domain/selectors";
 import { uniqueStrings } from "../../lib/collections/uniqueStrings";
-import type {
-  Group,
-  Pane,
-  Project,
-  TerminalTab,
-  WorkspaceContainer,
-  WorkspaceSnapshotV2,
-} from "../../types";
+import type { Group, Pane, Project, TerminalTab, WorkspaceContainer, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import type {
   WorkbenchContainerProjection,
   WorkbenchPaneProjection,

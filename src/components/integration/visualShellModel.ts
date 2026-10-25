@@ -1,7 +1,9 @@
 import { CONTEXT_ATTENTION_PERCENT, isTerminalRunning, type AgentRunStatus } from "../../domain/agentStatus";
 import { latestUnreadPerAgent } from "../../domain/notifications";
 import type { Translate } from "../../i18n";
-import type { NotificationItem, VoiceStatus, Workspace, WorkspaceSnapshotV2 } from "../../types";
+import type { NotificationItem } from "../../domain/notification.model";
+import type { VoiceStatus } from "../../domain/voice.model";
+import type { Workspace, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import type { VoiceCapsuleState } from "../voice/voiceModel";
 
 /**

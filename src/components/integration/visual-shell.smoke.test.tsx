@@ -3,7 +3,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Group, Workspace } from "../../types";
+import type { Group, Workspace } from "../../domain/workspace.model";
 import { useShellStore, SHELL_STORAGE_KEY } from "../../stores/shellStore";
 import { useOrchestrationStore } from "../../stores/orchestrationStore";
 import { ptyApi } from "../../lib/tauri/pty";

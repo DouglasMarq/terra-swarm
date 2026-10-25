@@ -2,7 +2,7 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TerminalRuntimeInfo } from "../types";
+import type { TerminalRuntimeInfo } from "../domain/terminal.model";
 
 const pty = vi.hoisted(() => ({ terminalRuntimeInfo: vi.fn() }));
 vi.mock("../lib/tauri/pty", () => ({ ptyApi: pty }));

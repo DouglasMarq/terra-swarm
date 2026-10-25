@@ -1,11 +1,12 @@
 import { agentKind } from "../../domain/agentLabels";
 import { deriveAgentStatus, type AgentRunStatus } from "../../domain/agentStatus";
-import type { McpAgentState } from "../../types";
+import type { McpAgentState } from "../../domain/mcp.model";
 import { DEFAULT_AGENT_PROFILES } from "../../domain/agentProfiles";
 import type { Translate } from "../../i18n";
 import { elapsedTime } from "../../domain/elapsedTime";
 import { clamp } from "../../lib/math/clamp";
-import type { TerminalMeta, Workspace, WorkspaceGroup } from "../../types";
+import type { TerminalMeta } from "../../domain/terminal.model";
+import type { Workspace, WorkspaceGroup } from "../../domain/workspace.model";
 
 /** The four states exposed by the fleet command center. */
 export type FleetStatus = AgentRunStatus;

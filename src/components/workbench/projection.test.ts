@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { migrateLegacyWorkspaces } from "../../domain/migration";
-import type { Workspace, WorkspaceSnapshotV2 } from "../../types";
+import type { Workspace, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import { projectWorkbench, toWorkbenchSnapshot } from "./projection";
 
 const legacy: Workspace[] = [

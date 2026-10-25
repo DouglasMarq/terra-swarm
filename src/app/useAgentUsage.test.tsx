@@ -2,7 +2,7 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentTokenUsage } from "../types";
+import type { AgentTokenUsage } from "../domain/agent.model";
 
 const mcp = vi.hoisted(() => ({ agentUsage: vi.fn() }));
 vi.mock("../lib/tauri/mcp", () => ({ mcpApi: mcp }));

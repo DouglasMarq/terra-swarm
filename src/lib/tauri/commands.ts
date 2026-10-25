@@ -1,32 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import type {
-  AgentInfo,
-  AgentTokenUsage,
-  AgentLaunchExtras,
-  ActivePaneSelection,
-  BacklogSnapshot,
-  McpAgentStatus,
-  McpServerInfo,
-  McpTask,
-  McpTaskPatch,
-  McpTaskPriority,
-  RunningTerminal,
-  SpawnedTerminal,
-  TerminalRuntimeInfo,
-  TerminalPlacement,
-  VoiceModelInfo,
-  Workspace,
-  WorkspaceGroup,
-  WorkspaceSnapshotTransfer,
-  WorkspaceContainerPatch,
-  WorkspaceLayout,
-  WorkspaceFileContent,
-  WorkspaceFileListing,
-  WorkspaceFileSaved,
-  WorkspaceGitStatus,
-  WorktreeDiff,
-  WorktreeStatus,
-} from "../../types";
+import type { AgentInfo, AgentTokenUsage, AgentLaunchExtras } from "../../domain/agent.model";
+import type { McpAgentStatus, McpServerInfo, McpTask, McpTaskPatch, McpTaskPriority } from "../../domain/mcp.model";
+import type { BacklogSnapshot, RunningTerminal, SpawnedTerminal, TerminalRuntimeInfo, TerminalPlacement } from "../../domain/terminal.model";
+import type { VoiceModelInfo } from "../../domain/voice.model";
+import type { ActivePaneSelection, Workspace, WorkspaceGroup, WorkspaceSnapshotTransfer, WorkspaceContainerPatch, WorkspaceLayout, WorkspaceGitStatus } from "../../domain/workspace.model";
+import type { WorkspaceFileContent, WorkspaceFileListing, WorkspaceFileSaved } from "../../domain/workspaceFiles.model";
+import type { WorktreeDiff, WorktreeStatus } from "../../domain/worktree.model";
 import { toIpcError } from "./errors";
 
 /**

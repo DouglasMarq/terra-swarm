@@ -1,5 +1,6 @@
 import { open, save, type OpenDialogOptions, type SaveDialogOptions } from "@tauri-apps/plugin-dialog";
-import type { AgentInfo, WorkspaceGitStatus } from "../../types";
+import type { AgentInfo } from "../../domain/agent.model";
+import type { WorkspaceGitStatus } from "../../domain/workspace.model";
 import { invokeCommand } from "./commands";
 
 export function openDialog(options: OpenDialogOptions) {

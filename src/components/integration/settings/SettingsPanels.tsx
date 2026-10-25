@@ -2,10 +2,8 @@ import { onVoiceAudioLevel } from "../../../lib/tauri/voice";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 
-import type {
-  AgentInfo,
-  VoiceModelInfo,
-} from "../../../types";
+import type { AgentInfo } from "../../../domain/agent.model";
+import type { VoiceModelInfo } from "../../../domain/voice.model";
 import {
   DEFAULT_AGENT_PROFILES,
   fallbackProfile,

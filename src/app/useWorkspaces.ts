@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { api } from "../api";
-import type { Workspace, WorkspaceGroup } from "../types";
+import type { Workspace, WorkspaceGroup } from "../domain/workspace.model";
 import { useOrchestrationStore } from "../stores/orchestrationStore";
 import { useUiStore } from "../stores/uiStore";
 

@@ -8,7 +8,7 @@ import { api } from "../api";
 import { isIpcError } from "../lib/tauri/errors";
 import type { UnlistenFn } from "../lib/tauri/events";
 import { onPtyOutput } from "../lib/tauri/pty";
-import type { OutputChunk } from "../types";
+import type { OutputChunk } from "../domain/terminal.model";
 import { registerTerminal, unregisterTerminal, getTerminal } from "../terminalRegistry";
 import {
   createFitScheduler,

@@ -1,15 +1,8 @@
 import type { PaneMenuGroups } from "../workbench/PaneActionsMenu";
 import type { CSSProperties, MouseEvent, ReactNode } from "react";
-import type {
-  Pane,
-  TerminalMeta,
-  Workspace,
-  WorkspaceContainer,
-  WorkspaceFileListing,
-  WorkspaceGroup,
-  WorkspaceGitStatus,
-  WorkspaceSnapshotV2,
-} from "../../types";
+import type { TerminalMeta } from "../../domain/terminal.model";
+import type { Pane, Workspace, WorkspaceContainer, WorkspaceGroup, WorkspaceGitStatus, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
+import type { WorkspaceFileListing } from "../../domain/workspaceFiles.model";
 
 /** The three visible nesting levels in the Terra navigator. */
 export type NavigatorNodeKind = "group" | "project" | "container" | "pane" | "agent";

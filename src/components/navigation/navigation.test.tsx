@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NavigatorPanel } from "./NavigatorPanel";
-import type { Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../types";
+import type { Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import { useEditorStore } from "../../stores/editorStore";
 
 const groups: WorkspaceGroup[] = [{

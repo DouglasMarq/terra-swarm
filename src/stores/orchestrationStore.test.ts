@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Workspace } from "../types";
+import type { Workspace } from "../domain/workspace.model";
 
 const workspaceApiMock = vi.hoisted(() => ({
   listWorkspaces: vi.fn(() => Promise.resolve([] as Workspace[])),

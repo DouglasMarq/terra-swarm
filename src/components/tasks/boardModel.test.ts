@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { t } from "../../i18n";
-import type { McpTask, McpTaskEvent } from "../../types";
+import type { McpTask, McpTaskEvent } from "../../domain/mcp.model";
 import { boardColumns, describeTaskEvent, dropPosition, parseDropTarget, planDrop, taskStatusLabel } from "./boardModel";
 
 function task(id: string, status: McpTask["status"], position: number): McpTask {

@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { buildAgentLabels } from "../../domain/agentLabels";
 import { FleetCommandCenter } from "./FleetCommandCenter";
-import type { Workspace } from "../../types";
+import type { Workspace } from "../../domain/workspace.model";
 
 const workspaces: Workspace[] = [{
   id: "ws-api",

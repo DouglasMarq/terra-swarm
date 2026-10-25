@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { CommandPalette } from "./CommandPalette";
-import type { Workspace } from "../../../types";
+import type { Workspace } from "../../../domain/workspace.model";
 
 const workspaces: Workspace[] = [{ id: "ws-1", name: "Terra API", cwd: "/tmp/api", terminals: [] }];
 

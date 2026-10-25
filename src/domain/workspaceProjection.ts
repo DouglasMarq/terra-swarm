@@ -1,4 +1,4 @@
-import type { Group, Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../types";
+import type { Group, Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "./workspace.model";
 import { uniqueStrings } from "../lib/collections/uniqueStrings";
 import { DEFAULT_WORKSPACE_LAYOUT, mergeWorkspaceLayout, mergeWorkspaceSnapshot, normalizeLayout } from "./migration";
 

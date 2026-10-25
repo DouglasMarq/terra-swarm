@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
-import type { Workspace, WorktreeStatus } from "../types";
+import type { Workspace } from "../domain/workspace.model";
+import type { WorktreeStatus } from "../domain/worktree.model";
 import { t } from "../i18n";
 import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { usePreferencesStore } from "../stores/preferencesStore";

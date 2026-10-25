@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { NotificationItem } from "../types";
+import type { NotificationItem } from "./notification.model";
 import { latestUnreadPerAgent, shouldNotify } from "./notifications";
 
 function item(key: number, terminalId: string, ts: number, extra: Partial<NotificationItem> = {}): NotificationItem {

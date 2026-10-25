@@ -1,4 +1,4 @@
-import type { NotificationItem } from "../types";
+import type { NotificationItem } from "./notification.model";
 
 /** One native notification per agent at most this often. */
 const PER_AGENT_COOLDOWN_MS = 30_000;

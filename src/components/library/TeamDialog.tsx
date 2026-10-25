@@ -4,7 +4,7 @@ import { useT } from "../../i18n";
 import { errorMessage } from "../../lib/errors/errorMessage";
 import { planTeam, TEAM_TEMPLATES, type TeamTemplate } from "../../domain/teamTemplates";
 import { useLibraryStore } from "../../stores/libraryStore";
-import type { AgentInfo, AgentRole } from "../../types";
+import type { AgentInfo, AgentRole } from "../../domain/agent.model";
 import { DialogFooter, TerraDialog } from "../overlays/Dialog";
 import { Button } from "../ui/Button";
 import "./library.css";

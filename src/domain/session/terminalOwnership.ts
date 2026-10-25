@@ -1,4 +1,4 @@
-import type { Workspace, WorkspaceSnapshotV2 } from "../../types";
+import type { Workspace, WorkspaceSnapshotV2 } from "../workspace.model";
 
 /**
  * Resolves a terminal's owning workspace from current metadata.

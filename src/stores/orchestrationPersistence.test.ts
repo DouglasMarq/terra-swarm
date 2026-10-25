@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Workspace, WorkspaceGroup } from "../types";
+import type { Workspace, WorkspaceGroup } from "../domain/workspace.model";
 
 const workspaceApiMock = vi.hoisted(() => ({
   listWorkspaces: vi.fn<() => Promise<Workspace[]>>(),

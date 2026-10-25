@@ -1,14 +1,4 @@
-import type {
-  Group,
-  LayoutMode,
-  Pane,
-  Project,
-  TerminalTab,
-  Workspace,
-  WorkspaceContainer,
-  WorkspaceLayout,
-  WorkspaceSnapshotV2,
-} from "../../types";
+import type { Group, LayoutMode, Pane, Project, TerminalTab, Workspace, WorkspaceContainer, WorkspaceLayout, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import type { ReactNode } from "react";
 
 /** A domain input accepted by the workbench boundary. */

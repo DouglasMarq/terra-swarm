@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { McpTask } from "../types";
+import type { McpTask } from "../domain/mcp.model";
 
 const api = vi.hoisted(() => ({
   mcpServerInfo: vi.fn(),

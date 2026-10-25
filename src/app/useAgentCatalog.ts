@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { api } from "../api";
-import type { AgentInfo } from "../types";
+import type { AgentInfo } from "../domain/agent.model";
 
 /** The agent CLIs found on the PATH, detected once at startup. */
 export function useAgentCatalog() {

@@ -1,9 +1,5 @@
-import type {
-  AgentTokenUsage,
-  Group,
-  Workspace,
-  WorkspaceSnapshotV2,
-} from "../../types";
+import type { AgentTokenUsage } from "../../domain/agent.model";
+import type { Group, Workspace, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import { profileForCommand } from "../../domain/agentProfiles";
 
 export type InspectorRuntimeState = "ativo" | "suspenso" | "encerrado";

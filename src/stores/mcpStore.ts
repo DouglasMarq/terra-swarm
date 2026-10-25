@@ -9,14 +9,7 @@ import {
   type McpNudgePayload,
 } from "../lib/tauri/mcp";
 import { errorMessage } from "../lib/errors/errorMessage";
-import type {
-  McpAgentState,
-  McpAgentStatus,
-  McpServerInfo,
-  McpTask,
-  McpTaskPatch,
-  McpTaskPriority,
-} from "../types";
+import type { McpAgentState, McpAgentStatus, McpServerInfo, McpTask, McpTaskPatch, McpTaskPriority } from "../domain/mcp.model";
 
 export interface McpState {
   server: McpServerInfo | null;

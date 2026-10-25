@@ -1,4 +1,5 @@
-import type { ResumeItem, Workspace } from "../../types";
+import type { ResumeItem } from "../terminal.model";
+import type { Workspace } from "../workspace.model";
 import { agentKind } from "../agentLabels";
 import { profileForCommand, resolveResumeCommand } from "../agentProfiles";
 

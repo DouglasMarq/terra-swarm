@@ -1,4 +1,4 @@
-import type { Workspace, WorkspaceSnapshotV2 } from "../../types";
+import type { Workspace, WorkspaceSnapshotV2 } from "../workspace.model";
 
 export interface WorkspaceContainerSelectionOptions {
   /** Prefer a caller-provided location when it belongs to this workspace. */

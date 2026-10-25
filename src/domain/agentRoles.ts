@@ -1,4 +1,5 @@
-import type { AgentRole, Workspace } from "../types";
+import type { AgentRole } from "./agent.model";
+import type { Workspace } from "./workspace.model";
 import { isTerminalRunning } from "./agentStatus";
 
 /** In the order a team is usually built. */

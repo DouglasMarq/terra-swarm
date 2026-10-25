@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { ensureNotificationPermission, setAppBadgeCount, showNotification } from "../lib/tauri/notifications";
 import { onAgentAttention, onTerminalNotification } from "../lib/tauri/pty";
-import type { Workspace } from "../types";
+import type { Workspace } from "../domain/workspace.model";
 import { t } from "../i18n";
 import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { deriveAgentStatus } from "../domain/agentStatus";

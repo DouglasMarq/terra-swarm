@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { ChevronDown, ChevronRight, ListTodo, Plus, Trash2 } from "lucide-react";
 import { useT } from "../../i18n";
 import { useMcpStore } from "../../stores/mcpStore";
-import type { McpAgentStatus, McpTask, McpTaskPatch } from "../../types";
+import type { McpAgentStatus, McpTask, McpTaskPatch } from "../../domain/mcp.model";
 import { groupTasksByStatus, MAX_TASK_TITLE_CHARS, TASK_PRIORITIES, TASK_STATUS_ORDER } from "../../domain/tasks";
 import { describeTaskEvent } from "./boardModel";
 import { useWorkspaceTasks } from "./useWorkspaceTasks";

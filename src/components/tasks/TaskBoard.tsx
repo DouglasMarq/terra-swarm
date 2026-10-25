@@ -18,7 +18,7 @@ import { Bot, SquareKanban, Plus, Users } from "lucide-react";
 import { useT } from "../../i18n";
 import { useMcpStore } from "../../stores/mcpStore";
 import { useLibraryStore } from "../../stores/libraryStore";
-import type { McpAgentStatus, McpTask, McpTaskPatch, McpTaskStatus } from "../../types";
+import type { McpAgentStatus, McpTask, McpTaskPatch, McpTaskStatus } from "../../domain/mcp.model";
 import { BOARD_COLUMNS, boardColumns, planDrop } from "./boardModel";
 import { TaskCard, type TaskAgentOption } from "./TasksPanel";
 import { useWorkspaceTasks } from "./useWorkspaceTasks";

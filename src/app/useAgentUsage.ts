@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useUsageStore } from "../stores/usageStore";
-import type { AgentTokenUsage } from "../types";
+import type { AgentTokenUsage } from "../domain/agent.model";
 
 /** How often a shown workspace's token usage is read again. */
 export const USAGE_REFRESH_MS = 15_000;

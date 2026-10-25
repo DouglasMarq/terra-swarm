@@ -1,18 +1,8 @@
 import { deriveAgentStatus } from "../../domain/agentStatus";
 import { normalizeSearchText } from "../../lib/text/normalizeSearchText";
-import type { McpAgentState } from "../../types";
-import type {
-  Pane,
-  PersistedWorkspaceContainer,
-  PersistedWorkspacePane,
-  PersistedWorkspaceTab,
-  TerminalMeta,
-  TerminalTab,
-  Workspace,
-  WorkspaceContainer,
-  WorkspaceGroup,
-  WorkspaceSnapshotV2,
-} from "../../types";
+import type { McpAgentState } from "../../domain/mcp.model";
+import type { TerminalMeta } from "../../domain/terminal.model";
+import type { Pane, PersistedWorkspaceContainer, PersistedWorkspacePane, PersistedWorkspaceTab, TerminalTab, Workspace, WorkspaceContainer, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import {
   type FlatNavigatorNode,
   type NavigatorAgentNode,

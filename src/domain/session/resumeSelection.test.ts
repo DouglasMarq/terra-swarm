@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceGroup } from "../../types";
+import type { WorkspaceGroup } from "../workspace.model";
 import { isTerminalSuspended, suspendedGroupIds } from "./resumeSelection";
 
 const groups: WorkspaceGroup[] = [

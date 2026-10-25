@@ -4,7 +4,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { AgentInfo, ResumeItem } from "../../../types";
+import type { AgentInfo } from "../../../domain/agent.model";
+import type { ResumeItem } from "../../../domain/terminal.model";
 import { ResumeDialog } from "../../ResumeDialog";
 import { AgentPickerDialog, RenameDialog, WorkspaceDialog } from ".";
 

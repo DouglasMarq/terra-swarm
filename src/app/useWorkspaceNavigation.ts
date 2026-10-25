@@ -1,4 +1,4 @@
-import type { Workspace, WorkspaceSnapshotV2 } from "../types";
+import type { Workspace, WorkspaceSnapshotV2 } from "../domain/workspace.model";
 import { selectWorkspaceContainerId } from "../domain/session/workspaceContainerSelection";
 import { useOrchestrationStore } from "../stores/orchestrationStore";
 import { useUiStore } from "../stores/uiStore";

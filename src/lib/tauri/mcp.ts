@@ -1,11 +1,5 @@
-import type {
-  AgentTokenUsage,
-  McpAgentStatus,
-  McpServerInfo,
-  McpTask,
-  McpTaskPatch,
-  McpTaskPriority,
-} from "../../types";
+import type { AgentTokenUsage } from "../../domain/agent.model";
+import type { McpAgentStatus, McpServerInfo, McpTask, McpTaskPatch, McpTaskPriority } from "../../domain/mcp.model";
 import { invokeCommand } from "./commands";
 import { listenPayload, type UnlistenFn } from "./events";
 

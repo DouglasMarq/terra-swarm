@@ -27,7 +27,8 @@ import { agentLabelText, buildAgentLabels } from "./domain/agentLabels";
 import { resumeCommandFor } from "./domain/session/resumeItems";
 import { useTerminalSessions } from "./app/useTerminalSessions";
 import { useUpdater } from "./app/useUpdater";
-import type { AgentRole, NotificationItem } from "./types";
+import type { AgentRole } from "./domain/agent.model";
+import type { NotificationItem } from "./domain/notification.model";
 import {
   AgentPickerDialog,
   RenameDialog,

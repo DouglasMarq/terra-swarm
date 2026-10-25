@@ -1,4 +1,5 @@
-import type { TerminalMeta, Workspace, WorkspaceGroup } from "../../types";
+import type { TerminalMeta } from "../terminal.model";
+import type { Workspace, WorkspaceGroup } from "../workspace.model";
 
 /**
  * Builds the group lookup used by startup resume. A group can reference a

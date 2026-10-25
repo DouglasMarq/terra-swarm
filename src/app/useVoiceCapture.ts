@@ -9,7 +9,9 @@ import {
   onVoiceTranscriptionError,
   onVoiceTranscriptionStarted,
 } from "../lib/tauri/voice";
-import type { AgentInfo, VoiceStatus, Workspace, WorkspaceGroup } from "../types";
+import type { AgentInfo } from "../domain/agent.model";
+import type { VoiceStatus } from "../domain/voice.model";
+import type { Workspace, WorkspaceGroup } from "../domain/workspace.model";
 import {
   createInitialVoiceCapsuleModel,
   canExecuteVoiceIntent,

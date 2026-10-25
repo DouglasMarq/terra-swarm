@@ -1,4 +1,4 @@
-import type { McpTask, McpTaskPriority, McpTaskStatus } from "../types";
+import type { McpTask, McpTaskPriority, McpTaskStatus } from "./mcp.model";
 
 /** Longest task title the board accepts; mirrors `MAX_TITLE_CHARS` in `src-tauri/src/mcp/repo.rs`. */
 export const MAX_TASK_TITLE_CHARS = 200;

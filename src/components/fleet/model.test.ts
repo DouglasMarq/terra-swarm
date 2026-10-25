@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Workspace, WorkspaceGroup } from "../../types";
+import type { Workspace, WorkspaceGroup } from "../../domain/workspace.model";
 import { t } from "../../i18n";
 import {
   deriveFleetModel,

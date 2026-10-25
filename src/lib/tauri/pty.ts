@@ -1,15 +1,6 @@
-import type {
-  AgentLaunchExtras,
-  BacklogSnapshot,
-  ContextPayload,
-  ExitPayload,
-  NotificationPayload,
-  OutputChunk,
-  RunningTerminal,
-  SpawnedTerminal,
-  TerminalRuntimeInfo,
-  TitlePayload,
-} from "../../types";
+import type { AgentLaunchExtras } from "../../domain/agent.model";
+import type { NotificationPayload } from "../../domain/notification.model";
+import type { BacklogSnapshot, ContextPayload, ExitPayload, OutputChunk, RunningTerminal, SpawnedTerminal, TerminalRuntimeInfo, TitlePayload } from "../../domain/terminal.model";
 import { invokeCommand } from "./commands";
 import { listenPayload, type UnlistenFn } from "./events";
 

@@ -2,7 +2,7 @@
 
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { McpServerInfo, McpTask } from "../../types";
+import type { McpServerInfo, McpTask } from "../../domain/mcp.model";
 
 const api = vi.hoisted(() => ({
   mcpServerInfo: vi.fn(),

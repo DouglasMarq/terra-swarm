@@ -1,15 +1,5 @@
-import type {
-  Group,
-  LayoutMode,
-  Pane,
-  Project,
-  TerminalMeta,
-  TerminalTab,
-  Workspace,
-  WorkspaceContainer,
-  WorkspaceLayout,
-  WorkspaceSnapshotV2,
-} from "../types";
+import type { TerminalMeta } from "./terminal.model";
+import type { Group, LayoutMode, Pane, Project, TerminalTab, Workspace, WorkspaceContainer, WorkspaceLayout, WorkspaceSnapshotV2 } from "./workspace.model";
 import { asRecord, type UnknownRecord } from "../lib/records/records";
 import { uniqueStrings } from "../lib/collections/uniqueStrings";
 

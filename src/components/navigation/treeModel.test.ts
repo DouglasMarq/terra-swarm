@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../types";
+import type { Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import { buildNavigatorTree, filterNavigatorTree, flattenNavigatorTree } from "./treeModel";
 import { normalizeSearchText } from "../../lib/text/normalizeSearchText";
 

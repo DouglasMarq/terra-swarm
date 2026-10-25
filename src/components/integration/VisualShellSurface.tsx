@@ -43,14 +43,9 @@ import type {
   VoiceCapsuleState,
   VoiceSendPayload,
 } from "../voice";
-import type {
-  Group,
-  NotificationItem,
-  VoiceStatus,
-  Workspace,
-  WorkspaceGroup,
-  WorkspaceSnapshotV2,
-} from "../../types";
+import type { NotificationItem } from "../../domain/notification.model";
+import type { VoiceStatus } from "../../domain/voice.model";
+import type { Group, Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import { useShellStore, type ShellSurface } from "../../stores/shellStore";
 import { useOrchestrationStore } from "../../stores/orchestrationStore";
 import { DEFAULT_HOTKEYS, formatHotkey, usePreferencesStore } from "../../stores/preferencesStore";

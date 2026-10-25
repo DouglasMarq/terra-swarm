@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { NotificationItem, WorkspaceSnapshotV2 } from "../../types";
+import type { NotificationItem } from "../../domain/notification.model";
+import type { WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import { filterNotificationItemsForTarget } from "./notificationScope";
 
 const items: NotificationItem[] = [

@@ -2,7 +2,8 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ResumeItem, Workspace } from "../types";
+import type { ResumeItem } from "../domain/terminal.model";
+import type { Workspace } from "../domain/workspace.model";
 
 const api = vi.hoisted(() => ({
   killTerminal: vi.fn(),

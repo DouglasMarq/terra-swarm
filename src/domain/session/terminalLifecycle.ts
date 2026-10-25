@@ -1,4 +1,4 @@
-import type { RunningTerminal } from "../../types";
+import type { RunningTerminal } from "../terminal.model";
 
 /**
  * A spawn response is not, by itself, proof that the child is still alive:

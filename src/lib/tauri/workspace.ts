@@ -1,15 +1,6 @@
-import type {
-  ActivePaneSelection,
-  TerminalPlacement,
-  Workspace,
-  WorkspaceContainerPatch,
-  WorkspaceGroup,
-  WorkspaceLayout,
-  WorkspaceSnapshotTransfer,
-  WorkspaceFileContent,
-  WorkspaceFileListing,
-  WorkspaceFileSaved,
-} from "../../types";
+import type { TerminalPlacement } from "../../domain/terminal.model";
+import type { ActivePaneSelection, Workspace, WorkspaceContainerPatch, WorkspaceGroup, WorkspaceLayout, WorkspaceSnapshotTransfer } from "../../domain/workspace.model";
+import type { WorkspaceFileContent, WorkspaceFileListing, WorkspaceFileSaved } from "../../domain/workspaceFiles.model";
 import { invokeCommand } from "./commands";
 import { listenPayload, type UnlistenFn } from "./events";
 

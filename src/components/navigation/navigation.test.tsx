@@ -45,6 +45,16 @@ describe("NavigatorPanel", () => {
     expect(onOpenTerminal).toHaveBeenCalledWith("ws-api", "term-luna");
   });
 
+  it("Given nested tree rows, when rendering the navigator, then each level indents 16px like the files view", () => {
+    render(<NavigatorPanel workspaces={workspaces} groups={groups} />);
+
+    for (const row of screen.getAllByRole("treeitem")) {
+      const depth = Number(row.getAttribute("data-depth"));
+      expect(row.style.paddingInlineStart).toBe(`${8 + depth * 16}px`);
+    }
+    expect(screen.getByRole("treeitem", { name: "Projeto Terra API" }).style.paddingInlineStart).toBe("24px");
+  });
+
   it("exposes activity tabs and forwards the selected surface", async () => {
     const onActivityChange = vi.fn();
     render(<NavigatorPanel onActivityChange={onActivityChange} workspaces={[]} />);

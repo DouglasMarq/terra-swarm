@@ -5,6 +5,7 @@ import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { CONTEXT_ATTENTION_PERCENT } from "../../domain/agentStatus";
 import type { NavigatorAgentNode, NavigatorGroupNode, NavigatorNode, NavigatorNodeActions, NavigatorProjectNode, NavigatorRowProps } from "./types";
 import { navigatorRef } from "./types";
+import { indentFor } from "./indent";
 import styles from "./Navigator.module.css";
 
 function stop(event: MouseEvent<HTMLElement>): void {
@@ -166,7 +167,7 @@ export function NavigatorNodeRow({
       onKeyDown={handleKeyDown}
       role="treeitem"
       tabIndex={0}
-      style={{ ...style, paddingInlineStart: `${8 + node.depth * 18}px` }}
+      style={{ ...style, paddingInlineStart: indentFor(node.depth) }}
     >
       <span className={styles.indent} aria-hidden="true" />
       <button

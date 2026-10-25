@@ -22,10 +22,10 @@ const LazyCommandPalette = lazy(async () => {
 });
 
 export function SurfaceLoading() {
-  const t = useT();
+  const translate = useT();
   return (
     <div className="terra-surface-loading" role="status" aria-live="polite">
-      {t("shell.loading")}
+      {translate("shell.loading")}
     </div>
   );
 }

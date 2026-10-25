@@ -33,12 +33,12 @@ describe("filterFonts", () => {
   });
 
   it("matches a substring ignoring case and accents", () => {
-    expect(filterFonts(fonts, "brains", false).map((f) => f.name)).toEqual(["JetBrains Mono"]);
-    expect(filterFonts(fonts, "tapajos", false).map((f) => f.name)).toEqual(["Tapajós Sans"]);
+    expect(filterFonts(fonts, "brains", false).map((font) => font.name)).toEqual(["JetBrains Mono"]);
+    expect(filterFonts(fonts, "tapajos", false).map((font) => font.name)).toEqual(["Tapajós Sans"]);
   });
 
   it("can keep only monospace fonts", () => {
-    expect(filterFonts(fonts, "", true).map((f) => f.name)).toEqual(["JetBrains Mono"]);
+    expect(filterFonts(fonts, "", true).map((font) => font.name)).toEqual(["JetBrains Mono"]);
   });
 });
 

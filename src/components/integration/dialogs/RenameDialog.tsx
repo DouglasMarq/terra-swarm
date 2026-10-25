@@ -27,11 +27,11 @@ export function RenameDialog({
   open,
   value,
 }: RenameDialogProps) {
-  const t = useT();
+  const translate = useT();
   const [submitted, setSubmitted] = useState(false);
   // Agents may clear their name; projects and groups need one.
   const valid = kind === "terminal" || value.trim().length > 0;
-  const noun = t(`rename.noun.${kind}`);
+  const noun = translate(`rename.noun.${kind}`);
   const isCreate = mode === "create";
 
   useEffect(() => {
@@ -48,15 +48,15 @@ export function RenameDialog({
   return (
     <TerraDialog
       className={styles.dialog}
-      description={isCreate ? t("rename.createDescription", { noun }) : t("rename.description", { noun })}
+      description={isCreate ? translate("rename.createDescription", { noun }) : translate("rename.description", { noun })}
       onOpenChange={onOpenChange}
       open={open}
-      title={isCreate ? t("rename.createTitle", { noun }) : t("rename.title", { noun })}
+      title={isCreate ? translate("rename.createTitle", { noun }) : translate("rename.title", { noun })}
     >
       <form className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.field}>
           <label className={styles.label} htmlFor="terra-rename-value">
-            {t("rename.name")}
+            {translate("rename.name")}
           </label>
           <input
             aria-describedby={submitted && !valid ? "terra-rename-error" : undefined}
@@ -71,18 +71,18 @@ export function RenameDialog({
           />
           {submitted && !valid ? (
             <span className={styles.error} id="terra-rename-error" role="alert">
-              {t("rename.required")}
+              {translate("rename.required")}
             </span>
           ) : null}
         </div>
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="ghost">
-              {t("common.cancel")}
+              {translate("common.cancel")}
             </Button>
           </DialogClose>
           <Button leadingIcon={<Pencil aria-hidden="true" size={14} />} type="submit" variant="primary">
-            {isCreate ? t("rename.create", { noun }) : t("rename.save")}
+            {isCreate ? translate("rename.create", { noun }) : translate("rename.save")}
           </Button>
         </DialogFooter>
       </form>

@@ -284,7 +284,7 @@ describe("orchestration store", () => {
     useOrchestrationStore.getState().sync(source);
 
     let rejectFirst: (error: unknown) => void = () => undefined;
-    const firstCommand = new Promise<void>((_, reject) => {
+    const firstCommand = new Promise<void>((_resolve, reject) => {
       rejectFirst = reject;
     });
     workspaceApiMock.setWorkspaceLayout

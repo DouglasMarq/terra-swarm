@@ -33,7 +33,7 @@ const collision: CollisionDetection = (args) => {
   const under = pointerWithin(args);
   if (under.length === 0) return closestCorners(args);
   // A card sits inside its column: prefer the innermost target.
-  return [...under].sort((a, b) => Number(String(b.id).startsWith("card:")) - Number(String(a.id).startsWith("card:")));
+  return [...under].sort((left, right) => Number(String(right.id).startsWith("card:")) - Number(String(left.id).startsWith("card:")));
 };
 
 export interface BoardAgent extends TaskAgentOption {
@@ -56,7 +56,7 @@ export interface TaskBoardProps {
  * store refetches on every `mcp-tasks-changed` event.
  */
 export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: TaskBoardProps) {
-  const t = useT();
+  const translate = useT();
   const { tasks, statuses, server, error } = useWorkspaceTasks(workspaceId);
   const { createTask, updateTask, deleteTask, clearError } = useMcpStore.getState();
   const [draft, setDraft] = useState("");
@@ -83,7 +83,7 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
     return (
       <div className="terra-tasks-empty">
         <SquareKanban size={18} aria-hidden="true" />
-        <span>{t("tasks.noWorkspace")}</span>
+        <span>{translate("tasks.noWorkspace")}</span>
       </div>
     );
   }
@@ -94,10 +94,10 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
     clearError();
     if (!(await update(task.id, { assignee: agent.id, status: "in_progress" }))) return;
     try {
-      await onSendPrompt(agent.id, t("tasks.board.prompt", { id: task.id, title: task.title }));
-      setNotice(t("tasks.board.handedOff", { id: task.id, agent: agent.label }));
+      await onSendPrompt(agent.id, translate("tasks.board.prompt", { id: task.id, title: task.title }));
+      setNotice(translate("tasks.board.handedOff", { id: task.id, agent: agent.label }));
     } catch {
-      setNotice(t("tasks.board.handoffFailed", { id: task.id, agent: agent.label }));
+      setNotice(translate("tasks.board.handoffFailed", { id: task.id, agent: agent.label }));
     }
   };
 
@@ -134,30 +134,30 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
   });
 
   return (
-    <div className="terra-board" aria-label={t("tasks.board.label", { name: workspaceName ?? workspaceId })}>
+    <div className="terra-board" aria-label={translate("tasks.board.label", { name: workspaceName ?? workspaceId })}>
       <header className="terra-board-head">
         <form className="terra-tasks-new" onSubmit={submit}>
           <input
             className="terra-tasks-input"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder={t("tasks.newPlaceholder")}
-            aria-label={t("tasks.newPlaceholder")}
+            placeholder={translate("tasks.newPlaceholder")}
+            aria-label={translate("tasks.newPlaceholder")}
             maxLength={MAX_TASK_TITLE_CHARS}
           />
-          <button className="terra-tasks-add" type="submit" disabled={!draft.trim()} aria-label={t("tasks.add")} title={t("tasks.add")}>
+          <button className="terra-tasks-add" type="submit" disabled={!draft.trim()} aria-label={translate("tasks.add")} title={translate("tasks.add")}>
             <Plus size={14} aria-hidden="true" />
           </button>
         </form>
         {server && !server.available ? (
-          <p className="terra-tasks-notice">{t("tasks.serverUnavailable")}</p>
+          <p className="terra-tasks-notice">{translate("tasks.serverUnavailable")}</p>
         ) : server && !server.enabled ? (
-          <p className="terra-tasks-notice">{t("tasks.serverOff")}</p>
+          <p className="terra-tasks-notice">{translate("tasks.serverOff")}</p>
         ) : null}
         {error ? (
           <p className="terra-tasks-error" role="alert">
             {error}
-            <button type="button" onClick={clearError}>{t("tasks.dismiss")}</button>
+            <button type="button" onClick={clearError}>{translate("tasks.dismiss")}</button>
           </p>
         ) : null}
         {notice ? <p className="terra-board-notice" role="status">{notice}</p> : null}
@@ -175,12 +175,12 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
               </BoardColumn>
             ))}
           </div>
-          <aside className="terra-board-agents" aria-label={t("tasks.board.agents")}>
-            <h3>{t("tasks.board.agents")}</h3>
-            <p className="terra-tasks-hint">{t("tasks.board.agentsHint")}</p>
-            {agents.some((agent) => agent.running) ? null : <p className="terra-tasks-hint">{t("tasks.board.noAgents")}</p>}
+          <aside className="terra-board-agents" aria-label={translate("tasks.board.agents")}>
+            <h3>{translate("tasks.board.agents")}</h3>
+            <p className="terra-tasks-hint">{translate("tasks.board.agentsHint")}</p>
+            {agents.some((agent) => agent.running) ? null : <p className="terra-tasks-hint">{translate("tasks.board.noAgents")}</p>}
             <button type="button" className="terra-board-team" onClick={() => useLibraryStore.getState().openDialog("team")}>
-              <Users size={13} aria-hidden="true" /> {t("palette.startTeam")}
+              <Users size={13} aria-hidden="true" /> {translate("palette.startTeam")}
             </button>
             <ul>
               {agents.filter((agent) => agent.running).map((agent) => (
@@ -198,12 +198,12 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
 }
 
 function BoardColumn({ status, count, children }: { status: McpTaskStatus; count: number; children: ReactNode }) {
-  const t = useT();
+  const translate = useT();
   const { setNodeRef, isOver } = useDroppable({ id: `column:${status}` });
   return (
-    <section ref={setNodeRef} className="terra-board-column" data-status={status} data-over={isOver} aria-label={t(`tasks.status.${status}`)}>
+    <section ref={setNodeRef} className="terra-board-column" data-status={status} data-over={isOver} aria-label={translate(`tasks.status.${status}`)}>
       <h3 className="terra-board-column-head">
-        <span>{t(`tasks.status.${status}`)}</span>
+        <span>{translate(`tasks.status.${status}`)}</span>
         <span className="terra-tasks-count">{count}</span>
       </h3>
       <ul className="terra-tasks-list">{children}</ul>
@@ -232,7 +232,7 @@ function DraggableCard({ id, children }: { id: string; children: ReactNode }) {
 }
 
 function AgentDrop({ agent, status }: { agent: BoardAgent; status?: McpAgentStatus }) {
-  const t = useT();
+  const translate = useT();
   const { setNodeRef, isOver } = useDroppable({ id: `agent:${agent.id}` });
   return (
     <div ref={setNodeRef} className="terra-board-agent" data-over={isOver} title={status?.summary || undefined}>
@@ -240,7 +240,7 @@ function AgentDrop({ agent, status }: { agent: BoardAgent; status?: McpAgentStat
       <span className="terra-board-agent-name">{agent.label}</span>
       {status ? (
         <span className="terra-task-state">
-          <span className="terra-task-dot" data-state={status.state} aria-hidden="true" /> {t(`tasks.agentState.${status.state}`)}
+          <span className="terra-task-dot" data-state={status.state} aria-hidden="true" /> {translate(`tasks.agentState.${status.state}`)}
         </span>
       ) : null}
     </div>

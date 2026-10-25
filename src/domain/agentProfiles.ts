@@ -221,7 +221,7 @@ export function resolveResumeCommand(
   if (strategy.kind === "append") return `${originalCommand}${strategy.separator}${strategy.suffix}`.trim();
   return strategy.template
     .replace(/\{command\}/g, originalCommand)
-    .replace(/\{(\w+)\}/g, (_, key: string) => values[key] ?? "");
+    .replace(/\{(\w+)\}/g, (_match, key: string) => values[key] ?? "");
 }
 
 /**
@@ -246,7 +246,7 @@ export function buildVoicePrompt(
   const rendered = behavior.template
       ? behavior.template
         .replace(/\{text\}/g, transcript)
-        .replace(/\{(\w+)\}/g, (_, key: string) => values[key] ?? "")
+        .replace(/\{(\w+)\}/g, (_match, key: string) => values[key] ?? "")
     : transcript;
   if (behavior.mode === "replace") {
     return behavior.template ? rendered : `${behavior.prefix}${rendered}${behavior.suffix}`;

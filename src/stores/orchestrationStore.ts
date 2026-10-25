@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
 import { asRecord } from "../lib/records/records";
 import { uniqueStrings } from "../lib/collections/uniqueStrings";
@@ -265,7 +265,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     set({
       persistenceError: {
         operation,
-        message: errorMessage(error, t("system.persistFailed")),
+        message: errorMessage(error, translateNow("system.persistFailed")),
         at: Date.now(),
       },
     });

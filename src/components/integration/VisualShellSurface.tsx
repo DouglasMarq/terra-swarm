@@ -134,7 +134,7 @@ function toWireGroup(group: Group): WorkspaceGroup {
 }
 
 export function VisualShellSurface(props: VisualShellSurfaceProps) {
-  const t = useT();
+  const translate = useT();
   const shortcutLabels = shellShortcutLabels();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -262,7 +262,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const visualVoiceState = shellVoiceState(props.voiceState, props.voiceStatus);
   const voiceActive = visualVoiceState === "listening" || visualVoiceState === "transcribing";
   const voiceRecording = visualVoiceState === "listening";
-  const voiceLabel = shellVoiceLabel(visualVoiceState, t);
+  const voiceLabel = shellVoiceLabel(visualVoiceState, translate);
   const voiceShortcut = formatHotkey(hotkeys.toggleVoice ?? DEFAULT_HOTKEYS.toggleVoice);
 
   const { agentLabels, agentStatus, reported, attentionCount, activeCount, railProjects } = useShellAgentOverview(props);
@@ -292,9 +292,9 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     />
   );
   const dockTabs = [
-    { id: "inspector", label: t("shell.dock.inspector") },
-    { id: "tasks", label: t("shell.dock.tasks") },
-    { id: "preview", label: t("shell.dock.preview") },
+    { id: "inspector", label: translate("shell.dock.inspector") },
+    { id: "tasks", label: translate("shell.dock.tasks") },
+    { id: "preview", label: translate("shell.dock.preview") },
   ] as const;
   const focusedLabel = props.focusedId ? agentLabels[props.focusedId] ?? null : null;
   useFullscreenExit({
@@ -318,7 +318,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const workspaceIdFor = (terminalId: string) => props.workspaces.find((workspace) => workspace.terminals.some((terminal) => terminal.id === terminalId))?.id ?? null;
 
   const worktreeBranches = worktreeBranchesByTerminal(props.workspaces);
-  const roleLabels = roleLabelsByTerminal(props.workspaces, t);
+  const roleLabels = roleLabelsByTerminal(props.workspaces, translate);
   const openReview = (terminalId: string) => {
     const workspaceId = workspaceIdFor(terminalId);
     if (!workspaceId) return;
@@ -344,7 +344,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       hasWorktree: Boolean(worktreeBranches[ptyId]),
     },
     paneMenuActions,
-    { t, shortcuts: shortcutLabels },
+    { translate, shortcuts: shortcutLabels },
   );
 
   const terminalTabView: ShellTerminalTabView = {
@@ -472,7 +472,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       sidebarCollapsed={shell.sidebarCollapsed}
       chrome={{
         breadcrumb: surface !== "workbench" ? undefined : { project: activeWorkspace?.name ?? null, agent: focusedLabel?.primary ?? null, branch: props.activeId ? props.branches[props.activeId] ?? null : null },
-        title: shellSurfaceTitle(surface, t),
+        title: shellSurfaceTitle(surface, translate),
         sidebarCollapsed: shell.sidebarCollapsed,
         onToggleSidebar: shell.toggleSidebar,
         sidebarShortcut: shortcutLabels.sidebar,

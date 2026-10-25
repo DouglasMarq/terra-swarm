@@ -27,19 +27,19 @@ interface ShellWorkbenchContentProps {
 }
 
 function WorkbenchEmpty({ onNewWorkspace }: { onNewWorkspace: () => void }) {
-  const t = useT();
+  const translate = useT();
   return (
     <div className="terra-workbench__empty">
       <LayoutGrid size={20} />
-      <strong>{t("shell.workbenchEmpty")}</strong>
-      <button type="button" className="terra-button" onClick={onNewWorkspace}>{t("shell.newWorkspace")}</button>
+      <strong>{translate("shell.workbenchEmpty")}</strong>
+      <button type="button" className="terra-button" onClick={onNewWorkspace}>{translate("shell.newWorkspace")}</button>
     </div>
   );
 }
 
 function WorkbenchNotLoaded() {
-  const t = useT();
-  return <div className="terra-workbench__empty"><LayoutGrid size={20} /><strong>{t("shell.workbenchNotLoaded")}</strong></div>;
+  const translate = useT();
+  return <div className="terra-workbench__empty"><LayoutGrid size={20} /><strong>{translate("shell.workbenchNotLoaded")}</strong></div>;
 }
 
 export function ShellWorkbenchContent({ source, snapshot, activeId, renderTab, actions }: ShellWorkbenchContentProps) {

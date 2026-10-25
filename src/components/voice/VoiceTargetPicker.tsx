@@ -30,7 +30,7 @@ export interface VoiceTargetPickerProps {
  * exited agent stays selectable and is resumed before it receives the prompt.
  */
 export function VoiceTargetPicker({ projects, targetId, onChange }: VoiceTargetPickerProps) {
-  const t = useT();
+  const translate = useT();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -56,10 +56,10 @@ export function VoiceTargetPicker({ projects, targetId, onChange }: VoiceTargetP
   return (
     <div className="terra-voice-target" ref={rootRef}>
       {open ? (
-        <div className="terra-voice-target-list terra-anim-pop" role="listbox" aria-label={t("voice.sendTo")}>
+        <div className="terra-voice-target-list terra-anim-pop" role="listbox" aria-label={translate("voice.sendTo")}>
           <div className="terra-voice-target-head">
-            <b>{t("voice.sendTo")}</b>
-            <span>{t("voice.pickHint")}</span>
+            <b>{translate("voice.sendTo")}</b>
+            <span>{translate("voice.pickHint")}</span>
           </div>
           {projects.map((project) => (
             <div className="terra-voice-target-group" role="group" aria-label={project.name} key={project.id}>
@@ -84,7 +84,7 @@ export function VoiceTargetPicker({ projects, targetId, onChange }: VoiceTargetP
                     <span className="terra-voice-target-copy">
                       <b>{agent.primary}</b>
                       <span data-status={agent.status}>
-                        {agent.status === "exited" ? t("voice.resumesOnSend") : agent.detail}
+                        {agent.status === "exited" ? translate("voice.resumesOnSend") : agent.detail}
                       </span>
                     </span>
                     <span className="terra-tag">{agent.tag}</span>
@@ -94,11 +94,11 @@ export function VoiceTargetPicker({ projects, targetId, onChange }: VoiceTargetP
               })}
             </div>
           ))}
-          <p className="terra-voice-target-foot">{t("voice.addressHint")}</p>
+          <p className="terra-voice-target-foot">{translate("voice.addressHint")}</p>
         </div>
       ) : null}
       <div className="terra-voice-target-row">
-        <span>{t("voice.sendTo")}</span>
+        <span>{translate("voice.sendTo")}</span>
         <button
           type="button"
           className="terra-voice-target-chip"
@@ -107,10 +107,10 @@ export function VoiceTargetPicker({ projects, targetId, onChange }: VoiceTargetP
           onClick={() => setOpen((value) => !value)}
         >
           <span className="terra-dot" data-status={target?.agent.status ?? "working"} aria-hidden="true" />
-          {target ? agentLabelText(target.agent) : t("voice.noTarget")}
+          {target ? agentLabelText(target.agent) : translate("voice.noTarget")}
           <ChevronDown size={12} aria-hidden="true" />
         </button>
-        {target?.agent.status === "exited" ? <span className="terra-voice-target-note">{t("voice.willResume")}</span> : null}
+        {target?.agent.status === "exited" ? <span className="terra-voice-target-note">{translate("voice.willResume")}</span> : null}
       </div>
     </div>
   );

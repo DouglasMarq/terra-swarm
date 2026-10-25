@@ -31,7 +31,7 @@ export interface PaneMenuActions {
 }
 
 export interface PaneMenuLabels {
-  t: Translate;
+  translate: Translate;
   shortcuts: ReturnType<typeof shellShortcutLabels>;
 }
 
@@ -44,49 +44,49 @@ interface PaneMenuInput {
 }
 
 function detachItem({ target, actions, labels }: PaneMenuInput): PaneMenuItem {
-  const { t } = labels;
+  const { translate } = labels;
   if (target.isDetached) {
-    return { id: "reattach", label: t("pane.menu.reattach"), icon: <SquareArrowOutUpRight size={13} />, onSelect: () => actions.onReattach(target.ptyId) };
+    return { id: "reattach", label: translate("pane.menu.reattach"), icon: <SquareArrowOutUpRight size={13} />, onSelect: () => actions.onReattach(target.ptyId) };
   }
-  return { id: "detach", label: t("pane.menu.detach"), icon: <SquareArrowOutUpRight size={13} />, onSelect: () => actions.onDetach(target.ptyId) };
+  return { id: "detach", label: translate("pane.menu.detach"), icon: <SquareArrowOutUpRight size={13} />, onSelect: () => actions.onDetach(target.ptyId) };
 }
 
 function agentItems(input: PaneMenuInput): PaneMenuItem[] {
   const { target, actions, labels } = input;
-  const { t } = labels;
+  const { translate } = labels;
   return [
-    { id: "interrupt", label: t("pane.menu.interrupt"), icon: <Square size={13} />, shortcut: labels.shortcuts.interrupt, disabled: !input.canRunAgentAction, onSelect: () => input.runAgentAction("interrupt") },
-    { id: "restart", label: t("pane.menu.restart"), icon: <RotateCcw size={13} />, onSelect: () => actions.onRestart(target.ptyId, target.command) },
+    { id: "interrupt", label: translate("pane.menu.interrupt"), icon: <Square size={13} />, shortcut: labels.shortcuts.interrupt, disabled: !input.canRunAgentAction, onSelect: () => input.runAgentAction("interrupt") },
+    { id: "restart", label: translate("pane.menu.restart"), icon: <RotateCcw size={13} />, onSelect: () => actions.onRestart(target.ptyId, target.command) },
     detachItem(input),
-    { id: "inspector", label: t("pane.menu.inspector"), icon: <PanelRight size={13} />, shortcut: labels.shortcuts.inspector, onSelect: () => actions.onOpenInspector(target.ptyId) },
-    ...(target.hasWorktree ? [{ id: "review", label: t("review.open"), icon: <GitCompare size={13} />, onSelect: () => actions.onOpenReview(target.ptyId) }] : []),
+    { id: "inspector", label: translate("pane.menu.inspector"), icon: <PanelRight size={13} />, shortcut: labels.shortcuts.inspector, onSelect: () => actions.onOpenInspector(target.ptyId) },
+    ...(target.hasWorktree ? [{ id: "review", label: translate("review.open"), icon: <GitCompare size={13} />, onSelect: () => actions.onOpenReview(target.ptyId) }] : []),
   ];
 }
 
 function sessionItems(input: PaneMenuInput): PaneMenuItem[] {
   const { target, actions, labels } = input;
-  const { t } = labels;
+  const { translate } = labels;
   const resumeCommand = resolveResumeCommand(profileForCommand(target.command), target.command);
   return [
-    { id: "copy-resume", label: t("pane.menu.copyResume"), detail: resumeCommand, icon: <Copy size={13} />, onSelect: () => { void window.navigator.clipboard?.writeText(resumeCommand).catch((error) => console.warn("failed to copy the resume command:", error)); } },
-    ...(actions.onRenameAgent ? [{ id: "rename", label: t("pane.menu.rename"), icon: <Pencil size={13} />, onSelect: () => actions.onRenameAgent?.(target.ptyId) }] : []),
-    { id: "clear-history", label: t("pane.menu.clearHistory"), icon: <Eraser size={13} />, disabled: !input.canRunAgentAction, onSelect: () => input.runAgentAction("clear-scrollback") },
+    { id: "copy-resume", label: translate("pane.menu.copyResume"), detail: resumeCommand, icon: <Copy size={13} />, onSelect: () => { void window.navigator.clipboard?.writeText(resumeCommand).catch((error) => console.warn("failed to copy the resume command:", error)); } },
+    ...(actions.onRenameAgent ? [{ id: "rename", label: translate("pane.menu.rename"), icon: <Pencil size={13} />, onSelect: () => actions.onRenameAgent?.(target.ptyId) }] : []),
+    { id: "clear-history", label: translate("pane.menu.clearHistory"), icon: <Eraser size={13} />, disabled: !input.canRunAgentAction, onSelect: () => input.runAgentAction("clear-scrollback") },
   ];
 }
 
 function killItem({ target, actions, labels, canRunAgentAction }: PaneMenuInput): PaneMenuItem {
-  const { t } = labels;
+  const { translate } = labels;
   return {
     id: "kill",
-    label: t("pane.menu.kill"),
+    label: translate("pane.menu.kill"),
     icon: <Power size={13} />,
     danger: true,
     disabled: !canRunAgentAction,
     onSelect: () => actions.onRequestConfirm({
       kind: "stop-agent",
       commandId: `pane:kill:${target.ptyId}`,
-      title: t("pane.confirmKill.title"),
-      description: t("pane.confirmKill.description"),
+      title: translate("pane.confirmKill.title"),
+      description: translate("pane.confirmKill.description"),
       resourceId: target.ptyId,
       resourceLabel: target.label,
       workspaceId: target.workspaceId ?? undefined,

@@ -54,7 +54,7 @@ export function ResumeDialog({
   autoResume = false,
   onAutoResumeChange,
 }: Props) {
-  const t = useT();
+  const translate = useT();
   const groups = useMemo(() => groupByProject(items), [items]);
   const [unchecked, setUnchecked] = useState<ReadonlySet<string>>(new Set());
   const [confirmDismissAll, setConfirmDismissAll] = useState(false);
@@ -91,8 +91,8 @@ export function ResumeDialog({
       <TerraDialog
         className={styles.resumeDialog}
         description={savedLabel
-          ? t("resume.descriptionAt", { count: items.length, when: savedLabel })
-          : t("resume.description", { count: items.length })}
+          ? translate("resume.descriptionAt", { count: items.length, when: savedLabel })
+          : translate("resume.description", { count: items.length })}
         onOpenChange={(open) => {
           if (!open) onDefer();
         }}
@@ -100,7 +100,7 @@ export function ResumeDialog({
         title={
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <History aria-hidden="true" size={17} strokeWidth={1.8} />
-            {t("resume.title")}
+            {translate("resume.title")}
           </span>
         }
       >
@@ -121,7 +121,7 @@ export function ResumeDialog({
                       onChange={(event) => toggle(ids, event.target.checked)}
                     />
                     <strong>{group.wsName}</strong>
-                    <span>{t("resume.agentCount", { count: ids.length })}</span>
+                    <span>{translate("resume.agentCount", { count: ids.length })}</span>
                   </label>
                   {group.items.map((item) => (
                     <label className={styles.resumeRow} key={item.terminalId}>
@@ -143,30 +143,30 @@ export function ResumeDialog({
 
           <div className={styles.resumeFooter}>
             <button type="button" className="terra-button terra-button-primary" disabled={busy || selected.length === 0} onClick={() => void resumeSelected()}>
-              {t("resume.resumeSelected", { count: selected.length })}
+              {translate("resume.resumeSelected", { count: selected.length })}
             </button>
             <button type="button" className="terra-button" onClick={onDefer}>
-              {t("resume.startFresh")}
+              {translate("resume.startFresh")}
             </button>
             <span className={styles.resumeSpacer} />
             <button type="button" className="terra-link-button" onClick={() => setConfirmDismissAll(true)}>
-              {t("resume.discardAll")}
+              {translate("resume.discardAll")}
             </button>
           </div>
           {onAutoResumeChange ? (
             <label className={styles.resumeAuto}>
               <input type="checkbox" checked={autoResume} onChange={(event) => onAutoResumeChange(event.target.checked)} />
-              {t("resume.always")}
+              {translate("resume.always")}
             </label>
           ) : null}
-          <p className={styles.resumeHint}>{t("resume.laterHint", { shortcut: formatShortcut(COMMAND_PALETTE_SHORTCUT) })}</p>
+          <p className={styles.resumeHint}>{translate("resume.laterHint", { shortcut: formatShortcut(COMMAND_PALETTE_SHORTCUT) })}</p>
         </div>
       </TerraDialog>
 
       <ConfirmActionDialog
         intent="destructive"
-        description={t("resume.discardDescription")}
-        confirmLabel={t("resume.discardAll")}
+        description={translate("resume.discardDescription")}
+        confirmLabel={translate("resume.discardAll")}
         onConfirm={async () => {
           await onDismissAll();
           setConfirmDismissAll(false);
@@ -175,7 +175,7 @@ export function ResumeDialog({
           if (!open) setConfirmDismissAll(false);
         }}
         open={confirmDismissAll}
-        title={t("resume.discardTitle")}
+        title={translate("resume.discardTitle")}
       />
     </>
   );

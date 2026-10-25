@@ -42,7 +42,7 @@ export function PaneFrame({
   onDetachTab,
   onKillTab,
 }: PaneFrameProps) {
-  const t = useT();
+  const translate = useT();
   const location = locationFor({ projection, container, project, group, renderTab });
   const activeTabId = projection.pane.activeTabId ?? projection.tabs[0]?.id ?? null;
   const laneTabs: SubTabLaneTab[] = projection.tabs.map((tab) => {
@@ -85,7 +85,7 @@ export function PaneFrame({
       className="terra-pane-frame"
       data-pane-id={projection.pane.id}
       data-active={active}
-      aria-label={t("workbench.pane", { name: projection.pane.id })}
+      aria-label={translate("workbench.pane", { name: projection.pane.id })}
     >
       {hasTabs && projection.tabs.length > 1 ? (
         <SubTabLane

@@ -30,14 +30,14 @@ export function RightDock({
   activeTab,
   onTabChange,
 }: RightDockProps) {
-  const t = useT();
+  const translate = useT();
   if (!open) return null;
   const tabbed = tabs !== undefined && tabs.length > 1;
   return (
-    <aside className="terra-right-dock terra-anim-slide-in" aria-label={t("shell.inspector.label")}>
+    <aside className="terra-right-dock terra-anim-slide-in" aria-label={translate("shell.inspector.label")}>
       <div className="terra-right-dock-header">
         {tabbed ? (
-          <div className="terra-right-dock-tabs" role="tablist" aria-label={t("shell.dock.tabs")}>
+          <div className="terra-right-dock-tabs" role="tablist" aria-label={translate("shell.dock.tabs")}>
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -52,14 +52,14 @@ export function RightDock({
             ))}
           </div>
         ) : (
-          <span className="terra-right-dock-title">{title ?? t("shell.inspector.title")}</span>
+          <span className="terra-right-dock-title">{title ?? translate("shell.inspector.title")}</span>
         )}
         <button
           className="terra-right-dock-close"
           type="button"
           onClick={onClose}
-          aria-label={t("shell.inspector.hide")}
-          title={t("shell.inspector.hide")}
+          aria-label={translate("shell.inspector.hide")}
+          title={translate("shell.inspector.hide")}
         >
           <PanelRightClose size={15} aria-hidden="true" />
         </button>

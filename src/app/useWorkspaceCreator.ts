@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../api";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { basename } from "../lib/path/basename";
 import { openDialog } from "../lib/tauri/system";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
@@ -34,7 +34,7 @@ export function useWorkspaceCreator(refresh: () => Promise<void>) {
 
   const create = async () => {
     try {
-      const ws = await api.createWorkspace(name.trim() || t("app.defaultWorkspaceName"), cwd);
+      const ws = await api.createWorkspace(name.trim() || translateNow("app.defaultWorkspaceName"), cwd);
       if (groupId) {
         await api.setWorkspaceGroup(ws.id, groupId).catch((error) => {
           console.error(`failed to assign new workspace ${ws.id} to group:`, error);
@@ -45,7 +45,7 @@ export function useWorkspaceCreator(refresh: () => Promise<void>) {
       useUiStore.getState().setActiveId(ws.id);
     } catch (err) {
       console.error("failed to create workspace:", err);
-      useTerminalRuntimeStore.getState().pushSystemNotification(t("app.createWorkspaceFailed", { detail: String(err) }));
+      useTerminalRuntimeStore.getState().pushSystemNotification(translateNow("app.createWorkspaceFailed", { detail: String(err) }));
     }
   };
 

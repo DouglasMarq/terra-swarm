@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { Workspace } from "../domain/workspace.model";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { hotkeyActionLabel, matchHotkey, type HotkeyActionId, usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { conflictingAction, isEditableTarget, recordedHotkey, runHotkeyAction, type HotkeyActionHandlers } from "./hotkeyActions";
@@ -47,15 +47,15 @@ export function useGlobalHotkeys({
   hotkeyActions.current = actions;
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
+    const handler = (event: KeyboardEvent) => {
       const { modalOpen, capturing, hotkeys, active, focusedId, workspaces } =
         hotkeyCtx.current;
       if (modalOpen || capturing) return;
-      if (isEditableTarget(e.target)) return;
-      const matched = Object.entries(hotkeys).find(([, hk]) => matchHotkey(e, hk));
+      if (isEditableTarget(event.target)) return;
+      const matched = Object.entries(hotkeys).find(([, hk]) => matchHotkey(event, hk));
       if (!matched) return;
-      e.preventDefault();
-      e.stopPropagation();
+      event.preventDefault();
+      event.stopPropagation();
       runHotkeyAction(matched[0], { active, focusedId, workspaces, actions: hotkeyActions.current });
     };
     window.addEventListener("keydown", handler, { capture: true });
@@ -65,21 +65,21 @@ export function useGlobalHotkeys({
 
   useEffect(() => {
     if (!capturing) return;
-    const handler = (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.key === "Escape") {
+    const handler = (event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") {
         setCapturing(null);
         return;
       }
-      const hk = recordedHotkey(e);
+      const hk = recordedHotkey(event);
       if (!hk) return;
       // Reject duplicates: dispatch stops at the first match, so a combo
       // already bound to another action would silently never fire.
       const conflict = conflictingAction(hk, { hotkeys, capturing });
       if (conflict) {
         useTerminalRuntimeStore.getState().pushSystemNotification(
-          t("app.shortcutTaken", { action: hotkeyActionLabel(conflict) }),
+          translateNow("app.shortcutTaken", { action: hotkeyActionLabel(conflict) }),
         );
         setCapturing(null);
         return;

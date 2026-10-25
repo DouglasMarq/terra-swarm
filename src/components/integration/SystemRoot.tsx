@@ -13,7 +13,7 @@ const LOADING_SURFACE_PROGRESS_PERCENT = 30;
  * forever.
  */
 function LazyApp() {
-  const t = useT();
+  const translate = useT();
   const [App] = useState(() => lazy(() => import("../../App")));
 
   return (
@@ -22,7 +22,7 @@ function LazyApp() {
         <LoadingScreen
           phase="booting"
           progress={LOADING_SURFACE_PROGRESS_PERCENT}
-          status={t("system.loadingSurface")}
+          status={translate("system.loadingSurface")}
         />
       }
     >

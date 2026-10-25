@@ -11,7 +11,7 @@ export function EmptyPaneCell({
   actionLabel,
   className,
 }: EmptyPaneCellProps) {
-  const t = useT();
+  const translate = useT();
   const id = useId();
   const classes = className ? `terra-empty-pane ${className}` : "terra-empty-pane";
   const titleId = `${id}-title`;
@@ -25,15 +25,15 @@ export function EmptyPaneCell({
       aria-describedby={descriptionId}
     >
       <div className="terra-empty-pane__content">
-        <h2 className="terra-empty-pane__title" id={titleId}>{label ?? t("workbench.emptyPane")}</h2>
-        <p className="terra-empty-pane__description" id={descriptionId}>{description ?? t("workbench.emptyPaneDescription")}</p>
+        <h2 className="terra-empty-pane__title" id={titleId}>{label ?? translate("workbench.emptyPane")}</h2>
+        <p className="terra-empty-pane__description" id={descriptionId}>{description ?? translate("workbench.emptyPaneDescription")}</p>
         {projectName ? (
-          <p className="terra-empty-pane__context">{t("workbench.emptyPaneProject", { name: projectName })}</p>
+          <p className="terra-empty-pane__context">{translate("workbench.emptyPaneProject", { name: projectName })}</p>
         ) : null}
       </div>
       {onNewTab ? (
         <button type="button" className="terra-empty-pane__button" onClick={onNewTab}>
-          {actionLabel ?? t("workbench.emptyPaneAction")}
+          {actionLabel ?? translate("workbench.emptyPaneAction")}
         </button>
       ) : null}
     </section>

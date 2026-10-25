@@ -57,7 +57,7 @@ function voiceTargetProjects({ projects, labels }: VoiceTargetSource): VoiceTarg
 }
 
 export function ShellVoiceOverlay({ voice, state, focusedId, targets, shortcut }: ShellVoiceOverlayProps) {
-  const t = useT();
+  const translate = useT();
   if (state === "idle") return null;
   return (
     <div className="terra-voice-overlay">
@@ -83,7 +83,7 @@ export function ShellVoiceOverlay({ voice, state, focusedId, targets, shortcut }
         onRetry={voice.onVoiceRetry}
         onSend={voice.onVoiceSend}
         onConfirm={voice.onVoiceConfirm}
-        footer={<span role="status">{voice.voiceFeedback || (voice.voiceEnabled ? t("shell.voiceReady") : t("shell.voiceDisabled"))}</span>}
+        footer={<span role="status">{voice.voiceFeedback || (voice.voiceEnabled ? translate("shell.voiceReady") : translate("shell.voiceDisabled"))}</span>}
       />
     </div>
   );

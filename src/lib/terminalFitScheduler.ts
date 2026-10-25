@@ -65,8 +65,8 @@ export function isUsableDimensions(dimensions: TerminalDimensions | undefined): 
   );
 }
 
-function sameDimensions(a: TerminalDimensions | null, b: TerminalDimensions): boolean {
-  return a?.cols === b.cols && a.rows === b.rows;
+function sameDimensions(previous: TerminalDimensions | null, next: TerminalDimensions): boolean {
+  return previous?.cols === next.cols && previous.rows === next.rows;
 }
 
 /**

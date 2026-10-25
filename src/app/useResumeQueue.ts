@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { api } from "../api";
 import type { ResumeItem } from "../domain/terminal.model";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
 import { dismissResumeItems } from "../domain/session/resumeDismiss";
 import { usePreferencesStore } from "../stores/preferencesStore";
@@ -42,7 +42,7 @@ export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<
       await sessions.resumeItem(item);
       runtime().dropResumeItem(item.terminalId);
     } catch (error) {
-      runtime().pushSystemNotification(t("app.resumeFailed", { name: item.wsName, detail: errorMessage(error) }));
+      runtime().pushSystemNotification(translateNow("app.resumeFailed", { name: item.wsName, detail: errorMessage(error) }));
     } finally {
       resuming.current.delete(item.terminalId);
       mutating.current = false;
@@ -65,7 +65,7 @@ export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<
       const [result] = await dismissResumeItems([item], (candidate) => api.killTerminal(candidate.terminalId));
       if (result?.status === "failed") {
         console.error(`failed to dismiss resume item ${item.terminalId}:`, result.error);
-        runtime().pushSystemNotification(t("app.dismissFailed", { name: item.wsName, detail: errorMessage(result.error) }));
+        runtime().pushSystemNotification(translateNow("app.dismissFailed", { name: item.wsName, detail: errorMessage(result.error) }));
         return;
       }
       forgetDismissed(item);
@@ -105,7 +105,7 @@ export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<
         if (result.status === "failed") {
           failed.push(result.item);
           console.error(`failed to dismiss resume item ${result.item.terminalId}:`, result.error);
-          runtime().pushSystemNotification(t("app.dismissFailed", { name: result.item.wsName, detail: errorMessage(result.error) }));
+          runtime().pushSystemNotification(translateNow("app.dismissFailed", { name: result.item.wsName, detail: errorMessage(result.error) }));
           continue;
         }
         forgetDismissed(result.item);

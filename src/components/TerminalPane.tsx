@@ -21,7 +21,7 @@ import { createRetryingWriter } from "../lib/terminalInputWriter";
 import { isPlainShiftEnter } from "../lib/terminalKeys";
 import { throttle } from "../lib/async/throttle";
 import { Maximize2, Minimize2, GitBranch } from "lucide-react";
-import { t as translateNow, useT } from "../i18n";
+import { translateNow, useT } from "../i18n";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { terminalFontStack } from "../lib/terminalFonts";
 import { detectDropPlatform, dropPointToClient, formatDroppedPaths } from "../domain/terminalDrop";
@@ -99,7 +99,7 @@ export function TerminalPane(props: Props) {
     attentionMessage,
     menu,
   } = props;
-  const t = useT();
+  const translate = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<(() => void) | null>(null);
@@ -361,7 +361,7 @@ export function TerminalPane(props: Props) {
           <button
             type="button"
             className="terra-tag pane-worktree"
-            title={t("pane.worktree", { branch: props.worktreeBranch })}
+            title={translate("pane.worktree", { branch: props.worktreeBranch })}
             disabled={!props.onOpenReview}
             onClick={(event) => {
               event.stopPropagation();
@@ -380,7 +380,7 @@ export function TerminalPane(props: Props) {
         {contextUsed != null && !exited && (
           <span
             className={`pane-ctx ${contextUsed >= CONTEXT_ATTENTION_PERCENT ? "high" : contextUsed >= CONTEXT_WARNING_PERCENT ? "mid" : ""}`}
-            title={t("pane.contextUsed", { count: contextUsed })}
+            title={translate("pane.contextUsed", { count: contextUsed })}
           >
             <span className="pane-ctx-bar">
               <span style={{ transform: `scaleX(${contextUsed / FULL_PERCENT})` }} />
@@ -392,14 +392,14 @@ export function TerminalPane(props: Props) {
           <button
             type="button"
             className="pane-btn"
-            aria-label={expanded ? t("pane.restore") : t("pane.maximize")}
-            title={expanded ? t("pane.restore") : t("pane.maximize")}
-            onMouseDown={(e) => e.stopPropagation()}
+            aria-label={expanded ? translate("pane.restore") : translate("pane.maximize")}
+            title={expanded ? translate("pane.restore") : translate("pane.maximize")}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={props.onToggleExpand}
           >
             {expanded ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
           </button>
-          {menu ? <PaneActionsMenu label={t("pane.moreActions")} groups={menu} /> : null}
+          {menu ? <PaneActionsMenu label={translate("pane.moreActions")} groups={menu} /> : null}
         </div>
       </div>
       <div className="pane-body" ref={containerRef} />
@@ -409,20 +409,20 @@ export function TerminalPane(props: Props) {
           <button
             type="button"
             className="terra-button"
-            onMouseDown={(e) => e.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={props.onClearNotifications}
           >
-            {t("pane.markRead")}
+            {translate("pane.markRead")}
           </button>
         </div>
       ) : null}
       {exited && (
         <div className="pane-overlay" role="status">
-          <strong>{t("pane.exited")}</strong>
-          <span>{t("pane.exitedDetail")}</span>
+          <strong>{translate("pane.exited")}</strong>
+          <span>{translate("pane.exitedDetail")}</span>
           <div className="pane-overlay-actions">
-            <button type="button" className="terra-button" onClick={props.onRestart}>{t("pane.restart")}</button>
-            <button type="button" className="terra-button" onClick={props.onClose}>{t("pane.closePane")}</button>
+            <button type="button" className="terra-button" onClick={props.onRestart}>{translate("pane.restart")}</button>
+            <button type="button" className="terra-button" onClick={props.onClose}>{translate("pane.closePane")}</button>
           </div>
         </div>
       )}

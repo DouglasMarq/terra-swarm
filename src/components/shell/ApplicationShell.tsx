@@ -75,7 +75,7 @@ export function ApplicationShell({
 }: ApplicationShellProps) {
   const dockProps = rightDock === false ? undefined : rightDock;
   const dockEnabled = dockProps !== undefined && dockProps.open !== false;
-  const t = useT();
+  const translate = useT();
   const compact = useCompactShell();
   const [compactSidebarOpen, setCompactSidebarOpen] = useState(false);
   const showSidebarPanel = !sidebarCollapsed;
@@ -122,7 +122,7 @@ export function ApplicationShell({
           <div className="terra-shell-compact-content">
             {compactSidebarOpen ? (
               <>
-                <button className="terra-shell-compact-backdrop" type="button" aria-label={t("shell.sidebar.collapse")} onClick={() => setCompactSidebarOpen(false)} />
+                <button className="terra-shell-compact-backdrop" type="button" aria-label={translate("shell.sidebar.collapse")} onClick={() => setCompactSidebarOpen(false)} />
                 <div
                   className="terra-shell-compact-drawer terra-shell-compact-navigator"
                   onClick={(event) => {
@@ -158,7 +158,7 @@ export function ApplicationShell({
                   <Panel id="navigator" className="terra-shell-panel" data-slot="navigator" minSize="220px" maxSize="420px">
                     <div className="terra-shell-panel-slot" data-slot="navigator">{sidebar}</div>
                   </Panel>
-                  <Separator id="navigator-separator" className="terra-shell-separator" aria-label={t("shell.sidebar.resize")} />
+                  <Separator id="navigator-separator" className="terra-shell-separator" aria-label={translate("shell.sidebar.resize")} />
                 </>
               ) : null}
               <Panel id="content" className="terra-shell-panel" data-slot="content" minSize={`${MIN_CONTENT_PERCENT}%`}>
@@ -166,7 +166,7 @@ export function ApplicationShell({
               </Panel>
               {dockEnabled ? (
                 <>
-                  <Separator id="dock-separator" className="terra-shell-separator" aria-label={t("shell.inspector.resize")} />
+                  <Separator id="dock-separator" className="terra-shell-separator" aria-label={translate("shell.inspector.resize")} />
                   <Panel id="dock" className="terra-shell-panel" data-slot="dock" minSize="260px" maxSize="480px">
                     <div className="terra-shell-panel-slot" data-slot="dock">
                       {dockProps ? <RightDock {...dockProps} open /> : null}

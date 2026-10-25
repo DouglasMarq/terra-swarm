@@ -107,7 +107,7 @@ export const useLocaleStore = create<LocaleState>((set) => ({
 }));
 
 /** Non-React access, e.g. inside stores or event handlers. */
-export function t(key: MessageKey, vars?: MessageVars): string {
+export function translateNow(key: MessageKey, vars?: MessageVars): string {
   return translate(useLocaleStore.getState().locale, key, vars);
 }
 

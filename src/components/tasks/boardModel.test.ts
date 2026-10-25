@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { t } from "../../i18n";
+import { translateNow } from "../../i18n";
 import type { McpTask, McpTaskEvent } from "../../domain/mcp.model";
 import { boardColumns, describeTaskEvent, dropPosition, parseDropTarget, planDrop, taskStatusLabel } from "./boardModel";
 
@@ -13,8 +13,8 @@ function task(id: string, status: McpTask["status"], position: number): McpTask 
 describe("board model", () => {
   it("orders each column by its manual position", () => {
     const columns = boardColumns([task("T-3", "todo", 2), task("T-1", "todo", 5), task("T-2", "done", 1)]);
-    expect(columns.todo.map((t) => t.id)).toEqual(["T-3", "T-1"]);
-    expect(columns.done.map((t) => t.id)).toEqual(["T-2"]);
+    expect(columns.todo.map((columnTask) => columnTask.id)).toEqual(["T-3", "T-1"]);
+    expect(columns.done.map((columnTask) => columnTask.id)).toEqual(["T-2"]);
     expect(columns.review).toEqual([]);
   });
 
@@ -56,29 +56,29 @@ const agentLabel = (terminalId: string) => (terminalId === "t-2" ? "Lyra" : term
 
 describe("taskStatusLabel", () => {
   it("given a task status, names it in the reader's language", () => {
-    expect(taskStatusLabel("in_progress", t)).toBe("Em andamento");
+    expect(taskStatusLabel("in_progress", translateNow)).toBe("Em andamento");
   });
 
   it("given text that is not a status, keeps it", () => {
-    expect(taskStatusLabel("archived", t)).toBe("archived");
+    expect(taskStatusLabel("archived", translateNow)).toBe("archived");
   });
 });
 
 describe("describeTaskEvent", () => {
   it("given a status change from the backend, names both statuses", () => {
-    expect(describeTaskEvent(event("status", "todo → in_progress"), t, agentLabel)).toBe("moveu de A fazer para Em andamento");
+    expect(describeTaskEvent(event("status", "todo → in_progress"), translateNow, agentLabel)).toBe("moveu de A fazer para Em andamento");
   });
 
   it("given an assignment, names the agent or the user, or says it was cleared", () => {
-    expect(describeTaskEvent(event("assigned", "t-2"), t, agentLabel)).toBe("atribuiu a Lyra");
-    expect(describeTaskEvent(event("assigned", "user"), t, agentLabel)).toBe("atribuiu a você");
-    expect(describeTaskEvent(event("assigned"), t, agentLabel)).toBe("removeu o responsável");
+    expect(describeTaskEvent(event("assigned", "t-2"), translateNow, agentLabel)).toBe("atribuiu a Lyra");
+    expect(describeTaskEvent(event("assigned", "user"), translateNow, agentLabel)).toBe("atribuiu a você");
+    expect(describeTaskEvent(event("assigned"), translateNow, agentLabel)).toBe("removeu o responsável");
   });
 
   it("given the other kinds, describes them, and keeps a note's text", () => {
-    expect(describeTaskEvent(event("created"), t, agentLabel)).toBe("criou a tarefa");
-    expect(describeTaskEvent(event("claimed"), t, agentLabel)).toBe("pegou a tarefa");
-    expect(describeTaskEvent(event("completed", "tests pass"), t, agentLabel)).toBe("entregou: tests pass");
-    expect(describeTaskEvent(event("note", "waiting on review"), t, agentLabel)).toBe("waiting on review");
+    expect(describeTaskEvent(event("created"), translateNow, agentLabel)).toBe("criou a tarefa");
+    expect(describeTaskEvent(event("claimed"), translateNow, agentLabel)).toBe("pegou a tarefa");
+    expect(describeTaskEvent(event("completed", "tests pass"), translateNow, agentLabel)).toBe("entregou: tests pass");
+    expect(describeTaskEvent(event("note", "waiting on review"), translateNow, agentLabel)).toBe("waiting on review");
   });
 });

@@ -29,7 +29,7 @@ describe("terminal runtime store", () => {
       count: MAX_NOTIF_ITEMS,
       messages: Array.from(
         { length: MAX_NOTIF_ITEMS },
-        (_, index) => `n-${index}`,
+        (_message, index) => `n-${index}`,
       ),
     });
 

@@ -19,10 +19,10 @@ interface AgentContextMenuProps {
 }
 
 export function AgentContextMenu({ agent, groups, position, onClose }: AgentContextMenuProps) {
-  const t = useT();
+  const translate = useT();
   return (
     <div
-      aria-label={t("nav.agentMenu", { name: agent.name })}
+      aria-label={translate("nav.agentMenu", { name: agent.name })}
       className={`${styles.contextMenu} ${styles.agentMenu}`}
       onPointerDown={(event) => event.stopPropagation()}
       role="menu"
@@ -61,10 +61,10 @@ interface ProjectContextMenuProps {
 }
 
 export function ProjectContextMenu({ position, onClose, onDelete }: ProjectContextMenuProps) {
-  const t = useT();
+  const translate = useT();
   return (
     <div
-      aria-label={t("nav.projectMenu")}
+      aria-label={translate("nav.projectMenu")}
       className={styles.contextMenu}
       onPointerDown={(event) => event.stopPropagation()}
       role="menu"
@@ -80,7 +80,7 @@ export function ProjectContextMenu({ position, onClose, onDelete }: ProjectConte
         type="button"
       >
         <Trash2 aria-hidden="true" size={MENU_ICON_SIZE} />
-        <span>{t("nav.deleteProject")}</span>
+        <span>{translate("nav.deleteProject")}</span>
       </button>
     </div>
   );

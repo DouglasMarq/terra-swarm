@@ -60,14 +60,14 @@ export function TerminalTabSurface({
   onKill,
   onOpenReview,
 }: TerminalTabSurfaceProps): ReactNode {
-  const t = useT();
+  const translate = useT();
   const { tab } = context;
   const ptyId = tab.ptyId;
   if (!ptyId) {
     return (
       <div className="terra-orphan-tab" role="status">
-        <strong>{t("pane.orphan")}</strong>
-        <span>{tab.title || tab.command || t("pane.noPty")}</span>
+        <strong>{translate("pane.orphan")}</strong>
+        <span>{tab.title || tab.command || translate("pane.noPty")}</span>
       </div>
     );
   }

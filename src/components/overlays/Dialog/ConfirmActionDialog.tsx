@@ -38,9 +38,9 @@ export function ConfirmActionDialog({
   open,
   title,
 }: ConfirmActionDialogProps) {
-  const t = useT();
+  const translate = useT();
   const [submitting, setSubmitting] = useState(false);
-  const copy = getConfirmationCopy(intent, t);
+  const copy = getConfirmationCopy(intent, translate);
   const isBusy = busy || submitting;
 
   async function handleConfirm() {
@@ -73,7 +73,7 @@ export function ConfirmActionDialog({
       <DialogFooter>
         <DialogClose asChild>
           <Button type="button" variant="ghost" disabled={isBusy}>
-            {cancelLabel ?? t("common.cancel")}
+            {cancelLabel ?? translate("common.cancel")}
           </Button>
         </DialogClose>
         <Button

@@ -16,7 +16,7 @@ export interface GridSizePickerProps {
 /** Above this many cells the picker warns that panes get small. */
 const DENSE_GRID_CELLS = 16;
 
-const CELLS = Array.from({ length: GRID_MAX * GRID_MAX }, (_, index) => ({
+const CELLS = Array.from({ length: GRID_MAX * GRID_MAX }, (_cell, index) => ({
   column: (index % GRID_MAX) + 1,
   row: Math.floor(index / GRID_MAX) + 1,
 }));
@@ -26,7 +26,7 @@ const CELLS = Array.from({ length: GRID_MAX * GRID_MAX }, (_, index) => ({
  * hover to preview and click to fix. Automatic follows the pane count.
  */
 export function GridSizePicker({ dimensions, auto, paneCount, disabled, onSelect, onAuto }: GridSizePickerProps) {
-  const t = useT();
+  const translate = useT();
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState<GridDimensions | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -52,15 +52,15 @@ export function GridSizePicker({ dimensions, auto, paneCount, disabled, onSelect
   const strong = hover !== null || !auto;
   const total = shown.columns * shown.rows;
   const summary = auto && !hover
-    ? t("grid.autoSummary", { columns: shown.columns, rows: shown.rows, count: paneCount })
-    : t("grid.size", { columns: shown.columns, rows: shown.rows, count: total });
-  let hint = t("grid.hintAuto");
+    ? translate("grid.autoSummary", { columns: shown.columns, rows: shown.rows, count: paneCount })
+    : translate("grid.size", { columns: shown.columns, rows: shown.rows, count: total });
+  let hint = translate("grid.hintAuto");
   if (hover || !auto) {
-    if (total > DENSE_GRID_CELLS) hint = t("grid.hintDense");
-    else if (total > paneCount) hint = t("grid.hintFill");
-    else hint = t("grid.hintOverflow");
+    if (total > DENSE_GRID_CELLS) hint = translate("grid.hintDense");
+    else if (total > paneCount) hint = translate("grid.hintFill");
+    else hint = translate("grid.hintOverflow");
   }
-  const buttonLabel = auto ? t("grid.label") : t("grid.labelWithSize", { columns: dimensions.columns, rows: dimensions.rows });
+  const buttonLabel = auto ? translate("grid.label") : translate("grid.labelWithSize", { columns: dimensions.columns, rows: dimensions.rows });
 
   return (
     <div className="terra-grid-picker" ref={rootRef}>
@@ -69,7 +69,7 @@ export function GridSizePicker({ dimensions, auto, paneCount, disabled, onSelect
         className="terra-grid-picker__trigger"
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={t("grid.open")}
+        aria-label={translate("grid.open")}
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
       >
@@ -77,13 +77,13 @@ export function GridSizePicker({ dimensions, auto, paneCount, disabled, onSelect
         <ChevronDown size={12} aria-hidden="true" />
       </button>
       {open ? (
-        <div className="terra-grid-picker__popover terra-anim-pop" role="dialog" aria-label={t("grid.title")}>
-          <div className="terra-segmented" role="group" aria-label={t("grid.mode")}>
+        <div className="terra-grid-picker__popover terra-anim-pop" role="dialog" aria-label={translate("grid.title")}>
+          <div className="terra-segmented" role="group" aria-label={translate("grid.mode")}>
             <button type="button" aria-pressed={auto} data-active={auto} onClick={() => { setHover(null); onAuto(); }}>
-              {t("grid.auto")}
+              {translate("grid.auto")}
             </button>
             <button type="button" aria-pressed={!auto} data-active={!auto} onClick={() => { setHover(null); onSelect(dimensions); }}>
-              {t("grid.fixed")}
+              {translate("grid.fixed")}
             </button>
           </div>
           <div className="terra-grid-picker__matrix" onMouseLeave={() => setHover(null)}>
@@ -96,7 +96,7 @@ export function GridSizePicker({ dimensions, auto, paneCount, disabled, onSelect
                   className="terra-grid-picker__cell"
                   data-inside={inside}
                   data-strong={inside && strong}
-                  aria-label={t("grid.cell", { columns: column, rows: row })}
+                  aria-label={translate("grid.cell", { columns: column, rows: row })}
                   onMouseEnter={() => setHover({ columns: column, rows: row })}
                   onFocus={() => setHover({ columns: column, rows: row })}
                   onClick={() => {

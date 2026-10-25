@@ -74,10 +74,10 @@ const removeKeys = <T>(record: Record<string, T>, keys: Set<string>) => {
   return changed ? next : record;
 };
 
-const sameRecord = (a: Record<string, string>, b: Record<string, string>) => {
-  const aKeys = Object.keys(a);
-  const bKeys = Object.keys(b);
-  return aKeys.length === bKeys.length && aKeys.every((key) => a[key] === b[key]);
+const sameRecord = (left: Record<string, string>, right: Record<string, string>) => {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return leftKeys.length === rightKeys.length && leftKeys.every((key) => left[key] === right[key]);
 };
 
 export const useTerminalRuntimeStore = create<TerminalRuntimeState>((set) => ({

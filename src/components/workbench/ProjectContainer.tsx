@@ -28,7 +28,7 @@ export function ProjectContainer({
   onWorkspaceLayoutChange,
   ...actions
 }: ProjectContainerProps) {
-  const t = useT();
+  const translate = useT();
   const newAgentHotkey = usePreferencesStore((state) => state.hotkeys.newTerminal ?? DEFAULT_HOTKEYS.newTerminal);
   const { container } = projection;
   const label = projectLabel({ projection, renderTab, visible, ...actions });
@@ -74,7 +74,7 @@ export function ProjectContainer({
         <button
           type="button"
           className="terra-project-container__action"
-          aria-label={t(container.collapsed ? "workbench.expand" : "workbench.collapse", { name: label })}
+          aria-label={translate(container.collapsed ? "workbench.expand" : "workbench.collapse", { name: label })}
           aria-expanded={!container.collapsed}
           onClick={() => onCollapseContainer?.(container.id, !container.collapsed)}
         >
@@ -84,12 +84,12 @@ export function ProjectContainer({
           {label}
         </span>
         {projection.project && onWorkspaceLayoutChange ? (
-          <div className="terra-segmented terra-project-container__modes" role="group" aria-label={t("workbench.layout", { name: label })}>
+          <div className="terra-segmented terra-project-container__modes" role="group" aria-label={translate("workbench.layout", { name: label })}>
             <button type="button" aria-pressed={visibleMode === "grid"} data-active={visibleMode === "grid"} onClick={() => setMode("grid")}>
-              {t("workbench.grid")}
+              {translate("workbench.grid")}
             </button>
             <button type="button" aria-pressed={visibleMode === "spotlight"} data-active={visibleMode === "spotlight"} onClick={() => setMode("spotlight")}>
-              {t("workbench.focus")}
+              {translate("workbench.focus")}
             </button>
           </div>
         ) : null}
@@ -114,7 +114,7 @@ export function ProjectContainer({
             })}
           >
             <Plus size={13} aria-hidden="true" />
-            {t("grid.newAgent")}
+            {translate("grid.newAgent")}
             <kbd>{formatHotkey(newAgentHotkey)}</kbd>
           </button>
         ) : null}
@@ -123,7 +123,7 @@ export function ProjectContainer({
             <button
               type="button"
               className="terra-project-container__action"
-              aria-label={t(container.fullscreen ? "workbench.exitFullscreen" : "workbench.fullscreen", { name: label })}
+              aria-label={translate(container.fullscreen ? "workbench.exitFullscreen" : "workbench.fullscreen", { name: label })}
               aria-pressed={container.fullscreen}
               onClick={() => onFullscreenContainer(container.id, !container.fullscreen)}
             >
@@ -134,8 +134,8 @@ export function ProjectContainer({
             <button
               type="button"
               className="terra-project-container__action"
-              aria-label={t("workbench.hide", { name: label })}
-              title={t("workbench.hideTitle")}
+              aria-label={translate("workbench.hide", { name: label })}
+              title={translate("workbench.hideTitle")}
               onClick={() => onHideContainer(container.id)}
             >
               <X size={13} aria-hidden="true" />

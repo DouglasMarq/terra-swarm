@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef } from "react";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
 import { ptyApi } from "../lib/tauri/pty";
 import {
@@ -36,7 +36,7 @@ export function useInspectorRuntime(terminalId: string | null, active: boolean):
         if (!cancelled) dispatch({ type: "success", terminalId, requestId, info });
       } catch (error) {
         if (!cancelled) {
-          dispatch({ type: "failure", terminalId, requestId, error: errorMessage(error, t("inspector.unavailable")) });
+          dispatch({ type: "failure", terminalId, requestId, error: errorMessage(error, translateNow("inspector.unavailable")) });
         }
       }
       if (!cancelled) timer = setTimeout(() => void poll(), INSPECTOR_RUNTIME_POLL_MS);

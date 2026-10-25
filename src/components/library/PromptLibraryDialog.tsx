@@ -25,7 +25,7 @@ export interface PromptLibraryDialogProps {
 
 /** Saved prompts: edit them, and send one to an agent of the project. */
 export function PromptLibraryDialog({ projectName, targets, defaultTargetId }: PromptLibraryDialogProps) {
-  const t = useT();
+  const translate = useT();
   const open = useLibraryStore((state) => state.dialog === "prompts");
   const prompts = useLibraryStore((state) => state.prompts);
   const { closeDialog, savePrompt, deletePrompt } = useLibraryStore.getState();
@@ -70,7 +70,7 @@ export function PromptLibraryDialog({ projectName, targets, defaultTargetId }: P
     const saved = savePrompt({ id: selectedId ?? undefined, title, body });
     setSelectedId(saved.id);
     setTitle(saved.title);
-    setNotice(t("library.saved"));
+    setNotice(translate("library.saved"));
   };
 
   const send = async () => {
@@ -78,9 +78,9 @@ export function PromptLibraryDialog({ projectName, targets, defaultTargetId }: P
     if (!target || !body.trim()) return;
     try {
       await sendPromptToTerminal(target.id, fillPrompt(body, { project: projectName }));
-      setNotice(t("library.sent", { agent: target.label }));
+      setNotice(translate("library.sent", { agent: target.label }));
     } catch {
-      setNotice(t("library.sendFailed", { agent: target.label }));
+      setNotice(translate("library.sendFailed", { agent: target.label }));
     }
   };
 
@@ -91,12 +91,12 @@ export function PromptLibraryDialog({ projectName, targets, defaultTargetId }: P
       onOpenChange={(next) => {
         if (!next) closeDialog();
       }}
-      title={t("library.title")}
-      description={t("library.description")}
+      title={translate("library.title")}
+      description={translate("library.description")}
     >
       <div className="terra-library-body">
         <aside className="terra-library-list">
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("library.search")} aria-label={t("library.search")} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={translate("library.search")} aria-label={translate("library.search")} />
           <ul>
             {visible.map((prompt) => (
               <li key={prompt.id}>
@@ -107,39 +107,39 @@ export function PromptLibraryDialog({ projectName, targets, defaultTargetId }: P
             ))}
           </ul>
           <button type="button" className="terra-library-new" onClick={() => pick(null)}>
-            <Plus size={13} aria-hidden="true" /> {t("library.new")}
+            <Plus size={13} aria-hidden="true" /> {translate("library.new")}
           </button>
         </aside>
         <div className="terra-library-editor">
-          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t("library.titlePlaceholder")} aria-label={t("library.titleLabel")} maxLength={MAX_PROMPT_TITLE_CHARS} />
-          <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder={t("library.bodyPlaceholder")} aria-label={t("library.bodyLabel")} />
-          <p className="terra-library-hint">{t("library.placeholderHint")}</p>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={translate("library.titlePlaceholder")} aria-label={translate("library.titleLabel")} maxLength={MAX_PROMPT_TITLE_CHARS} />
+          <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder={translate("library.bodyPlaceholder")} aria-label={translate("library.bodyLabel")} />
+          <p className="terra-library-hint">{translate("library.placeholderHint")}</p>
         </div>
       </div>
       {notice ? <p className="terra-library-notice" role="status">{notice}</p> : null}
       <DialogFooter>
         {selected ? (
           <Button type="button" variant="ghost" onClick={() => { deletePrompt(selected.id); pick(null); }}>
-            <Trash2 size={14} aria-hidden="true" /> {t("library.delete")}
+            <Trash2 size={14} aria-hidden="true" /> {translate("library.delete")}
           </Button>
         ) : null}
         <Button type="button" onClick={save} disabled={!dirty || !body.trim()}>
-          {t("library.save")}
+          {translate("library.save")}
         </Button>
         <select
           className="terra-library-target"
           value={targetId ?? ""}
           onChange={(event) => setTargetId(event.target.value || null)}
-          aria-label={t("library.target")}
+          aria-label={translate("library.target")}
           disabled={targets.length === 0}
         >
-          {targets.length === 0 ? <option value="">{t("library.noTargets")}</option> : null}
+          {targets.length === 0 ? <option value="">{translate("library.noTargets")}</option> : null}
           {targets.map((target) => (
             <option key={target.id} value={target.id}>{target.label}</option>
           ))}
         </select>
         <Button type="button" variant="primary" onClick={() => void send()} disabled={!targetId || !body.trim()}>
-          <Send size={14} aria-hidden="true" /> {t("library.send")}
+          <Send size={14} aria-hidden="true" /> {translate("library.send")}
         </Button>
       </DialogFooter>
     </TerraDialog>

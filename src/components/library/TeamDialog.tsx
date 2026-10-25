@@ -21,7 +21,7 @@ export interface TeamDialogProps {
 
 /** Start a ready-made team of agents with roles in the active project. */
 export function TeamDialog({ projectName, agents, defaultAgent, canIsolate, onSpawn }: TeamDialogProps) {
-  const t = useT();
+  const translate = useT();
   const open = useLibraryStore((state) => state.dialog === "team");
   const closeDialog = useLibraryStore((state) => state.closeDialog);
   const [chosen, setChosen] = useState<TeamTemplate["id"]>("feature");
@@ -51,28 +51,28 @@ export function TeamDialog({ projectName, agents, defaultAgent, canIsolate, onSp
       onOpenChange={(next) => {
         if (!next && !starting) closeDialog();
       }}
-      title={t("teams.title", { project: projectName ?? "" })}
-      description={t("teams.description")}
+      title={translate("teams.title", { project: projectName ?? "" })}
+      description={translate("teams.description")}
     >
-      <div className="terra-team-list" role="radiogroup" aria-label={t("teams.templates")}>
+      <div className="terra-team-list" role="radiogroup" aria-label={translate("teams.templates")}>
         {TEAM_TEMPLATES.map((candidate) => (
           <label key={candidate.id} className="terra-team-option" data-active={candidate.id === chosen}>
             <input type="radio" name="team-template" checked={candidate.id === chosen} onChange={() => setChosen(candidate.id)} />
-            <span className="terra-team-name"><Users size={14} aria-hidden="true" /> {t(`teams.${candidate.id}.name`)}</span>
-            <span className="terra-team-text">{t(`teams.${candidate.id}.description`)}</span>
+            <span className="terra-team-name"><Users size={14} aria-hidden="true" /> {translate(`teams.${candidate.id}.name`)}</span>
+            <span className="terra-team-text">{translate(`teams.${candidate.id}.description`)}</span>
           </label>
         ))}
       </div>
       {plan.blocked ? (
-        <p className="terra-library-notice" role="alert">{t("teams.noAgents")}</p>
+        <p className="terra-library-notice" role="alert">{translate("teams.noAgents")}</p>
       ) : (
-        <ul className="terra-team-members" aria-label={t("teams.members")}>
+        <ul className="terra-team-members" aria-label={translate("teams.members")}>
           {plan.members.map((member, index) => (
             <li key={`${member.role}-${index}`}>
-              <strong>{t(`roles.${member.role}`)}</strong>
+              <strong>{translate(`roles.${member.role}`)}</strong>
               <span>{member.agent}</span>
-              {member.worktree ? <span className="terra-team-chip">{t("teams.worktree")}</span> : null}
-              {member.substituted ? <span className="terra-team-chip" data-tone="warn">{t("teams.substituted")}</span> : null}
+              {member.worktree ? <span className="terra-team-chip">{translate("teams.worktree")}</span> : null}
+              {member.substituted ? <span className="terra-team-chip" data-tone="warn">{translate("teams.substituted")}</span> : null}
             </li>
           ))}
         </ul>
@@ -80,10 +80,10 @@ export function TeamDialog({ projectName, agents, defaultAgent, canIsolate, onSp
       {error ? <p className="terra-library-notice" data-tone="error" role="alert">{error}</p> : null}
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={closeDialog} disabled={starting}>
-          {t("common.cancel")}
+          {translate("common.cancel")}
         </Button>
         <Button type="button" variant="primary" onClick={() => void start()} disabled={starting || plan.blocked || !projectName}>
-          {starting ? t("teams.starting") : t("teams.start", { count: plan.members.length })}
+          {starting ? translate("teams.starting") : translate("teams.start", { count: plan.members.length })}
         </Button>
       </DialogFooter>
     </TerraDialog>

@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { translateNow } from "../../i18n";
 import { normalizeSearchText } from "../../lib/text/normalizeSearchText";
 
 export const SETTINGS_SECTION_IDS = [
@@ -26,10 +26,10 @@ function section(id: SettingsSectionId, keywords: readonly string[]): SettingsSe
     id,
     keywords,
     get label() {
-      return t(`settings.sections.${id}.label` as const);
+      return translateNow(`settings.sections.${id}.label` as const);
     },
     get description() {
-      return t(`settings.sections.${id}.description` as const);
+      return translateNow(`settings.sections.${id}.description` as const);
     },
   };
 }

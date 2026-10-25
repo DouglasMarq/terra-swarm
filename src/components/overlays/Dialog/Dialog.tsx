@@ -100,7 +100,7 @@ export function TerraDialog({
   titleClassName,
   ...rootProps
 }: TerraDialogProps) {
-  const t = useT();
+  const translate = useT();
   return (
     <DialogRoot {...rootProps}>
       <DialogPortal>
@@ -115,7 +115,7 @@ export function TerraDialog({
           {children}
           {footer ? <DialogFooter>{footer}</DialogFooter> : null}
           {showCloseButton ? (
-            <DialogClose className={styles.closeButton} aria-label={t("common.close")}>
+            <DialogClose className={styles.closeButton} aria-label={translate("common.close")}>
               <X aria-hidden="true" size={16} strokeWidth={1.8} />
             </DialogClose>
           ) : null}

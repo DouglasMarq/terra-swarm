@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { api } from "../api";
 import type { ResumeItem } from "../domain/terminal.model";
 import type { Workspace, WorkspaceGroup } from "../domain/workspace.model";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { agentKind } from "../domain/agentLabels";
 import { planResume } from "../domain/session/resumePlanner";
 import { useOrchestrationStore } from "../stores/orchestrationStore";
@@ -108,7 +108,7 @@ export function useGroupActions({ workspaces, groups, sessions, refresh, setWork
       });
       useOrchestrationStore.getState().setGroupSuspended(groupId, true);
       notify(
-        t("app.groupResumePartial", { count: failed.length, group: groupName }),
+        translateNow("app.groupResumePartial", { count: failed.length, group: groupName }),
       );
       await refresh();
       return;
@@ -122,7 +122,7 @@ export function useGroupActions({ workspaces, groups, sessions, refresh, setWork
         console.error(`failed to restore suspended group ${groupId}:`, restoreError);
       });
       useOrchestrationStore.getState().setGroupSuspended(groupId, true);
-      notify(t("app.groupActivateFailed", { group: groupName }));
+      notify(translateNow("app.groupActivateFailed", { group: groupName }));
     }
     await refresh();
   };

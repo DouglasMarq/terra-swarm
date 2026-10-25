@@ -7,7 +7,7 @@ import {
   onVoiceModelDownloadProgress,
 } from "../lib/tauri/voice";
 import type { VoiceModelInfo } from "../domain/voice.model";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import type { VoiceLanguage } from "../domain/voiceLanguages";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
@@ -59,12 +59,12 @@ export function useVoiceSettings({ settingsOpen, voiceSectionOpen }: VoiceSettin
     console.error("voice model load failed:", error);
     prefs.getState().setVoiceModel(null);
     refreshModels();
-    notify(t("app.voice.modelLoadFailed"));
+    notify(translateNow("app.voice.modelLoadFailed"));
   };
 
   const disableVoice = (announce: boolean) => {
     prefs.getState().setVoiceEnabled(false);
-    if (announce) notify(t("app.voice.micDisconnected"));
+    if (announce) notify(translateNow("app.voice.micDisconnected"));
   };
 
   /** Send the stored language, device and model to the backend. */
@@ -137,7 +137,7 @@ export function useVoiceSettings({ settingsOpen, voiceSectionOpen }: VoiceSettin
       .then(() => setMicTesting(true))
       .catch((error) => {
         console.error("mic test failed:", error);
-        notify(typeof error === "string" ? error : t("app.voice.micTestFailed"));
+        notify(typeof error === "string" ? error : translateNow("app.voice.micTestFailed"));
       });
   };
 
@@ -171,7 +171,7 @@ export function useVoiceSettings({ settingsOpen, voiceSectionOpen }: VoiceSettin
         refreshInputDevices();
         if (!isAvailable && prefs.getState().voiceEnabled) {
           prefs.getState().setVoiceEnabled(false);
-          notify(t("app.voice.micDisconnected"));
+          notify(translateNow("app.voice.micDisconnected"));
         }
       }),
     ];

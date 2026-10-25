@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
 import type { ReviewTarget } from "../stores/reviewStore";
 import type { WorktreeDiff } from "../domain/worktree.model";
@@ -79,21 +79,21 @@ export function useWorktreeReview(target: ReviewTarget | null): WorktreeReview {
   const commit = (message: string) =>
     run("commit", async ({ workspaceId, terminalId }) => {
       await api.worktreeCommit(workspaceId, terminalId, message);
-      return t("review.committed");
+      return translateNow("review.committed");
     });
 
   const merge = () => {
     const status = diff?.status;
     return run("merge", async ({ workspaceId, terminalId }) => {
       await api.worktreeMerge(workspaceId, terminalId);
-      return t("review.merged", { branch: status?.branch ?? "", base: status?.base ?? "" });
+      return translateNow("review.merged", { branch: status?.branch ?? "", base: status?.base ?? "" });
     });
   };
 
   const openPullRequest = (title: string, body: string) =>
     run("pr", async ({ workspaceId, terminalId }) => {
       setPrUrl(await api.worktreeOpenPr(workspaceId, terminalId, title, body));
-      return t("review.prOpened");
+      return translateNow("review.prOpened");
     });
 
   return { diff, busy, error, notice, prUrl, load, commit, merge, openPullRequest };

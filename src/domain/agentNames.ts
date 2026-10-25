@@ -27,38 +27,38 @@ export interface PickAgentNameOptions {
 }
 
 /** Rough "sounds alike" check: same first letter and same consonant skeleton, or edit distance ≤ 1. */
-export function namesSimilar(a: string, b: string): boolean {
-  const x = normalizeSearchText(a);
-  const y = normalizeSearchText(b);
-  if (!x || !y) return false;
-  if (x === y) return true;
-  if (x[0] !== y[0]) return false;
+export function namesSimilar(first: string, second: string): boolean {
+  const normalizedFirst = normalizeSearchText(first);
+  const normalizedSecond = normalizeSearchText(second);
+  if (!normalizedFirst || !normalizedSecond) return false;
+  if (normalizedFirst === normalizedSecond) return true;
+  if (normalizedFirst[0] !== normalizedSecond[0]) return false;
   const skeleton = (value: string) => value.replace(/[aeiouy]/g, "");
-  if (skeleton(x) === skeleton(y)) return true;
-  return editDistanceAtMostOne(x, y);
+  if (skeleton(normalizedFirst) === skeleton(normalizedSecond)) return true;
+  return editDistanceAtMostOne(normalizedFirst, normalizedSecond);
 }
 
-function editDistanceAtMostOne(a: string, b: string): boolean {
-  if (Math.abs(a.length - b.length) > 1) return false;
-  let i = 0;
-  let j = 0;
+function editDistanceAtMostOne(first: string, second: string): boolean {
+  if (Math.abs(first.length - second.length) > 1) return false;
+  let firstIndex = 0;
+  let secondIndex = 0;
   let edits = 0;
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      i += 1;
-      j += 1;
+  while (firstIndex < first.length && secondIndex < second.length) {
+    if (first[firstIndex] === second[secondIndex]) {
+      firstIndex += 1;
+      secondIndex += 1;
       continue;
     }
     edits += 1;
     if (edits > 1) return false;
-    if (a.length > b.length) i += 1;
-    else if (b.length > a.length) j += 1;
+    if (first.length > second.length) firstIndex += 1;
+    else if (second.length > first.length) secondIndex += 1;
     else {
-      i += 1;
-      j += 1;
+      firstIndex += 1;
+      secondIndex += 1;
     }
   }
-  return edits + (a.length - i) + (b.length - j) <= 1;
+  return edits + (first.length - firstIndex) + (second.length - secondIndex) <= 1;
 }
 
 /**

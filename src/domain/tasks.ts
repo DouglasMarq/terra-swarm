@@ -24,10 +24,10 @@ export function groupTasksByStatus(tasks: readonly McpTask[]): Record<McpTaskSta
   for (const task of tasks) (groups[task.status] ?? groups.todo).push(task);
   for (const status of TASK_STATUS_ORDER) {
     groups[status].sort(
-      (a, b) =>
-        PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
-        a.position - b.position ||
-        taskNumber(a.id) - taskNumber(b.id),
+      (left, right) =>
+        PRIORITY_RANK[left.priority] - PRIORITY_RANK[right.priority] ||
+        left.position - right.position ||
+        taskNumber(left.id) - taskNumber(right.id),
     );
   }
   return groups;

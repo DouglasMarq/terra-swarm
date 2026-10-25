@@ -20,7 +20,7 @@ const BYTES_PER_KIB = 1024;
  * refuses to overwrite a file an agent changed meanwhile, unless asked to.
  */
 export function FileEditorDialog() {
-  const t = useT();
+  const translate = useT();
   const target = useEditorStore((state) => state.target);
   const close = useEditorStore((state) => state.close);
   const editor = useFileEditor(target);
@@ -62,44 +62,44 @@ export function FileEditorDialog() {
         <span className="terra-editor-title">
           <FileText size={14} aria-hidden="true" />
           {target?.path ?? ""}
-          {dirty ? <span className="terra-editor-dirty" aria-label={t("editor.unsaved")} title={t("editor.unsaved")}>●</span> : null}
+          {dirty ? <span className="terra-editor-dirty" aria-label={translate("editor.unsaved")} title={translate("editor.unsaved")}>●</span> : null}
         </span>
       }
-      description={file ? t("editor.meta", { size: Math.max(1, Math.round(file.size / BYTES_PER_KIB)), shortcut: formatShortcut(SAVE_SHORTCUT) }) : t("editor.loading")}
+      description={file ? translate("editor.meta", { size: Math.max(1, Math.round(file.size / BYTES_PER_KIB)), shortcut: formatShortcut(SAVE_SHORTCUT) }) : translate("editor.loading")}
     >
       <div className="terra-editor-body">
         {loadError ? (
           <p className="terra-editor-message" role="alert">{loadError}</p>
         ) : file?.binary ? (
-          <p className="terra-editor-message">{t("editor.binary")}</p>
+          <p className="terra-editor-message">{translate("editor.binary")}</p>
         ) : file ? (
-          <Suspense fallback={<p className="terra-editor-message">{t("editor.loading")}</p>}>
+          <Suspense fallback={<p className="terra-editor-message">{translate("editor.loading")}</p>}>
             <CodeEditor docKey={`${target?.workspaceId}:${target?.path}:${generation}`} path={file.path} initial={file.content} onChange={editor.setText} onSave={() => void save()} />
           </Suspense>
         ) : (
-          <p className="terra-editor-message">{t("editor.loading")}</p>
+          <p className="terra-editor-message">{translate("editor.loading")}</p>
         )}
       </div>
       {saveError ? <p className="terra-editor-error" role="alert">{saveError}</p> : null}
-      {confirmDiscard ? <p className="terra-editor-error" role="alert">{t("editor.discardPrompt")}</p> : null}
+      {confirmDiscard ? <p className="terra-editor-error" role="alert">{translate("editor.discardPrompt")}</p> : null}
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={requestClose}>
-          {confirmDiscard ? t("editor.discard") : t("common.close")}
+          {confirmDiscard ? translate("editor.discard") : translate("common.close")}
         </Button>
         {conflict ? (
           <>
             <Button type="button" onClick={load}>
               <RotateCw size={14} aria-hidden="true" />
-              {t("editor.reload")}
+              {translate("editor.reload")}
             </Button>
             <Button type="button" variant="danger" onClick={() => void save(true)} disabled={saving}>
-              {t("editor.overwrite")}
+              {translate("editor.overwrite")}
             </Button>
           </>
         ) : (
           <Button type="button" variant="primary" onClick={() => void save()} disabled={!dirty || saving || !file || file.binary}>
             <Save size={14} aria-hidden="true" />
-            {saving ? t("editor.saving") : t("editor.save")}
+            {saving ? translate("editor.saving") : translate("editor.save")}
           </Button>
         )}
       </DialogFooter>

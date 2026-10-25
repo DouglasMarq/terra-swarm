@@ -32,8 +32,8 @@ export interface WindowChromeProps {
   inspectorShortcut?: string;
 }
 
-function withShortcut(t: Translate, label: string, shortcut?: string): string {
-  return shortcut ? t("common.withShortcut", { label, shortcut }) : label;
+function withShortcut(translate: Translate, label: string, shortcut?: string): string {
+  return shortcut ? translate("common.withShortcut", { label, shortcut }) : label;
 }
 
 /**
@@ -60,7 +60,7 @@ export function WindowChrome({
   onToggleInspector,
   inspectorShortcut,
 }: WindowChromeProps) {
-  const t = useT();
+  const translate = useT();
   const notificationsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -80,12 +80,12 @@ export function WindowChrome({
     };
   }, [notificationsOpen, onNotificationsOpenChange]);
 
-  const sidebarLabel = withShortcut(t, t(sidebarCollapsed ? "shell.sidebar.expand" : "shell.sidebar.collapse"), sidebarShortcut);
-  const inspectorLabel = withShortcut(t, t(inspectorOpen ? "shell.inspector.hide" : "shell.inspector.show"), inspectorShortcut);
-  const voiceTitle = withShortcut(t, voiceLabel ?? t("shell.voice"), voiceShortcut);
+  const sidebarLabel = withShortcut(translate, translate(sidebarCollapsed ? "shell.sidebar.expand" : "shell.sidebar.collapse"), sidebarShortcut);
+  const inspectorLabel = withShortcut(translate, translate(inspectorOpen ? "shell.inspector.hide" : "shell.inspector.show"), inspectorShortcut);
+  const voiceTitle = withShortcut(translate, voiceLabel ?? translate("shell.voice"), voiceShortcut);
   const notificationLabel = attentionCount > 0
-    ? t("shell.attention.button", { count: attentionCount })
-    : t("shell.attention.notifications");
+    ? translate("shell.attention.button", { count: attentionCount })
+    : translate("shell.attention.notifications");
 
   return (
     <header className="terra-window-chrome" data-tauri-drag-region="true">
@@ -102,7 +102,7 @@ export function WindowChrome({
         </button>
       ) : null}
 
-      <nav className="terra-window-breadcrumb" aria-label={t("shell.location")} data-tauri-drag-region="true">
+      <nav className="terra-window-breadcrumb" aria-label={translate("shell.location")} data-tauri-drag-region="true">
         {breadcrumb?.project ? (
           <>
             <span className="terra-window-breadcrumb-project" data-tauri-drag-region="true">{breadcrumb.project}</span>
@@ -117,7 +117,7 @@ export function WindowChrome({
             ) : null}
           </>
         ) : (
-          <span className="terra-window-breadcrumb-project" data-tauri-drag-region="true">{title ?? t("common.appName")}</span>
+          <span className="terra-window-breadcrumb-project" data-tauri-drag-region="true">{title ?? translate("common.appName")}</span>
         )}
       </nav>
 
@@ -126,11 +126,11 @@ export function WindowChrome({
           className="terra-window-search"
           type="button"
           onClick={onOpenLauncher}
-          aria-label={t("shell.search.open")}
-          title={withShortcut(t, t("shell.search.title"), launcherShortcut)}
+          aria-label={translate("shell.search.open")}
+          title={withShortcut(translate, translate("shell.search.title"), launcherShortcut)}
         >
           <Search size={14} aria-hidden="true" />
-          <span className="terra-window-search-label">{t("shell.search.placeholder")}</span>
+          <span className="terra-window-search-label">{translate("shell.search.placeholder")}</span>
           <kbd>{launcherShortcut}</kbd>
         </button>
       </div>

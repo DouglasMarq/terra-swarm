@@ -17,7 +17,7 @@ const EMPTY: readonly string[] = [];
  * on this machine (localhost) load here.
  */
 export function PreviewPanel({ workspaceId }: PreviewPanelProps) {
-  const t = useT();
+  const translate = useT();
   const detected = usePreviewStore((state) => (workspaceId ? state.detected[workspaceId] ?? EMPTY : EMPTY));
   const selected = usePreviewStore((state) => (workspaceId ? state.selected[workspaceId] ?? null : null));
   const probing = usePreviewStore((state) => state.probing);
@@ -40,7 +40,7 @@ export function PreviewPanel({ workspaceId }: PreviewPanelProps) {
     return (
       <div className="terra-preview-empty">
         <Globe size={18} aria-hidden="true" />
-        <span>{t("preview.noWorkspace")}</span>
+        <span>{translate("preview.noWorkspace")}</span>
       </div>
     );
   }
@@ -64,8 +64,8 @@ export function PreviewPanel({ workspaceId }: PreviewPanelProps) {
             setDraft(event.target.value);
             setInvalid(false);
           }}
-          placeholder={t("preview.placeholder")}
-          aria-label={t("preview.address")}
+          placeholder={translate("preview.placeholder")}
+          aria-label={translate("preview.address")}
           aria-invalid={invalid}
           spellCheck={false}
         />
@@ -74,7 +74,7 @@ export function PreviewPanel({ workspaceId }: PreviewPanelProps) {
             <option key={url} value={url} />
           ))}
         </datalist>
-        <button type="button" className="terra-preview-icon" onClick={() => setReloadKey((key) => key + 1)} disabled={!selected} aria-label={t("preview.reload")} title={t("preview.reload")}>
+        <button type="button" className="terra-preview-icon" onClick={() => setReloadKey((key) => key + 1)} disabled={!selected} aria-label={translate("preview.reload")} title={translate("preview.reload")}>
           <RotateCw size={13} aria-hidden="true" />
         </button>
         <button
@@ -82,26 +82,26 @@ export function PreviewPanel({ workspaceId }: PreviewPanelProps) {
           className="terra-preview-icon"
           onClick={() => void usePreviewStore.getState().probe(workspaceId, mcpPort)}
           disabled={probing}
-          aria-label={t("preview.scan")}
-          title={t("preview.scan")}
+          aria-label={translate("preview.scan")}
+          title={translate("preview.scan")}
         >
           <Radar size={13} aria-hidden="true" />
         </button>
       </form>
-      {invalid ? <p className="terra-preview-hint" role="alert">{t("preview.onlyLocal")}</p> : null}
+      {invalid ? <p className="terra-preview-hint" role="alert">{translate("preview.onlyLocal")}</p> : null}
       {selected ? (
         <iframe
           key={`${selected}#${reloadKey}`}
           className="terra-preview-frame"
           src={selected}
-          title={t("preview.frameTitle", { url: selected })}
+          title={translate("preview.frameTitle", { url: selected })}
           sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads"
           referrerPolicy="no-referrer"
         />
       ) : (
         <div className="terra-preview-empty">
           <Globe size={18} aria-hidden="true" />
-          <span>{probing ? t("preview.scanning") : t("preview.none")}</span>
+          <span>{probing ? translate("preview.scanning") : translate("preview.none")}</span>
         </div>
       )}
     </div>

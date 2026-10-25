@@ -154,34 +154,34 @@ export function reduceVoiceCapsuleModel(
   }
 }
 
-export function voiceIntentLabel(intent: VoiceCapsuleIntent, t: Translate): string {
+export function voiceIntentLabel(intent: VoiceCapsuleIntent, translate: Translate): string {
   switch (intent.type) {
     case "focus":
-      return t("voiceIntent.focus", { name: intent.target });
+      return translate("voiceIntent.focus", { name: intent.target });
     case "open-fleet":
-      return t("palette.openFleet");
+      return translate("palette.openFleet");
     case "suspend-group":
-      return t("voiceIntent.suspendGroup", { name: intent.group });
+      return translate("voiceIntent.suspendGroup", { name: intent.group });
     case "resume-group":
-      return t("voiceIntent.resumeGroup", { name: intent.group });
+      return translate("voiceIntent.resumeGroup", { name: intent.group });
     case "new-agent":
-      return intent.agent ? t("voiceIntent.newAgentNamed", { name: intent.agent }) : t("voiceIntent.newAgent");
+      return intent.agent ? translate("voiceIntent.newAgentNamed", { name: intent.agent }) : translate("voiceIntent.newAgent");
     case "stop":
-      return intent.target ? t("voiceIntent.stopNamed", { name: intent.target }) : t("voiceIntent.stop");
+      return intent.target ? translate("voiceIntent.stopNamed", { name: intent.target }) : translate("voiceIntent.stop");
   }
 }
 
-export function voiceStateLabel(state: VoiceCapsuleState, t: Translate): string {
+export function voiceStateLabel(state: VoiceCapsuleState, translate: Translate): string {
   switch (state) {
     case "idle":
-      return t("voiceState.idle");
+      return translate("voiceState.idle");
     case "listening":
-      return t("shell.voiceListening");
+      return translate("shell.voiceListening");
     case "transcribing":
-      return t("shell.voiceTranscribing");
+      return translate("shell.voiceTranscribing");
     case "preview":
-      return t("voiceState.preview");
+      return translate("voiceState.preview");
     case "error":
-      return t("voiceState.error");
+      return translate("voiceState.error");
   }
 }

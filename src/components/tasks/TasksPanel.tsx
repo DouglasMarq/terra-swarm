@@ -27,7 +27,7 @@ export interface TasksPanelProps {
  * drag-and-drop Kanban can reuse both.
  */
 export function TasksPanel({ workspaceId, workspaceName, agents }: TasksPanelProps) {
-  const t = useT();
+  const translate = useT();
   const { tasks, statuses, server, error } = useWorkspaceTasks(workspaceId);
   const { createTask, updateTask, deleteTask, clearError } = useMcpStore.getState();
   const [draft, setDraft] = useState("");
@@ -40,7 +40,7 @@ export function TasksPanel({ workspaceId, workspaceName, agents }: TasksPanelPro
     return (
       <div className="terra-tasks-empty">
         <ListTodo size={18} aria-hidden="true" />
-        <span>{t("tasks.noWorkspace")}</span>
+        <span>{translate("tasks.noWorkspace")}</span>
       </div>
     );
   }
@@ -57,16 +57,16 @@ export function TasksPanel({ workspaceId, workspaceName, agents }: TasksPanelPro
   const total = tasks?.length ?? 0;
 
   return (
-    <div className="terra-tasks" aria-label={t("tasks.label", { name: workspaceName ?? workspaceId })}>
+    <div className="terra-tasks" aria-label={translate("tasks.label", { name: workspaceName ?? workspaceId })}>
       {server && !server.available ? (
-        <p className="terra-tasks-notice">{t("tasks.serverUnavailable")}</p>
+        <p className="terra-tasks-notice">{translate("tasks.serverUnavailable")}</p>
       ) : server && !server.enabled ? (
-        <p className="terra-tasks-notice">{t("tasks.serverOff")}</p>
+        <p className="terra-tasks-notice">{translate("tasks.serverOff")}</p>
       ) : null}
       {error ? (
         <p className="terra-tasks-error" role="alert">
           {error}
-          <button type="button" onClick={clearError}>{t("tasks.dismiss")}</button>
+          <button type="button" onClick={clearError}>{translate("tasks.dismiss")}</button>
         </p>
       ) : null}
       <form className="terra-tasks-new" onSubmit={submit}>
@@ -74,21 +74,21 @@ export function TasksPanel({ workspaceId, workspaceName, agents }: TasksPanelPro
           className="terra-tasks-input"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder={t("tasks.newPlaceholder")}
-          aria-label={t("tasks.newPlaceholder")}
+          placeholder={translate("tasks.newPlaceholder")}
+          aria-label={translate("tasks.newPlaceholder")}
           maxLength={MAX_TASK_TITLE_CHARS}
         />
-        <button className="terra-tasks-add" type="submit" disabled={!draft.trim()} aria-label={t("tasks.add")} title={t("tasks.add")}>
+        <button className="terra-tasks-add" type="submit" disabled={!draft.trim()} aria-label={translate("tasks.add")} title={translate("tasks.add")}>
           <Plus size={14} aria-hidden="true" />
         </button>
       </form>
-      {tasks && total === 0 ? <p className="terra-tasks-hint">{t("tasks.empty")}</p> : null}
+      {tasks && total === 0 ? <p className="terra-tasks-hint">{translate("tasks.empty")}</p> : null}
       {TASK_STATUS_ORDER.map((status) => {
         const list = groups[status];
         if (list.length === 0) return null;
         const isCollapsed = collapsed[status] === true;
         return (
-          <section className="terra-tasks-group" key={status} data-status={status} aria-label={t(`tasks.status.${status}`)}>
+          <section className="terra-tasks-group" key={status} data-status={status} aria-label={translate(`tasks.status.${status}`)}>
             <button
               type="button"
               className="terra-tasks-group-head"
@@ -96,7 +96,7 @@ export function TasksPanel({ workspaceId, workspaceName, agents }: TasksPanelPro
               onClick={() => setCollapsed((state) => ({ ...state, [status]: !isCollapsed }))}
             >
               {isCollapsed ? <ChevronRight size={12} aria-hidden="true" /> : <ChevronDown size={12} aria-hidden="true" />}
-              <span>{t(`tasks.status.${status}`)}</span>
+              <span>{translate(`tasks.status.${status}`)}</span>
               <span className="terra-tasks-count">{list.length}</span>
             </button>
             {isCollapsed ? null : (
@@ -133,9 +133,9 @@ export interface TaskCardProps {
 }
 
 export function TaskCard({ task, agents, agentLabel, status, onChange, onDelete }: TaskCardProps) {
-  const t = useT();
+  const translate = useT();
   const [open, setOpen] = useState(false);
-  const author = (id: string) => (id === "user" ? t("tasks.you") : agentLabel(id));
+  const author = (id: string) => (id === "user" ? translate("tasks.you") : agentLabel(id));
   const assigneeKnown = !task.assignee || agents.some((agent) => agent.id === task.assignee);
 
   return (
@@ -146,17 +146,17 @@ export function TaskCard({ task, agents, agentLabel, status, onChange, onDelete 
       </button>
       <div className="terra-task-meta">
         {task.priority !== "medium" ? (
-          <span className="terra-task-chip" data-priority={task.priority}>{t(`tasks.priority.${task.priority}`)}</span>
+          <span className="terra-task-chip" data-priority={task.priority}>{translate(`tasks.priority.${task.priority}`)}</span>
         ) : null}
         {task.assignee ? (
           <span className="terra-task-assignee" title={status?.summary || undefined}>
             <span className="terra-task-dot" data-state={status?.state ?? "unknown"} aria-hidden="true" />
             {agentLabel(task.assignee)}
-            {status ? <span className="terra-task-state">· {t(`tasks.agentState.${status.state}`)}</span> : null}
+            {status ? <span className="terra-task-state">· {translate(`tasks.agentState.${status.state}`)}</span> : null}
           </span>
         ) : null}
         {task.blocked_by.length > 0 ? (
-          <span className="terra-task-chip" data-blocked="true">{t("tasks.blockedBy", { ids: task.blocked_by.join(", ") })}</span>
+          <span className="terra-task-chip" data-blocked="true">{translate("tasks.blockedBy", { ids: task.blocked_by.join(", ") })}</span>
         ) : null}
         {task.labels.map((label) => (
           <span className="terra-task-chip" key={label}>{label}</span>
@@ -165,27 +165,27 @@ export function TaskCard({ task, agents, agentLabel, status, onChange, onDelete 
       <div className="terra-task-controls">
         <select
           className="terra-task-select"
-          aria-label={t("tasks.moveTo")}
+          aria-label={translate("tasks.moveTo")}
           value={task.status}
           onChange={(event) => onChange({ status: event.target.value as McpTask["status"] })}
         >
           {TASK_STATUS_ORDER.map((status) => (
-            <option key={status} value={status}>{t(`tasks.status.${status}`)}</option>
+            <option key={status} value={status}>{translate(`tasks.status.${status}`)}</option>
           ))}
         </select>
         <select
           className="terra-task-select"
-          aria-label={t("tasks.assignee")}
+          aria-label={translate("tasks.assignee")}
           value={task.assignee ?? ""}
           onChange={(event) => onChange({ assignee: event.target.value || null })}
         >
-          <option value="">{t("tasks.unassigned")}</option>
+          <option value="">{translate("tasks.unassigned")}</option>
           {agents.map((agent) => (
             <option key={agent.id} value={agent.id}>{agent.label}</option>
           ))}
           {assigneeKnown ? null : <option value={task.assignee ?? ""}>{task.assignee}</option>}
         </select>
-        <button type="button" className="terra-task-delete" onClick={onDelete} aria-label={t("tasks.delete", { id: task.id })} title={t("tasks.delete", { id: task.id })}>
+        <button type="button" className="terra-task-delete" onClick={onDelete} aria-label={translate("tasks.delete", { id: task.id })} title={translate("tasks.delete", { id: task.id })}>
           <Trash2 size={13} aria-hidden="true" />
         </button>
       </div>
@@ -193,34 +193,34 @@ export function TaskCard({ task, agents, agentLabel, status, onChange, onDelete 
         <div className="terra-task-details">
           {task.description ? <p className="terra-task-description">{task.description}</p> : null}
           <dl className="terra-task-facts">
-            <dt>{t("tasks.createdBy")}</dt>
+            <dt>{translate("tasks.createdBy")}</dt>
             <dd>{author(task.created_by)}</dd>
-            <dt>{t("tasks.priorityLabel")}</dt>
+            <dt>{translate("tasks.priorityLabel")}</dt>
             <dd>
               <select
                 className="terra-task-select"
-                aria-label={t("tasks.priorityLabel")}
+                aria-label={translate("tasks.priorityLabel")}
                 value={task.priority}
                 onChange={(event) => onChange({ priority: event.target.value as McpTask["priority"] })}
               >
                 {TASK_PRIORITIES.map((priority) => (
-                  <option key={priority} value={priority}>{t(`tasks.priority.${priority}`)}</option>
+                  <option key={priority} value={priority}>{translate(`tasks.priority.${priority}`)}</option>
                 ))}
               </select>
             </dd>
             {task.depends_on.length > 0 ? (
               <>
-                <dt>{t("tasks.dependsOn")}</dt>
+                <dt>{translate("tasks.dependsOn")}</dt>
                 <dd>{task.depends_on.join(", ")}</dd>
               </>
             ) : null}
           </dl>
           {task.events && task.events.length > 0 ? (
-            <ol className="terra-task-log" aria-label={t("tasks.log")}>
+            <ol className="terra-task-log" aria-label={translate("tasks.log")}>
               {task.events.map((event, index) => (
                 <li key={`${event.created_at}-${index}`}>
                   <span className="terra-task-log-author">{author(event.actor)}</span>{" "}
-                  {describeTaskEvent(event, t, agentLabel)}
+                  {describeTaskEvent(event, translate, agentLabel)}
                 </li>
               ))}
             </ol>

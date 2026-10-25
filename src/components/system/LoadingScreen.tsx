@@ -44,7 +44,7 @@ export function LoadingScreen({
   subtitle,
   title,
 }: LoadingScreenProps) {
-  const t = useT();
+  const translate = useT();
   const progressValue = progress === undefined ? undefined : clampProgress(progress);
   const rootClassName = [styles.loadingScreen, className].filter(Boolean).join(" ");
   const progressStyle = (
@@ -53,14 +53,14 @@ export function LoadingScreen({
 
   return (
     <main className={rootClassName} aria-busy={phase !== "ready"}>
-      <section className={styles.loadingPanel} aria-label={t("system.startup")}>
+      <section className={styles.loadingPanel} aria-label={translate("system.startup")}>
         <div className={styles.loadingMark} aria-hidden="true">
           <Orbit />
         </div>
         <div className={styles.loadingCopy}>
           <p className={styles.loadingKicker}>terra / swarm</p>
-          <h1 className={styles.loadingTitle}>{title ?? t("common.appName")}</h1>
-          <p className={styles.loadingSubtitle}>{subtitle ?? t("system.subtitle")}</p>
+          <h1 className={styles.loadingTitle}>{title ?? translate("common.appName")}</h1>
+          <p className={styles.loadingSubtitle}>{subtitle ?? translate("system.subtitle")}</p>
         </div>
         <div className={styles.loadingStatus} role="status" aria-live="polite">
           {phase === "ready" ? (
@@ -68,13 +68,13 @@ export function LoadingScreen({
           ) : (
             <LoaderCircle className={styles.loadingSpinner} size={13} aria-hidden="true" />
           )}
-          <span>{status ?? t(PHASE_LABELS[phase])}</span>
+          <span>{status ?? translate(PHASE_LABELS[phase])}</span>
         </div>
         {progressValue === undefined ? null : (
           <div
             className={styles.loadingProgress}
             role="progressbar"
-            aria-label={t("system.progress")}
+            aria-label={translate("system.progress")}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={progressValue}

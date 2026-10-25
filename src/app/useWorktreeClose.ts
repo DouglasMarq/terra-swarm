@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api } from "../api";
 import type { Workspace } from "../domain/workspace.model";
 import type { WorktreeStatus } from "../domain/worktree.model";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useReviewStore } from "../stores/reviewStore";
@@ -31,7 +31,7 @@ export function useWorktreeClose(workspaces: readonly Workspace[], sessions: Wor
     await api.stopTerminal(terminalId).catch((error) => console.warn(`failed to stop ${terminalId}:`, error));
     await api.worktreeRemove(workspaceId, terminalId, deleteBranch).catch((error) => {
       console.error(`failed to remove the worktree of ${terminalId}:`, error);
-      useTerminalRuntimeStore.getState().pushSystemNotification(t("app.worktreeRemoveFailed", { detail: String(error) }));
+      useTerminalRuntimeStore.getState().pushSystemNotification(translateNow("app.worktreeRemoveFailed", { detail: String(error) }));
     });
   };
 
@@ -48,7 +48,7 @@ export function useWorktreeClose(workspaces: readonly Workspace[], sessions: Wor
       status = await api.worktreeStatus(workspace.id, terminalId);
     } catch (error) {
       console.error(`failed to read the worktree status of ${terminalId}:`, error);
-      useTerminalRuntimeStore.getState().pushSystemNotification(t("app.worktreeStatusFailed", { detail: String(error) }));
+      useTerminalRuntimeStore.getState().pushSystemNotification(translateNow("app.worktreeStatusFailed", { detail: String(error) }));
       return;
     }
     if (!status || !status.exists) {

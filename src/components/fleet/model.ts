@@ -127,9 +127,9 @@ const KNOWN_AGENT_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
   DEFAULT_AGENT_PROFILES.filter((profile) => profile.command).map((profile) => [profile.command, profile.label]),
 );
 
-function agentLabelFromCommand(command: string, t: Translate): string {
+function agentLabelFromCommand(command: string, translate: Translate): string {
   const kind = agentKind(command).replace(SCRIPT_EXTENSION, "");
-  if (kind === SHELL_KIND) return t("fleet.shellAgent");
+  if (kind === SHELL_KIND) return translate("fleet.shellAgent");
   return KNOWN_AGENT_LABELS[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
@@ -186,14 +186,14 @@ interface AgentPlacement {
   group: WorkspaceGroup;
 }
 
-function makeAgent(placement: AgentPlacement, input: FleetDerivationInput, t: Translate): FleetAgentModel {
+function makeAgent(placement: AgentPlacement, input: FleetDerivationInput, translate: Translate): FleetAgentModel {
   const { workspace, terminal, group } = placement;
   const exited = input.exited ?? EMPTY_RECORD as Readonly<Record<string, number | null>>;
   const notifications = input.notifications ?? EMPTY_RECORD as Readonly<Record<string, number>>;
   const contextUsage = input.contextUsage ?? EMPTY_RECORD as Readonly<Record<string, number>>;
   const groupSuspended = Boolean(group.suspended || workspace.terminals.length > 0 && workspace.terminals.every((item) => item.suspended));
   const command = clean(terminal.command, "shell");
-  const label = clean(mapValue(input.agentLabels, terminal.id), agentLabelFromCommand(command, t));
+  const label = clean(mapValue(input.agentLabels, terminal.id), agentLabelFromCommand(command, translate));
   const title = clean(mapValue(input.titles, terminal.id));
   return {
     id: terminal.id,
@@ -274,14 +274,14 @@ function groupModelFromAgents(
  * This function is deliberately pure so filters and rendering can be tested
  * without a Tauri runtime or a mounted React tree.
  */
-export function deriveFleetModel(input: FleetDerivationInput, t: Translate): FleetModel {
+export function deriveFleetModel(input: FleetDerivationInput, translate: Translate): FleetModel {
   const workspaces = input.workspaces ?? [];
   const groups = input.groups ?? [];
   const membership = membershipByWorkspace(workspaces, groups);
   const ungrouped = groupForId(groups, UNGROUPED_ID);
   const agents = workspaces.flatMap((workspace) => {
     const group = membership.get(workspace.id) ?? ungrouped;
-    return workspace.terminals.map((terminal) => makeAgent({ workspace, terminal, group }, input, t));
+    return workspace.terminals.map((terminal) => makeAgent({ workspace, terminal, group }, input, translate));
   });
 
   const groupModels = [
@@ -345,30 +345,30 @@ export function filterFleetModel(model: FleetModel, filters: Partial<FleetFilter
   return { agents: filteredAgents, groups, summary: summaryFor(filteredAgents) };
 }
 
-export function formatFleetDuration(value: FleetValue | undefined, now: number, t: Translate): string | null {
+export function formatFleetDuration(value: FleetValue | undefined, now: number, translate: Translate): string | null {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value === "string") return value;
-  if (value instanceof Date) return formatFleetRelativeTime(value.getTime(), now, t);
+  if (value instanceof Date) return formatFleetRelativeTime(value.getTime(), now, translate);
   if (!Number.isFinite(value)) return null;
   const milliseconds = value < DURATION_SECONDS_LIMIT ? value * MS_PER_SECOND : value;
   const totalSeconds = Math.max(0, Math.floor(milliseconds / MS_PER_SECOND));
   const hours = Math.floor(totalSeconds / SECONDS_PER_HOUR);
   const minutes = Math.floor((totalSeconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
   const seconds = totalSeconds % SECONDS_PER_MINUTE;
-  if (hours > 0) return t("time.durationHours", { hours, minutes: String(minutes).padStart(2, "0") });
-  if (minutes > 0) return t("time.durationMinutes", { minutes, seconds: String(seconds).padStart(2, "0") });
-  return t("time.durationSeconds", { seconds });
+  if (hours > 0) return translate("time.durationHours", { hours, minutes: String(minutes).padStart(2, "0") });
+  if (minutes > 0) return translate("time.durationMinutes", { minutes, seconds: String(seconds).padStart(2, "0") });
+  return translate("time.durationSeconds", { seconds });
 }
 
-export function formatFleetRelativeTime(value: FleetValue | undefined, now: number, t: Translate): string | null {
+export function formatFleetRelativeTime(value: FleetValue | undefined, now: number, translate: Translate): string | null {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value === "string") return value;
   const timestamp = value instanceof Date ? value.getTime() : value;
   if (!Number.isFinite(timestamp)) return null;
   const elapsed = elapsedTime(timestamp, now);
-  if (elapsed.unit === "now") return t("time.ago.now");
-  if (elapsed.unit === "minutes") return t("time.ago.minutes", { count: elapsed.count });
-  if (elapsed.unit === "hours") return t("time.ago.hours", { count: elapsed.count });
-  return t("time.ago.days", { count: elapsed.count });
+  if (elapsed.unit === "now") return translate("time.ago.now");
+  if (elapsed.unit === "minutes") return translate("time.ago.minutes", { count: elapsed.count });
+  if (elapsed.unit === "hours") return translate("time.ago.hours", { count: elapsed.count });
+  return translate("time.ago.days", { count: elapsed.count });
 }
 

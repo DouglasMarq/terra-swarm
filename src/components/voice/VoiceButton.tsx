@@ -28,9 +28,9 @@ export function VoiceButton({
   title,
   ...buttonProps
 }: VoiceButtonProps & { ariaLabel?: string }) {
-  const t = useT();
-  const label = ariaLabel ?? (listening ? t("palette.voiceStop") : t("palette.voiceStart"));
-  const hint = [pushToTalk ? t("voiceCapsule.holdToTalk") : null, shortcut].filter(Boolean).join(" · ");
+  const translate = useT();
+  const label = ariaLabel ?? (listening ? translate("palette.voiceStop") : translate("palette.voiceStart"));
+  const hint = [pushToTalk ? translate("voiceCapsule.holdToTalk") : null, shortcut].filter(Boolean).join(" · ");
   const classes = [styles.voiceButton, className].filter(Boolean).join(" ");
 
   return (

@@ -10,7 +10,7 @@ export function boardColumns(tasks: readonly McpTask[]): Record<McpTaskStatus, M
   const columns = Object.fromEntries(BOARD_COLUMNS.map((status) => [status, [] as McpTask[]])) as Record<McpTaskStatus, McpTask[]>;
   for (const task of tasks) (columns[task.status] ?? columns.todo).push(task);
   for (const status of BOARD_COLUMNS) {
-    columns[status].sort((a, b) => a.position - b.position || taskNumber(a.id) - taskNumber(b.id));
+    columns[status].sort((left, right) => left.position - right.position || taskNumber(left.id) - taskNumber(right.id));
   }
   return columns;
 }
@@ -78,9 +78,9 @@ export function planDrop(task: McpTask, overId: string | null, board: DropBoard)
 }
 
 /** A task status in the reader's language; text that is not a status is kept as is. */
-export function taskStatusLabel(value: string, t: Translate): string {
+export function taskStatusLabel(value: string, translate: Translate): string {
   return (BOARD_COLUMNS as readonly string[]).includes(value)
-    ? t(`tasks.status.${value as McpTaskStatus}`)
+    ? translate(`tasks.status.${value as McpTaskStatus}`)
     : value;
 }
 
@@ -90,24 +90,24 @@ export function taskStatusLabel(value: string, t: Translate): string {
  */
 export function describeTaskEvent(
   event: McpTaskEvent,
-  t: Translate,
+  translate: Translate,
   agentLabel: (terminalId: string) => string,
 ): string {
   switch (event.kind) {
     case "created":
-      return t("tasks.event.created");
+      return translate("tasks.event.created");
     case "claimed":
-      return t("tasks.event.claimed");
+      return translate("tasks.event.claimed");
     case "status": {
       const [from = "", to = ""] = event.body.split("→").map((part) => part.trim());
-      return t("tasks.event.status", { from: taskStatusLabel(from, t), to: taskStatusLabel(to, t) });
+      return translate("tasks.event.status", { from: taskStatusLabel(from, translate), to: taskStatusLabel(to, translate) });
     }
     case "assigned":
       return event.body
-        ? t("tasks.event.assigned", { who: event.body === "user" ? t("tasks.you") : agentLabel(event.body) })
-        : t("tasks.event.unassigned");
+        ? translate("tasks.event.assigned", { who: event.body === "user" ? translate("tasks.you") : agentLabel(event.body) })
+        : translate("tasks.event.unassigned");
     case "completed":
-      return t("tasks.event.completed", { summary: event.body });
+      return translate("tasks.event.completed", { summary: event.body });
     default:
       return event.body;
   }

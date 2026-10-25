@@ -168,7 +168,7 @@ export function NavigatorPanel({
   headerSlot,
   agentMenu,
 }: NavigatorPanelProps) {
-  const t = useT();
+  const translate = useT();
   const [query, setQuery] = useState("");
   const [localCollapsed, setLocalCollapsed] = useState<Set<string>>(() => new Set(defaultCollapsedIds));
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -296,21 +296,21 @@ export function NavigatorPanel({
     if (selectedActivity === "git" && loadGitStatus) {
       return <NavigatorGitView activeWorkspaceId={activeWorkspaceId} loadGitStatus={loadGitStatus} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} />;
     }
-    return <div className={styles.integrationView}><div className={styles.integrationEmpty}>{t("nav.unavailable")}</div></div>;
+    return <div className={styles.integrationView}><div className={styles.integrationEmpty}>{translate("nav.unavailable")}</div></div>;
   }
 
   return (
-    <aside aria-label={title ?? t("shell.sidebar.label")} className={classes(styles.panel, className)} style={style}>
+    <aside aria-label={title ?? translate("shell.sidebar.label")} className={classes(styles.panel, className)} style={style}>
       <header className={styles.header}>
         {headerSlot ?? (
           <div className={styles.headerTop}>
             <div className={styles.titleCluster}>
               <span aria-hidden="true" className={styles.mark}><Folder size={13} /></span>
-              <h2 className={styles.title}>{title ?? t("shell.sidebar.label")}</h2>
+              <h2 className={styles.title}>{title ?? translate("shell.sidebar.label")}</h2>
             </div>
           </div>
         )}
-        <nav aria-label={t("nav.activity")} className={styles.activityTabs} role="tablist">
+        <nav aria-label={translate("nav.activity")} className={styles.activityTabs} role="tablist">
           {ACTIVITY_TABS.filter((tab) => enabledActivities.includes(tab.id)).map((tab) => (
             <button
               aria-selected={selectedActivity === tab.id}
@@ -321,19 +321,19 @@ export function NavigatorPanel({
               type="button"
             >
               {tab.id === "git" ? <GitBranch aria-hidden="true" size={12} /> : null}
-              <span className={styles.tabLabel}>{t(tab.label)}</span>
+              <span className={styles.tabLabel}>{translate(tab.label)}</span>
             </button>
           ))}
         </nav>
         <label className={styles.searchRow}>
           <Search aria-hidden="true" size={13} />
-          <input aria-label={t("nav.search")} className={styles.searchInput} onChange={handleQuery} placeholder={t("nav.searchPlaceholder")} type="search" value={query} />
+          <input aria-label={translate("nav.search")} className={styles.searchInput} onChange={handleQuery} placeholder={translate("nav.searchPlaceholder")} type="search" value={query} />
         </label>
       </header>
       {renderActivityView()}
       <footer className={styles.footer}>
-        <span>{t("nav.projectCount", { count: projectCount })}</span>
-        {createProject ? <button className={styles.footerAction} onClick={() => createProject(null)} type="button"><Plus aria-hidden="true" size={12} /> {t("palette.newProject")}</button> : null}
+        <span>{translate("nav.projectCount", { count: projectCount })}</span>
+        {createProject ? <button className={styles.footerAction} onClick={() => createProject(null)} type="button"><Plus aria-hidden="true" size={12} /> {translate("palette.newProject")}</button> : null}
       </footer>
     </aside>
   );

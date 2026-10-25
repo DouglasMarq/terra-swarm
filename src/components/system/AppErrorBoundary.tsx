@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { translateNow } from "../../i18n";
 import { AlertTriangle, Check, ClipboardCopy, RefreshCw } from "lucide-react";
 import {
   Component,
@@ -81,7 +81,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   };
 
   private copyDetails = async () => {
-    const details = getSafeErrorDetails(this.state.error, this.state.info, t);
+    const details = getSafeErrorDetails(this.state.error, this.state.info, translateNow);
     try {
       if (!navigator.clipboard?.writeText) throw new Error("clipboard-unavailable");
       await navigator.clipboard.writeText(details.text);
@@ -98,7 +98,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   public render() {
     if (this.state.error === null) return this.props.children;
 
-    const details = getSafeErrorDetails(this.state.error, this.state.info, t);
+    const details = getSafeErrorDetails(this.state.error, this.state.info, translateNow);
     const fallback = this.props.fallback;
     if (typeof fallback === "function") {
       return fallback({
@@ -120,10 +120,10 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
             </span>
             <div>
               <h1 id="terra-error-title" className={styles.errorTitle}>
-                {t("system.errorTitle")}
+                {translateNow("system.errorTitle")}
               </h1>
               <p className={styles.errorDescription}>
-                {t("system.errorBody")}
+                {translateNow("system.errorBody")}
               </p>
             </div>
           </div>
@@ -135,7 +135,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
               onClick={this.reset}
             >
               <RefreshCw size={14} aria-hidden="true" />
-              {t("nav.retry")}
+              {translateNow("nav.retry")}
             </button>
             <button type="button" className={styles.errorButton} onClick={this.copyDetails}>
               {this.state.copied ? (
@@ -143,7 +143,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
               ) : (
                 <ClipboardCopy size={14} aria-hidden="true" />
               )}
-              {this.state.copied ? t("system.copied") : t("system.copyReport")}
+              {this.state.copied ? translateNow("system.copied") : translateNow("system.copyReport")}
             </button>
           </div>
         </section>

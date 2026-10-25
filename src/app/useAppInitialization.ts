@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { api } from "../api";
 import type { ResumeItem } from "../domain/terminal.model";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
 import { createInitializationGate, type InitializationGate } from "../domain/session/initializationGate";
 import { isTerminalSuspended, suspendedGroupIds } from "../domain/session/resumeSelection";
@@ -80,7 +80,7 @@ export function useAppInitialization({ workspaces, sessions, resumeQueue, agentC
       (failure) => {
         console.error("initialization failed:", failure);
         started.current = false;
-        setError(errorMessage(failure, t("app.loadFailed")));
+        setError(errorMessage(failure, translateNow("app.loadFailed")));
         setRunning(false);
       },
     );

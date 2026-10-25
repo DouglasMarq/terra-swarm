@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { openDialog, saveDialog } from "../lib/tauri/system";
 import { api } from "../api";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
@@ -29,9 +29,9 @@ export function useSnapshotTransfer(sessions: Pick<TerminalSessions, "forgetAll"
     setOperation("exporting");
     try {
       const path = await saveDialog({
-        title: t("app.exportDialogTitle"),
+        title: translateNow("app.exportDialogTitle"),
         defaultPath: "terra-swarm-snapshot.json",
-        filters: [{ name: t("app.snapshotFileType"), extensions: ["json"] }],
+        filters: [{ name: translateNow("app.snapshotFileType"), extensions: ["json"] }],
       });
       // A cancelled picker is a true no-op: no IPC call, feedback kept.
       if (typeof path !== "string" || !path.trim()) return;
@@ -39,13 +39,13 @@ export function useSnapshotTransfer(sessions: Pick<TerminalSessions, "forgetAll"
       const transfer = await api.exportWorkspaceSnapshot(path);
       setFeedback({
         kind: "success",
-        message: t("app.snapshotExported", { workspaces: transfer.workspaceCount, terminals: transfer.terminalCount }),
+        message: translateNow("app.snapshotExported", { workspaces: transfer.workspaceCount, terminals: transfer.terminalCount }),
         backupPath: transfer.path,
         pathKind: "file",
       });
     } catch (error) {
       console.error("workspace snapshot export failed:", error);
-      setFeedback({ kind: "error", message: errorMessage(error, t("app.snapshotFailed")) });
+      setFeedback({ kind: "error", message: errorMessage(error, translateNow("app.snapshotFailed")) });
     } finally {
       setOperation(null);
     }
@@ -56,10 +56,10 @@ export function useSnapshotTransfer(sessions: Pick<TerminalSessions, "forgetAll"
     if (operation || pendingImportPath) return;
     try {
       const path = await openDialog({
-        title: t("app.importDialogTitle"),
+        title: translateNow("app.importDialogTitle"),
         multiple: false,
         directory: false,
-        filters: [{ name: t("app.snapshotFileType"), extensions: ["json"] }],
+        filters: [{ name: translateNow("app.snapshotFileType"), extensions: ["json"] }],
       });
       if (typeof path !== "string" || !path.trim()) return;
       setPendingImportPath(path);
@@ -92,13 +92,13 @@ export function useSnapshotTransfer(sessions: Pick<TerminalSessions, "forgetAll"
       await refresh();
       setFeedback({
         kind: "success",
-        message: t("app.snapshotImported", { workspaces: transfer.workspaceCount, terminals: transfer.suspendedTerminalCount }),
+        message: translateNow("app.snapshotImported", { workspaces: transfer.workspaceCount, terminals: transfer.suspendedTerminalCount }),
         backupPath: transfer.backupPath,
         pathKind: "backup",
       });
     } catch (error) {
       console.error("workspace snapshot import failed:", error);
-      setFeedback({ kind: "error", message: errorMessage(error, t("app.snapshotFailed")) });
+      setFeedback({ kind: "error", message: errorMessage(error, translateNow("app.snapshotFailed")) });
     } finally {
       setOperation(null);
     }

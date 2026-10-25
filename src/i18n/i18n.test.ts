@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { en } from "./locales/en";
 import { ptBR } from "./locales/pt-BR";
-import { DEFAULT_LOCALE, t, translate, useLocaleStore } from "./index";
+import { DEFAULT_LOCALE, translateNow, translate, useLocaleStore } from "./index";
 
 function keys(node: unknown, prefix = ""): string[] {
   if (!node || typeof node !== "object") return [prefix];
@@ -29,9 +29,9 @@ describe("i18n", () => {
 
   it("follows the selected locale for non-React callers", () => {
     useLocaleStore.getState().setLocale("en");
-    expect(t("common.fleet")).toBe("Fleet");
+    expect(translateNow("common.fleet")).toBe("Fleet");
     useLocaleStore.getState().setLocale("pt-BR");
-    expect(t("common.fleet")).toBe("Frota");
+    expect(translateNow("common.fleet")).toBe("Frota");
   });
 
   it("given a label with a shortcut or a path, formats them in one message per locale", () => {

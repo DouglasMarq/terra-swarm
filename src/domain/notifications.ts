@@ -26,5 +26,5 @@ export function latestUnreadPerAgent(items: readonly NotificationItem[]): Notifi
     const current = latest.get(item.terminalId);
     if (!current || current.ts < item.ts) latest.set(item.terminalId, item);
   }
-  return [...latest.values()].sort((a, b) => b.ts - a.ts);
+  return [...latest.values()].sort((left, right) => right.ts - left.ts);
 }

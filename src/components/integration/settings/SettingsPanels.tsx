@@ -142,7 +142,7 @@ function Toggle({
 }
 
 function MicLevelMeter({ active }: { active: boolean }) {
-  const t = useT();
+  const translate = useT();
   const fillRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -158,26 +158,26 @@ function MicLevelMeter({ active }: { active: boolean }) {
   }, [active]);
 
   return (
-    <div className={styles.micMeter} aria-label={t("settingsPanels.micLevel")}>
+    <div className={styles.micMeter} aria-label={translate("settingsPanels.micLevel")}>
       <div className={styles.micMeterFill} ref={fillRef} />
     </div>
   );
 }
 
 function LanguageCard() {
-  const t = useT();
+  const translate = useT();
   const locale = useLocaleStore((state) => state.locale);
   const setLocale = useLocaleStore((state) => state.setLocale);
   return (
     <div className={styles.card}>
-      <span className={styles.cardTitle}>{t("settings.language.title")}</span>
+      <span className={styles.cardTitle}>{translate("settings.language.title")}</span>
       <label className={styles.fieldLabel}>
-        {t("settings.language.label")}
+        {translate("settings.language.label")}
         <select className={styles.select} value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
           {LOCALES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
         </select>
       </label>
-      <p className={styles.hint}>{t("settings.language.hint")}</p>
+      <p className={styles.hint}>{translate("settings.language.hint")}</p>
     </div>
   );
 }
@@ -192,7 +192,7 @@ interface FontOptionRow {
 /** Font family picker: every installed family, a search box and a
  * monospace-only filter; each row renders in its own font. */
 function TerminalFontPicker({ fontSize }: { fontSize: number }) {
-  const t = useT();
+  const translate = useT();
   const family = usePreferencesStore((state) => state.terminalFontFamily);
   const setFamily = usePreferencesStore((state) => state.setTerminalFontFamily);
   const [fonts, setFonts] = useState<SystemFont[] | null>(null);
@@ -232,7 +232,7 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
         onClick={() => setFamily(name)}
       >
         <span className={styles.fontOptionName} style={{ fontFamily: name ? terminalFontStack(name) : DEFAULT_TERMINAL_FONT_STACK }}>{label}</span>
-        {note ? <span className={styles.fontOptionTag}>{note}</span> : isMonospace ? <span className={styles.fontOptionTag}>{t("settingsPanels.fontMono")}</span> : null}
+        {note ? <span className={styles.fontOptionTag}>{note}</span> : isMonospace ? <span className={styles.fontOptionTag}>{translate("settingsPanels.fontMono")}</span> : null}
       </button>
     );
   };
@@ -240,19 +240,19 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
   return (
     <div className={styles.fontPicker}>
       <div className={styles.rowLabel}>
-        <span className={styles.label}>{t("settingsPanels.fontFamily")}</span>
+        <span className={styles.label}>{translate("settingsPanels.fontFamily")}</span>
         <span className={styles.rowHint}>
           {fonts === null
-            ? t("settingsPanels.fontLoading")
-            : t("settingsPanels.fontFamilyHint", { count: fonts.length, mono: monoCount })}
+            ? translate("settingsPanels.fontLoading")
+            : translate("settingsPanels.fontFamilyHint", { count: fonts.length, mono: monoCount })}
         </span>
       </div>
       <div className={styles.fontFilters}>
         <input
           className={styles.textInput}
           type="search"
-          aria-label={t("settingsPanels.fontSearch")}
-          placeholder={t("settingsPanels.fontSearch")}
+          aria-label={translate("settingsPanels.fontSearch")}
+          placeholder={translate("settingsPanels.fontSearch")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -263,14 +263,14 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
           data-active={monospaceOnly}
           onClick={() => setMonospaceOnly((value) => !value)}
         >
-          {t("settingsPanels.fontMonoOnly")}
+          {translate("settingsPanels.fontMonoOnly")}
         </button>
       </div>
-      <div className={styles.fontList} role="listbox" aria-label={t("settingsPanels.fontFamily")}>
-        {!query ? row({ name: "", label: t("settingsPanels.fontDefault"), isMonospace: true }) : null}
-        {missing ? row({ name: family, label: family, isMonospace: false, note: t("settingsPanels.fontMissing") }) : null}
+      <div className={styles.fontList} role="listbox" aria-label={translate("settingsPanels.fontFamily")}>
+        {!query ? row({ name: "", label: translate("settingsPanels.fontDefault"), isMonospace: true }) : null}
+        {missing ? row({ name: family, label: family, isMonospace: false, note: translate("settingsPanels.fontMissing") }) : null}
         {shown.map((font) => row({ name: font.name, label: font.name, isMonospace: font.monospace }))}
-        {fonts !== null && shown.length === 0 ? <div className={styles.fontEmpty}>{t("settingsPanels.fontNoMatch")}</div> : null}
+        {fonts !== null && shown.length === 0 ? <div className={styles.fontEmpty}>{translate("settingsPanels.fontNoMatch")}</div> : null}
       </div>
       <div
         className={styles.fontPreview}
@@ -292,34 +292,34 @@ function useNamesInUse(): string[] {
 
 /** Dictation goes to the project's orchestrator agent when one is running. */
 function VoiceToOrchestratorRow() {
-  const t = useT();
+  const translate = useT();
   const enabled = usePreferencesStore((state) => state.voiceToOrchestrator);
   const setEnabled = usePreferencesStore((state) => state.setVoiceToOrchestrator);
   return (
     <div className={styles.row}>
       <div className={styles.rowLabel}>
-        <span className={styles.label}>{t("settingsPanels.voiceToOrchestrator")}</span>
-        <span className={styles.rowHint}>{t("settingsPanels.voiceToOrchestratorHint")}</span>
+        <span className={styles.label}>{translate("settingsPanels.voiceToOrchestrator")}</span>
+        <span className={styles.rowHint}>{translate("settingsPanels.voiceToOrchestratorHint")}</span>
       </div>
-      <Toggle checked={enabled} label={t("settingsPanels.voiceToOrchestrator")} onChange={setEnabled} />
+      <Toggle checked={enabled} label={translate("settingsPanels.voiceToOrchestrator")} onChange={setEnabled} />
     </div>
   );
 }
 
 /** Native notifications and the app icon badge. */
 function SystemNotificationsCard() {
-  const t = useT();
+  const translate = useT();
   const enabled = usePreferencesStore((state) => state.systemNotifications);
   const setEnabled = usePreferencesStore((state) => state.setSystemNotifications);
   return (
     <div className={styles.card}>
-      <span className={styles.cardTitle}>{t("settingsPanels.notificationsTitle")}</span>
+      <span className={styles.cardTitle}>{translate("settingsPanels.notificationsTitle")}</span>
       <div className={styles.row}>
         <div className={styles.rowLabel}>
-          <span className={styles.label}>{t("settingsPanels.systemNotifications")}</span>
-          <span className={styles.rowHint}>{t("settingsPanels.systemNotificationsHint")}</span>
+          <span className={styles.label}>{translate("settingsPanels.systemNotifications")}</span>
+          <span className={styles.rowHint}>{translate("settingsPanels.systemNotificationsHint")}</span>
         </div>
-        <Toggle checked={enabled} label={t("settingsPanels.systemNotifications")} onChange={setEnabled} />
+        <Toggle checked={enabled} label={translate("settingsPanels.systemNotifications")} onChange={setEnabled} />
       </div>
     </div>
   );
@@ -327,7 +327,7 @@ function SystemNotificationsCard() {
 
 /** Extra arguments and environment variables used every time an agent starts. */
 function AgentLaunchEditor({ agentId, label }: { agentId: string; label: string }) {
-  const t = useT();
+  const translate = useT();
   const saved = usePreferencesStore((state) => state.agentLaunch[agentId]);
   const setAgentLaunch = usePreferencesStore((state) => state.setAgentLaunch);
   const [open, setOpen] = useState(false);
@@ -344,39 +344,39 @@ function AgentLaunchEditor({ agentId, label }: { agentId: string; label: string 
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        {t("settingsPanels.launchOptions")}
-        {configured ? <span className={styles.agentLaunchBadge}>{t("settingsPanels.launchConfigured")}</span> : null}
+        {translate("settingsPanels.launchOptions")}
+        {configured ? <span className={styles.agentLaunchBadge}>{translate("settingsPanels.launchConfigured")}</span> : null}
       </button>
       {open ? (
         <div className={styles.stack}>
           <label className={styles.fieldLabel}>
-            {t("settingsPanels.launchArgs")}
+            {translate("settingsPanels.launchArgs")}
             <input
               className={styles.input}
               value={args}
-              placeholder={t("settingsPanels.launchArgsPlaceholder")}
-              aria-label={t("settingsPanels.launchArgsFor", { name: label })}
+              placeholder={translate("settingsPanels.launchArgsPlaceholder")}
+              aria-label={translate("settingsPanels.launchArgsFor", { name: label })}
               onChange={(event) => setArgs(event.target.value)}
               onBlur={save}
             />
           </label>
           <label className={styles.fieldLabel}>
-            {t("settingsPanels.launchEnv")}
+            {translate("settingsPanels.launchEnv")}
             <textarea
               className={styles.textarea}
               value={env}
               rows={3}
               spellCheck={false}
               placeholder="ANTHROPIC_MODEL=claude-sonnet-5-5"
-              aria-label={t("settingsPanels.launchEnvFor", { name: label })}
+              aria-label={translate("settingsPanels.launchEnvFor", { name: label })}
               onChange={(event) => setEnv(event.target.value)}
               onBlur={save}
             />
           </label>
           {invalid.length > 0 ? (
-            <p className={styles.hint} role="alert">{t("settingsPanels.launchEnvInvalid", { lines: invalid.join(", ") })}</p>
+            <p className={styles.hint} role="alert">{translate("settingsPanels.launchEnvInvalid", { lines: invalid.join(", ") })}</p>
           ) : (
-            <p className={styles.hint}>{t("settingsPanels.launchHint")}</p>
+            <p className={styles.hint}>{translate("settingsPanels.launchHint")}</p>
           )}
         </div>
       ) : null}
@@ -386,7 +386,7 @@ function AgentLaunchEditor({ agentId, label }: { agentId: string; label: string 
 
 /** The embedded MCP server: the on/off switch and where it listens. */
 function McpCard() {
-  const t = useT();
+  const translate = useT();
   const server = useMcpStore((state) => state.server);
   const loadServer = useMcpStore((state) => state.loadServer);
   const setEnabled = useMcpStore((state) => state.setEnabled);
@@ -395,36 +395,36 @@ function McpCard() {
   }, [loadServer]);
   return (
     <div className={styles.card}>
-      <span className={styles.cardTitle}>{t("settingsPanels.mcpTitle")}</span>
-      <p className={styles.cardDescription}>{t("settingsPanels.mcpHint")}</p>
+      <span className={styles.cardTitle}>{translate("settingsPanels.mcpTitle")}</span>
+      <p className={styles.cardDescription}>{translate("settingsPanels.mcpHint")}</p>
       <div className={styles.row}>
         <div className={styles.rowLabel}>
-          <span className={styles.label}>{t("settingsPanels.mcpExpose")}</span>
-          <span className={styles.rowHint}>{t("settingsPanels.mcpExposeHint")}</span>
+          <span className={styles.label}>{translate("settingsPanels.mcpExpose")}</span>
+          <span className={styles.rowHint}>{translate("settingsPanels.mcpExposeHint")}</span>
         </div>
         <Toggle
           checked={server ? server.available && server.enabled : true}
           disabled={!server || !server.available}
-          label={t("settingsPanels.mcpExpose")}
+          label={translate("settingsPanels.mcpExpose")}
           onChange={(enabled) => void setEnabled(enabled)}
         />
       </div>
       {server && !server.available ? (
         <p className={styles.hint} role="alert">
-          {t("settingsPanels.mcpUnavailable", { error: server.error ?? "" })}
+          {translate("settingsPanels.mcpUnavailable", { error: server.error ?? "" })}
         </p>
       ) : server ? (
         server.running && server.url ? (
           <p className={styles.hint}>
-            {server.port ? t("settingsPanels.mcpUrlWithPort", { url: server.url, port: server.port }) : t("settingsPanels.mcpUrl", { url: server.url })}
+            {server.port ? translate("settingsPanels.mcpUrlWithPort", { url: server.url, port: server.port }) : translate("settingsPanels.mcpUrl", { url: server.url })}
           </p>
         ) : (
-          <p className={styles.hint}>{t("settingsPanels.mcpNotRunning")}</p>
+          <p className={styles.hint}>{translate("settingsPanels.mcpNotRunning")}</p>
         )
       ) : null}
       {server?.db_path ? (
         <p className={styles.hint}>
-          {t("settingsPanels.mcpDbPath")}: <code className={styles.agentCommand}>{server.db_path}</code>
+          {translate("settingsPanels.mcpDbPath")}: <code className={styles.agentCommand}>{server.db_path}</code>
         </p>
       ) : null}
     </div>
@@ -432,7 +432,7 @@ function McpCard() {
 }
 
 function AgentNamesCard() {
-  const t = useT();
+  const translate = useT();
   const prefs = usePreferencesStore();
   const inUse = useNamesInUse();
   const [draft, setDraft] = useState("");
@@ -447,23 +447,23 @@ function AgentNamesCard() {
 
   return (
     <div className={styles.card}>
-      <span className={styles.cardTitle}>{t("settingsPanels.namesTitle")}</span>
-      <p className={styles.cardDescription}>{t("settingsPanels.namesHint")}</p>
+      <span className={styles.cardTitle}>{translate("settingsPanels.namesTitle")}</span>
+      <p className={styles.cardDescription}>{translate("settingsPanels.namesHint")}</p>
       <div className={styles.row}>
         <div className={styles.rowLabel}>
-          <span className={styles.label}>{t("settingsPanels.autoNames")}</span>
-          <span className={styles.rowHint}>{t("settingsPanels.autoNamesHint")}</span>
+          <span className={styles.label}>{translate("settingsPanels.autoNames")}</span>
+          <span className={styles.rowHint}>{translate("settingsPanels.autoNamesHint")}</span>
         </div>
-        <Toggle checked={prefs.agentAutoNames} label={t("settingsPanels.autoNames")} onChange={prefs.setAgentAutoNames} />
+        <Toggle checked={prefs.agentAutoNames} label={translate("settingsPanels.autoNames")} onChange={prefs.setAgentAutoNames} />
       </div>
       {prefs.agentAutoNames ? (
         <div className={styles.stack}>
           <label className={styles.fieldLabel}>
-            {t("settingsPanels.nameSet")}
+            {translate("settingsPanels.nameSet")}
             <select className={styles.select} value={prefs.agentNameSet} onChange={(event) => prefs.setAgentNameSet(event.target.value as NameSetId)}>
-              <option value="stars">{t("settingsPanels.sets.stars")}</option>
-              <option value="rivers">{t("settingsPanels.sets.rivers")}</option>
-              <option value="custom">{t("settingsPanels.sets.custom")}</option>
+              <option value="stars">{translate("settingsPanels.sets.stars")}</option>
+              <option value="rivers">{translate("settingsPanels.sets.rivers")}</option>
+              <option value="custom">{translate("settingsPanels.sets.custom")}</option>
             </select>
           </label>
           <div className={styles.nameChips}>
@@ -476,7 +476,7 @@ function AgentNamesCard() {
                   <button
                     type="button"
                     className={styles.nameChipRemove}
-                    aria-label={t("settingsPanels.remove", { name })}
+                    aria-label={translate("settingsPanels.remove", { name })}
                     onClick={() => prefs.setAgentNameList(prefs.agentNameList.filter((candidate) => candidate !== name))}
                   >
                     <X size={10} aria-hidden="true" />
@@ -488,31 +488,31 @@ function AgentNamesCard() {
           <div className={styles.nameAdd}>
             <input
               className={styles.input}
-              aria-label={t("settingsPanels.addName")}
-              placeholder={t("settingsPanels.addName")}
+              aria-label={translate("settingsPanels.addName")}
+              placeholder={translate("settingsPanels.addName")}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") addName();
               }}
             />
-            <button type="button" className={styles.button} onClick={addName}>{t("settingsPanels.add")}</button>
+            <button type="button" className={styles.button} onClick={addName}>{translate("settingsPanels.add")}</button>
           </div>
           <p className={styles.hint}>
-            {t("settingsPanels.namesUsage", { inUse: usedCount, free: prefs.agentNameList.length - usedCount, next: next ?? "—" })}
+            {translate("settingsPanels.namesUsage", { inUse: usedCount, free: prefs.agentNameList.length - usedCount, next: next ?? "—" })}
           </p>
           <div className={styles.row}>
             <div className={styles.rowLabel}>
-              <span className={styles.label}>{t("settingsPanels.avoidSimilar")}</span>
-              <span className={styles.rowHint}>{t("settingsPanels.avoidSimilarHint")}</span>
+              <span className={styles.label}>{translate("settingsPanels.avoidSimilar")}</span>
+              <span className={styles.rowHint}>{translate("settingsPanels.avoidSimilarHint")}</span>
             </div>
-            <Toggle checked={prefs.avoidSimilarNames} label={t("settingsPanels.avoidSimilar")} onChange={prefs.setAvoidSimilarNames} />
+            <Toggle checked={prefs.avoidSimilarNames} label={translate("settingsPanels.avoidSimilar")} onChange={prefs.setAvoidSimilarNames} />
           </div>
           <label className={styles.fieldLabel}>
-            {t("settingsPanels.exhausted")}
+            {translate("settingsPanels.exhausted")}
             <select className={styles.select} value={prefs.namesExhausted} onChange={(event) => prefs.setNamesExhausted(event.target.value === "repeat" ? "repeat" : "type-number")}>
-              <option value="type-number">{t("settingsPanels.exhaustedType")}</option>
-              <option value="repeat">{t("settingsPanels.exhaustedRepeat")}</option>
+              <option value="type-number">{translate("settingsPanels.exhaustedType")}</option>
+              <option value="repeat">{translate("settingsPanels.exhaustedRepeat")}</option>
             </select>
           </label>
         </div>
@@ -526,7 +526,7 @@ function AgentPanel({
   defaultAgent,
   onDefaultAgentChange,
 }: Pick<SettingsPanelsProps, "agents" | "defaultAgent" | "onDefaultAgentChange">) {
-  const t = useT();
+  const translate = useT();
   const newAgentHotkey = usePreferencesStore((state) => state.hotkeys.newTerminal ?? DEFAULT_HOTKEYS.newTerminal);
   const profiles: AgentProfile[] = agents.map((agent) =>
     PROFILE_BY_ID.get(agent.id) ?? { ...fallbackProfile(agent.id), label: agent.label },
@@ -534,16 +534,16 @@ function AgentPanel({
   return (
     <div className={styles.stack}>
       <div className={styles.card}>
-        <span className={styles.cardTitle}>{t("settingsPanels.defaultAgentTitle")}</span>
-        <p className={styles.cardDescription}>{t("settingsPanels.defaultAgentHint", { shortcut: formatHotkey(newAgentHotkey) })}</p>
+        <span className={styles.cardTitle}>{translate("settingsPanels.defaultAgentTitle")}</span>
+        <p className={styles.cardDescription}>{translate("settingsPanels.defaultAgentHint", { shortcut: formatHotkey(newAgentHotkey) })}</p>
         <label className={styles.fieldLabel}>
-          {t("settingsPanels.defaultAgentLabel")}
+          {translate("settingsPanels.defaultAgentLabel")}
           <select
             className={styles.select}
             value={defaultAgent ?? ""}
             onChange={(event) => onDefaultAgentChange(event.target.value || null)}
           >
-            <option value="">{t("settingsPanels.askEachTime")}</option>
+            <option value="">{translate("settingsPanels.askEachTime")}</option>
             {agents.filter((agent) => agent.available).map((agent) => (
               <option key={agent.id} value={agent.id}>
                 {agent.label} ({agent.id})
@@ -554,10 +554,10 @@ function AgentPanel({
       </div>
       <McpCard />
       <div className={styles.card}>
-        <span className={styles.cardTitle}>{t("settingsPanels.detectedTitle")}</span>
-        <p className={styles.cardDescription}>{t("settingsPanels.detectedHint")}</p>
+        <span className={styles.cardTitle}>{translate("settingsPanels.detectedTitle")}</span>
+        <p className={styles.cardDescription}>{translate("settingsPanels.detectedHint")}</p>
         {profiles.length === 0 ? (
-          <div className={styles.empty}>{t("settingsPanels.detectedNone")}</div>
+          <div className={styles.empty}>{translate("settingsPanels.detectedNone")}</div>
         ) : (
           <div className={styles.agentList}>
             {profiles.map((profile) => {
@@ -571,7 +571,7 @@ function AgentPanel({
                       <span className={styles.agentCommand}>{profile.command || "shell"}</span>
                     </div>
                     <span className={`${styles.status} ${available ? styles.available : styles.unavailable}`}>
-                      {available ? t("settingsPanels.available") : t("settingsPanels.notFound")}
+                      {available ? translate("settingsPanels.available") : translate("settingsPanels.notFound")}
                     </span>
                   </div>
                   {profile.id !== "shell" && available ? <AgentLaunchEditor agentId={profile.id} label={profile.label} /> : null}
@@ -587,7 +587,7 @@ function AgentPanel({
 }
 
 export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps) {
-  const t = useT();
+  const translate = useT();
   const {
     agents,
     defaultAgent,
@@ -645,27 +645,27 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
           <LanguageCard />
           <SystemNotificationsCard />
           <div className={styles.card}>
-            <span className={styles.cardTitle}>{t("settingsPanels.accessibility")}</span>
-            <p className={styles.cardDescription}>{t("settingsPanels.accessibilityHint")}</p>
+            <span className={styles.cardTitle}>{translate("settingsPanels.accessibility")}</span>
+            <p className={styles.cardDescription}>{translate("settingsPanels.accessibilityHint")}</p>
             <div className={styles.row}>
               <div className={styles.rowLabel}>
-                <span className={styles.label}>{t("settingsPanels.reduceMotion")}</span>
-                <span className={styles.rowHint}>{t("settingsPanels.reduceMotionHint")}</span>
+                <span className={styles.label}>{translate("settingsPanels.reduceMotion")}</span>
+                <span className={styles.rowHint}>{translate("settingsPanels.reduceMotionHint")}</span>
               </div>
-              <Toggle checked={reduceMotion} label={t("settingsPanels.reduceMotion")} onChange={onReduceMotionChange} />
+              <Toggle checked={reduceMotion} label={translate("settingsPanels.reduceMotion")} onChange={onReduceMotionChange} />
             </div>
           </div>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>{t("settingsPanels.labs")}</span>
-            <p className={styles.cardDescription}>{t("settingsPanels.labsHint")}</p>
+            <span className={styles.cardTitle}>{translate("settingsPanels.labs")}</span>
+            <p className={styles.cardDescription}>{translate("settingsPanels.labsHint")}</p>
             <div className={styles.stack}>
               {LAB_FEATURE_FLAG_IDS.map((id) => (
                 <div className={styles.row} key={id}>
                   <div className={styles.rowLabel}>
-                    <span className={styles.label}>{t(`settingsPanels.flags.${id}.label`)}</span>
-                    <span className={styles.rowHint}>{t(`settingsPanels.flags.${id}.description`)}</span>
+                    <span className={styles.label}>{translate(`settingsPanels.flags.${id}.label`)}</span>
+                    <span className={styles.rowHint}>{translate(`settingsPanels.flags.${id}.description`)}</span>
                   </div>
-                  <Toggle checked={flags[id]} label={t(`settingsPanels.flags.${id}.label`)} onChange={(enabled) => onFeatureFlagChange(id, enabled)} />
+                  <Toggle checked={flags[id]} label={translate(`settingsPanels.flags.${id}.label`)} onChange={(enabled) => onFeatureFlagChange(id, enabled)} />
                 </div>
               ))}
             </div>
@@ -676,29 +676,29 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
       {section.id === "terminal" && (
         <div className={styles.stack}>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>{t("settingsPanels.fontTitle")}</span>
+            <span className={styles.cardTitle}>{translate("settingsPanels.fontTitle")}</span>
             <TerminalFontPicker fontSize={fontSize} />
             <div className={styles.row}>
               <div className={styles.rowLabel}>
-                <span className={styles.label}>{t("settingsPanels.fontSize")}</span>
-                <span className={styles.rowHint}>{t("settingsPanels.fontRange", { size: fontSize, min: MIN_FONT_SIZE, max: MAX_FONT_SIZE })}</span>
+                <span className={styles.label}>{translate("settingsPanels.fontSize")}</span>
+                <span className={styles.rowHint}>{translate("settingsPanels.fontRange", { size: fontSize, min: MIN_FONT_SIZE, max: MAX_FONT_SIZE })}</span>
               </div>
               <div className={styles.stepper}>
-                <button className={styles.stepperButton} disabled={fontSize <= MIN_FONT_SIZE} onClick={() => onFontSizeChange(-1)} aria-label={t("settingsPanels.fontDecrease")}>−</button>
+                <button className={styles.stepperButton} disabled={fontSize <= MIN_FONT_SIZE} onClick={() => onFontSizeChange(-1)} aria-label={translate("settingsPanels.fontDecrease")}>−</button>
                 <span className={styles.stepperValue}>{fontSize}px</span>
-                <button className={styles.stepperButton} disabled={fontSize >= MAX_FONT_SIZE} onClick={() => onFontSizeChange(1)} aria-label={t("settingsPanels.fontIncrease")}>+</button>
-                <button className={styles.chip} onClick={onFontSizeReset}>{t("settingsPanels.reset")}</button>
+                <button className={styles.stepperButton} disabled={fontSize >= MAX_FONT_SIZE} onClick={() => onFontSizeChange(1)} aria-label={translate("settingsPanels.fontIncrease")}>+</button>
+                <button className={styles.chip} onClick={onFontSizeReset}>{translate("settingsPanels.reset")}</button>
               </div>
             </div>
           </div>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>{t("settingsPanels.layoutTitle")}</span>
+            <span className={styles.cardTitle}>{translate("settingsPanels.layoutTitle")}</span>
             <div className={styles.row}>
               <div className={styles.rowLabel}>
-                <span className={styles.label}>{t("settingsPanels.sideBySide")}</span>
-                <span className={styles.rowHint}>{t("settingsPanels.sideBySideHint")}</span>
+                <span className={styles.label}>{translate("settingsPanels.sideBySide")}</span>
+                <span className={styles.rowHint}>{translate("settingsPanels.sideBySideHint")}</span>
               </div>
-              <div className={styles.gridOptions} aria-label={t("settingsPanels.gridColumns")}>
+              <div className={styles.gridOptions} aria-label={translate("settingsPanels.gridColumns")}>
                 {GRID_COL_OPTIONS.map((columns) => (
                   <button
                     key={columns}
@@ -713,11 +713,11 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
             </div>
           </div>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>{t("settingsPanels.shellTitle")}</span>
+            <span className={styles.cardTitle}>{translate("settingsPanels.shellTitle")}</span>
             <label className={styles.fieldLabel}>
-              {t("settingsPanels.shellLabel")}
+              {translate("settingsPanels.shellLabel")}
               <select className={styles.select} value={defaultShell} onChange={(event) => onDefaultShellChange(event.target.value)}>
-                <option value="">{t("settingsPanels.systemDefault")}</option>
+                <option value="">{translate("settingsPanels.systemDefault")}</option>
                 {(defaultShell && !availableShells.includes(defaultShell) ? [defaultShell, ...availableShells] : availableShells).map((shell) => (
                   <option key={shell} value={shell}>{shell}</option>
                 ))}
@@ -730,57 +730,57 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
       {section.id === "voice" && (
         <div className={styles.stack}>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>{t("settingsPanels.voiceTitle")}</span>
+            <span className={styles.cardTitle}>{translate("settingsPanels.voiceTitle")}</span>
             <div className={styles.row}>
               <div className={styles.rowLabel}>
-                <span className={styles.label}>{t("settingsPanels.voiceEnable")}</span>
-                <span className={styles.rowHint}>{t("settingsPanels.voiceEnableHint")}</span>
+                <span className={styles.label}>{translate("settingsPanels.voiceEnable")}</span>
+                <span className={styles.rowHint}>{translate("settingsPanels.voiceEnableHint")}</span>
               </div>
-              <Toggle checked={voiceEnabled} label={t("settingsPanels.voiceEnableLabel")} disabled={micAvailable === false && !voiceEnabled} onChange={onVoiceEnabledChange} />
+              <Toggle checked={voiceEnabled} label={translate("settingsPanels.voiceEnableLabel")} disabled={micAvailable === false && !voiceEnabled} onChange={onVoiceEnabledChange} />
             </div>
-            {micAvailable === false && !voiceEnabled ? <p className={styles.hint}>{t("settingsPanels.noMic")}</p> : null}
+            {micAvailable === false && !voiceEnabled ? <p className={styles.hint}>{translate("settingsPanels.noMic")}</p> : null}
             {voiceEnabled ? (
               <>
                 <label className={styles.fieldLabel}>
-                  {t("settingsPanels.voiceLanguage")}
+                  {translate("settingsPanels.voiceLanguage")}
                   <select className={styles.select} value={voiceLang} onChange={(event) => { if (isVoiceLanguage(event.target.value)) onVoiceLangChange(event.target.value); }}>
-                    {VOICE_LANGUAGES.map((code) => <option key={code} value={code}>{code === "auto" ? t("settingsPanels.voiceLanguageAuto") : VOICE_LANGUAGE_ENDONYMS[code]}</option>)}
+                    {VOICE_LANGUAGES.map((code) => <option key={code} value={code}>{code === "auto" ? translate("settingsPanels.voiceLanguageAuto") : VOICE_LANGUAGE_ENDONYMS[code]}</option>)}
                   </select>
                 </label>
                 <label className={styles.fieldLabel}>
-                  {t("settingsPanels.inputDevice")}
-                  <select className={styles.select} value={voiceInputDevice ?? ""} title={voiceInputDevice ?? t("settingsPanels.systemDefault")} onChange={(event) => onVoiceInputDeviceChange(event.target.value)}>
-                    <option value="">{t("settingsPanels.systemDefault")}</option>
-                    {voiceInputDevice && !voiceInputDevices.includes(voiceInputDevice) ? <option value={voiceInputDevice}>{t("settingsPanels.disconnected", { name: voiceInputDevice })}</option> : null}
+                  {translate("settingsPanels.inputDevice")}
+                  <select className={styles.select} value={voiceInputDevice ?? ""} title={voiceInputDevice ?? translate("settingsPanels.systemDefault")} onChange={(event) => onVoiceInputDeviceChange(event.target.value)}>
+                    <option value="">{translate("settingsPanels.systemDefault")}</option>
+                    {voiceInputDevice && !voiceInputDevices.includes(voiceInputDevice) ? <option value={voiceInputDevice}>{translate("settingsPanels.disconnected", { name: voiceInputDevice })}</option> : null}
                     {voiceInputDevices.map((device) => <option key={device} value={device}>{device}</option>)}
                   </select>
                 </label>
                 <div className={styles.row}>
                   <div className={styles.rowLabel}>
-                    <span className={styles.label}>{t("settingsPanels.micTest")}</span>
-                    <span className={styles.rowHint}>{t("settingsPanels.micTestHint")}</span>
+                    <span className={styles.label}>{translate("settingsPanels.micTest")}</span>
+                    <span className={styles.rowHint}>{translate("settingsPanels.micTestHint")}</span>
                   </div>
                   <div className={styles.micTest}>
                     <MicLevelMeter active={micTesting} />
-                    <button className={styles.chip} onClick={onMicTestToggle}>{micTesting ? t("settingsPanels.stop") : t("settingsPanels.test")}</button>
+                    <button className={styles.chip} onClick={onMicTestToggle}>{micTesting ? translate("settingsPanels.stop") : translate("settingsPanels.test")}</button>
                   </div>
                 </div>
-                {micTesting ? <p className={styles.hint}>{t("settingsPanels.micTestBody")}</p> : null}
+                {micTesting ? <p className={styles.hint}>{translate("settingsPanels.micTestBody")}</p> : null}
                 <VoiceToOrchestratorRow />
               </>
             ) : null}
           </div>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>{t("settingsPanels.modelsTitle")}</span>
-            <p className={styles.cardDescription}>{t("settingsPanels.modelsHint")}</p>
-            {voiceModels.length === 0 && voiceModelsStatus === "loading" ? <div className={styles.empty}>{t("settingsPanels.modelsLoading")}</div> : null}
+            <span className={styles.cardTitle}>{translate("settingsPanels.modelsTitle")}</span>
+            <p className={styles.cardDescription}>{translate("settingsPanels.modelsHint")}</p>
+            {voiceModels.length === 0 && voiceModelsStatus === "loading" ? <div className={styles.empty}>{translate("settingsPanels.modelsLoading")}</div> : null}
             {voiceModels.length === 0 && voiceModelsStatus !== "loading" ? (
               <div className={styles.empty} role="alert">
-                <span>{t("settingsPanels.modelsFailed")}</span>
-                {onRetryVoiceModels ? <button className={styles.chip} onClick={onRetryVoiceModels}>{t("nav.retry")}</button> : null}
+                <span>{translate("settingsPanels.modelsFailed")}</span>
+                {onRetryVoiceModels ? <button className={styles.chip} onClick={onRetryVoiceModels}>{translate("nav.retry")}</button> : null}
               </div>
             ) : null}
-            {voiceModels.length > 0 && !voiceModels.some((model) => model.downloaded) ? <p className={styles.hint}>{t("settingsPanels.modelsNone")}</p> : null}
+            {voiceModels.length > 0 && !voiceModels.some((model) => model.downloaded) ? <p className={styles.hint}>{translate("settingsPanels.modelsNone")}</p> : null}
             <div className={styles.modelList}>
               {voiceModels.map((model) => (
                 <div className={styles.modelRow} key={model.id}>
@@ -788,7 +788,7 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
                     <span className={styles.modelName} title={model.description}>{model.display_name}</span>
                     <span className={styles.modelMeta}>{model.size_label}</span>
                   </div>
-                  {voiceDownload?.id === model.id ? <span className={styles.status}>{Math.floor(voiceDownload.percent)}%</span> : model.active ? <span className={`${styles.chip} ${styles.chipActive}`}>{t("settingsPanels.active")}</span> : model.downloaded ? <button className={styles.chip} onClick={() => onVoiceModelSelect(model.id)}>{t("settingsPanels.use")}</button> : <button className={styles.chip} disabled={voiceDownload !== null} onClick={() => onVoiceModelDownload(model.id)}>{t("settingsPanels.download")}</button>}
+                  {voiceDownload?.id === model.id ? <span className={styles.status}>{Math.floor(voiceDownload.percent)}%</span> : model.active ? <span className={`${styles.chip} ${styles.chipActive}`}>{translate("settingsPanels.active")}</span> : model.downloaded ? <button className={styles.chip} onClick={() => onVoiceModelSelect(model.id)}>{translate("settingsPanels.use")}</button> : <button className={styles.chip} disabled={voiceDownload !== null} onClick={() => onVoiceModelDownload(model.id)}>{translate("settingsPanels.download")}</button>}
                 </div>
               ))}
             </div>
@@ -800,43 +800,43 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
 
       {section.id === "shortcuts" && (
         <div className={styles.card}>
-          <span className={styles.cardTitle}>{t("settingsPanels.shortcutsTitle")}</span>
-          <p className={styles.cardDescription}>{t("settingsPanels.shortcutsHint")}</p>
+          <span className={styles.cardTitle}>{translate("settingsPanels.shortcutsTitle")}</span>
+          <p className={styles.cardDescription}>{translate("settingsPanels.shortcutsHint")}</p>
           <div className={styles.shortcutList}>
             {HOTKEY_ACTIONS.map((action) => (
               <div className={styles.shortcutRow} key={action.id}>
                 <span className={styles.shortcutIdentity}><span className={styles.shortcutName}>{hotkeyActionLabel(action.id)}</span></span>
-                {capturing === action.id ? <span className={styles.status}>{t("settingsPanels.pressShortcut")}</span> : <button className={styles.chip} onClick={() => onCaptureHotkey(action.id)}>{formatHotkey(hotkeys[action.id])}</button>}
+                {capturing === action.id ? <span className={styles.status}>{translate("settingsPanels.pressShortcut")}</span> : <button className={styles.chip} onClick={() => onCaptureHotkey(action.id)}>{formatHotkey(hotkeys[action.id])}</button>}
               </div>
             ))}
           </div>
-          <div className={styles.actions}><button className={styles.button} onClick={onResetHotkeys}>{t("settingsPanels.restoreDefaults")}</button></div>
+          <div className={styles.actions}><button className={styles.button} onClick={onResetHotkeys}>{translate("settingsPanels.restoreDefaults")}</button></div>
         </div>
       )}
 
       {section.id === "data" && (
         <div className={styles.card}>
-          <span className={styles.cardTitle}>{t("settingsPanels.dataTitle")}</span>
-          <p className={styles.cardDescription}>{t("settingsPanels.dataHint")}</p>
+          <span className={styles.cardTitle}>{translate("settingsPanels.dataTitle")}</span>
+          <p className={styles.cardDescription}>{translate("settingsPanels.dataHint")}</p>
           <div className={styles.actions}>
-            <button className={styles.primary} disabled={snapshotOperation !== null} onClick={onExportSnapshot}>{snapshotOperation === "exporting" ? t("settingsPanels.exporting") : t("settingsPanels.exportSnapshot")}</button>
-            <button className={styles.button} disabled={snapshotOperation !== null} onClick={onImportSnapshot}>{snapshotOperation === "importing" ? t("settingsPanels.importing") : t("settingsPanels.importSnapshot")}</button>
+            <button className={styles.primary} disabled={snapshotOperation !== null} onClick={onExportSnapshot}>{snapshotOperation === "exporting" ? translate("settingsPanels.exporting") : translate("settingsPanels.exportSnapshot")}</button>
+            <button className={styles.button} disabled={snapshotOperation !== null} onClick={onImportSnapshot}>{snapshotOperation === "importing" ? translate("settingsPanels.importing") : translate("settingsPanels.importSnapshot")}</button>
           </div>
-          <p className={styles.hint}>{t("settingsPanels.importHint")}</p>
-          {snapshotFeedback ? <div className={`${styles.feedback} ${snapshotFeedback.kind === "error" ? styles.feedbackError : styles.feedbackSuccess}`} role={snapshotFeedback.kind === "error" ? "alert" : "status"} aria-live="polite"><span>{snapshotFeedback.message}</span>{snapshotFeedback.backupPath ? <span className={styles.path}>{t(snapshotFeedback.pathKind === "backup" ? "settingsPanels.backupPath" : "settingsPanels.filePath", { path: snapshotFeedback.backupPath })}</span> : null}</div> : null}
+          <p className={styles.hint}>{translate("settingsPanels.importHint")}</p>
+          {snapshotFeedback ? <div className={`${styles.feedback} ${snapshotFeedback.kind === "error" ? styles.feedbackError : styles.feedbackSuccess}`} role={snapshotFeedback.kind === "error" ? "alert" : "status"} aria-live="polite"><span>{snapshotFeedback.message}</span>{snapshotFeedback.backupPath ? <span className={styles.path}>{translate(snapshotFeedback.pathKind === "backup" ? "settingsPanels.backupPath" : "settingsPanels.filePath", { path: snapshotFeedback.backupPath })}</span> : null}</div> : null}
         </div>
       )}
 
       {section.id === "about" && (
         <div className={styles.stack}>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>{t("common.appName")}</span>
-            <div className={styles.row}><span className={styles.label}>{t("settingsPanels.installedVersion")}</span><span className={styles.status}>{appVersion || t("settingsPanels.unknown")}</span></div>
-            <p className={styles.hint}>{t("settingsPanels.localHint")}</p>
+            <span className={styles.cardTitle}>{translate("common.appName")}</span>
+            <div className={styles.row}><span className={styles.label}>{translate("settingsPanels.installedVersion")}</span><span className={styles.status}>{appVersion || translate("settingsPanels.unknown")}</span></div>
+            <p className={styles.hint}>{translate("settingsPanels.localHint")}</p>
           </div>
           <div className={styles.card}>
-            <span className={styles.cardTitle}>{t("settingsPanels.updatesTitle")}</span>
-            {updateVersion ? <div className={styles.row}><span className={styles.label}>{t("settingsPanels.updateAvailable", { version: updateVersion })}</span><button className={styles.primary} disabled={updateInstalling} onClick={onInstallUpdate}>{updateInstalling ? t("settingsPanels.installing") : t("settingsPanels.updateNow")}</button></div> : <div className={styles.row}><span className={styles.status}>{updateCheckState === "checking" ? t("settingsPanels.checking") : updateCheckState === "uptodate" ? t("settingsPanels.upToDate") : updateCheckState === "error" ? t("settingsPanels.checkFailed") : t("settingsPanels.checkHourly")}</span><button className={styles.chip} disabled={updateCheckState === "checking"} onClick={onManualUpdateCheck}>{t("settingsPanels.checkNow")}</button></div>}
+            <span className={styles.cardTitle}>{translate("settingsPanels.updatesTitle")}</span>
+            {updateVersion ? <div className={styles.row}><span className={styles.label}>{translate("settingsPanels.updateAvailable", { version: updateVersion })}</span><button className={styles.primary} disabled={updateInstalling} onClick={onInstallUpdate}>{updateInstalling ? translate("settingsPanels.installing") : translate("settingsPanels.updateNow")}</button></div> : <div className={styles.row}><span className={styles.status}>{updateCheckState === "checking" ? translate("settingsPanels.checking") : updateCheckState === "uptodate" ? translate("settingsPanels.upToDate") : updateCheckState === "error" ? translate("settingsPanels.checkFailed") : translate("settingsPanels.checkHourly")}</span><button className={styles.chip} disabled={updateCheckState === "checking"} onClick={onManualUpdateCheck}>{translate("settingsPanels.checkNow")}</button></div>}
           </div>
         </div>
       )}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { ensureNotificationPermission, setAppBadgeCount, showNotification } from "../lib/tauri/notifications";
 import { onAgentAttention, onTerminalNotification } from "../lib/tauri/pty";
 import type { Workspace } from "../domain/workspace.model";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { deriveAgentStatus } from "../domain/agentStatus";
 import { shouldNotify } from "../domain/notifications";
@@ -58,8 +58,8 @@ export function useSystemNotifications(workspaces: readonly Workspace[]) {
       });
       const label = labels[terminalId];
       showNotification({
-        title: t("notifications.needsYouTitle", { name: label ? agentLabelText(label) : terminalId }),
-        body: body || t("notifications.needsYouBody"),
+        title: translateNow("notifications.needsYouTitle", { name: label ? agentLabelText(label) : terminalId }),
+        body: body || translateNow("notifications.needsYouBody"),
       });
     };
     const pending = [

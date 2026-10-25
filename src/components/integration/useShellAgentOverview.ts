@@ -33,7 +33,7 @@ function countTerminals(workspaces: readonly Workspace[], matches: (terminal: Wo
 }
 
 export function useShellAgentOverview({ workspaces, titles, exited, notifications, contextUsage }: ShellAgentSignals): ShellAgentOverview {
-  const t = useT();
+  const translate = useT();
   const agentNames = usePreferencesStore((state) => state.agentNames);
   const agentLabels = useMemo(() => buildAgentLabels(workspaces, { titles, names: agentNames }), [agentNames, titles, workspaces]);
   const reported = useReportedStates();
@@ -48,13 +48,13 @@ export function useShellAgentOverview({ workspaces, titles, exited, notification
     const agents = workspace.terminals.map((terminal) => {
       const status = agentStatus(terminal);
       const label = agentLabels[terminal.id];
-      const detail = t(`status.${status}Lower` as const);
+      const detail = translate(`status.${status}Lower` as const);
       return { id: terminal.id, label: label?.primary ?? terminal.command, status, detail };
     });
     const suspended = workspace.terminals.length > 0 && workspace.terminals.every((terminal) => terminal.suspended);
     const status = projectStatus(agents.map((agent) => agent.status));
     return { id: workspace.id, name: workspace.name, status, suspended, agents };
-  }), [agentLabels, agentStatus, workspaces, t]);
+  }), [agentLabels, agentStatus, workspaces, translate]);
   return {
     agentLabels,
     agentStatus,

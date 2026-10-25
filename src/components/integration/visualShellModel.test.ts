@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { t } from "../../i18n";
+import { translateNow } from "../../i18n";
 import type { NotificationItem } from "../../domain/notification.model";
 import type { TerminalTab, Workspace, WorkspaceContainer, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import {
@@ -132,10 +132,10 @@ describe("shellVoiceState", () => {
 
 describe("shellVoiceLabel", () => {
   it("given each state, names it", () => {
-    expect(shellVoiceLabel("listening", t)).toBe(t("shell.voiceListening"));
-    expect(shellVoiceLabel("transcribing", t)).toBe(t("shell.voiceTranscribing"));
-    expect(shellVoiceLabel("preview", t)).toBe(t("shell.voicePreview"));
-    expect(shellVoiceLabel("error", t)).toBe(t("shell.voiceError"));
-    expect(shellVoiceLabel("idle", t)).toBe(t("shell.voice"));
+    expect(shellVoiceLabel("listening", translateNow)).toBe(translateNow("shell.voiceListening"));
+    expect(shellVoiceLabel("transcribing", translateNow)).toBe(translateNow("shell.voiceTranscribing"));
+    expect(shellVoiceLabel("preview", translateNow)).toBe(translateNow("shell.voicePreview"));
+    expect(shellVoiceLabel("error", translateNow)).toBe(translateNow("shell.voiceError"));
+    expect(shellVoiceLabel("idle", translateNow)).toBe(translateNow("shell.voice"));
   });
 });

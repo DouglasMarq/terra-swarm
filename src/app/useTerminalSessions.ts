@@ -6,7 +6,7 @@ import type { AgentLaunchExtras, AgentRole } from "../domain/agent.model";
 import type { ResumeItem, RunningTerminal, SpawnedTerminal } from "../domain/terminal.model";
 import type { Workspace, WorkspaceSnapshotV2 } from "../domain/workspace.model";
 import { getTerminal } from "../terminalRegistry";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { agentNamesInUse, pickAgentName } from "../domain/agentNames";
 import { createDebouncedTask } from "../lib/async/debounce";
@@ -184,7 +184,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
         })
         .catch((error) => {
           console.error("failed to persist terminal placement:", error);
-          runtime().pushSystemNotification(t("app.placementNotSaved"));
+          runtime().pushSystemNotification(translateNow("app.placementNotSaved"));
         });
     }
     useUiStore.getState().setFocusedId(result.meta.id);
@@ -193,7 +193,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
 
   const reportSpawnError = (error: unknown) => {
     console.error("failed to spawn terminal:", error);
-    runtime().pushSystemNotification(t("app.spawnFailed", { detail: String(error) }));
+    runtime().pushSystemNotification(translateNow("app.spawnFailed", { detail: String(error) }));
   };
 
   /** End an agent for good: process, record, name and runtime state. */
@@ -266,7 +266,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     for (const result of results) {
       if (result.status === "succeeded") continue;
       const label = labels.get(result.id) ?? result.id;
-      runtime().pushSystemNotification(t("app.resumeFailed", { name: label, detail: errorMessage(result.error, result.status) }));
+      runtime().pushSystemNotification(translateNow("app.resumeFailed", { name: label, detail: errorMessage(result.error, result.status) }));
     }
   };
 
@@ -283,7 +283,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
       if (result.status === "succeeded") continue;
       const label = labels[result.id];
       runtime().pushSystemNotification(
-        t("app.resumeAgentFailed", { name: label ? agentLabelText(label) : result.id, detail: errorMessage(result.error, result.status) }),
+        translateNow("app.resumeAgentFailed", { name: label ? agentLabelText(label) : result.id, detail: errorMessage(result.error, result.status) }),
       );
     }
     await refresh();

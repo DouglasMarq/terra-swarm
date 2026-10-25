@@ -103,18 +103,18 @@ function renderSlot(
 }
 
 function DefaultSectionContent({ section }: { section: SettingsSectionDefinition }) {
-  const t = useT();
+  const translate = useT();
   const locale = useLocale();
   return (
     <div className={styles.defaultSection}>
       <div className={styles.sectionKicker}>{section.label}</div>
-      <h3 className={styles.defaultTitle}>{t("settings.defaultSectionTitle", { section: section.label.toLocaleLowerCase(locale) })}</h3>
+      <h3 className={styles.defaultTitle}>{translate("settings.defaultSectionTitle", { section: section.label.toLocaleLowerCase(locale) })}</h3>
       <p className={styles.defaultDescription}>{section.description}</p>
       <div className={styles.placeholderCard}>
         <span className={styles.placeholderDot} aria-hidden="true" />
         <div>
-          <strong>{t("settings.defaultSectionReady")}</strong>
-          <span>{t("settings.defaultSectionHost")}</span>
+          <strong>{translate("settings.defaultSectionReady")}</strong>
+          <span>{translate("settings.defaultSectionHost")}</span>
         </div>
       </div>
     </div>
@@ -139,10 +139,10 @@ export function SettingsDialog({
   title,
   variant = "dialog",
 }: SettingsDialogProps) {
-  const t = useT();
+  const translate = useT();
   const isPage = variant === "page";
-  const resolvedTitle = title ?? t("settings.title");
-  const resolvedDescription = description ?? t("settings.description");
+  const resolvedTitle = title ?? translate("settings.title");
+  const resolvedDescription = description ?? translate("settings.description");
   const firstSection = useMemo(
     () => getInitialSettingsSection(sections, activeSection ?? defaultSection),
     [activeSection, defaultSection, sections],
@@ -237,12 +237,12 @@ export function SettingsDialog({
               value={activeTab}
               onValueChange={selectSection}
             >
-              <aside className={styles.sidebar} aria-label={t("settings.categories")}>
+              <aside className={styles.sidebar} aria-label={translate("settings.categories")}>
                 <label className={styles.searchBox}>
                   <Search aria-hidden="true" size={15} strokeWidth={1.8} />
                   <input
                     ref={searchRef}
-                    aria-label={t("settings.search")}
+                    aria-label={translate("settings.search")}
                     className={styles.searchInput}
                     onChange={(event) => setQuery(event.target.value)}
                     onKeyDown={(event) => {
@@ -258,7 +258,7 @@ export function SettingsDialog({
                         searchRef.current?.focus();
                       }
                     }}
-                    placeholder={searchPlaceholder ?? t("settings.searchPlaceholder")}
+                    placeholder={searchPlaceholder ?? translate("settings.searchPlaceholder")}
                     type="search"
                     value={query}
                   />
@@ -266,9 +266,9 @@ export function SettingsDialog({
                   {isPage ? null : <kbd className={styles.searchShortcut}>{formatShortcut(SEARCH_HOTKEY)}</kbd>}
                 </label>
                 <div className={styles.resultCount} aria-live="polite">
-                  {query ? t("settings.results", { count: visibleSections.length }) : resolvedTitle}
+                  {query ? translate("settings.results", { count: visibleSections.length }) : resolvedTitle}
                 </div>
-                <TabsPrimitive.List className={styles.sectionList} aria-label={t("settings.sectionsLabel")}>
+                <TabsPrimitive.List className={styles.sectionList} aria-label={translate("settings.sectionsLabel")}>
                   {visibleSections.map((section) => {
                     const Icon = SECTION_ICONS[section.id];
                     return (
@@ -288,8 +288,8 @@ export function SettingsDialog({
                 </TabsPrimitive.List>
                 <div className={styles.sidebarHint}>
                   <span className={styles.sidebarHintKey}>↑↓</span>
-                  <span>{t("settings.navigate")}</span>
-                  {isPage ? null : <><span className={styles.sidebarHintKey}>Esc</span><span>{t("common.close")}</span></>}
+                  <span>{translate("settings.navigate")}</span>
+                  {isPage ? null : <><span className={styles.sidebarHintKey}>Esc</span><span>{translate("common.close")}</span></>}
                 </div>
               </aside>
 
@@ -297,8 +297,8 @@ export function SettingsDialog({
                 {visibleSections.length === 0 ? (
                   <div className={styles.emptyState} role="status">
                     <Search aria-hidden="true" size={20} strokeWidth={1.5} />
-                    <strong>{t("settings.emptyTitle")}</strong>
-                    <span>{t("settings.emptyBody")}</span>
+                    <strong>{translate("settings.emptyTitle")}</strong>
+                    <span>{translate("settings.emptyBody")}</span>
                   </div>
                 ) : (
                   visibleSections.map((section) => (
@@ -322,7 +322,7 @@ export function SettingsDialog({
       onOpenChange={(nextOpen) => {
         if (!nextOpen) setConfirmation(null);
       }}
-      title={confirmation?.title ?? t("common.confirm")}
+      title={confirmation?.title ?? translate("common.confirm")}
       description={confirmation?.description ?? ""}
       confirmLabel={confirmation?.confirmLabel}
       cancelLabel={confirmation?.cancelLabel}
@@ -363,7 +363,7 @@ export function SettingsDialog({
               </div>
               <div className={styles.headerActions}>
                 {renderedHeaderSlot}
-                <DialogClose className={styles.closeButton} aria-label={t("settings.close")}>
+                <DialogClose className={styles.closeButton} aria-label={translate("settings.close")}>
                   <X aria-hidden="true" size={17} strokeWidth={1.8} />
                 </DialogClose>
               </div>

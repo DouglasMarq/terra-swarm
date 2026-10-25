@@ -1,7 +1,7 @@
 import { DEFAULT_NAME_LIST, NAME_SETS, type NameSetId, type NamesExhaustedStrategy } from "../domain/agentNames";
 import { create } from "zustand";
 import type { AgentLaunchSettings } from "../domain/agentLaunchEnv";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { isRecord } from "../lib/records/records";
 import { storageGet, storageRemove, storageSet } from "../lib/storage/safeStorage";
 import { DEFAULT_VOICE_LANGUAGE, isVoiceLanguage, type VoiceLanguage } from "../domain/voiceLanguages";
@@ -116,9 +116,9 @@ function isNumberedHotkeyAction(id: HotkeyActionId): id is NumberedHotkeyActionI
 
 /** The action's name in the current language. */
 export function hotkeyActionLabel(id: HotkeyActionId): string {
-  if (!isNumberedHotkeyAction(id)) return t(`hotkeys.${id}` as const);
-  const n = id.slice(-1);
-  return id.startsWith("selectWorkspace") ? t("hotkeys.selectWorkspace", { n }) : t("hotkeys.selectTerminal", { n });
+  if (!isNumberedHotkeyAction(id)) return translateNow(`hotkeys.${id}` as const);
+  const slotNumber = id.slice(-1);
+  return id.startsWith("selectWorkspace") ? translateNow("hotkeys.selectWorkspace", { n: slotNumber }) : translateNow("hotkeys.selectTerminal", { n: slotNumber });
 }
 
 /** Keep persisted shortcuts executable when a profile moves between OSes. */

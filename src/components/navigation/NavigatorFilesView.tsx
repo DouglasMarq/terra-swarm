@@ -46,7 +46,7 @@ function FileRow({
   onToggle: () => void;
   onOpen?: () => void;
 }) {
-  const t = useT();
+  const translate = useT();
   const directory = entry.kind === "directory";
   const rowContent = (
     <>
@@ -55,14 +55,14 @@ function FileRow({
       </span>
       <span className={styles.integrationIcon}><FileIcon entry={entry} /></span>
       <span className={styles.integrationName}>{entry.name}</span>
-      {loading ? <LoaderCircle aria-label={t("nav.filesView.loadingEntry")} className={styles.spin} size={12} /> : null}
-      {entry.kind === "file" && entry.size !== null ? <span className={styles.integrationMeta}>{t("nav.filesView.sizeBytes", { size: entry.size })}</span> : null}
+      {loading ? <LoaderCircle aria-label={translate("nav.filesView.loadingEntry")} className={styles.spin} size={12} /> : null}
+      {entry.kind === "file" && entry.size !== null ? <span className={styles.integrationMeta}>{translate("nav.filesView.sizeBytes", { size: entry.size })}</span> : null}
     </>
   );
   if (!directory && entry.kind === "file" && onOpen) {
     return (
       <button
-        aria-label={t("editor.open", { name: entry.name })}
+        aria-label={translate("editor.open", { name: entry.name })}
         className={styles.integrationRow}
         onClick={onOpen}
         style={{ paddingInlineStart: indentFor(depth) }}
@@ -75,7 +75,7 @@ function FileRow({
   if (!directory) {
     return (
       <div
-        aria-label={t("nav.filesView.fileRow", { name: entry.name })}
+        aria-label={translate("nav.filesView.fileRow", { name: entry.name })}
         className={styles.integrationRow}
         data-file-static="true"
         role="listitem"
@@ -105,7 +105,7 @@ export function NavigatorFilesView({
   onSelectWorkspace,
   onOpenFile,
 }: NavigatorFilesViewProps) {
-  const t = useT();
+  const translate = useT();
   const workspace = workspaces.find((candidate) => candidate.id === activeWorkspaceId) ?? null;
   const [directories, setDirectories] = useState<Record<string, DirectoryState>>({});
   const directoriesRef = useRef<Record<string, DirectoryState>>({});
@@ -174,16 +174,16 @@ export function NavigatorFilesView({
       return (
         <div className={styles.integrationError} style={{ paddingInlineStart: messageIndentFor(depth) }}>
           <AlertCircle aria-hidden="true" size={13} />
-          <span>{state.error || t("nav.filesView.error")}</span>
-          <button aria-label={t("nav.retry")} onClick={() => void loadDirectory(relativePath, true)} type="button"><RefreshCw size={12} /></button>
+          <span>{state.error || translate("nav.filesView.error")}</span>
+          <button aria-label={translate("nav.retry")} onClick={() => void loadDirectory(relativePath, true)} type="button"><RefreshCw size={12} /></button>
         </div>
       );
     }
     if (state.loading && !state.listing) {
-      return <div className={styles.integrationLoading}><LoaderCircle className={styles.spin} size={14} /> {t("nav.filesView.loading")}</div>;
+      return <div className={styles.integrationLoading}><LoaderCircle className={styles.spin} size={14} /> {translate("nav.filesView.loading")}</div>;
     }
     if (!state.listing || state.listing.entries.length === 0) {
-      return <div className={styles.integrationEmpty}>{t("nav.filesView.empty")}</div>;
+      return <div className={styles.integrationEmpty}>{translate("nav.filesView.empty")}</div>;
     }
     return (
       <>
@@ -196,25 +196,25 @@ export function NavigatorFilesView({
             </div>
           );
         })}
-        {state.listing.truncated ? <div className={styles.integrationNotice}>{t("nav.filesView.truncated", { count: state.listing.limit })}</div> : null}
-        {state.error !== null ? <div className={styles.integrationNotice}>{state.error || t("nav.filesView.error")}</div> : null}
+        {state.listing.truncated ? <div className={styles.integrationNotice}>{translate("nav.filesView.truncated", { count: state.listing.limit })}</div> : null}
+        {state.error !== null ? <div className={styles.integrationNotice}>{state.error || translate("nav.filesView.error")}</div> : null}
       </>
     );
   };
 
   return (
-    <section aria-label={t("nav.files")} className={styles.integrationView}>
+    <section aria-label={translate("nav.files")} className={styles.integrationView}>
       <div className={styles.integrationToolbar}>
         <label className={styles.integrationSelectLabel}>
-          <span>{t("nav.project")}</span>
-          <select aria-label={t("nav.filesView.project")} className={styles.integrationSelect} onChange={(event) => onSelectWorkspace?.(event.target.value)} value={workspace?.id ?? ""}>
-            <option value="">{t("nav.pickProject")}</option>
+          <span>{translate("nav.project")}</span>
+          <select aria-label={translate("nav.filesView.project")} className={styles.integrationSelect} onChange={(event) => onSelectWorkspace?.(event.target.value)} value={workspace?.id ?? ""}>
+            <option value="">{translate("nav.pickProject")}</option>
             {workspaces.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
           </select>
         </label>
-        <button aria-label={t("nav.filesView.refresh")} className={styles.integrationRefresh} disabled={!workspace} onClick={() => void loadDirectory("", true)} type="button"><RefreshCw size={13} /></button>
+        <button aria-label={translate("nav.filesView.refresh")} className={styles.integrationRefresh} disabled={!workspace} onClick={() => void loadDirectory("", true)} type="button"><RefreshCw size={13} /></button>
       </div>
-      {!workspace ? <div className={styles.integrationEmpty}>{t("nav.filesView.pick")}</div> : <div className={styles.integrationList}>{renderDirectory("", 0)}</div>}
+      {!workspace ? <div className={styles.integrationEmpty}>{translate("nav.filesView.pick")}</div> : <div className={styles.integrationList}>{renderDirectory("", 0)}</div>}
     </section>
   );
 }

@@ -179,7 +179,7 @@ export function installMockBackend(): void {
       case "import_workspace_snapshot": return snapshotTransfer(String(args.path), "/Users/me/.terra-swarm/backups/workspaces.json");
       case "git_status": return gitStatus;
       case "detect_agents": return agents;
-      case "running_terminals": return scenario === "resume" ? [] : workspaces.flatMap((ws) => ws.terminals.filter((t) => !t.suspended).map((t) => ({ id: t.id, seq: 1 })));
+      case "running_terminals": return scenario === "resume" ? [] : workspaces.flatMap((ws) => ws.terminals.filter((terminal) => !terminal.suspended).map((terminal) => ({ id: terminal.id, seq: 1 })));
       case "terminal_backlog": {
         const data = backlog[String(args.id)] ?? "";
         return { data, total: data.length };

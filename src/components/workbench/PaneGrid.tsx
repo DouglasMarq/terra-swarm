@@ -104,7 +104,7 @@ export function PaneGrid({
   renderPane,
   onLayoutChange,
 }: PaneGridProps) {
-  const t = useT();
+  const translate = useT();
   const mode = resolveLayoutMode(projection.container.layout, explicitMode);
   const isSpotlight = mode === "spotlight";
   // Grade and Foco share one CSS grid with cells in a stable order, so
@@ -220,7 +220,7 @@ export function PaneGrid({
                   key={`separator-${projection.container.id}-${paneProjection.pane.id}`}
                   id={`separator-${projection.container.id}-${paneProjection.pane.id}`}
                   className="terra-pane-separator"
-                  aria-label={t("grid.resize")}
+                  aria-label={translate("grid.resize")}
                 />,
               ]
             : []),

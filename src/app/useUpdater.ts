@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { appVersion as readAppVersion, checkForUpdate, installUpdate as installAppUpdate, type Update, type UpdateCheckResult } from "../lib/tauri/updater";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
 import { MS_PER_HOUR } from "../lib/time/durations";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 
@@ -68,7 +68,7 @@ export function useUpdater() {
     installAppUpdate(pendingUpdate.current).catch((error) => {
       console.error("update install failed:", error);
       setUpdateInstalling(false);
-      useTerminalRuntimeStore.getState().pushSystemNotification(t("app.updateFailed"));
+      useTerminalRuntimeStore.getState().pushSystemNotification(translateNow("app.updateFailed"));
     });
   };
 

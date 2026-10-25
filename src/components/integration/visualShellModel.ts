@@ -106,18 +106,18 @@ export function shellVoiceState(voiceState: VoiceCapsuleState | undefined, voice
 }
 
 /** The label of the window chrome's voice button. */
-export function shellVoiceLabel(state: VoiceCapsuleState, t: Translate): string {
+export function shellVoiceLabel(state: VoiceCapsuleState, translate: Translate): string {
   switch (state) {
     case "listening":
-      return t("shell.voiceListening");
+      return translate("shell.voiceListening");
     case "transcribing":
-      return t("shell.voiceTranscribing");
+      return translate("shell.voiceTranscribing");
     case "preview":
-      return t("shell.voicePreview");
+      return translate("shell.voicePreview");
     case "error":
-      return t("shell.voiceError");
+      return translate("shell.voiceError");
     case "idle":
-      return t("shell.voice");
+      return translate("shell.voice");
   }
 }
 
@@ -131,11 +131,11 @@ export function worktreeBranchesByTerminal(workspaces: readonly Workspace[]): Re
 }
 
 /** The translated team role of each agent that has one, by terminal id. */
-export function roleLabelsByTerminal(workspaces: readonly Workspace[], t: Translate): Record<string, string> {
+export function roleLabelsByTerminal(workspaces: readonly Workspace[], translate: Translate): Record<string, string> {
   return Object.fromEntries(
     workspaces
       .flatMap((workspace) => workspace.terminals)
-      .flatMap((terminal) => (terminal.role ? [[terminal.id, t(`roles.${terminal.role}`)]] : [])),
+      .flatMap((terminal) => (terminal.role ? [[terminal.id, translate(`roles.${terminal.role}`)]] : [])),
   );
 }
 
@@ -155,9 +155,9 @@ export function containerVisibilityByWorkspace(
 }
 
 /** The window title of each shell surface. */
-export function shellSurfaceTitle(surface: ShellSurface, t: Translate): string {
-  if (surface === "fleet") return t("common.fleet");
-  if (surface === "board") return t("common.board");
-  if (surface === "settings") return t("common.settings");
-  return t("common.appName");
+export function shellSurfaceTitle(surface: ShellSurface, translate: Translate): string {
+  if (surface === "fleet") return translate("common.fleet");
+  if (surface === "board") return translate("common.board");
+  if (surface === "settings") return translate("common.settings");
+  return translate("common.appName");
 }

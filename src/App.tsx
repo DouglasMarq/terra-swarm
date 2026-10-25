@@ -48,7 +48,7 @@ import { useTerminalRuntimeStore } from "./stores/terminalRuntimeStore";
 import { useUiStore } from "./stores/uiStore";
 import { useShellStore } from "./stores/shellStore";
 import { useOrchestrationStore } from "./stores/orchestrationStore";
-import { t, useLocale, useT } from "./i18n";
+import { translateNow, useLocale, useT } from "./i18n";
 import type { SettingsSectionId } from "./components/settings";
 import "./App.css";
 
@@ -75,10 +75,10 @@ const LazySettingsSectionPanel = lazy(async () => {
 });
 
 function AppLoadingSurface() {
-  const t = useT();
+  const translate = useT();
   return (
     <div className="terra-app-loading" role="status" aria-live="polite">
-      <span>{t("shell.loading")}</span>
+      <span>{translate("shell.loading")}</span>
     </div>
   );
 }
@@ -243,7 +243,7 @@ function App() {
   useEffect(() => {
     if (!orchestrationPersistenceError) return;
     pushSystemNotification(
-      t("app.saveFailed", { what: orchestrationPersistenceError.operation, detail: orchestrationPersistenceError.message }),
+      translateNow("app.saveFailed", { what: orchestrationPersistenceError.operation, detail: orchestrationPersistenceError.message }),
     );
     clearPersistenceError();
   }, [
@@ -265,7 +265,7 @@ function App() {
   const applyGridLayout = useGridLayout({ workspaces, setWorkspaces, refresh });
   const initialization = useAppInitialization({ workspaces: workspaceData, sessions, resumeQueue, agentCatalog, voiceSettings });
 
-  const active = workspaces.find((w) => w.id === activeId) ?? null;
+  const active = workspaces.find((workspace) => workspace.id === activeId) ?? null;
   const agentNames = usePreferencesStore((state) => state.agentNames);
   const promptTargets = useMemo(() => {
     if (!active) return [];
@@ -301,8 +301,8 @@ function App() {
   };
 
   const jumpToNotification = (item: NotificationItem) => {
-    const ws = workspaces.find((w) => w.id === item.workspaceId);
-    if (ws?.terminals.some((t) => t.id === item.terminalId)) {
+    const ws = workspaces.find((workspace) => workspace.id === item.workspaceId);
+    if (ws?.terminals.some((terminal) => terminal.id === item.terminalId)) {
       selectWorkspace(item.workspaceId, item.terminalId);
       setFocusedId(item.terminalId);
     }
@@ -312,7 +312,7 @@ function App() {
   const renameWorkspace = async (id: string, name: string) => {
     await api.renameWorkspace(id, name).catch((error) => {
       console.error(`failed to rename workspace ${id}:`, error);
-      pushSystemNotification(t("app.renameFailed", { detail: String(error) }));
+      pushSystemNotification(translateNow("app.renameFailed", { detail: String(error) }));
     });
     await refresh();
   };
@@ -375,7 +375,7 @@ function App() {
       await refresh();
     } catch (err) {
       console.error("failed to stop fleet terminals:", err);
-      pushSystemNotification(t("app.stopSomeFailed"));
+      pushSystemNotification(translateNow("app.stopSomeFailed"));
       await refresh();
     }
   };
@@ -388,12 +388,12 @@ function App() {
   };
 
   const closeWorkspace = async (id: string): Promise<boolean> => {
-    const terms = workspaces.find((w) => w.id === id)?.terminals ?? [];
+    const terms = workspaces.find((workspace) => workspace.id === id)?.terminals ?? [];
     try {
       await api.closeWorkspace(id);
     } catch (err) {
       console.error(`failed to close workspace ${id}:`, err);
-      pushSystemNotification(t("app.deleteFailed", { detail: String(err) }));
+      pushSystemNotification(translateNow("app.deleteFailed", { detail: String(err) }));
       return false;
     }
     sessions.forget(terms.map((term) => term.id));
@@ -451,7 +451,7 @@ function App() {
       case "clear-scrollback":
         getTerminal(terminal.id)?.clear();
         clearTerminal(terminal.id);
-        pushSystemNotification(t("app.historyCleared"));
+        pushSystemNotification(translateNow("app.historyCleared"));
         return;
       case "resume":
         await sessions.respawn(workspace.id, terminal.id, resumeCommandFor(terminal.command));
@@ -542,11 +542,11 @@ function App() {
       {initialization.error ? (
         <div className="terra-initialization-error" role="alert" aria-live="assertive">
           <div>
-            <strong>{t("system.initFailed")}</strong>
+            <strong>{translateNow("system.initFailed")}</strong>
             <span>{initialization.error}</span>
           </div>
           <button type="button" className="terra-button" onClick={initialization.retry} disabled={initialization.running}>
-            {initialization.running ? t("system.retrying") : t("nav.retry")}
+            {initialization.running ? translateNow("system.retrying") : translateNow("nav.retry")}
           </button>
         </div>
       ) : null}
@@ -768,14 +768,14 @@ function App() {
       />
 
       <ConfirmActionDialog
-        description={t("app.importDescription")}
+        description={translateNow("app.importDescription")}
         onConfirm={() => snapshotTransfer.confirmImport()}
         onOpenChange={(open) => {
           if (!open) snapshotTransfer.cancelImport();
         }}
         open={snapshotTransfer.pendingImportPath !== null}
-        title={t("app.importTitle")}
-        confirmLabel={t("settingsPanels.importSnapshot")}
+        title={translateNow("app.importTitle")}
+        confirmLabel={translateNow("settingsPanels.importSnapshot")}
       />
 
       <ConfirmActionDialog
@@ -784,8 +784,8 @@ function App() {
             ? workspaces.find((workspace) => workspace.id === workspaceToDelete)
             : null;
           return project
-            ? t("app.deleteProjectNamed", { name: project.name })
-            : t("app.deleteProject");
+            ? translateNow("app.deleteProjectNamed", { name: project.name })
+            : translateNow("app.deleteProject");
         })()}
         onConfirm={async () => {
           if (!workspaceToDelete) return;
@@ -796,8 +796,8 @@ function App() {
           if (!open) setWorkspaceToDelete(null);
         }}
         open={workspaceToDelete !== null}
-        title={t("app.deleteTitle")}
-        confirmLabel={t("app.deleteConfirm")}
+        title={translateNow("app.deleteTitle")}
+        confirmLabel={translateNow("app.deleteConfirm")}
       />
 
     </MotionConfig>

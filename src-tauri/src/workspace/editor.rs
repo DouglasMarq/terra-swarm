@@ -3,7 +3,7 @@
 //! save refuses to overwrite a file that changed on disk since it was read
 //! (agents edit the same files).
 
-use super::{safe_relative_path, WorkspaceStore};
+use super::{safe_relative_path, write_atomic, WorkspaceStore};
 use crate::ipc_error::{IpcError, IpcErrorCode};
 use crate::sync::LockExt;
 use serde::Serialize;
@@ -93,6 +93,15 @@ pub(crate) fn read_file(root: &Path, relative: &str) -> Result<WorkspaceFileCont
     })
 }
 
+fn replace_file(target: &Path, content: &str) -> Result<(), String> {
+    let permissions = std::fs::metadata(target)
+        .map_err(|error| format!("cannot read the file's permissions: {}", error))?
+        .permissions();
+    write_atomic(target, content).map_err(|error| format!("cannot save the file: {}", error))?;
+    std::fs::set_permissions(target, permissions)
+        .map_err(|error| format!("cannot restore the file's permissions: {}", error))
+}
+
 pub(crate) fn write_file(
     root: &Path,
     relative: &str,
@@ -114,7 +123,7 @@ pub(crate) fn write_file(
             ));
         }
     }
-    std::fs::write(&target, content).map_err(|error| format!("cannot save the file: {}", error))?;
+    replace_file(&target, content)?;
     Ok(WorkspaceFileSaved {
         size: content.len() as u64,
         modified: modified_millis(&target)?,
@@ -207,6 +216,28 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "agent wrote this");
         write_file(&root, "notes.md", "mine", None).unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "mine");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn given_a_reader_with_the_file_open_when_saving_then_it_still_reads_the_whole_previous_text() {
+        use std::io::Read;
+        use std::os::unix::fs::PermissionsExt;
+        let root = temp_root("atomic");
+        let path = root.join("run.sh");
+        std::fs::write(&path, "echo before\n").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut reader = std::fs::File::open(&path).unwrap();
+
+        write_file(&root, "run.sh", "echo after\n", None).unwrap();
+
+        let mut seen = String::new();
+        reader.read_to_string(&mut seen).unwrap();
+        assert_eq!(seen, "echo before\n");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "echo after\n");
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o755);
         let _ = std::fs::remove_dir_all(root);
     }
 

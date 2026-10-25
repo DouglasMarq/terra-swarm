@@ -46,13 +46,6 @@ impl KnownTerminals<'_> {
     }
 }
 
-fn trim_in_place(value: &mut String) {
-    let trimmed = value.trim();
-    if trimmed.len() != value.len() {
-        *value = trimmed.to_string();
-    }
-}
-
 fn normalize_workspace_ids(workspaces: &mut Vec<Workspace>) {
     let mut seen = HashSet::new();
     workspaces.retain_mut(|workspace| {

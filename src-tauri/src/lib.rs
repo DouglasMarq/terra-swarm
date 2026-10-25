@@ -1,6 +1,7 @@
 mod agent_catalog;
 pub mod cli;
 mod clock;
+mod collections;
 mod fonts;
 mod ipc_error;
 mod mcp;
@@ -10,6 +11,7 @@ mod pty;
 mod roles;
 mod scrollback;
 mod sync;
+mod text;
 mod usage;
 mod voice;
 mod workspace;

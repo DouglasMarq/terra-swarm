@@ -14,6 +14,7 @@ use tauri::Runtime;
 
 use super::integration;
 use super::model::AgentState;
+use super::statuses::StatusReport;
 use super::{AgentIdentity, McpHub};
 use crate::usage::SessionLog;
 
@@ -56,7 +57,13 @@ pub fn apply<R: Runtime>(
     }
     let (state, summary) = interpret(call)?;
     let reported = hub.statuses().and_then(|mut statuses| {
-        statuses.report_status(&who.workspace_id, &who.terminal_id, state, &summary)
+        statuses.report_status(
+            &who.actor(),
+            &StatusReport {
+                state,
+                summary: &summary,
+            },
+        )
     });
     let status = match reported {
         Ok(status) => status,

@@ -39,15 +39,14 @@ pub fn delete(repo: &Repo, workspace_id: &str, raw_id: &str) -> StoreResult<()> 
 }
 
 pub fn create(repo: &mut Repo, actor: &Actor<'_>, new: NewTask) -> StoreResult<Task> {
-    let at = now_millis();
     let tx = repo.transaction()?;
     let queries = tx.queries();
-    let task = new_task(queries, actor, new, at)?;
+    let task = new_task(queries, actor, new)?;
     queries.insert_task(&task)?;
     let change = Change {
         actor: actor.name,
         task_id: &task.id,
-        at,
+        at: task.created_at,
     };
     change.record(queries, "created", "")?;
     if let Some(assignee) = &task.assignee {
@@ -189,7 +188,8 @@ impl Change<'_> {
     }
 }
 
-fn new_task(queries: Queries<'_>, actor: &Actor<'_>, new: NewTask, at: i64) -> StoreResult<Task> {
+fn new_task(queries: Queries<'_>, actor: &Actor<'_>, new: NewTask) -> StoreResult<Task> {
+    let at = now_millis();
     let title = clean_title(&new.title)?;
     let description = clean_body(
         new.description.as_deref().unwrap_or(""),
@@ -423,6 +423,7 @@ mod tests {
     use super::super::messages::{self, Outgoing};
     use super::super::model::{MAX_BODY_BYTES, MAX_TITLE_CHARS};
     use super::super::notes::{self, NoteDraft};
+    use super::super::repo::TaskQuery;
     use super::super::test_support::actor;
     use super::*;
     use rusqlite::params;
@@ -550,20 +551,23 @@ mod tests {
 
         let ids: Vec<String> = repo
             .queries()
-            .list_tasks("ws-1", None, None, None)
+            .list_tasks(&TaskQuery::all("ws-1"))
             .unwrap()
             .into_iter()
             .map(|t| t.id)
             .collect();
         assert_eq!(ids, vec!["T-4", "T-2", "T-3", "T-1", "T-5"]);
         assert!(
-            repo.queries().list_tasks("ws-1", None, None, None).unwrap()[0]
+            repo.queries().list_tasks(&TaskQuery::all("ws-1")).unwrap()[0]
                 .events
                 .is_none()
         );
         assert_eq!(
             repo.queries()
-                .list_tasks("ws-1", Some(TaskStatus::Todo), None, None)
+                .list_tasks(&TaskQuery {
+                    status: Some(TaskStatus::Todo),
+                    ..TaskQuery::all("ws-1")
+                })
                 .unwrap()
                 .len(),
             3
@@ -590,7 +594,7 @@ mod tests {
         create(&mut repo, &actor("ws-1", "t-1"), task("secret")).unwrap();
         assert!(repo
             .queries()
-            .list_tasks("ws-2", None, None, None)
+            .list_tasks(&TaskQuery::all("ws-2"))
             .unwrap()
             .is_empty());
         assert!(matches!(
@@ -720,7 +724,10 @@ mod tests {
 
         let tasks = repo
             .queries()
-            .list_tasks("ws-1", None, None, Some(2))
+            .list_tasks(&TaskQuery {
+                events: Some(2),
+                ..TaskQuery::all("ws-1")
+            })
             .unwrap();
         let by_title = |title: &str| tasks.iter().find(|task| task.title == title).unwrap();
         assert_eq!(by_title("third").depends_on, vec!["T-1", "T-2"]);

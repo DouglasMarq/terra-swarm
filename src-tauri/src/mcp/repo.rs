@@ -16,6 +16,24 @@ use super::model::{
 /// can be named in SQL with `format!`.
 const WORKSPACE_TABLES: [&str; 3] = ["tasks", "messages", "notes"];
 
+pub struct TaskQuery<'a> {
+    pub workspace_id: &'a str,
+    pub status: Option<TaskStatus>,
+    pub assignee: Option<&'a str>,
+    pub events: Option<usize>,
+}
+
+impl<'a> TaskQuery<'a> {
+    pub fn all(workspace_id: &'a str) -> Self {
+        Self {
+            workspace_id,
+            status: None,
+            assignee: None,
+            events: None,
+        }
+    }
+}
+
 pub struct EventRecord<'a> {
     pub task_id: &'a str,
     pub actor: &'a str,
@@ -192,13 +210,7 @@ impl Queries<'_> {
     }
 
     /// Ordered by status (active work first), priority, then position.
-    pub fn list_tasks(
-        &self,
-        workspace_id: &str,
-        status: Option<TaskStatus>,
-        assignee: Option<&str>,
-        events: Option<usize>,
-    ) -> StoreResult<Vec<Task>> {
+    pub fn list_tasks(&self, query: &TaskQuery<'_>) -> StoreResult<Vec<Task>> {
         let mut tasks: Vec<Task> = {
             let mut stmt = self.conn.prepare_cached(
                 "SELECT id, workspace_id, title, description, status, priority, assignee, created_by,
@@ -213,12 +225,16 @@ impl Queries<'_> {
                           priority, position, created_at",
             )?;
             let rows = stmt.query_map(
-                params![workspace_id, status.map(TaskStatus::as_str), assignee],
+                params![
+                    query.workspace_id,
+                    query.status.map(TaskStatus::as_str),
+                    query.assignee
+                ],
                 task_from_row,
             )?;
             rows.collect::<Result<_, _>>()?
         };
-        self.attach_task_details(workspace_id, &mut tasks, events)?;
+        self.attach_task_details(query.workspace_id, &mut tasks, query.events)?;
         Ok(tasks)
     }
 
@@ -788,7 +804,7 @@ mod tests {
         repo.purge_workspace("ws-1").unwrap();
         assert!(repo
             .queries()
-            .list_tasks("ws-1", None, None, None)
+            .list_tasks(&TaskQuery::all("ws-1"))
             .unwrap()
             .is_empty());
         assert!(notes::search(
@@ -803,7 +819,7 @@ mod tests {
         .is_empty());
         assert_eq!(
             repo.queries()
-                .list_tasks("ws-2", None, None, None)
+                .list_tasks(&TaskQuery::all("ws-2"))
                 .unwrap()
                 .len(),
             2
@@ -857,7 +873,7 @@ mod tests {
         assert!(!repo.enabled());
         assert_eq!(
             repo.queries()
-                .list_tasks("ws-1", None, None, None)
+                .list_tasks(&TaskQuery::all("ws-1"))
                 .unwrap()
                 .len(),
             1

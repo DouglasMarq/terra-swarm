@@ -9,7 +9,8 @@ use super::messages::{self, InboxRequest, Outgoing};
 use super::model::{AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus};
 use super::model::{DEFAULT_INBOX_LIMIT, DEFAULT_SEARCH_LIMIT, MAX_LIMIT, MAX_TITLE_CHARS};
 use super::notes::{self, NoteDraft, NoteSearch};
-use super::statuses::MAX_STATUS_SUMMARY_CHARS;
+use super::repo::TaskQuery;
+use super::statuses::{StatusReport, MAX_STATUS_SUMMARY_CHARS};
 use super::tasks::{self, Assignment, Completion, TaskUpdate};
 use super::{AgentIdentity, McpHub};
 
@@ -443,6 +444,11 @@ struct ReportStatusArgs {
     summary: String,
 }
 
+pub struct ToolCall<'a> {
+    pub name: &'a str,
+    pub args: Value,
+}
+
 type Handler<R> = fn(&McpHub<R>, &AgentIdentity, Value) -> Result<Value, ToolError>;
 
 fn handlers<R: Runtime>() -> [(&'static str, Handler<R>); 13] {
@@ -468,14 +474,13 @@ fn handlers<R: Runtime>() -> [(&'static str, Handler<R>); 13] {
 pub fn call<R: Runtime>(
     hub: &McpHub<R>,
     who: &AgentIdentity,
-    name: &str,
-    args: Value,
+    request: ToolCall<'_>,
 ) -> Result<Value, ToolError> {
     let (_, handler) = handlers::<R>()
         .into_iter()
-        .find(|(tool, _)| *tool == name)
-        .ok_or_else(|| ToolError::UnknownTool(name.to_string()))?;
-    handler(hub, who, args)
+        .find(|(tool, _)| *tool == request.name)
+        .ok_or_else(|| ToolError::UnknownTool(request.name.to_string()))?;
+    handler(hub, who, request.args)
 }
 
 fn peer_summaries<R: Runtime>(
@@ -511,7 +516,10 @@ fn whoami<R: Runtime>(
     let workspace = hub.workspace(ws);
     let peers = peer_summaries(hub, who)?;
     let repo = hub.repo()?;
-    let mine = repo.queries().list_tasks(ws, None, Some(me), None)?;
+    let mine = repo.queries().list_tasks(&TaskQuery {
+        assignee: Some(me),
+        ..TaskQuery::all(ws)
+    })?;
     Ok(json!({
         "terminal_id": me,
         "agent": who.agent,
@@ -548,10 +556,11 @@ fn list_tasks<R: Runtime>(
                 value
             }
         });
-    let tasks =
-        hub.repo()?
-            .queries()
-            .list_tasks(&who.workspace_id, status, assignee.as_deref(), None)?;
+    let tasks = hub.repo()?.queries().list_tasks(&TaskQuery {
+        status,
+        assignee: assignee.as_deref(),
+        ..TaskQuery::all(&who.workspace_id)
+    })?;
     Ok(json!({
         "tasks": tasks.iter().map(task_summary).collect::<Vec<_>>(),
     }))
@@ -827,9 +836,13 @@ fn report_status<R: Runtime>(
             state_values().join(", ")
         ))
     })?;
-    let status =
-        hub.statuses()?
-            .report_status(&who.workspace_id, &who.terminal_id, state, &args.summary)?;
+    let status = hub.statuses()?.report_status(
+        &who.actor(),
+        &StatusReport {
+            state,
+            summary: &args.summary,
+        },
+    )?;
     hub.emit_agent_status(&status);
     Ok(json!(status))
 }
@@ -866,7 +879,14 @@ mod tests {
         for def in &defs {
             assert_eq!(def.schema["type"], "object", "{}", def.name);
             assert!(def.description.len() > 40, "{}", def.name);
-            let result = call(&hub, &who, def.name, json!({}));
+            let result = call(
+                &hub,
+                &who,
+                ToolCall {
+                    name: def.name,
+                    args: json!({}),
+                },
+            );
             assert!(
                 !matches!(result, Err(ToolError::UnknownTool(_))),
                 "{} has no handler",
@@ -874,7 +894,14 @@ mod tests {
             );
         }
         assert_eq!(
-            call(&hub, &who, "nope", json!({})),
+            call(
+                &hub,
+                &who,
+                ToolCall {
+                    name: "nope",
+                    args: json!({})
+                }
+            ),
             Err(ToolError::UnknownTool("nope".into()))
         );
     }
@@ -890,8 +917,10 @@ mod tests {
         let task = call(
             &hub,
             &lead,
-            "create_task",
-            json!({ "title": "Add login form", "priority": "high" }),
+            ToolCall {
+                name: "create_task",
+                args: json!({ "title": "Add login form", "priority": "high" }),
+            },
         )
         .unwrap();
         assert_eq!(task["id"], "T-1");
@@ -899,41 +928,101 @@ mod tests {
         call(
             &hub,
             &lead,
-            "send_message",
-            json!({ "to": "t-2", "body": "T-1 is yours" }),
+            ToolCall {
+                name: "send_message",
+                args: json!({ "to": "t-2", "body": "T-1 is yours" }),
+            },
         )
         .unwrap();
 
-        let me = call(&hub, &helper, "whoami", Value::Null).unwrap();
+        let me = call(
+            &hub,
+            &helper,
+            ToolCall {
+                name: "whoami",
+                args: Value::Null,
+            },
+        )
+        .unwrap();
         assert_eq!(me["terminal_id"], "t-2");
         assert_eq!(me["workspace_name"], "ws-1 project");
         assert_eq!(me["unread_messages"], 1);
         assert_eq!(me["peers"][0]["terminal_id"], "t-1");
 
-        let inbox = call(&hub, &helper, "read_inbox", json!({})).unwrap();
+        let inbox = call(
+            &hub,
+            &helper,
+            ToolCall {
+                name: "read_inbox",
+                args: json!({}),
+            },
+        )
+        .unwrap();
         assert_eq!(inbox["messages"][0]["body"], "T-1 is yours");
         assert_eq!(
-            call(&hub, &helper, "read_inbox", json!({})).unwrap()["messages"],
+            call(
+                &hub,
+                &helper,
+                ToolCall {
+                    name: "read_inbox",
+                    args: json!({})
+                }
+            )
+            .unwrap()["messages"],
             json!([])
         );
 
-        let claimed = call(&hub, &helper, "claim_task", json!({ "id": "T-1" })).unwrap();
+        let claimed = call(
+            &hub,
+            &helper,
+            ToolCall {
+                name: "claim_task",
+                args: json!({ "id": "T-1" }),
+            },
+        )
+        .unwrap();
         assert_eq!(claimed["assignee"], "t-2");
-        assert!(call(&hub, &lead, "claim_task", json!({ "id": "T-1" })).is_err());
+        assert!(call(
+            &hub,
+            &lead,
+            ToolCall {
+                name: "claim_task",
+                args: json!({ "id": "T-1" })
+            }
+        )
+        .is_err());
 
-        let mine = call(&hub, &helper, "list_tasks", json!({ "assignee": "me" })).unwrap();
+        let mine = call(
+            &hub,
+            &helper,
+            ToolCall {
+                name: "list_tasks",
+                args: json!({ "assignee": "me" }),
+            },
+        )
+        .unwrap();
         assert_eq!(mine["tasks"].as_array().unwrap().len(), 1);
 
         let done = call(
             &hub,
             &helper,
-            "complete_task",
-            json!({ "id": "T-1", "summary": "form + tests" }),
+            ToolCall {
+                name: "complete_task",
+                args: json!({ "id": "T-1", "summary": "form + tests" }),
+            },
         )
         .unwrap();
         assert_eq!(done["status"], "review");
 
-        let full = call(&hub, &lead, "get_task", json!({ "id": "1" })).unwrap();
+        let full = call(
+            &hub,
+            &lead,
+            ToolCall {
+                name: "get_task",
+                args: json!({ "id": "1" }),
+            },
+        )
+        .unwrap();
         let kinds: Vec<&str> = full["events"]
             .as_array()
             .unwrap()
@@ -946,14 +1035,32 @@ mod tests {
         call(
             &hub,
             &lead,
-            "create_task",
-            json!({ "title": "Ship", "depends_on": ["T-1"] }),
+            ToolCall {
+                name: "create_task",
+                args: json!({ "title": "Ship", "depends_on": ["T-1"] }),
+            },
         )
         .unwrap();
-        let listed = call(&hub, &lead, "list_tasks", json!({ "status": "todo" })).unwrap();
+        let listed = call(
+            &hub,
+            &lead,
+            ToolCall {
+                name: "list_tasks",
+                args: json!({ "status": "todo" }),
+            },
+        )
+        .unwrap();
         assert_eq!(listed["tasks"][0]["blocked_by"], json!(["T-1"]));
         assert!(listed["tasks"][0].get("events").is_none());
-        assert!(call(&hub, &helper, "claim_task", json!({ "id": "T-2" })).is_err());
+        assert!(call(
+            &hub,
+            &helper,
+            ToolCall {
+                name: "claim_task",
+                args: json!({ "id": "T-2" })
+            }
+        )
+        .is_err());
 
         let events = events.lock().unwrap();
         assert!(
@@ -976,27 +1083,77 @@ mod tests {
         let one = identity("t-1", "ws-1", "claude");
         let other = identity("t-5", "ws-2", "codex");
 
-        call(&hub, &one, "create_task", json!({ "title": "private" })).unwrap();
-        call(&hub, &one, "add_note", json!({ "body": "secret sauce" })).unwrap();
+        call(
+            &hub,
+            &one,
+            ToolCall {
+                name: "create_task",
+                args: json!({ "title": "private" }),
+            },
+        )
+        .unwrap();
+        call(
+            &hub,
+            &one,
+            ToolCall {
+                name: "add_note",
+                args: json!({ "body": "secret sauce" }),
+            },
+        )
+        .unwrap();
         assert_eq!(
-            call(&hub, &other, "list_tasks", json!({})).unwrap()["tasks"],
+            call(
+                &hub,
+                &other,
+                ToolCall {
+                    name: "list_tasks",
+                    args: json!({})
+                }
+            )
+            .unwrap()["tasks"],
             json!([])
         );
-        assert!(call(&hub, &other, "get_task", json!({ "id": "T-1" })).is_err());
+        assert!(call(
+            &hub,
+            &other,
+            ToolCall {
+                name: "get_task",
+                args: json!({ "id": "T-1" })
+            }
+        )
+        .is_err());
         assert_eq!(
-            call(&hub, &other, "search_notes", json!({ "query": "secret" })).unwrap()["notes"],
+            call(
+                &hub,
+                &other,
+                ToolCall {
+                    name: "search_notes",
+                    args: json!({ "query": "secret" })
+                }
+            )
+            .unwrap()["notes"],
             json!([])
         );
         // Agents of other projects are not addressable either.
         assert!(call(
             &hub,
             &other,
-            "send_message",
-            json!({ "to": "t-1", "body": "hi" })
+            ToolCall {
+                name: "send_message",
+                args: json!({ "to": "t-1", "body": "hi" })
+            }
         )
         .is_err());
         assert_eq!(
-            call(&hub, &other, "whoami", json!({})).unwrap()["peers"],
+            call(
+                &hub,
+                &other,
+                ToolCall {
+                    name: "whoami",
+                    args: json!({})
+                }
+            )
+            .unwrap()["peers"],
             json!([])
         );
     }
@@ -1012,7 +1169,15 @@ mod tests {
         hub.issue(owner.clone());
         hub.issue(lead.clone());
         hub.issue(identity("t-6", "ws-2", "codex"));
-        call(&hub, &owner, "create_task", json!({ "title": "private" })).unwrap();
+        call(
+            &hub,
+            &owner,
+            ToolCall {
+                name: "create_task",
+                args: json!({ "title": "private" }),
+            },
+        )
+        .unwrap();
 
         let attempts = [
             ("get_task", json!({ "id": "T-1" })),
@@ -1027,7 +1192,7 @@ mod tests {
         for (tool, args) in attempts {
             assert!(
                 matches!(
-                    call(&hub, &lead, tool, args),
+                    call(&hub, &lead, ToolCall { name: tool, args }),
                     Err(ToolError::Store(StoreError::NotFound(_)))
                 ),
                 "{}",
@@ -1035,13 +1200,29 @@ mod tests {
             );
         }
 
-        let task = call(&hub, &owner, "get_task", json!({ "id": "T-1" })).unwrap();
+        let task = call(
+            &hub,
+            &owner,
+            ToolCall {
+                name: "get_task",
+                args: json!({ "id": "T-1" }),
+            },
+        )
+        .unwrap();
         assert_eq!(task["status"], "todo");
         assert_eq!(task["assignee"], Value::Null);
         assert_eq!(task["events"].as_array().unwrap().len(), 1);
         let helper = identity("t-6", "ws-2", "codex");
         assert_eq!(
-            call(&hub, &helper, "read_inbox", json!({})).unwrap()["messages"],
+            call(
+                &hub,
+                &helper,
+                ToolCall {
+                    name: "read_inbox",
+                    args: json!({})
+                }
+            )
+            .unwrap()["messages"],
             json!([])
         );
     }
@@ -1051,15 +1232,13 @@ mod tests {
         let (hub, _) = hub();
         let who = identity("t-1", "ws-1", "claude");
         assert!(matches!(
-            call(&hub, &who, "list_tasks", json!({ "status": "finished" })),
-            Err(ToolError::InvalidArguments(_))
-        ));
-        assert!(matches!(
             call(
                 &hub,
                 &who,
-                "create_task",
-                json!({ "title": "x", "priority": "asap" })
+                ToolCall {
+                    name: "list_tasks",
+                    args: json!({ "status": "finished" })
+                }
             ),
             Err(ToolError::InvalidArguments(_))
         ));
@@ -1067,18 +1246,53 @@ mod tests {
             call(
                 &hub,
                 &who,
-                "send_message",
-                json!({ "to": "t-1", "body": "me" })
+                ToolCall {
+                    name: "create_task",
+                    args: json!({ "title": "x", "priority": "asap" })
+                }
             ),
             Err(ToolError::InvalidArguments(_))
         ));
         assert!(matches!(
-            call(&hub, &who, "report_status", json!({ "state": "sleeping" })),
+            call(
+                &hub,
+                &who,
+                ToolCall {
+                    name: "send_message",
+                    args: json!({ "to": "t-1", "body": "me" })
+                }
+            ),
             Err(ToolError::InvalidArguments(_))
         ));
-        call(&hub, &who, "create_task", json!({ "title": "x" })).unwrap();
         assert!(matches!(
-            call(&hub, &who, "update_task", json!({ "id": "T-1" })),
+            call(
+                &hub,
+                &who,
+                ToolCall {
+                    name: "report_status",
+                    args: json!({ "state": "sleeping" })
+                }
+            ),
+            Err(ToolError::InvalidArguments(_))
+        ));
+        call(
+            &hub,
+            &who,
+            ToolCall {
+                name: "create_task",
+                args: json!({ "title": "x" }),
+            },
+        )
+        .unwrap();
+        assert!(matches!(
+            call(
+                &hub,
+                &who,
+                ToolCall {
+                    name: "update_task",
+                    args: json!({ "id": "T-1" })
+                }
+            ),
             Err(ToolError::InvalidArguments(_))
         ));
     }
@@ -1093,11 +1307,21 @@ mod tests {
         call(
             &hub,
             &one,
-            "report_status",
-            json!({ "state": "needs_input", "summary": "which DB?" }),
+            ToolCall {
+                name: "report_status",
+                args: json!({ "state": "needs_input", "summary": "which DB?" }),
+            },
         )
         .unwrap();
-        let me = call(&hub, &two, "whoami", json!({})).unwrap();
+        let me = call(
+            &hub,
+            &two,
+            ToolCall {
+                name: "whoami",
+                args: json!({}),
+            },
+        )
+        .unwrap();
         assert_eq!(me["peers"][0]["state"], "needs_input");
         assert_eq!(me["peers"][0]["summary"], "which DB?");
         assert!(events
@@ -1109,18 +1333,38 @@ mod tests {
         call(
             &hub,
             &one,
-            "add_note",
-            json!({ "body": "use sqlite", "key": "db" }),
+            ToolCall {
+                name: "add_note",
+                args: json!({ "body": "use sqlite", "key": "db" }),
+            },
         )
         .unwrap();
-        let found = call(&hub, &two, "search_notes", json!({ "query": "db" })).unwrap();
+        let found = call(
+            &hub,
+            &two,
+            ToolCall {
+                name: "search_notes",
+                args: json!({ "query": "db" }),
+            },
+        )
+        .unwrap();
         assert_eq!(found["notes"][0]["body"], "use sqlite");
-        call(&hub, &one, "add_note", json!({ "body": "second" })).unwrap();
+        call(
+            &hub,
+            &one,
+            ToolCall {
+                name: "add_note",
+                args: json!({ "body": "second" }),
+            },
+        )
+        .unwrap();
         let limited = call(
             &hub,
             &two,
-            "search_notes",
-            json!({ "query": "", "limit": 1 }),
+            ToolCall {
+                name: "search_notes",
+                args: json!({ "query": "", "limit": 1 }),
+            },
         )
         .unwrap();
         assert_eq!(limited["notes"].as_array().unwrap().len(), 1);
@@ -1141,7 +1385,15 @@ mod tests {
         hub.issue(dev.clone());
         hub.issue(identity("t-3", "ws-1", "codex"));
 
-        let me = call(&hub, &dev, "whoami", json!({})).unwrap();
+        let me = call(
+            &hub,
+            &dev,
+            ToolCall {
+                name: "whoami",
+                args: json!({}),
+            },
+        )
+        .unwrap();
         assert_eq!(me["role"], "executor");
         assert!(me["role_instructions"]
             .as_str()
@@ -1155,15 +1407,19 @@ mod tests {
         let first = call(
             &hub,
             &lead,
-            "create_task",
-            json!({ "title": "Build the API" }),
+            ToolCall {
+                name: "create_task",
+                args: json!({ "title": "Build the API" }),
+            },
         )
         .unwrap();
         let second = call(
             &hub,
             &lead,
-            "create_task",
-            json!({ "title": "Test the API", "depends_on": [first["id"]] }),
+            ToolCall {
+                name: "create_task",
+                args: json!({ "title": "Test the API", "depends_on": [first["id"]] }),
+            },
         )
         .unwrap();
 
@@ -1171,8 +1427,10 @@ mod tests {
         let refused = call(
             &hub,
             &dev,
-            "assign_task",
-            json!({ "id": first["id"], "to": "t-3" }),
+            ToolCall {
+                name: "assign_task",
+                args: json!({ "id": first["id"], "to": "t-3" }),
+            },
         );
         assert!(
             matches!(refused, Err(ToolError::InvalidArguments(message)) if message.contains("orchestrator"))
@@ -1182,16 +1440,20 @@ mod tests {
             call(
                 &hub,
                 &lead,
-                "assign_task",
-                json!({ "id": second["id"], "to": "t-2" })
+                ToolCall {
+                    name: "assign_task",
+                    args: json!({ "id": second["id"], "to": "t-2" })
+                }
             ),
             Err(ToolError::Store(StoreError::Conflict(_)))
         ));
         assert!(call(
             &hub,
             &lead,
-            "assign_task",
-            json!({ "id": first["id"], "to": "t-9" })
+            ToolCall {
+                name: "assign_task",
+                args: json!({ "id": first["id"], "to": "t-9" })
+            }
         )
         .is_err());
 
@@ -1199,21 +1461,33 @@ mod tests {
         call(
             &hub,
             &dev,
-            "report_status",
-            json!({ "state": "working", "summary": "other work" }),
+            ToolCall {
+                name: "report_status",
+                args: json!({ "state": "working", "summary": "other work" }),
+            },
         )
         .unwrap();
         let busy = call(
             &hub,
             &lead,
-            "assign_task",
-            json!({ "id": first["id"], "to": "t-2", "note": "Use axum." }),
+            ToolCall {
+                name: "assign_task",
+                args: json!({ "id": first["id"], "to": "t-2", "note": "Use axum." }),
+            },
         )
         .unwrap();
         assert_eq!(busy["woken"], false);
         assert_eq!(busy["task"]["assignee"], "t-2");
         assert_eq!(busy["task"]["status"], "in_progress");
-        let inbox = call(&hub, &dev, "read_inbox", json!({})).unwrap();
+        let inbox = call(
+            &hub,
+            &dev,
+            ToolCall {
+                name: "read_inbox",
+                args: json!({}),
+            },
+        )
+        .unwrap();
         assert!(inbox["messages"][0]["body"]
             .as_str()
             .unwrap()
@@ -1228,15 +1502,19 @@ mod tests {
         call(
             &hub,
             &dev,
-            "report_status",
-            json!({ "state": "idle", "summary": "" }),
+            ToolCall {
+                name: "report_status",
+                args: json!({ "state": "idle", "summary": "" }),
+            },
         )
         .unwrap();
         let idle = call(
             &hub,
             &lead,
-            "assign_task",
-            json!({ "id": first["id"], "to": "t-2" }),
+            ToolCall {
+                name: "assign_task",
+                args: json!({ "id": first["id"], "to": "t-2" }),
+            },
         )
         .unwrap();
         assert_eq!(idle["woken"], true);

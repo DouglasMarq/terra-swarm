@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tauri::State;
 
 use super::model::{Actor, AgentStatus, NewTask, Task, TaskPatch, TaskPriority, TaskStatus};
+use super::repo::TaskQuery;
 use super::tasks::{self, TaskUpdate};
 use super::{McpHub, ServerInfo};
 
@@ -63,8 +64,10 @@ pub fn mcp_set_enabled(hub: Hub<'_>, enabled: bool) -> Result<ServerInfo, String
 pub fn mcp_list_tasks(hub: Hub<'_>, workspace_id: String) -> Result<Vec<Task>, String> {
     hub.repo()
         .and_then(|repo| {
-            repo.queries()
-                .list_tasks(&workspace_id, None, None, Some(PANEL_EVENTS))
+            repo.queries().list_tasks(&TaskQuery {
+                events: Some(PANEL_EVENTS),
+                ..TaskQuery::all(&workspace_id)
+            })
         })
         .map_err(|e| e.to_string())
 }

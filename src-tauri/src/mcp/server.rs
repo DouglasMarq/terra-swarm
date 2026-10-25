@@ -22,7 +22,7 @@ use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, Stream
 use rmcp::{ErrorData, RoleServer, ServerHandler};
 use tauri::Runtime;
 
-use super::tools::{self, ToolError};
+use super::tools::{self, ToolCall, ToolError};
 use super::{AgentIdentity, McpHub};
 
 pub const MCP_PATH: &str = "/mcp";
@@ -109,10 +109,11 @@ impl<R: Runtime> ServerHandler for TerraServer<R> {
         let hub = Arc::clone(&self.hub);
         let name = request.name.to_string();
         // Tool handlers take blocking locks and run SQLite queries.
-        let outcome =
-            tokio::task::spawn_blocking(move || tools::call(&hub, &identity, &name, args))
-                .await
-                .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
+        let outcome = tokio::task::spawn_blocking(move || {
+            tools::call(&hub, &identity, ToolCall { name: &name, args })
+        })
+        .await
+        .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
         Ok(match outcome {
             Ok(value) => CallToolResult::success(vec![ContentBlock::text(
                 serde_json::to_string_pretty(&value).unwrap_or_else(|error| {

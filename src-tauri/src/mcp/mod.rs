@@ -451,10 +451,7 @@ mod tests {
         let token = hub.issue(identity("t-1", "ws-1", "claude"));
         tasks::create(
             &mut hub.repo().unwrap(),
-            &model::Actor {
-                workspace_id: "ws-1",
-                name: "t-1",
-            },
+            &actor("ws-1", "t-1"),
             model::NewTask {
                 title: "x".into(),
                 ..Default::default()
@@ -463,7 +460,13 @@ mod tests {
         .unwrap();
         hub.statuses()
             .unwrap()
-            .report_status("ws-1", "t-1", model::AgentState::Working, "")
+            .report_status(
+                &actor("ws-1", "t-1"),
+                &statuses::StatusReport {
+                    state: model::AgentState::Working,
+                    summary: "",
+                },
+            )
             .unwrap();
         hub.purge_workspace("ws-1");
         assert!(hub.identify(&token).is_none());
@@ -472,7 +475,7 @@ mod tests {
             .repo()
             .unwrap()
             .queries()
-            .list_tasks("ws-1", None, None, None)
+            .list_tasks(&repo::TaskQuery::all("ws-1"))
             .unwrap()
             .is_empty());
         assert!(events

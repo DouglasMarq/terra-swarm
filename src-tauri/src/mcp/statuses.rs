@@ -1,9 +1,14 @@
 use std::collections::HashMap;
 
-use super::model::{AgentState, AgentStatus, StoreError, StoreResult};
+use super::model::{Actor, AgentState, AgentStatus, StoreError, StoreResult};
 use crate::clock::now_millis;
 
 pub const MAX_STATUS_SUMMARY_CHARS: usize = 500;
+
+pub struct StatusReport<'a> {
+    pub state: AgentState,
+    pub summary: &'a str,
+}
 
 #[derive(Default)]
 pub struct StatusRegistry {
@@ -13,12 +18,10 @@ pub struct StatusRegistry {
 impl StatusRegistry {
     pub fn report_status(
         &mut self,
-        workspace_id: &str,
-        terminal_id: &str,
-        state: AgentState,
-        summary: &str,
+        reporter: &Actor<'_>,
+        report: &StatusReport<'_>,
     ) -> StoreResult<AgentStatus> {
-        let summary = summary.trim();
+        let summary = report.summary.trim();
         if summary.chars().count() > MAX_STATUS_SUMMARY_CHARS {
             return Err(StoreError::Invalid(format!(
                 "summary is longer than {} characters",
@@ -26,14 +29,14 @@ impl StatusRegistry {
             )));
         }
         let status = AgentStatus {
-            terminal_id: terminal_id.to_string(),
-            workspace_id: workspace_id.to_string(),
-            state,
+            terminal_id: reporter.name.to_string(),
+            workspace_id: reporter.workspace_id.to_string(),
+            state: report.state,
             summary: summary.to_string(),
             updated_at: now_millis(),
         };
         self.by_terminal
-            .insert(terminal_id.to_string(), status.clone());
+            .insert(reporter.name.to_string(), status.clone());
         Ok(status)
     }
 
@@ -64,20 +67,39 @@ impl StatusRegistry {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::actor;
     use super::*;
 
     #[test]
     fn statuses_are_scoped_and_validated() {
         let mut registry = StatusRegistry::default();
         registry
-            .report_status("ws-1", "t-1", AgentState::Working, "parsing")
+            .report_status(
+                &actor("ws-1", "t-1"),
+                &StatusReport {
+                    state: AgentState::Working,
+                    summary: "parsing",
+                },
+            )
             .unwrap();
         registry
-            .report_status("ws-2", "t-5", AgentState::Idle, "")
+            .report_status(
+                &actor("ws-2", "t-5"),
+                &StatusReport {
+                    state: AgentState::Idle,
+                    summary: "",
+                },
+            )
             .unwrap();
         assert_eq!(registry.statuses("ws-1").len(), 1);
         assert!(registry
-            .report_status("ws-1", "t-1", AgentState::Idle, &"x".repeat(501))
+            .report_status(
+                &actor("ws-1", "t-1"),
+                &StatusReport {
+                    state: AgentState::Idle,
+                    summary: &"x".repeat(501)
+                }
+            )
             .is_err());
         registry.forget_status("t-1");
         assert!(registry.statuses("ws-1").is_empty());
@@ -89,10 +111,14 @@ mod tests {
         for workspace_id in ["ws-1", "ws-2"] {
             registry
                 .report_status(
-                    workspace_id,
-                    &format!("{}-agent", workspace_id),
-                    AgentState::Working,
-                    "",
+                    &Actor {
+                        workspace_id,
+                        name: &format!("{}-agent", workspace_id),
+                    },
+                    &StatusReport {
+                        state: AgentState::Working,
+                        summary: "",
+                    },
                 )
                 .unwrap();
         }

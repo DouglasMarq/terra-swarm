@@ -976,7 +976,8 @@ mod resample_tests {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
+#[cfg(unix)]
 mod stderr_tests {
     use super::with_stderr_silenced;
     use std::os::fd::AsFd;

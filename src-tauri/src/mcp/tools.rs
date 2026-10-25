@@ -3,6 +3,7 @@
 
 use serde::Deserialize;
 use serde_json::{json, Value};
+use tauri::Runtime;
 
 use super::repo::{
     AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus,
@@ -381,8 +382,8 @@ struct ReportStatusArgs {
 
 /// Run one tool for `who`. Every store call uses `who.workspace_id`, so a
 /// caller can never reach another project's data.
-pub fn call(
-    hub: &McpHub,
+pub fn call<R: Runtime>(
+    hub: &McpHub<R>,
     who: &AgentIdentity,
     name: &str,
     args: Value,
@@ -610,10 +611,10 @@ pub fn call(
 
 #[cfg(test)]
 mod tests {
-    use super::super::roles::Role;
     use super::super::test_support::{hub, identity};
     use super::super::{EVENT_AGENT_STATUS, EVENT_MESSAGE, EVENT_NUDGE, EVENT_TASKS_CHANGED};
     use super::*;
+    use crate::roles::Role;
 
     #[test]
     fn every_tool_has_an_object_schema_and_a_handler() {

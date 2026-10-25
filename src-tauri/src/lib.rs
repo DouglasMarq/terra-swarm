@@ -1,8 +1,13 @@
+mod agent_catalog;
 pub mod cli;
+mod clock;
 mod fonts;
 mod ipc_error;
 mod mcp;
+mod orchestration;
+mod paths;
 mod pty;
+mod roles;
 mod scrollback;
 mod sync;
 mod usage;
@@ -66,9 +71,7 @@ pub fn run() {
             let hub = Arc::new(mcp::McpHub::open(
                 dir.join(mcp::db::DB_FILE),
                 Some(dir.join("mcp")),
-                Box::new(mcp::TauriHost {
-                    app: app.handle().clone(),
-                }),
+                app.handle().clone(),
             ));
             let known_workspaces = store
                 .workspaces
@@ -143,12 +146,12 @@ pub fn run() {
             workspace::create_group,
             workspace::rename_group,
             workspace::remove_group,
-            workspace::suspend_group,
+            orchestration::suspend_group,
             workspace::resume_group,
             workspace::store_saved_at,
             workspace::export_workspace_snapshot,
-            workspace::import_workspace_snapshot,
-            workspace::close_workspace,
+            orchestration::import_workspace_snapshot,
+            orchestration::close_workspace,
             workspace::rename_workspace,
             workspace::reorder_workspaces,
             workspace::set_terminal_width,
@@ -170,12 +173,12 @@ pub fn run() {
             pty::dev_server::probe_dev_servers,
             pty::shell::list_available_shells,
             fonts::list_system_fonts,
-            worktree::worktree_status,
-            worktree::worktree_remove,
-            worktree::worktree_diff,
-            worktree::worktree_commit,
-            worktree::worktree_merge,
-            worktree::worktree_open_pr,
+            orchestration::worktree_status,
+            orchestration::worktree_remove,
+            orchestration::worktree_diff,
+            orchestration::worktree_commit,
+            orchestration::worktree_merge,
+            orchestration::worktree_open_pr,
             mcp::commands::mcp_server_info,
             mcp::commands::mcp_set_enabled,
             mcp::commands::mcp_list_tasks,

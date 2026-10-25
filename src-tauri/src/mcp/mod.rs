@@ -8,29 +8,28 @@
 //! - `server`: Streamable HTTP transport on 127.0.0.1 (rmcp + axum).
 //! - `launch`: how a terminal gets its token, environment and CLI flags.
 //! - `commands`: Tauri commands used by the Tasks panel and Settings.
-//! - `tauri_host`: the Tauri side of [`McpHost`].
 
 pub mod auth;
 pub mod commands;
+pub mod connect;
 pub mod db;
 pub mod hooks;
+pub mod integration;
 pub mod launch;
 pub mod repo;
-pub mod roles;
 pub mod server;
-mod tauri_host;
 pub mod tools;
 
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
+use tauri::{AppHandle, Emitter, Manager, Runtime, Wry};
 
+use crate::sync::LockExt;
+use crate::workspace::{Workspace, WorkspaceStore};
 use auth::TokenRegistry;
 pub use auth::{AgentIdentity, McpLease};
 use repo::{AgentStatus, Message, Repo, StoreError, StoreResult};
-pub use tauri_host::{purge_workspace, TauriHost};
-
-use crate::sync::LockExt;
 
 pub const EVENT_TASKS_CHANGED: &str = "mcp-tasks-changed";
 pub const EVENT_MESSAGE: &str = "mcp-message";
@@ -42,15 +41,6 @@ pub const EVENT_NUDGE: &str = "mcp-nudge";
 pub struct WorkspaceInfo {
     pub name: String,
     pub cwd: String,
-}
-
-/// What the hub needs from the app around it. The Tauri implementation
-/// emits window events and reads the workspace store; tests record calls.
-pub trait McpHost: Send + Sync {
-    fn emit(&self, event: &str, payload: serde_json::Value);
-    fn workspace(&self, workspace_id: &str) -> Option<WorkspaceInfo>;
-    /// Ids of every terminal of the workspace, running or not.
-    fn terminals(&self, workspace_id: &str) -> Vec<String>;
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -66,7 +56,7 @@ pub struct ServerInfo {
     pub error: Option<String>,
 }
 
-pub struct McpHub {
+pub struct McpHub<R: Runtime = Wry> {
     repo: Option<Mutex<Repo>>,
     error: Option<String>,
     db_path: Option<PathBuf>,
@@ -78,13 +68,13 @@ pub struct McpHub {
     config_dir: Option<PathBuf>,
     /// Each terminal's session log, as its hooks reported it.
     session_logs: Mutex<std::collections::HashMap<String, crate::usage::SessionLog>>,
-    host: Box<dyn McpHost>,
+    app: AppHandle<R>,
 }
 
-impl McpHub {
+impl<R: Runtime> McpHub<R> {
     /// Open `mcp.db`. When it cannot be opened or migrated the app keeps
     /// running with the MCP server off, and Settings shows why.
-    pub fn open(db_path: PathBuf, config_dir: Option<PathBuf>, host: Box<dyn McpHost>) -> Self {
+    pub fn open(db_path: PathBuf, config_dir: Option<PathBuf>, app: AppHandle<R>) -> Self {
         let (repo, error) = match db::open(&db_path) {
             Ok(conn) => (Some(Mutex::new(Repo::new(conn))), None),
             Err(error) => {
@@ -101,12 +91,12 @@ impl McpHub {
             hook_program: Mutex::new(None),
             session_logs: Mutex::new(std::collections::HashMap::new()),
             config_dir,
-            host,
+            app,
         }
     }
 
     #[cfg(test)]
-    pub fn with_repo(repo: Repo, config_dir: Option<PathBuf>, host: Box<dyn McpHost>) -> Self {
+    pub fn with_repo(repo: Repo, config_dir: Option<PathBuf>, app: AppHandle<R>) -> Self {
         Self {
             repo: Some(Mutex::new(repo)),
             error: None,
@@ -116,7 +106,7 @@ impl McpHub {
             hook_program: Mutex::new(None),
             session_logs: Mutex::new(std::collections::HashMap::new()),
             config_dir,
-            host,
+            app,
         }
     }
 
@@ -177,12 +167,36 @@ impl McpHub {
         }
     }
 
+    fn with_workspace<T>(
+        &self,
+        workspace_id: &str,
+        read: impl FnOnce(&Workspace) -> T,
+    ) -> Option<T> {
+        let store = self.app.try_state::<Mutex<WorkspaceStore>>()?;
+        let store = store.lock_or_recover();
+        store.get(workspace_id).map(read)
+    }
+
     pub fn workspace(&self, workspace_id: &str) -> Option<WorkspaceInfo> {
-        self.host.workspace(workspace_id)
+        self.with_workspace(workspace_id, |workspace| WorkspaceInfo {
+            name: workspace.name.clone(),
+            cwd: workspace.cwd.clone(),
+        })
     }
 
     pub fn workspace_terminals(&self, workspace_id: &str) -> Vec<String> {
-        self.host.terminals(workspace_id)
+        self.with_workspace(workspace_id, |workspace| {
+            workspace
+                .terminals
+                .iter()
+                .map(|terminal| terminal.id.clone())
+                .collect()
+        })
+        .unwrap_or_default()
+    }
+
+    fn emit(&self, event: &str, payload: serde_json::Value) {
+        let _ = self.app.emit(event, payload);
     }
 
     // ----- tokens ---------------------------------------------------------
@@ -219,7 +233,7 @@ impl McpHub {
         if let Ok(mut repo) = self.repo() {
             repo.forget_status(&identity.terminal_id);
         }
-        self.host.emit(
+        self.emit(
             EVENT_AGENT_STATUS,
             serde_json::json!({
                 "workspace_id": identity.workspace_id,
@@ -248,7 +262,7 @@ impl McpHub {
     // ----- events ---------------------------------------------------------
 
     pub fn emit_tasks_changed(&self, workspace_id: &str) {
-        self.host.emit(
+        self.emit(
             EVENT_TASKS_CHANGED,
             serde_json::json!({ "workspace_id": workspace_id }),
         );
@@ -268,14 +282,14 @@ impl McpHub {
     }
 
     pub fn emit_nudge(&self, workspace_id: &str, terminal_id: &str, prompt: &str) {
-        self.host.emit(
+        self.emit(
             EVENT_NUDGE,
             serde_json::json!({ "workspace_id": workspace_id, "terminal_id": terminal_id, "prompt": prompt }),
         );
     }
 
     pub fn emit_message(&self, message: &Message) {
-        self.host.emit(
+        self.emit(
             EVENT_MESSAGE,
             serde_json::to_value(message).unwrap_or_else(|error| {
                 eprintln!("cannot serialize message {}: {}", message.id, error);
@@ -287,7 +301,7 @@ impl McpHub {
     /// An agent is waiting for a human (a permission prompt, a question).
     pub fn emit_attention(&self, status: &AgentStatus) {
         let workspace = self.workspace(&status.workspace_id);
-        self.host.emit(
+        self.emit(
             hooks::EVENT_AGENT_ATTENTION,
             serde_json::json!({
                 "workspace_id": status.workspace_id,
@@ -299,7 +313,7 @@ impl McpHub {
     }
 
     pub fn emit_agent_status(&self, status: &AgentStatus) {
-        self.host.emit(
+        self.emit(
             EVENT_AGENT_STATUS,
             serde_json::json!({
                 "workspace_id": status.workspace_id,
@@ -315,39 +329,55 @@ pub mod test_support {
     use super::*;
     use std::sync::Arc;
 
+    use tauri::test::{mock_app, MockRuntime};
+    use tauri::Listener;
+
     pub type Events = Arc<Mutex<Vec<(String, serde_json::Value)>>>;
 
-    /// Records emitted events; knows no terminals beyond the live tokens.
-    #[derive(Default)]
-    pub struct RecordingHost {
-        pub events: Events,
+    const RECORDED_EVENTS: [&str; 5] = [
+        EVENT_TASKS_CHANGED,
+        EVENT_MESSAGE,
+        EVENT_AGENT_STATUS,
+        EVENT_NUDGE,
+        hooks::EVENT_AGENT_ATTENTION,
+    ];
+    const WORKSPACE_IDS: [&str; 2] = ["ws-1", "ws-2"];
+
+    fn workspace(workspace_id: &str) -> Workspace {
+        serde_json::from_value(serde_json::json!({
+            "id": workspace_id,
+            "name": format!("{} project", workspace_id),
+            "cwd": format!("/tmp/{}", workspace_id),
+        }))
+        .unwrap()
     }
 
-    impl McpHost for RecordingHost {
-        fn emit(&self, event: &str, payload: serde_json::Value) {
-            self.events
-                .lock()
-                .unwrap()
-                .push((event.to_string(), payload));
-        }
-
-        fn workspace(&self, workspace_id: &str) -> Option<WorkspaceInfo> {
-            Some(WorkspaceInfo {
-                name: format!("{} project", workspace_id),
-                cwd: format!("/tmp/{}", workspace_id),
-            })
-        }
-
-        fn terminals(&self, _workspace_id: &str) -> Vec<String> {
-            Vec::new()
-        }
+    pub fn app() -> AppHandle<MockRuntime> {
+        let app = mock_app();
+        app.manage(Mutex::new(WorkspaceStore {
+            workspaces: WORKSPACE_IDS.map(workspace).to_vec(),
+            ..WorkspaceStore::default()
+        }));
+        app.handle().clone()
     }
 
-    pub fn hub() -> (Arc<McpHub>, Events) {
-        let host = RecordingHost::default();
-        let events = Arc::clone(&host.events);
+    fn record_events(app: &AppHandle<MockRuntime>) -> Events {
+        let events = Events::default();
+        for event in RECORDED_EVENTS {
+            let sink = Arc::clone(&events);
+            app.listen_any(event, move |emitted| {
+                let payload = serde_json::from_str(emitted.payload()).unwrap();
+                sink.lock().unwrap().push((event.to_string(), payload));
+            });
+        }
+        events
+    }
+
+    pub fn hub() -> (Arc<McpHub<MockRuntime>>, Events) {
+        let app = app();
+        let events = record_events(&app);
         (
-            Arc::new(McpHub::with_repo(Repo::in_memory(), None, Box::new(host))),
+            Arc::new(McpHub::with_repo(Repo::in_memory(), None, app)),
             events,
         )
     }
@@ -419,15 +449,12 @@ mod tests {
 
     #[test]
     fn an_unreadable_database_turns_the_server_off() {
-        let dir = std::env::temp_dir().join(format!("terra-mcp-hub-{}", repo::now_millis()));
+        let dir =
+            std::env::temp_dir().join(format!("terra-mcp-hub-{}", crate::clock::now_millis()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(db::DB_FILE);
         std::fs::write(&path, b"this is not a sqlite database, not even close").unwrap();
-        let hub = Arc::new(McpHub::open(
-            path.clone(),
-            None,
-            Box::new(RecordingHost::default()),
-        ));
+        let hub = Arc::new(McpHub::open(path.clone(), None, app()));
         hub.set_port(4100);
         let info = hub.info();
         assert!(!info.available);

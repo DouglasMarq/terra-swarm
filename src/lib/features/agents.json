@@ -1,5 +1,5 @@
 {
-  "$comment": "The single list of agent CLIs Terra Swarm knows. Read by the frontend (agentProfiles.ts) and compiled into the backend (src-tauri/src/pty/agents.rs). Order is the order shown to the user. `resume` is the command that continues the last session (omit when the CLI has no stable flag for it); `integration` names how Terra connects the agent to its MCP server and state hooks.",
+  "$comment": "The single list of agent CLIs Terra Swarm knows. Read by the frontend (agentProfiles.ts) and compiled into the backend (src-tauri/src/agent_catalog.rs). Order is the order shown to the user. `resume` is the command that continues the last session (omit when the CLI has no stable flag for it); `integration` names how Terra connects the agent to its MCP server and state hooks.",
   "agents": [
     { "id": "claude", "label": "Claude Code", "resume": "claude --continue", "integration": "claude" },
     { "id": "codex", "label": "Codex", "resume": "codex resume --last", "integration": "codex" },

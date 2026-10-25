@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Component, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager, State};
+use tauri::State;
 
 /// Result returned by the explicit snapshot import/export IPC commands.
 /// `path` is the user-selected source (import) or destination (export), while
@@ -162,8 +162,7 @@ pub fn store_saved_at(store: State<'_, Mutex<WorkspaceStore>>) -> Result<Option<
     let millis = std::fs::metadata(path)
         .and_then(|m| m.modified())
         .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_millis() as u64);
+        .and_then(crate::clock::epoch_millis);
     Ok(millis)
 }
 
@@ -197,68 +196,6 @@ pub fn export_workspace_snapshot(
         version: WORKSPACE_FILE_VERSION,
         path: target.to_string_lossy().into_owned(),
         backup_path: None,
-        workspace_count: counts.0,
-        group_count: counts.1,
-        terminal_count: counts.2,
-        suspended_terminal_count: counts.3,
-    })
-}
-
-/// Import a validated legacy/v1/v2 snapshot.  The current store is backed up
-/// and replaced atomically; all currently tracked PTYs are stopped so the
-/// imported metadata cannot accidentally describe an inherited live process.
-#[tauri::command(async)]
-pub fn import_workspace_snapshot(
-    app: AppHandle,
-    path: String,
-) -> Result<WorkspaceSnapshotTransfer, String> {
-    let source = validate_explicit_path(&path)?;
-    let raw = std::fs::read_to_string(&source).map_err(|error| {
-        format!(
-            "failed to read workspace snapshot {}: {}",
-            source.display(),
-            error
-        )
-    })?;
-    let mut imported = parse_import_snapshot(&raw)?;
-    mark_imported_sessions_suspended(&mut imported);
-    let counts = transfer_counts(&imported);
-    let json = imported
-        .serialized_snapshot()
-        .map_err(|error| format!("failed to serialize imported workspace snapshot: {}", error))?;
-
-    let state = app.state::<Mutex<WorkspaceStore>>();
-    let mut current = state.lock_or_recover();
-    let target = current
-        .save_path
-        .clone()
-        .ok_or_else(|| "workspace store has no persistence path".to_string())?;
-    let backup = replace_store_file(&target, &json)?;
-
-    // A transfer is metadata-only. Stop every process known to this app
-    // before swapping the in-memory store, including sessions absent from the
-    // old persisted file after a previous interrupted operation.
-    let manager = app.state::<Mutex<crate::pty::PtyManager>>();
-    crate::pty::kill_all(&manager);
-
-    imported.save_path = Some(target);
-    for workspace in &imported.workspaces {
-        bump_next_id(&workspace.id);
-        for terminal in &workspace.terminals {
-            crate::pty::bump_next_terminal_id(&terminal.id);
-        }
-    }
-    for group in &imported.groups {
-        bump_next_group_id(&group.id);
-    }
-    *current = imported;
-    drop(current);
-    emit_workspaces_changed(&app);
-
-    Ok(WorkspaceSnapshotTransfer {
-        version: WORKSPACE_FILE_VERSION,
-        path: source.to_string_lossy().into_owned(),
-        backup_path: backup.map(|path| path.to_string_lossy().into_owned()),
         workspace_count: counts.0,
         group_count: counts.1,
         terminal_count: counts.2,

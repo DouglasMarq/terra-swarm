@@ -9,6 +9,8 @@ use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+use crate::clock::now_millis;
+
 pub const MAX_TITLE_CHARS: usize = 200;
 /// Guards against runaway input; history itself is never trimmed.
 pub const MAX_BODY_BYTES: usize = 64 * 1024;
@@ -241,13 +243,6 @@ impl From<rusqlite::Error> for StoreError {
 }
 
 pub type StoreResult<T> = Result<T, StoreError>;
-
-pub fn now_millis() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as i64)
-        .unwrap_or(0)
-}
 
 /// Accept `T-12`, `t-12` and a bare `12`, so agents can be sloppy with ids.
 pub fn normalize_task_id(raw: &str) -> Option<String> {

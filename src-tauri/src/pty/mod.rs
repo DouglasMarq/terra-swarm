@@ -17,6 +17,7 @@ use shell::resolve_shell;
 #[cfg(windows)]
 use shell::{shell_flavor, ShellFlavor};
 
+use crate::agent_catalog;
 use crate::ipc_error::{IpcError, IpcErrorCode};
 use crate::mcp::launch::Quoting;
 use crate::mcp::{McpHub, McpLease};
@@ -186,7 +187,7 @@ pub struct SpawnOptions {
     /// Where worktrees go; the app data directory when unset.
     pub worktree_root: Option<std::path::PathBuf>,
     /// Team role for a new agent; a respawned one keeps its recorded role.
-    pub role: Option<crate::mcp::roles::Role>,
+    pub role: Option<crate::roles::Role>,
 }
 
 impl SpawnOptions {
@@ -212,7 +213,7 @@ pub struct LaunchExtras {
     #[serde(default)]
     pub worktree: bool,
     #[serde(default)]
-    pub role: Option<crate::mcp::roles::Role>,
+    pub role: Option<crate::roles::Role>,
 }
 
 #[derive(Serialize, Clone)]
@@ -594,7 +595,8 @@ pub fn spawn_terminal_inner<R: Runtime>(
 
     let recorded_command = match existing_command {
         Some(original)
-            if agents::is_resume_command(&command) && !agents::is_resume_command(&original) =>
+            if agent_catalog::is_resume_command(&command)
+                && !agent_catalog::is_resume_command(&original) =>
         {
             original
         }

@@ -28,7 +28,7 @@ pub(crate) use git::*;
 pub use git::{git_branch, git_status};
 pub(crate) use persistence::*;
 pub(crate) use snapshot::*;
-pub use snapshot::{export_workspace_snapshot, import_workspace_snapshot, store_saved_at};
+pub use snapshot::{export_workspace_snapshot, store_saved_at};
 
 static NEXT_WS_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -52,7 +52,7 @@ const MAX_LAYOUT_TRACKS: u32 = 128;
 /// frontend already coalesces/refreshes this event; keeping emission at the
 /// command boundary also covers secondary windows that did not initiate the
 /// mutation.
-fn emit_workspaces_changed(app: &AppHandle) {
+pub(crate) fn emit_workspaces_changed(app: &AppHandle) {
     let _ = app.emit("workspaces-changed", ());
 }
 
@@ -93,7 +93,7 @@ pub struct TerminalMeta {
     pub worktree: Option<crate::worktree::WorktreeInfo>,
     /// The agent's team role, if it was started with one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub role: Option<crate::mcp::roles::Role>,
+    pub role: Option<crate::roles::Role>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -350,28 +350,14 @@ pub struct WorkspaceStore {
     pub save_path: Option<PathBuf>,
 }
 
-fn home_dir() -> String {
-    #[cfg(windows)]
-    {
-        if let Ok(p) = std::env::var("USERPROFILE") {
-            if !p.trim().is_empty() {
-                return p;
-            }
-        }
-        if let (Ok(drive), Ok(path)) = (std::env::var("HOMEDRIVE"), std::env::var("HOMEPATH")) {
-            return format!("{}{}", drive, path);
-        }
-        "C:\\".to_string()
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
-    }
-}
+#[cfg(windows)]
+const FALLBACK_HOME_DIR: &str = "C:\\";
 
-fn unix_millis() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
+#[cfg(not(windows))]
+const FALLBACK_HOME_DIR: &str = "/";
+
+fn home_dir() -> String {
+    crate::paths::home_dir()
+        .map(|home| home.to_string_lossy().into_owned())
+        .unwrap_or_else(|| FALLBACK_HOME_DIR.to_string())
 }

@@ -1,5 +1,6 @@
 import { t } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
+import { asRecord } from "../lib/records/records";
 import { storageGet, storageSet } from "../lib/storage/safeStorage";
 import { create } from "zustand";
 import type {
@@ -74,12 +75,6 @@ type PersistedOrchestrationState = {
   detachedTerminalIds?: string[];
   snapshot?: WorkspaceSnapshotV2 | null;
 };
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : {};
-}
 
 function readPersisted(): Pick<
   PersistedOrchestrationState,

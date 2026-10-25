@@ -10,6 +10,7 @@ import type {
   WorkspaceLayout,
   WorkspaceSnapshotV2,
 } from "../types";
+import { asRecord, type UnknownRecord } from "../lib/records/records";
 
 const DOMAIN_SNAPSHOT_VERSION = 2 as const;
 
@@ -23,11 +24,7 @@ export interface LegacyMigrationOptions {
   defaultLayout?: Partial<WorkspaceLayout>;
 }
 
-type RecordLike = Record<string, unknown>;
-
-function asRecord(value: unknown): RecordLike {
-  return value !== null && typeof value === "object" ? (value as RecordLike) : {};
-}
+type RecordLike = UnknownRecord;
 
 function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";

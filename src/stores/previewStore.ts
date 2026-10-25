@@ -1,6 +1,5 @@
 import { create } from "zustand";
-import { listen } from "@tauri-apps/api/event";
-import { DEV_SERVER_EVENT, previewApi, type DevServerPayload } from "../lib/tauri/preview";
+import { onDevServer, previewApi } from "../lib/tauri/preview";
 
 /** Ports dev servers usually take, tried when nothing was printed. */
 export const COMMON_DEV_PORTS: readonly number[] = [3000, 3001, 4200, 4321, 5000, 5173, 5174, 8000, 8080, 8081, 8888, 9000];
@@ -72,8 +71,7 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
 
 /** Collect the URLs terminals print, per workspace. */
 export function startPreviewBridge(): () => void {
-  const pending = listen<DevServerPayload>(DEV_SERVER_EVENT, (event) => {
-    const payload = event.payload;
+  const pending = onDevServer((payload) => {
     if (payload?.workspace_id && payload.url) usePreviewStore.getState().addDetected(payload.workspace_id, payload.url);
   });
   return () => void pending.then((stop) => stop()).catch((error) => console.warn("failed to stop listening for dev servers:", error));

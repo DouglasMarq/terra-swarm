@@ -4,7 +4,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
-import type { WorkspaceSnapshotV2 } from "../../types";
+import type { WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import workbenchStyles from "./workbench.css?raw";
 
 const snapshot: WorkspaceSnapshotV2 = {

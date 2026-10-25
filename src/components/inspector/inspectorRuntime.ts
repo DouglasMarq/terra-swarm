@@ -1,4 +1,4 @@
-import type { TerminalRuntimeInfo } from "../../types";
+import type { TerminalRuntimeInfo } from "../../domain/terminal.model";
 
 export type InspectorRuntimeStatus = "idle" | "loading" | "ready" | "unavailable" | "error";
 

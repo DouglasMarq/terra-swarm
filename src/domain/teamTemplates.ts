@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentRole } from "../types";
+import type { AgentInfo, AgentRole } from "./agent.model";
 
 export interface TeamMember {
   role: AgentRole;

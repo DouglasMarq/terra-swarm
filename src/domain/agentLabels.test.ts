@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Workspace } from "../types";
+import type { Workspace } from "./workspace.model";
 import { agentKind, buildAgentLabels, cleanAgentTitle } from "./agentLabels";
 
 const workspace = (terminals: Array<[string, string]>): Workspace => ({

@@ -1,12 +1,7 @@
-import type {
-  AgentTokenUsage,
-  McpAgentStatus,
-  McpServerInfo,
-  McpTask,
-  McpTaskPatch,
-  McpTaskPriority,
-} from "../../types";
+import type { AgentTokenUsage } from "../../domain/agent.model";
+import type { McpAgentStatus, McpServerInfo, McpTask, McpTaskPatch, McpTaskPriority } from "../../domain/mcp.model";
 import { invokeCommand } from "./commands";
+import { listenPayload, type UnlistenFn } from "./events";
 
 /** Window events emitted by the embedded MCP server (see `src-tauri/src/mcp`). */
 export const MCP_EVENTS = {
@@ -74,6 +69,18 @@ export function mcpAgentStatuses(workspaceId: string): Promise<McpAgentStatus[]>
 /** Token usage of the workspace's agents, from the session logs their hooks reported. */
 export function agentUsage(workspaceId: string): Promise<AgentTokenUsage[]> {
   return invokeCommand("agentUsage", { workspaceId });
+}
+
+export function onMcpTasksChanged(handler: (payload: McpTasksChangedPayload) => void): Promise<UnlistenFn> {
+  return listenPayload(MCP_EVENTS.tasksChanged, handler);
+}
+
+export function onMcpAgentStatus(handler: (payload: McpAgentStatusPayload) => void): Promise<UnlistenFn> {
+  return listenPayload(MCP_EVENTS.agentStatus, handler);
+}
+
+export function onMcpNudge(handler: (payload: McpNudgePayload) => void): Promise<UnlistenFn> {
+  return listenPayload(MCP_EVENTS.nudge, handler);
 }
 
 export const mcpApi = {

@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import type { ResumeItem } from "../types";
+import type { ResumeItem } from "../domain/terminal.model";
 import { t } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
-import { createInitializationGate, type InitializationGate } from "../lib/session/initializationGate";
-import { isTerminalSuspended, suspendedGroupIds } from "../lib/session/resumeSelection";
+import { createInitializationGate, type InitializationGate } from "../domain/session/initializationGate";
+import { isTerminalSuspended, suspendedGroupIds } from "../domain/session/resumeSelection";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import type { useAgentCatalog } from "./useAgentCatalog";
 import type { useResumeQueue } from "./useResumeQueue";
 import type { useVoiceSettings } from "./useVoiceSettings";
 import type { useWorkspaces } from "./useWorkspaces";
-import { resumeItemFor, type TerminalSessions } from "./useTerminalSessions";
+import { resumeItemFor } from "../domain/session/resumeItems";
+import type { TerminalSessions } from "./useTerminalSessions";
 
 interface InitializationInput {
   workspaces: ReturnType<typeof useWorkspaces>;

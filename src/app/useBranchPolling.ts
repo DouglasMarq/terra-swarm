@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { api } from "../api";
-import type { Workspace } from "../types";
+import type { Workspace } from "../domain/workspace.model";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 
 const BRANCH_POLL_MS = 10000;

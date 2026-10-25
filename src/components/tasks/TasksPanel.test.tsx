@@ -3,7 +3,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { McpServerInfo, McpTask } from "../../types";
+import type { McpServerInfo, McpTask } from "../../domain/mcp.model";
 
 const api = vi.hoisted(() => ({
   mcpServerInfo: vi.fn(),

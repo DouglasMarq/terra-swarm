@@ -1,4 +1,5 @@
 import { normalizeSearchText } from "../lib/text/normalizeSearchText";
+import type { Workspace } from "./workspace.model";
 
 /**
  * Optional automatic agent names ("Vega", "Lyra"…). Off by default: agents
@@ -83,4 +84,12 @@ export function pickAgentName(
     if (candidate) return candidate;
   }
   return null;
+}
+
+export function agentNamesInUse(
+  workspaces: readonly Workspace[],
+  agentNames: Readonly<Record<string, string>>,
+): string[] {
+  const openIds = new Set(workspaces.flatMap((workspace) => workspace.terminals.map((terminal) => terminal.id)));
+  return Object.entries(agentNames).filter(([id]) => openIds.has(id)).map(([, name]) => name);
 }

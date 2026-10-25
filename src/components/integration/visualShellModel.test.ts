@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { t } from "../../i18n";
-import type { NotificationItem, TerminalTab, Workspace, WorkspaceContainer, WorkspaceSnapshotV2 } from "../../types";
+import type { NotificationItem } from "../../domain/notification.model";
+import type { TerminalTab, Workspace, WorkspaceContainer, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import {
   lastActivityByAgent,
   latestMessageByAgent,

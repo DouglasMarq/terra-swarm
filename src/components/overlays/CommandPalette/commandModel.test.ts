@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AgentInfo, Workspace, WorkspaceGroup } from "../../../types";
+import type { AgentInfo } from "../../../domain/agent.model";
+import type { Workspace, WorkspaceGroup } from "../../../domain/workspace.model";
 import {
   buildCommandModel,
   executeCommand,

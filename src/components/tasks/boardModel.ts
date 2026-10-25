@@ -1,4 +1,4 @@
-import type { McpTask, McpTaskEvent, McpTaskPatch, McpTaskStatus } from "../../types";
+import type { McpTask, McpTaskEvent, McpTaskPatch, McpTaskStatus } from "../../domain/mcp.model";
 import { taskNumber } from "../../domain/tasks";
 import type { Translate } from "../../i18n";
 

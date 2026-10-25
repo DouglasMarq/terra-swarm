@@ -1,22 +1,13 @@
 import { t } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
+import { asRecord } from "../lib/records/records";
+import { uniqueStrings } from "../lib/collections/uniqueStrings";
+import { storageGet, storageSet } from "../lib/storage/safeStorage";
 import { create } from "zustand";
-import type {
-  Group,
-  Workspace,
-  WorkspaceContainerPatch,
-  WorkspaceContainer,
-  WorkspaceLayout,
-  WorkspaceGroup,
-  WorkspaceSnapshotV2,
-} from "../types";
-import {
-  DEFAULT_WORKSPACE_LAYOUT,
-  mergeWorkspaceLayout,
-  mergeWorkspaceSnapshot,
-  normalizeLayout,
-  normalizeSnapshotV2,
-} from "../domain/migration";
+import type { Group, Workspace, WorkspaceContainerPatch, WorkspaceContainer, WorkspaceLayout, WorkspaceGroup, WorkspaceSnapshotV2 } from "../domain/workspace.model";
+import { normalizeLayout, normalizeSnapshotV2 } from "../domain/migration";
+import { deriveSnapshot } from "../domain/workspaceProjection";
+import { createPersistenceEngine } from "./orchestrationPersistence";
 import {
   DEFAULT_FEATURE_FLAGS,
   FEATURE_FLAG_IDS,
@@ -32,37 +23,6 @@ export interface OrchestrationPersistenceError {
   at: number;
 }
 
-type PersistenceTransaction = {
-  version: number;
-  targets: readonly string[];
-  before: {
-    snapshot: WorkspaceSnapshotV2 | null;
-    groups: Group[];
-    containerVisibility: Record<string, boolean>;
-    detachedTerminalIds: string[];
-    hydrated: boolean;
-  };
-};
-
-function persistLayoutCommand(
-  command: Promise<void>,
-  operation: string,
-  transaction: PersistenceTransaction,
-  report: (operation: string, error: unknown) => void,
-  recover: (
-    transaction: PersistenceTransaction,
-    operation: string,
-    error: unknown,
-  ) => void,
-): void {
-  // Keep optimistic visual state responsive, but reconcile a rejected backend
-  // command instead of leaving an invalid snapshot in local storage.
-  void command.catch((error) => {
-    report(operation, error);
-    recover(transaction, operation, error);
-  });
-}
-
 export const ORCHESTRATION_STORAGE_KEY = "orchestration-state-v1";
 
 type PersistedOrchestrationState = {
@@ -73,28 +33,6 @@ type PersistedOrchestrationState = {
   detachedTerminalIds?: string[];
   snapshot?: WorkspaceSnapshotV2 | null;
 };
-
-const storageGet = (key: string): string | null => {
-  try {
-    return typeof localStorage === "undefined" ? null : localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
-
-const storageSet = (key: string, value: string): void => {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // The desktop webview can disable storage in restricted/private contexts.
-  }
-};
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : {};
-}
 
 function readPersisted(): Pick<
   PersistedOrchestrationState,
@@ -158,109 +96,6 @@ function persist(
   storageSet(ORCHESTRATION_STORAGE_KEY, JSON.stringify(value));
 }
 
-function uniqueIds(values: readonly string[]): string[] {
-  return [...new Set(values.filter(Boolean))];
-}
-
-function sourceGroupLayout(source: WorkspaceGroup): ReturnType<typeof normalizeLayout> {
-  const candidate = source as unknown as Record<string, unknown>;
-  const mode = typeof candidate.layout === "object" ? candidate.layout : {
-    mode: source.layoutMode ?? DEFAULT_WORKSPACE_LAYOUT.mode,
-  };
-  return normalizeLayout(mode);
-}
-
-function toDomainGroups(
-  sourceGroups: readonly WorkspaceGroup[],
-  snapshot: WorkspaceSnapshotV2,
-  workspaces: readonly Workspace[],
-  previousGroups: readonly Group[] = [],
-): Group[] {
-  const projectIds = new Set(snapshot.projects.map((project) => project.id));
-  const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
-  const projectsByGroup = new Map<string, string[]>();
-  for (const project of snapshot.projects) {
-    if (!project.groupId || !projectIds.has(project.id)) continue;
-    const ids = projectsByGroup.get(project.groupId) ?? [];
-    ids.push(project.id);
-    projectsByGroup.set(project.groupId, ids);
-  }
-  for (const workspace of workspaces) {
-    const groupId = workspace.groupId ?? null;
-    if (!groupId || !projectIds.has(workspace.id)) continue;
-    const ids = projectsByGroup.get(groupId) ?? [];
-    ids.push(workspace.id);
-    projectsByGroup.set(groupId, ids);
-  }
-
-  const effectiveGroups = sourceGroups.length > 0 ? sourceGroups : previousGroups;
-  const previousById = new Map(previousGroups.map((group) => [group.id, group]));
-  return effectiveGroups
-    .filter((source) => Boolean(source.id))
-    .map((source): Group => {
-      const projectIdsForGroup = uniqueIds([
-        ...source.projectIds.filter((projectId) => {
-          const workspace = workspaceById.get(projectId);
-          return !workspace || workspace.groupId === undefined || workspace.groupId === source.id;
-        }),
-        ...(projectsByGroup.get(source.id) ?? []),
-      ]).filter((id) => projectIds.has(id));
-      const layout = sourceGroupLayout(source);
-      const previous = previousById.get(source.id);
-      const parentGroupId = source.parentGroupId || null;
-      return {
-        id: source.id,
-        name: source.name.trim() || source.id,
-        projectIds: projectIdsForGroup,
-        parentGroupId,
-        collapsed: Boolean(source.collapsed),
-        suspended: Boolean(source.suspended),
-        layout: mergeWorkspaceLayout(
-          previous?.layout,
-          { ...layout, itemIds: projectIdsForGroup },
-          new Set(projectIdsForGroup),
-          DEFAULT_WORKSPACE_LAYOUT,
-        ),
-        ...(("archived" in source && source.archived) ? { archived: true } : {}),
-      };
-    });
-}
-
-function deriveSnapshot(
-  workspaces: readonly Workspace[],
-  sourceGroups: readonly WorkspaceGroup[],
-  visibility: Record<string, boolean>,
-  previous: WorkspaceSnapshotV2 | null,
-): { snapshot: WorkspaceSnapshotV2; groups: Group[] } {
-  const snapshot = mergeWorkspaceSnapshot(workspaces, previous, {
-    containerVisibility: visibility,
-  });
-  const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
-
-  for (const project of snapshot.projects) {
-    const workspace = workspaceById.get(project.id);
-    project.groupId =
-      workspace && workspace.groupId !== undefined
-        ? workspace.groupId
-        : project.groupId ?? null;
-    project.collapsed = workspace?.collapsed ?? project.collapsed;
-    project.archived = workspace?.archived ?? project.archived;
-  }
-
-  for (const container of snapshot.containers) {
-    const visible = visibility[container.id] ?? true;
-    container.visible = visible;
-    container.closed = !visible;
-  }
-
-  const groups = toDomainGroups(sourceGroups, snapshot, workspaces, previous?.groups ?? snapshot.groups);
-  snapshot.groups = groups;
-  snapshot.activeGroupId = groups.some((group) => group.id === snapshot.activeGroupId)
-    ? snapshot.activeGroupId
-    : null;
-  return { snapshot, groups };
-}
-
 function updateSnapshotContainerState(
   snapshot: WorkspaceSnapshotV2 | null,
   containerId: string,
@@ -299,7 +134,7 @@ function updateSnapshotPaneTabs(
   const pane = snapshot.panes.find((candidate) => candidate.id === paneId);
   if (!pane) return snapshot;
   const allowed = new Set(pane.tabIds);
-  const sortedTabIds = uniqueIds([...order, ...pane.tabIds]).filter((id) => allowed.has(id));
+  const sortedTabIds = uniqueStrings([...order, ...pane.tabIds]).filter((id) => allowed.has(id));
   return {
     ...snapshot,
     panes: snapshot.panes.map((candidate) =>
@@ -354,7 +189,7 @@ function patchProjectGroup(
     ...group,
     projectIds:
       group.id === groupId
-        ? uniqueIds([...group.projectIds, projectId])
+        ? uniqueStrings([...group.projectIds, projectId])
         : group.projectIds.filter((id) => id !== projectId),
   }));
   return {
@@ -432,139 +267,14 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     });
   };
 
-  // Every durable command gets both a global sequence and a set of logical
-  // targets. The global sequence prevents a full backend reload from
-  // clobbering any newer optimistic mutation; target versions make the
-  // ownership explicit for commands that affect one visual surface.
-  let persistenceVersion = 0;
-  const targetVersions = new Map<string, number>();
-  let reconciliationChain: Promise<void> = Promise.resolve();
-
-  const beginPersistence = (targets: readonly string[]): PersistenceTransaction => {
-    const normalizedTargets = uniqueIds(targets);
-    const version = ++persistenceVersion;
-    normalizedTargets.forEach((target) => targetVersions.set(target, version));
-    const state = get();
-    return {
-      version,
-      targets: normalizedTargets,
-      before: {
-        snapshot: state.snapshot,
-        groups: [...state.groups],
-        containerVisibility: { ...state.containerVisibility },
-        detachedTerminalIds: [...state.detachedTerminalIds],
-        hydrated: state.hydrated,
-      },
-    };
-  };
-
-  const markNewerProjection = (): void => {
-    persistenceVersion += 1;
-  };
-
-  const isCurrentPersistence = (transaction: PersistenceTransaction): boolean =>
-    transaction.version === persistenceVersion &&
-    transaction.targets.every(
-      (target) => targetVersions.get(target) === transaction.version,
-    );
-
-  const restoreBeforePersistence = (transaction: PersistenceTransaction): void => {
-    const current = get();
-    persist(
-      transaction.before.containerVisibility,
-      current.flags,
-      transaction.before.snapshot,
-      transaction.before.detachedTerminalIds,
-    );
-    set({
-      snapshot: transaction.before.snapshot,
-      groups: transaction.before.groups,
-      containerVisibility: transaction.before.containerVisibility,
-      detachedTerminalIds: transaction.before.detachedTerminalIds,
-      hydrated: transaction.before.hydrated,
-    });
-  };
-
-  const reconcilePersistence = (
-    transaction: PersistenceTransaction,
-    operation: string,
-    _commandError: unknown,
-  ): void => {
-    // Roll back synchronously as soon as the command rejects. The subsequent
-    // read replaces this safe baseline with the backend's authoritative state.
-    if (isCurrentPersistence(transaction)) restoreBeforePersistence(transaction);
-    const run = async (): Promise<void> => {
-      if (!isCurrentPersistence(transaction)) return;
-      try {
-        const workspaces = await workspaceApi.listWorkspaces();
-        const loadedGroups = await workspaceApi.listGroups();
-        if (!Array.isArray(workspaces) || !isCurrentPersistence(transaction)) return;
-        const sourceGroups = Array.isArray(loadedGroups) ? loadedGroups : [];
-        const backendVisibility: Record<string, boolean> = {};
-        for (const workspace of workspaces) {
-          for (const container of workspace.containers ?? []) {
-            backendVisibility[container.id] =
-              container.visible !== false && container.closed !== true;
-          }
-        }
-        const derived = deriveSnapshot(workspaces, sourceGroups, backendVisibility, null);
-        if (!isCurrentPersistence(transaction)) return;
-
-        const current = get();
-        const terminalIds = new Set(
-          workspaces.flatMap((workspace) =>
-            workspace.terminals.map((terminal) => terminal.id),
-          ),
-        );
-        const detachedTerminalIds = current.detachedTerminalIds.filter((id) =>
-          terminalIds.has(id),
-        );
-        const containerVisibility: Record<string, boolean> = {};
-        for (const container of derived.snapshot.containers) {
-          containerVisibility[container.id] = container.visible;
-        }
-        persist(
-          containerVisibility,
-          current.flags,
-          derived.snapshot,
-          detachedTerminalIds,
-        );
-        set({
-          snapshot: derived.snapshot,
-          groups: derived.groups,
-          containerVisibility,
-          detachedTerminalIds,
-          hydrated: true,
-        });
-      } catch (reconciliationError) {
-        if (!isCurrentPersistence(transaction)) return;
-        // If the authoritative read is unavailable, restore the exact
-        // pre-mutation projection instead of persisting the rejected one.
-        restoreBeforePersistence(transaction);
-        reportPersistenceError(`${operation} reconciliation`, reconciliationError);
-      }
-    };
-
-    // A failed command can arrive while another reconciliation is reading the
-    // backend. Serializing reads avoids applying an older authoritative view
-    // after a newer one.
-    const next = reconciliationChain.then(run, run);
-    reconciliationChain = next.catch(() => undefined);
-  };
-
-  const persistCommand = (
-    command: Promise<void>,
-    operation: string,
-    targets: readonly string[],
-  ): void => {
-    persistLayoutCommand(
-      command,
-      operation,
-      beginPersistence(targets),
-      reportPersistenceError,
-      reconcilePersistence,
-    );
-  };
+  const { persistCommand, markNewerProjection } = createPersistenceEngine({
+    read: () => get(),
+    apply: (projection) => {
+      persist(projection.containerVisibility, get().flags, projection.snapshot, projection.detachedTerminalIds);
+      set(projection);
+    },
+    reportError: reportPersistenceError,
+  });
 
   return {
     snapshot: persisted.snapshot ?? null,
@@ -578,7 +288,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     sync: (workspaces, sourceGroups = []) => {
     // An explicit backend refresh is already authoritative. Any rejection
     // from a command issued before it must not replace this newer projection.
-    persistenceVersion += 1;
+    markNewerProjection();
     const state = get();
     const derived = deriveSnapshot(
       workspaces,
@@ -966,7 +676,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
   reset: () => {
     // Reset is a newer local projection; pending failures must not restore
     // the state that existed before the reset.
-    persistenceVersion += 1;
+    markNewerProjection();
     const next = emptyState();
     persist(next.containerVisibility, next.flags, next.snapshot);
     set(next);

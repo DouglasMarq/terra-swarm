@@ -1,4 +1,5 @@
 import { invokeCommand } from "./commands";
+import { listenPayload, type UnlistenFn } from "./events";
 
 /** Ports among `ports` with a server listening on 127.0.0.1. */
 function probeDevServers(ports: number[]): Promise<number[]> {
@@ -14,4 +15,8 @@ export interface DevServerPayload {
   id: string;
   workspace_id: string;
   url: string;
+}
+
+export function onDevServer(handler: (payload: DevServerPayload) => void): Promise<UnlistenFn> {
+  return listenPayload(DEV_SERVER_EVENT, handler);
 }

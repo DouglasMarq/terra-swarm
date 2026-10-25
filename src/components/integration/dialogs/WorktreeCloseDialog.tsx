@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useT } from "../../../i18n";
-import type { WorktreeStatus } from "../../../types";
+import type { WorktreeStatus } from "../../../domain/worktree.model";
 import { DialogFooter, TerraDialog } from "../../overlays/Dialog";
 import { Button } from "../../ui/Button";
 import styles from "./ModalForms.module.css";

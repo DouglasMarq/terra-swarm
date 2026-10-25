@@ -1,4 +1,5 @@
-import type { NotificationItem, WorkspaceSnapshotV2 } from "../../types";
+import type { NotificationItem } from "../../domain/notification.model";
+import type { WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 
 export interface NotificationTarget {
   /** Project/workspace currently selected in the shell. */

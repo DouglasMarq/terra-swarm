@@ -1,15 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { ChevronDown, ChevronRight, ListTodo, Plus, Trash2 } from "lucide-react";
 import { useT } from "../../i18n";
-import {
-  groupTasksByStatus,
-  TASK_PRIORITIES,
-  TASK_STATUS_ORDER,
-  useMcpStore,
-} from "../../stores/mcpStore";
-import type { McpAgentStatus, McpTask, McpTaskPatch } from "../../types";
-import { MAX_TASK_TITLE_CHARS } from "../../domain/tasks";
+import { useMcpStore } from "../../stores/mcpStore";
+import type { McpAgentStatus, McpTask, McpTaskPatch } from "../../domain/mcp.model";
+import { groupTasksByStatus, MAX_TASK_TITLE_CHARS, TASK_PRIORITIES, TASK_STATUS_ORDER } from "../../domain/tasks";
 import { describeTaskEvent } from "./boardModel";
+import { useWorkspaceTasks } from "./useWorkspaceTasks";
 import "./tasks.css";
 
 export interface TaskAgentOption {
@@ -32,24 +28,10 @@ export interface TasksPanelProps {
  */
 export function TasksPanel({ workspaceId, workspaceName, agents }: TasksPanelProps) {
   const t = useT();
-  const tasks = useMcpStore((state) => (workspaceId ? state.tasks[workspaceId] : undefined));
-  const statuses = useMcpStore((state) => state.statuses);
-  const server = useMcpStore((state) => state.server);
-  const error = useMcpStore((state) => state.error);
-  const { loadTasks, loadStatuses, loadServer, createTask, updateTask, deleteTask, clearError } = useMcpStore.getState();
+  const { tasks, statuses, server, error } = useWorkspaceTasks(workspaceId);
+  const { createTask, updateTask, deleteTask, clearError } = useMcpStore.getState();
   const [draft, setDraft] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ done: true });
-
-  // The switch can change in Settings while the dock is closed.
-  useEffect(() => {
-    void loadServer();
-  }, [loadServer]);
-
-  useEffect(() => {
-    if (!workspaceId) return;
-    void loadTasks(workspaceId);
-    void loadStatuses(workspaceId);
-  }, [workspaceId, loadTasks, loadStatuses]);
 
   const groups = useMemo(() => groupTasksByStatus(tasks ?? []), [tasks]);
   const agentLabel = useMemo(() => new Map(agents.map((agent) => [agent.id, agent.label])), [agents]);

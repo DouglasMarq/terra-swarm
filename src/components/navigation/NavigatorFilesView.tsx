@@ -3,8 +3,10 @@ import { errorMessage } from "../../lib/errors/errorMessage";
 import { DEFAULT_FILE_LIST_LIMIT } from "../../lib/tauri/workspace";
 import { AlertCircle, ChevronDown, ChevronRight, FileText, Folder, Link2, LoaderCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { Workspace, WorkspaceFileEntry, WorkspaceFileListing } from "../../types";
+import type { Workspace } from "../../domain/workspace.model";
+import type { WorkspaceFileEntry, WorkspaceFileListing } from "../../domain/workspaceFiles.model";
 import type { NavigatorFilesLoader } from "./types";
+import { indentFor, messageIndentFor } from "./indent";
 import styles from "./Navigator.module.css";
 
 
@@ -63,7 +65,7 @@ function FileRow({
         aria-label={t("editor.open", { name: entry.name })}
         className={styles.integrationRow}
         onClick={onOpen}
-        style={{ paddingInlineStart: `${8 + depth * 16}px` }}
+        style={{ paddingInlineStart: indentFor(depth) }}
         type="button"
       >
         {rowContent}
@@ -77,7 +79,7 @@ function FileRow({
         className={styles.integrationRow}
         data-file-static="true"
         role="listitem"
-        style={{ paddingInlineStart: `${8 + depth * 16}px` }}
+        style={{ paddingInlineStart: indentFor(depth) }}
       >
         {rowContent}
       </div>
@@ -88,7 +90,7 @@ function FileRow({
       aria-expanded={expanded}
       className={styles.integrationRow}
       onClick={onToggle}
-      style={{ paddingInlineStart: `${8 + depth * 16}px` }}
+      style={{ paddingInlineStart: indentFor(depth) }}
       type="button"
     >
       {rowContent}
@@ -170,7 +172,7 @@ export function NavigatorFilesView({
     if (!state) return null;
     if (state.error !== null && !state.listing) {
       return (
-        <div className={styles.integrationError} style={{ paddingInlineStart: `${12 + depth * 16}px` }}>
+        <div className={styles.integrationError} style={{ paddingInlineStart: messageIndentFor(depth) }}>
           <AlertCircle aria-hidden="true" size={13} />
           <span>{state.error || t("nav.filesView.error")}</span>
           <button aria-label={t("nav.retry")} onClick={() => void loadDirectory(relativePath, true)} type="button"><RefreshCw size={12} /></button>

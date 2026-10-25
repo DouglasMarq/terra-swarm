@@ -2,7 +2,7 @@ import { useT } from "../../../i18n";
 import { Check, CircleAlert } from "lucide-react";
 
 import { AGENT_ROLES, isAgentRole } from "../../../domain/agentRoles";
-import type { AgentInfo, AgentRole } from "../../../types";
+import type { AgentInfo, AgentRole } from "../../../domain/agent.model";
 import { DialogFooter, TerraDialog } from "../../overlays/Dialog";
 import { Button } from "../../ui/Button";
 import styles from "./ModalForms.module.css";

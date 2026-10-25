@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { api } from "../api";
-import type { Workspace, WorkspaceSnapshotV2 } from "../types";
+import type { Workspace, WorkspaceSnapshotV2 } from "../domain/workspace.model";
 import { getTerminal } from "../terminalRegistry";
 import { useUiStore } from "../stores/uiStore";
 import { useOrchestrationStore } from "../stores/orchestrationStore";

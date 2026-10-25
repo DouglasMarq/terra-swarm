@@ -1,6 +1,6 @@
 import { Group, Panel, Separator } from "react-resizable-panels";
 import type { ReactNode } from "react";
-import type { WorkspaceLayout } from "../../types";
+import type { WorkspaceLayout } from "../../domain/workspace.model";
 import {
   gridDimensionsForLayout,
   layoutForPanelIds,

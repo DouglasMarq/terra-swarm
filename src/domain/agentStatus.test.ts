@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { deriveAgentStatus } from "./agentStatus";
+import { deriveAgentStatus, isTerminalRunning } from "./agentStatus";
+
+describe("isTerminalRunning", () => {
+  it("Given a live terminal, when checking it, then it is running", () => {
+    expect(isTerminalRunning({ id: "a" }, {})).toBe(true);
+  });
+
+  it("Given a suspended or exited terminal, when checking it, then it is not running", () => {
+    expect(isTerminalRunning({ id: "a", suspended: true }, {})).toBe(false);
+    expect(isTerminalRunning({ id: "a" }, { a: null })).toBe(false);
+  });
+});
 
 describe("deriveAgentStatus", () => {
   it("lets the process state win", () => {

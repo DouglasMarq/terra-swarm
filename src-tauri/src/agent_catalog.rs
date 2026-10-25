@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::sync::OnceLock;
 
 /// The shared agent catalog, also read by the frontend.
-const AGENT_CATALOG_JSON: &str = include_str!("../../src/lib/features/agents.json");
+const AGENT_CATALOG_JSON: &str = include_str!("../../src/domain/agents.json");
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 pub struct CatalogAgent {

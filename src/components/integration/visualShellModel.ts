@@ -1,7 +1,9 @@
-import { CONTEXT_ATTENTION_PERCENT, type AgentRunStatus } from "../../domain/agentStatus";
+import { CONTEXT_ATTENTION_PERCENT, isTerminalRunning, type AgentRunStatus } from "../../domain/agentStatus";
 import { latestUnreadPerAgent } from "../../domain/notifications";
 import type { Translate } from "../../i18n";
-import type { NotificationItem, VoiceStatus, Workspace, WorkspaceSnapshotV2 } from "../../types";
+import type { NotificationItem } from "../../domain/notification.model";
+import type { VoiceStatus } from "../../domain/voice.model";
+import type { Workspace, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import type { VoiceCapsuleState } from "../voice/voiceModel";
 
 /**
@@ -72,7 +74,7 @@ export function nearlyFullContexts(
   contextUsage: Readonly<Record<string, number>>,
 ): ContextAlert[] {
   return workspaces.flatMap((workspace) => workspace.terminals
-    .filter((terminal) => !terminal.suspended && !(terminal.id in exited) && (contextUsage[terminal.id] ?? 0) >= CONTEXT_ATTENTION_PERCENT)
+    .filter((terminal) => isTerminalRunning(terminal, exited) && (contextUsage[terminal.id] ?? 0) >= CONTEXT_ATTENTION_PERCENT)
     .map((terminal) => ({ terminalId: terminal.id, workspaceId: workspace.id, used: contextUsage[terminal.id] ?? 0 })));
 }
 

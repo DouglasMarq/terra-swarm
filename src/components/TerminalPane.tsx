@@ -4,20 +4,27 @@ import { useMcpStore } from "../stores/mcpStore";
 import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api } from "../api";
 import { isIpcError } from "../lib/tauri/errors";
-import type { OutputChunk } from "../types";
+import type { UnlistenFn } from "../lib/tauri/events";
+import { onPtyOutput } from "../lib/tauri/pty";
 import { registerTerminal, unregisterTerminal, getTerminal } from "../terminalRegistry";
 import {
   createFitScheduler,
   createTerminalResizeQueue,
+  hasVisibleBox,
+  isUsableDimensions,
 } from "../lib/terminalFitScheduler";
+import { createOutputBuffer } from "../lib/terminalOutputBuffer";
+import { attachOutputStream } from "../lib/terminalOutputStream";
+import { createRetryingWriter } from "../lib/terminalInputWriter";
+import { isPlainShiftEnter } from "../lib/terminalKeys";
+import { throttle } from "../lib/async/throttle";
 import { Maximize2, Minimize2, GitBranch } from "lucide-react";
 import { t as translateNow, useT } from "../i18n";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { terminalFontStack } from "../lib/terminalFonts";
-import { detectDropPlatform, dropPointToClient, formatDroppedPaths } from "../lib/terminalDrop";
+import { detectDropPlatform, dropPointToClient, formatDroppedPaths } from "../domain/terminalDrop";
 import { onFileDrop } from "../lib/tauri/fileDrop";
 import { PaneActionsMenu, type PaneMenuGroups } from "./workbench/PaneActionsMenu";
 import "@xterm/xterm/css/xterm.css";
@@ -26,11 +33,6 @@ import "./terminal-pane.css";
 const SCROLLBACK_LINES = 10_000;
 /** Minimum gap between console warnings for one terminal's failed IPC calls. */
 const WARN_THROTTLE_MS = 2000;
-/** Retries of a keystroke write while the backend input channel is busy. */
-const MAX_WRITE_RETRIES = 30;
-/** Delay between write retries: one step per attempt so far, capped at `MAX_WRITE_RETRY_STEPS` steps. */
-const WRITE_RETRY_STEP_MS = 25;
-const MAX_WRITE_RETRY_STEPS = 10;
 
 interface Props {
   id: string;
@@ -139,35 +141,21 @@ export function TerminalPane(props: Props) {
     registerTerminal(id, term);
 
     let disposed = false;
+    const isStopped = (): boolean => disposed || exitedRef.current;
+    const warnThrottled = throttle(
+      (what: string, err: unknown) => console.warn(`[terminal ${id}] ${what} failed:`, err),
+      WARN_THROTTLE_MS,
+    );
 
-    // Backend IPC failures (dead PTY, full input queue) must be visible
-    // somewhere; throttle so a dead terminal can't spam the console.
-    let lastWarnAt = 0;
-    const warnThrottled = (what: string, err: unknown) => {
-      const now = Date.now();
-      if (now - lastWarnAt < WARN_THROTTLE_MS) return;
-      lastWarnAt = now;
-      console.warn(`[terminal ${id}] ${what} failed:`, err);
-    };
-
-    term.attachCustomKeyEventHandler((e) => {
-      if (
-        (e.type === "keydown" || e.type === "keypress") &&
-        e.key === "Enter" &&
-        e.shiftKey &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey
-      ) {
-        if (e.type === "keydown") {
-          e.preventDefault();
-          if (!exitedRef.current) {
-            api.writeTerminal(id, "\n").catch((err) => warnThrottled("write", err));
-          }
+    term.attachCustomKeyEventHandler((event) => {
+      if (!isPlainShiftEnter(event)) return true;
+      if (event.type === "keydown") {
+        event.preventDefault();
+        if (!exitedRef.current) {
+          api.writeTerminal(id, "\n").catch((err) => warnThrottled("write", err));
         }
-        return false;
       }
-      return true;
+      return false;
     });
 
     const resizeQueue = createTerminalResizeQueue(({ cols, rows }) => {
@@ -188,19 +176,8 @@ export function TerminalPane(props: Props) {
     // never poisons the PTY with a tiny resize.
     const fitAndSend = (): void => {
       try {
-        if (exitedRef.current) return;
-        const box = container.getBoundingClientRect();
-        if (!(box.width > 0 && box.height > 0)) return;
-        const d = fit.proposeDimensions();
-        if (
-          !d ||
-          !Number.isFinite(d.cols) ||
-          !Number.isFinite(d.rows) ||
-          d.cols < 1 ||
-          d.rows < 1
-        ) {
-          return;
-        }
+        if (exitedRef.current || !hasVisibleBox(container)) return;
+        if (!isUsableDimensions(fit.proposeDimensions())) return;
         fit.fit();
         if (term.cols < 1 || term.rows < 1) return;
         resizeQueue.request({ cols: term.cols, rows: term.rows });
@@ -216,103 +193,25 @@ export function TerminalPane(props: Props) {
     resizeQueueRef.current = resizeQueue;
     fitScheduler.schedule();
 
-    // Output pipeline with real backpressure: each chunk is handed to xterm
-    // with a completion callback, and the next chunk is only drained once
-    // xterm has parsed the previous one. If the producer outruns the parser
-    // (huge bursts, throttled timers in an occluded window), the buffer is
-    // capped and the oldest data is dropped instead of growing without bound.
-    const WRITE_BUDGET = 32768;
-    const MAX_BUFFERED = 8 * 1024 * 1024;
-    let writeBuf = "";
-    let writing = false;
-    const drain = () => {
-      if (disposed || writing || !writeBuf) return;
-      writing = true;
-      let n = Math.min(writeBuf.length, WRITE_BUDGET);
-      if (n < writeBuf.length) {
-        // never split a surrogate pair at the cut
-        const c = writeBuf.charCodeAt(n - 1);
-        if (c >= 0xd800 && c <= 0xdbff) n += 1;
-      }
-      const data = writeBuf.slice(0, n);
-      writeBuf = writeBuf.slice(n);
-      term.write(data, () => {
-        writing = false;
-        drain();
-      });
-    };
-    const enqueueOutput = (data: string) => {
-      if (disposed || !data) return;
-      if (writeBuf.length + data.length > MAX_BUFFERED) {
-        writeBuf =
-          writeBuf.slice(-Math.floor(MAX_BUFFERED / 4)) +
-          `\r\n\x1b[33m${translateNow("pane.outputDropped")}\x1b[0m\r\n`;
-      }
-      writeBuf += data;
-      drain();
-    };
-
-    // Exactly-once delivery across listener attach: events carry a cumulative
-    // byte total; the backlog snapshot covers everything up to its total, so
-    // buffered events already included in it are dropped.
-    let live = false;
-    let backlogTotal = 0;
-    const preLive: OutputChunk[] = [];
-    let unlisten: UnlistenFn | null = null;
-    (async () => {
-      const un = await listen<OutputChunk>(`pty-output-${id}`, (e) => {
-        if (disposed) return;
-        if (!live) {
-          preLive.push(e.payload);
-          return;
-        }
-        enqueueOutput(e.payload.data);
-      });
-      if (disposed) {
-        un();
-        return;
-      }
-      unlisten = un;
-      try {
-        const backlog = await api.terminalBacklog(id);
-        if (disposed) return;
-        if (backlog.data) enqueueOutput(backlog.data);
-        backlogTotal = backlog.total;
-      } catch {
-        // Terminal may already be gone backend-side; the live stream (if any)
-        // still works, and a dead process surfaces via terminal-exit.
-      }
-      live = true;
-      for (const c of preLive) {
-        if (c.total > backlogTotal) enqueueOutput(c.data);
-      }
-      preLive.length = 0;
-    })();
-
-    // Serialize writes and retry while the backend input channel is full
-    // (child not reading stdin): without this, keystrokes and pastes are
-    // silently dropped under backpressure.
-    let writeChain: Promise<void> = Promise.resolve();
-    const dataSub = term.onData((data) => {
-      if (disposed || exitedRef.current) return;
-      writeChain = writeChain.then(async () => {
-        for (let attempt = 0; ; attempt++) {
-          if (disposed || exitedRef.current) return;
-          try {
-            await api.writeTerminal(id, data);
-            return;
-          } catch (err) {
-            if (!isIpcError(err, "busy") || attempt >= MAX_WRITE_RETRIES) {
-              warnThrottled("write", err);
-              return;
-            }
-            await new Promise((r) =>
-              setTimeout(r, WRITE_RETRY_STEP_MS * Math.min(attempt + 1, MAX_WRITE_RETRY_STEPS)),
-            );
-          }
-        }
-      });
+    const output = createOutputBuffer({
+      write: (data, done) => term.write(data, done),
+      overflowNotice: () => translateNow("pane.outputDropped"),
     });
+    const detachOutput = attachOutputStream(
+      {
+        subscribe: (onChunk) => onPtyOutput(id, onChunk),
+        loadBacklog: () => api.terminalBacklog(id),
+      },
+      output.enqueue,
+    );
+
+    const writeInput = createRetryingWriter({
+      write: (data) => api.writeTerminal(id, data),
+      shouldStop: isStopped,
+      isRetryable: (err) => isIpcError(err, "busy"),
+      onError: (err) => warnThrottled("write", err),
+    });
+    const dataSub = term.onData(writeInput);
 
     const observer = new ResizeObserver(() => {
       fitScheduler.schedule();
@@ -327,7 +226,7 @@ export function TerminalPane(props: Props) {
 
     return () => {
       disposed = true;
-      writeBuf = "";
+      output.dispose();
       fitScheduler.dispose();
       resizeQueue.dispose();
       observer.disconnect();
@@ -335,7 +234,7 @@ export function TerminalPane(props: Props) {
       window.removeEventListener("focus", onWindowResize);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       dataSub.dispose();
-      unlisten?.();
+      detachOutput();
       unregisterTerminal(id, term);
       term.dispose();
       fitRef.current = null;

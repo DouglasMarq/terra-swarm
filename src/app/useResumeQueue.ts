@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import type { ResumeItem } from "../types";
+import type { ResumeItem } from "../domain/terminal.model";
 import { t } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
-import { dismissResumeItems } from "../lib/session/resumeDismiss";
+import { dismissResumeItems } from "../domain/session/resumeDismiss";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import type { TerminalSessions } from "./useTerminalSessions";

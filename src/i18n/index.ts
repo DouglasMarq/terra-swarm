@@ -1,7 +1,9 @@
 import { useCallback } from "react";
 import { create } from "zustand";
+import { storageGet, storageSet } from "../lib/storage/safeStorage";
 import { en } from "./locales/en";
 import { ptBR } from "./locales/pt-BR";
+import type { Dictionary, PluralLeaf } from "./dictionary";
 
 /**
  * Tiny, dependency-free i18n.
@@ -23,18 +25,7 @@ export const LOCALES: readonly { id: Locale; label: string }[] = [
 export const DEFAULT_LOCALE: Locale = "en";
 const STORAGE_KEY = "locale";
 
-export interface PluralLeaf {
-  zero?: string;
-  one: string;
-  other: string;
-}
-
 type Leaf = string | PluralLeaf;
-
-/** Same shape as the English source, with any string values. */
-export type Dictionary<T> = {
-  [K in keyof T]: T[K] extends string ? string : T[K] extends PluralLeaf ? PluralLeaf : Dictionary<T[K]>;
-};
 
 type Leaves<T, Prefix extends string = ""> = {
   [K in keyof T & string]: T[K] extends Leaf ? `${Prefix}${K}` : Leaves<T[K], `${Prefix}${K}.`>;
@@ -54,12 +45,8 @@ function isLocale(value: unknown): value is Locale {
 }
 
 function readStoredLocale(): Locale {
-  try {
-    const stored = typeof localStorage === "undefined" ? null : localStorage.getItem(STORAGE_KEY);
-    return isLocale(stored) ? stored : DEFAULT_LOCALE;
-  } catch {
-    return DEFAULT_LOCALE;
-  }
+  const stored = storageGet(STORAGE_KEY);
+  return isLocale(stored) ? stored : DEFAULT_LOCALE;
 }
 
 function lookup(dictionary: unknown, key: string): Leaf | undefined {
@@ -113,11 +100,7 @@ interface LocaleState {
 export const useLocaleStore = create<LocaleState>((set) => ({
   locale: readStoredLocale(),
   setLocale: (locale) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, locale);
-    } catch {
-      // Storage can be unavailable in restricted web views.
-    }
+    storageSet(STORAGE_KEY, locale);
     if (typeof document !== "undefined") document.documentElement.lang = locale;
     set({ locale });
   },

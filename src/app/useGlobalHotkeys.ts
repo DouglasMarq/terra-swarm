@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { Workspace } from "../types";
+import type { Workspace } from "../domain/workspace.model";
 import { t } from "../i18n";
 import { HOTKEY_ACTIONS, hotkeyActionLabel, matchHotkey, type Hotkey, type HotkeyActionId, usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";

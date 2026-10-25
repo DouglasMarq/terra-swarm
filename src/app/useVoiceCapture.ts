@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
-import type { AgentInfo, VoiceStatus, Workspace, WorkspaceGroup } from "../types";
+import {
+  onVoiceAudioLevel,
+  onVoiceRecordingError,
+  onVoiceRecordingStarted,
+  onVoiceRecordingStopped,
+  onVoiceTranscriptionComplete,
+  onVoiceTranscriptionError,
+  onVoiceTranscriptionStarted,
+} from "../lib/tauri/voice";
+import type { AgentInfo } from "../domain/agent.model";
+import type { VoiceStatus } from "../domain/voice.model";
+import type { Workspace, WorkspaceGroup } from "../domain/workspace.model";
 import {
   createInitialVoiceCapsuleModel,
   canExecuteVoiceIntent,
@@ -12,11 +22,12 @@ import {
 } from "../components/voice/voiceModel";
 import { getTerminal } from "../terminalRegistry";
 import { t } from "../i18n";
-import { agentKind, agentLabelText, buildAgentLabels } from "../domain/agentLabels";
+import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { orchestratorOf } from "../domain/agentRoles";
-import { normalizeVoiceText, parseVoiceCommand } from "../lib/voiceCommands";
-import { promptPayload } from "../lib/session/sendPrompt";
-import { buildVoicePrompt, profileForCommand, resolveResumeCommand } from "../lib/features/agentProfiles";
+import { parseVoiceCommand } from "../domain/voiceCommands";
+import { isVoiceModelError, resolveVoiceAgent, resolveVoiceGroup, resolveVoiceTerminal } from "../domain/voiceTargets";
+import { promptPayload } from "../domain/session/sendPrompt";
+import { buildVoicePrompt, profileForCommand, resolveResumeCommand } from "../domain/agentProfiles";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useOrchestrationStore } from "../stores/orchestrationStore";
 import { useShellStore } from "../stores/shellStore";
@@ -80,38 +91,11 @@ export function useVoiceCapture({
   const [voiceFeedback, setVoiceFeedback] = useState<string | null>(null);
   const [voiceSubmitted, setVoiceSubmitted] = useState(false);
 
-  const resolveVoiceTerminal = (target: string) => {
-    const needle = normalizeVoiceText(target);
-    if (!needle) return null;
-    const labels = buildAgentLabels(workspaces, { titles, names: usePreferencesStore.getState().agentNames });
-    for (const workspace of workspaces) {
-      const terminal = workspace.terminals.find((candidate) => {
-        const title = titles[candidate.id] ?? "";
-        const command = candidate.command.trim();
-        const label = labels[candidate.id];
-        return [candidate.id, title, command, agentKind(command), label?.tag ?? "", label?.title ?? "", label?.name ?? ""]
-          .some((value) => value && normalizeVoiceText(value) === needle);
-      });
-      if (terminal) return { workspace, terminal };
-    }
-    for (const workspace of workspaces) {
-      const terminal = workspace.terminals.find((candidate) => {
-        const title = labels[candidate.id]?.title;
-        return title ? normalizeVoiceText(title).includes(needle) || needle.includes(normalizeVoiceText(title)) : false;
-      });
-      if (terminal) return { workspace, terminal };
-    }
-    const workspace = workspaces.find(
-      (candidate) =>
-        normalizeVoiceText(candidate.id) === needle ||
-        normalizeVoiceText(candidate.name) === needle,
-    );
-    const terminal = workspace?.terminals[0];
-    return workspace && terminal ? { workspace, terminal } : null;
-  };
+  const voiceTerminalFor = (target: string) =>
+    resolveVoiceTerminal(workspaces, target, { titles, names: usePreferencesStore.getState().agentNames });
 
   const focusVoiceTarget = (target: string): boolean => {
-    const match = resolveVoiceTerminal(target);
+    const match = voiceTerminalFor(target);
     if (!match) return false;
     useOrchestrationStore.getState().reattachTerminal(match.terminal.id);
     actions.selectWorkspace(match.workspace.id);
@@ -140,15 +124,6 @@ export function useVoiceCapture({
     }
   };
 
-  const resolveVoiceGroup = (target: string): string | null => {
-    const needle = normalizeVoiceText(target);
-    return groups.find(
-      (group) =>
-        normalizeVoiceText(group.id) === needle ||
-        normalizeVoiceText(group.name) === needle,
-    )?.id ?? null;
-  };
-
   const startVoiceAgent = async (agentTarget?: string) => {
     if (!activeWorkspace) {
       notify(t("app.pickWorkspaceFirst"));
@@ -158,18 +133,28 @@ export function useVoiceCapture({
       await actions.quickNewTerminal(activeWorkspace.id);
       return;
     }
-    const needle = normalizeVoiceText(agentTarget);
-    const agent = agents.find(
-      (candidate) =>
-        candidate.available &&
-        (normalizeVoiceText(candidate.id) === needle ||
-          normalizeVoiceText(candidate.label) === needle),
-    );
+    const agent = resolveVoiceAgent(agents, agentTarget);
     if (!agent) {
       notify(t("app.agentUnavailable", { name: agentTarget }));
       return;
     }
     await sessions.spawnInto(activeWorkspace.id, agent.id);
+  };
+
+  const runVoiceGroupAction = async (
+    groupName: string,
+    action: (groupId: string) => Promise<void>,
+    doneKey: "app.voice.groupSuspended" | "app.voice.groupResumed",
+  ): Promise<boolean> => {
+    const groupId = resolveVoiceGroup(groups, groupName);
+    if (!groupId) {
+      notify(t("app.voice.groupNotFound", { name: groupName }));
+      setVoiceFeedback(t("app.voice.groupNotFound", { name: groupName }));
+      return false;
+    }
+    await action(groupId);
+    setVoiceFeedback(t(doneKey, { name: groupName }));
+    return true;
   };
 
   const executeVoiceIntent = async (
@@ -194,34 +179,16 @@ export function useVoiceCapture({
           }
           setVoiceFeedback(t("app.voice.focusChanged", { name: intent.target }));
           return true;
-        case "suspend-group": {
-          const groupId = resolveVoiceGroup(intent.group);
-          if (!groupId) {
-            notify(t("app.voice.groupNotFound", { name: intent.group }));
-            setVoiceFeedback(t("app.voice.groupNotFound", { name: intent.group }));
-            return false;
-          }
-          await actions.suspendGroup(groupId);
-          setVoiceFeedback(t("app.voice.groupSuspended", { name: intent.group }));
-          return true;
-        }
-        case "resume-group": {
-          const groupId = resolveVoiceGroup(intent.group);
-          if (!groupId) {
-            notify(t("app.voice.groupNotFound", { name: intent.group }));
-            setVoiceFeedback(t("app.voice.groupNotFound", { name: intent.group }));
-            return false;
-          }
-          await actions.resumeGroup(groupId);
-          setVoiceFeedback(t("app.voice.groupResumed", { name: intent.group }));
-          return true;
-        }
+        case "suspend-group":
+          return await runVoiceGroupAction(intent.group, actions.suspendGroup, "app.voice.groupSuspended");
+        case "resume-group":
+          return await runVoiceGroupAction(intent.group, actions.resumeGroup, "app.voice.groupResumed");
         case "new-agent":
           await startVoiceAgent(intent.agent);
           setVoiceFeedback(intent.agent ? t("app.voice.agentStarted", { name: intent.agent }) : t("app.voice.agentReady"));
           return true;
         case "stop": {
-          const match = intent.target ? resolveVoiceTerminal(intent.target) : null;
+          const match = intent.target ? voiceTerminalFor(intent.target) : null;
           if (!match) {
             setVoiceFeedback(intent.target ? t("app.voice.terminalNotFound", { name: intent.target }) : t("app.voice.whichStop"));
             return false;
@@ -300,17 +267,12 @@ export function useVoiceCapture({
   const voiceCommandsEnabledRef = useRef(voiceCommandsEnabled);
   voiceCommandsEnabledRef.current = voiceCommandsEnabled;
 
-  const isVoiceModelError = (message: unknown): boolean => {
-    const text = String(message ?? "").toLocaleLowerCase("pt-BR");
-    return text.includes("model") || text.includes("modelo") || text.includes("whisper");
-  };
-
   // Voice backend events. Parsed intents stop at the capsule preview; they
   // are executed only by the explicit Send/Confirm action below. Everything
   // else becomes a profile-aware prompt; transcript text is never interpreted
   // as a shell command.
   useEffect(() => {
-    const unRecStart = listen("voice-recording-started", () => {
+    const unRecStart = onVoiceRecordingStarted(() => {
       setVoiceStatus("recording");
       setVoiceFeedback(null);
       setVoiceSubmitted(false);
@@ -318,22 +280,22 @@ export function useVoiceCapture({
       setVoiceSamples([]);
       dispatchVoiceCapsule({ type: "start-listening" });
     });
-    const unRecStop = listen("voice-recording-stopped", () => {
+    const unRecStop = onVoiceRecordingStopped(() => {
       setVoiceStatus("transcribing");
       dispatchVoiceCapsule({ type: "stop-listening" });
     });
-    const unAudioLevel = listen<number>("voice-audio-level", (e) => {
-      const level = Math.max(0, Math.min(1, Number(e.payload) || 0));
+    const unAudioLevel = onVoiceAudioLevel((payload) => {
+      const level = Math.max(0, Math.min(1, Number(payload) || 0));
       setVoiceLevel(level);
       setVoiceSamples((previous) => [...previous.slice(-(VOICE_WAVEFORM_SAMPLES - 1)), level]);
     });
-    const unTrStart = listen("voice-transcription-started", () => {
+    const unTrStart = onVoiceTranscriptionStarted(() => {
       setVoiceStatus("transcribing");
       dispatchVoiceCapsule({ type: "begin-transcription" });
     });
-    const unTrDone = listen<string>("voice-transcription-complete", (e) => {
+    const unTrDone = onVoiceTranscriptionComplete((transcript) => {
       setVoiceStatus("idle");
-      const text = e.payload.trim();
+      const text = transcript.trim();
       if (!text) {
         dispatchVoiceCapsule({ type: "transcription-ready", transcript: "", intent: null });
         setVoiceFeedback(t("app.voice.noTranscript"));
@@ -363,24 +325,19 @@ export function useVoiceCapture({
       }
       void deliverDictationRef.current(id, text);
     });
-    const unTrErr = listen<string>("voice-transcription-error", (e) => {
+    const reportVoiceFailure = (message: string, fallback: string, logLabel: string): void => {
       setVoiceStatus("idle");
-      dispatchVoiceCapsule({ type: "fail", message: e.payload || t("app.voice.transcriptionFailed") });
-      setVoiceFeedback(e.payload || t("app.voice.transcriptionFailed"));
-      console.error("voice transcription error:", e.payload);
-      if (isVoiceModelError(e.payload)) {
-        openVoiceSettings();
-      }
-    });
-    const unRecErr = listen<string>("voice-recording-error", (e) => {
-      setVoiceStatus("idle");
-      dispatchVoiceCapsule({ type: "fail", message: e.payload || t("app.voice.captureFailed") });
-      setVoiceFeedback(e.payload || t("app.voice.captureFailed"));
-      console.error("voice recording error:", e.payload);
-      if (isVoiceModelError(e.payload)) {
-        openVoiceSettings();
-      }
-    });
+      dispatchVoiceCapsule({ type: "fail", message: message || fallback });
+      setVoiceFeedback(message || fallback);
+      console.error(logLabel, message);
+      if (isVoiceModelError(message)) openVoiceSettings();
+    };
+    const unTrErr = onVoiceTranscriptionError((message) =>
+      reportVoiceFailure(message, t("app.voice.transcriptionFailed"), "voice transcription error:"),
+    );
+    const unRecErr = onVoiceRecordingError((message) =>
+      reportVoiceFailure(message, t("app.voice.captureFailed"), "voice recording error:"),
+    );
     return () => {
       unRecStart.then((u) => u());
       unRecStop.then((u) => u());

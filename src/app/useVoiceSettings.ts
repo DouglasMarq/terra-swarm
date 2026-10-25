@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
-import type { VoiceDownloadProgress, VoiceModelInfo } from "../types";
+import {
+  onVoiceMicChanged,
+  onVoiceModelChanged,
+  onVoiceModelDownloadComplete,
+  onVoiceModelDownloadProgress,
+} from "../lib/tauri/voice";
+import type { VoiceModelInfo } from "../domain/voice.model";
 import { t } from "../i18n";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import type { VoiceLanguage } from "../domain/voiceLanguages";
@@ -150,21 +155,21 @@ export function useVoiceSettings({ settingsOpen, voiceSectionOpen }: VoiceSettin
 
   useEffect(() => {
     const pending = [
-      listen<VoiceDownloadProgress>("voice-model-download-progress", (event) =>
-        setDownload({ id: event.payload.model_id, percent: event.payload.percent }),
+      onVoiceModelDownloadProgress((progress) =>
+        setDownload({ id: progress.model_id, percent: progress.percent }),
       ),
-      listen("voice-model-download-complete", () => {
+      onVoiceModelDownloadComplete(() => {
         setDownload(null);
         refreshModels();
       }),
-      listen<string>("voice-model-changed", (event) => {
-        prefs.getState().setVoiceModel(event.payload);
+      onVoiceModelChanged((modelId) => {
+        prefs.getState().setVoiceModel(modelId);
         refreshModels();
       }),
-      listen<boolean>("voice-mic-changed", (event) => {
-        setMicAvailable(event.payload);
+      onVoiceMicChanged((isAvailable) => {
+        setMicAvailable(isAvailable);
         refreshInputDevices();
-        if (!event.payload && prefs.getState().voiceEnabled) {
+        if (!isAvailable && prefs.getState().voiceEnabled) {
           prefs.getState().setVoiceEnabled(false);
           notify(t("app.voice.micDisconnected"));
         }

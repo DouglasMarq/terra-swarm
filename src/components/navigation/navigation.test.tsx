@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NavigatorPanel } from "./NavigatorPanel";
-import type { Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../types";
+import type { Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import { useEditorStore } from "../../stores/editorStore";
 
 const groups: WorkspaceGroup[] = [{
@@ -43,6 +43,16 @@ describe("NavigatorPanel", () => {
     agent.focus();
     await user.keyboard("{Enter}");
     expect(onOpenTerminal).toHaveBeenCalledWith("ws-api", "term-luna");
+  });
+
+  it("Given nested tree rows, when rendering the navigator, then each level indents 16px like the files view", () => {
+    render(<NavigatorPanel workspaces={workspaces} groups={groups} />);
+
+    for (const row of screen.getAllByRole("treeitem")) {
+      const depth = Number(row.getAttribute("data-depth"));
+      expect(row.style.paddingInlineStart).toBe(`${8 + depth * 16}px`);
+    }
+    expect(screen.getByRole("treeitem", { name: "Projeto Terra API" }).style.paddingInlineStart).toBe("24px");
   });
 
   it("exposes activity tabs and forwards the selected surface", async () => {

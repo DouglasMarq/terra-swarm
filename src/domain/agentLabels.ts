@@ -1,4 +1,4 @@
-import type { Workspace } from "../types";
+import type { Workspace } from "./workspace.model";
 
 /**
  * How an agent is identified everywhere in the UI (sidebar, pane header,

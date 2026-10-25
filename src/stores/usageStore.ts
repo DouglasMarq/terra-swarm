@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { mcpApi } from "../lib/tauri/mcp";
-import type { AgentTokenUsage } from "../types";
+import type { AgentTokenUsage } from "../domain/agent.model";
 
 interface UsageState {
   /** Usage by terminal id. */

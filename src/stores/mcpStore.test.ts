@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { McpTask } from "../types";
+import type { McpTask } from "../domain/mcp.model";
 
 const api = vi.hoisted(() => ({
   mcpServerInfo: vi.fn(),
@@ -24,7 +24,8 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { listen } from "@tauri-apps/api/event";
-import { groupTasksByStatus, startMcpEventBridge, useMcpStore } from "./mcpStore";
+import { groupTasksByStatus } from "../domain/tasks";
+import { startMcpEventBridge, useMcpStore } from "./mcpStore";
 
 export function makeTask(id: string, extra: Partial<McpTask> = {}): McpTask {
   return {

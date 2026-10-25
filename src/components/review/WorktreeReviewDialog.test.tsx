@@ -3,7 +3,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorktreeDiff } from "../../types";
+import type { WorktreeDiff } from "../../domain/worktree.model";
 
 const api = vi.hoisted(() => ({
   worktreeDiff: vi.fn(),

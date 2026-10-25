@@ -59,6 +59,54 @@ describe("migrateLegacyWorkspaces", () => {
     expect(snapshot.activeTabId).toBe("tab-ws-alpha-1");
   });
 
+  it("Given legacy containers and panes with their own order, when migrating, then the source order, visibility and active ids are kept", () => {
+    const snapshot = migrateLegacyWorkspaces([
+      {
+        id: "ws-split",
+        name: "Split",
+        cwd: "/work/split",
+        activeContainerId: "c-right",
+        activePaneId: "p-c",
+        containers: [
+          { id: "c-left", paneIds: ["p-b", "p-a"], activePaneId: "p-a" },
+          { id: "c-right", visible: false, size: 30 },
+        ],
+        panes: [
+          { id: "p-a", activeTabId: "t-a2", tabs: [{ id: "t-a2" }, { id: "t-a1" }] },
+          { id: "p-b" },
+          { id: "p-c", containerId: "c-right" },
+        ],
+        terminals: [
+          { id: "pty-a1", command: "codex", paneId: "p-a", tabId: "t-a1" },
+          { id: "pty-a2", command: "claude", paneId: "p-a", tabId: "t-a2" },
+          { id: "pty-b", command: "bash", paneId: "p-b", tabId: "t-b", groupId: "group-1" },
+          { id: "pty-c", command: "zsh", paneId: "p-c", tabId: "t-c" },
+        ],
+      },
+    ]);
+
+    expect(snapshot.projects[0]).toMatchObject({
+      containerIds: ["c-left", "c-right"],
+      activeContainerId: "c-right",
+      activePaneId: "p-c",
+      groupId: "group-1",
+    });
+    expect(snapshot.containers).toMatchObject([
+      { id: "c-left", paneIds: ["p-b", "p-a"], activePaneId: "p-a", visible: true },
+      { id: "c-right", paneIds: ["p-c"], activePaneId: "p-c", visible: false, closed: true, size: 30 },
+    ]);
+    expect(snapshot.panes.find((pane) => pane.id === "p-a")).toMatchObject({
+      tabIds: ["t-a2", "t-a1"],
+      activeTabId: "t-a2",
+      containerId: "c-left",
+    });
+    expect(snapshot.tabs.find((tab) => tab.id === "t-b")).toMatchObject({
+      paneId: "p-b",
+      legacyWorkspaceId: "ws-split",
+      orphaned: false,
+    });
+  });
+
   it("is deterministic and keeps the old workspace ids", () => {
     const legacy = [
       {
@@ -253,6 +301,25 @@ describe("mergeWorkspaceSnapshot", () => {
     expect(first.tabs.map((tab) => tab.id)).toEqual(["tab-one", "tab-two"]);
     expect((first.tabs[0] as typeof first.tabs[number] & { suspended?: boolean }).suspended).toBe(true);
     expect(refreshed).toEqual(first);
+  });
+
+  it("Given a previous orphan tab and a visibility override, when refreshing, then the orphan is kept and the container follows the override", () => {
+    const first = mergeWorkspaceSnapshot(sharedPaneWorkspaces, null);
+    const previous = {
+      ...first,
+      tabs: [...first.tabs, { ...first.tabs[0], id: "tab-orphan", ptyId: null, orphaned: true }],
+      panes: first.panes.map((pane) => ({ ...pane, tabIds: [...pane.tabIds, "tab-orphan"] })),
+    };
+    const containerId = first.containers[0]?.id ?? "";
+
+    const refreshed = mergeWorkspaceSnapshot(sharedPaneWorkspaces, previous, {
+      containerVisibility: { [containerId]: false },
+    });
+
+    expect(refreshed.tabs.find((tab) => tab.id === "tab-orphan")).toMatchObject({ orphaned: true, ptyId: null });
+    expect(refreshed.orphanedTabIds).toEqual(["tab-orphan"]);
+    expect(refreshed.panes[0]?.tabIds).toEqual(["tab-one", "tab-two", "tab-orphan"]);
+    expect(refreshed.containers[0]).toMatchObject({ id: containerId, visible: false, closed: true });
   });
 
   it("preserves visual active state and layout while removing a stale PTY", () => {

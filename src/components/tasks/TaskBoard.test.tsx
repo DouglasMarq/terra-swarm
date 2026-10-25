@@ -4,7 +4,7 @@ import { act, render, screen, within } from "@testing-library/react";
 import type { DragEndEvent } from "@dnd-kit/core";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { McpServerInfo, McpTask } from "../../types";
+import type { McpServerInfo, McpTask } from "../../domain/mcp.model";
 
 const api = vi.hoisted(() => ({
   mcpServerInfo: vi.fn(),

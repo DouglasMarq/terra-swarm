@@ -1,6 +1,8 @@
 import { DEFAULT_NAME_LIST, NAME_SETS, type NameSetId, type NamesExhaustedStrategy } from "../domain/agentNames";
 import { create } from "zustand";
+import type { AgentLaunchSettings } from "../domain/agentLaunchEnv";
 import { t } from "../i18n";
+import { storageGet, storageRemove, storageSet } from "../lib/storage/safeStorage";
 import { DEFAULT_VOICE_LANGUAGE, isVoiceLanguage, type VoiceLanguage } from "../domain/voiceLanguages";
 import {
   detectShortcutPlatform,
@@ -157,10 +159,6 @@ function nameListFor(set: NameSetId): string[] {
 }
 
 /** User launch settings of one agent: extra arguments and `KEY=VALUE` lines. */
-export interface AgentLaunchSettings {
-  args: string;
-  env: string;
-}
 
 function loadAgentLaunch(): Record<string, AgentLaunchSettings> {
   try {
@@ -181,24 +179,6 @@ function loadAgentLaunch(): Record<string, AgentLaunchSettings> {
   }
 }
 
-/** Parse `KEY=VALUE` lines; blank lines and `#` comments are skipped. */
-export function parseEnvLines(text: string): { env: Record<string, string>; invalid: string[] } {
-  const env: Record<string, string> = {};
-  const invalid: string[] = [];
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
-    const separator = line.indexOf("=");
-    const key = separator > 0 ? line.slice(0, separator).trim() : "";
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || key.startsWith("TERRA_")) {
-      invalid.push(line);
-      continue;
-    }
-    env[key] = line.slice(separator + 1).trim();
-  }
-  return { env, invalid };
-}
-
 function loadAgentNames(): Record<string, string> {
   try {
     const parsed = JSON.parse(storageGet("agentNames") ?? "{}");
@@ -210,30 +190,6 @@ function loadAgentNames(): Record<string, string> {
   }
   return {};
 }
-
-const storageGet = (key: string): string | null => {
-  try {
-    return typeof localStorage === "undefined" ? null : localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
-
-const storageSet = (key: string, value: string): void => {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Storage can be unavailable in private or restricted web views.
-  }
-};
-
-const storageRemove = (key: string): void => {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // Storage can be unavailable in private or restricted web views.
-  }
-};
 
 function loadHotkeys(): Record<HotkeyActionId, Hotkey> {
   try {

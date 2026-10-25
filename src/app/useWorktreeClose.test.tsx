@@ -2,7 +2,8 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Workspace, WorktreeStatus } from "../types";
+import type { Workspace } from "../domain/workspace.model";
+import type { WorktreeStatus } from "../domain/worktree.model";
 
 const api = vi.hoisted(() => ({
   stopTerminal: vi.fn(),

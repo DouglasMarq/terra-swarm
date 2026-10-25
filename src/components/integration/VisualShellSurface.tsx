@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type ComponentProps, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   Copy,
@@ -13,7 +13,7 @@ import {
   Square,
 } from "lucide-react";
 import type { PaneMenuGroups } from "../workbench/PaneActionsMenu";
-import { profileForCommand, resolveResumeCommand } from "../../lib/features/agentProfiles";
+import { profileForCommand, resolveResumeCommand } from "../../domain/agentProfiles";
 import { ApplicationShell } from "../shell/ApplicationShell";
 import { CollapsedSidebar, Sidebar, SurfaceSwitch, type CollapsedSidebarProject } from "../shell/Sidebar";
 import { NotificationCenter } from "../notifications/NotificationCenter";
@@ -30,12 +30,11 @@ import { useAgentUsage } from "../../app/useAgentUsage";
 import { useInspectorRuntime } from "../../app/useInspectorRuntime";
 import { startPreviewBridge } from "../../stores/previewStore";
 import { PreviewPanel } from "../preview/PreviewPanel";
-import { deriveAgentStatus } from "../../domain/agentStatus";
+import { deriveAgentStatus, isTerminalRunning } from "../../domain/agentStatus";
 import { NavigatorPanel } from "../navigation/NavigatorPanel";
 import type { ActivityTab, NavigatorFilesLoader, NavigatorGitLoader, NavigatorNodeRef } from "../navigation/types";
 import type { WorkbenchLocation, WorkbenchTabRenderContext } from "../workbench/types";
 import type { CommandConfirmRequest, FocusedAgentAction } from "../overlays/CommandPalette";
-import { ConfirmActionDialog } from "../overlays/Dialog";
 import { VoiceCapsule } from "../voice";
 import { VoiceTargetPicker } from "../voice/VoiceTargetPicker";
 import type {
@@ -43,20 +42,14 @@ import type {
   VoiceCapsuleState,
   VoiceSendPayload,
 } from "../voice";
-import type {
-  Group,
-  NotificationItem,
-  VoiceStatus,
-  Workspace,
-  WorkspaceGroup,
-  WorkspaceSnapshotV2,
-} from "../../types";
+import type { NotificationItem } from "../../domain/notification.model";
+import type { VoiceStatus } from "../../domain/voice.model";
+import type { Group, Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import { useShellStore, type ShellSurface } from "../../stores/shellStore";
 import { useOrchestrationStore } from "../../stores/orchestrationStore";
 import { DEFAULT_HOTKEYS, formatHotkey, usePreferencesStore } from "../../stores/preferencesStore";
 import { useShallow as useOrchestrationShallow } from "zustand/react/shallow";
-import { selectWorkspaceContainerId } from "../../lib/session/workspaceContainerSelection";
-import { formatShortcut, type ShortcutDefinition, type ShortcutPlatform } from "../../lib/platform/shortcuts";
+import { selectWorkspaceContainerId } from "../../domain/session/workspaceContainerSelection";
 import {
   inspectorActionRequiresConfirmation,
   resolveInspectorTarget,
@@ -72,103 +65,14 @@ import {
   shellVoiceState,
   workbenchSnapshot,
 } from "./visualShellModel";
+import { CommandPalette, FleetCommandCenter, LazyTerminalTabSurface, SurfaceLoading, WorkspaceWorkbench } from "./lazySurfaces";
+import { ShellConfirmDialogs, type PendingInspectorAction } from "./ShellConfirmDialogs";
+import { shellShortcutLabels, useShellShortcuts } from "./shellShortcuts";
+import { useFullscreenExit } from "./useFullscreenExit";
 import "./visual-shell.css";
-
-const LazyFleetCommandCenter = lazy(async () => {
-  const module = await import("../fleet/FleetCommandCenter");
-  return { default: module.FleetCommandCenter };
-});
-
-const LazyWorkspaceWorkbench = lazy(async () => {
-  const module = await import("../workbench/WorkspaceWorkbench");
-  return { default: module.WorkspaceWorkbench };
-});
-
-const LazyTerminalTabSurface = lazy(async () => {
-  const module = await import("./TerminalTabSurface");
-  return { default: module.TerminalTabSurface };
-});
-
-const LazyCommandPalette = lazy(async () => {
-  const module = await import("../overlays/CommandPalette/CommandPalette");
-  return { default: module.CommandPalette };
-});
-
-function SurfaceLoading() {
-  const t = useT();
-  return (
-    <div className="terra-surface-loading" role="status" aria-live="polite">
-      {t("shell.loading")}
-    </div>
-  );
-}
-
-function FleetCommandCenter(props: ComponentProps<typeof LazyFleetCommandCenter>) {
-  return (
-    <Suspense fallback={<SurfaceLoading />}>
-      <LazyFleetCommandCenter {...props} />
-    </Suspense>
-  );
-}
-
-function WorkspaceWorkbench(props: ComponentProps<typeof LazyWorkspaceWorkbench>) {
-  return (
-    <Suspense fallback={<SurfaceLoading />}>
-      <LazyWorkspaceWorkbench {...props} />
-    </Suspense>
-  );
-}
-
-function CommandPalette(props: ComponentProps<typeof LazyCommandPalette>) {
-  if (!props.open) return null;
-  return (
-    <Suspense fallback={null}>
-      <LazyCommandPalette {...props} />
-    </Suspense>
-  );
-}
-
-/** ⌘B toggles the sidebar and ⌘I the inspector, outside dialogs and terminals' own input. */
-function shellShortcut(event: KeyboardEvent): "sidebar" | "inspector" | null {
-  if (event.defaultPrevented || event.shiftKey || event.altKey) return null;
-  if (!(event.metaKey || event.ctrlKey)) return null;
-  const target = event.target;
-  if (typeof Element !== "undefined" && target instanceof Element && target.closest('[role="dialog"]')) return null;
-  const key = event.key.toLowerCase();
-  if (key === "b") return "sidebar";
-  if (key === "i") return "inspector";
-  return null;
-}
-
-const NO_MODIFIERS = { meta: false, shift: false, ctrl: false, alt: false } as const;
 
 /** How long "mute notifications" lasts. */
 const NOTIFICATIONS_MUTE_MS = 60 * 60 * 1000;
-
-/** The shell's fixed shortcuts; `meta` reads as Ctrl outside macOS, as their handlers accept either. */
-const SHELL_SHORTCUTS = {
-  interrupt: { ...NO_MODIFIERS, key: "c", ctrl: true },
-  inspector: { ...NO_MODIFIERS, key: "i", meta: true },
-  sidebar: { ...NO_MODIFIERS, key: "b", meta: true },
-} satisfies Record<string, ShortcutDefinition>;
-
-/** The shell's fixed shortcuts written the way the platform shows them (⌘I on macOS, Ctrl+I elsewhere). */
-export function shellShortcutLabels(platform?: ShortcutPlatform): Record<keyof typeof SHELL_SHORTCUTS, string> {
-  return {
-    interrupt: formatShortcut(SHELL_SHORTCUTS.interrupt, platform),
-    inspector: formatShortcut(SHELL_SHORTCUTS.inspector, platform),
-    sidebar: formatShortcut(SHELL_SHORTCUTS.sidebar, platform),
-  };
-}
-
-export function shouldOpenCommandPaletteShortcut(event: KeyboardEvent): boolean {
-  if (event.defaultPrevented) return false;
-  const target = event.target;
-  if (typeof Element !== "undefined" && target instanceof Element && target.closest('[role="dialog"]')) {
-    return false;
-  }
-  return (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
-}
 
 export interface VisualShellSurfaceProps {
   workspaces: readonly Workspace[];
@@ -256,11 +160,6 @@ interface VisualAgent {
   available: boolean;
 }
 
-interface PendingInspectorAction {
-  action: "restart" | "kill";
-  target: InspectorTarget;
-}
-
 function toWireGroup(group: Group): WorkspaceGroup {
   return {
     id: group.id,
@@ -330,29 +229,12 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   useEffect(() => startPreviewBridge(), []);
   const inspectorRuntime = useInspectorRuntime(props.focusedId, inspectorActive);
 
-  const toggleSidebar = shell.toggleSidebar;
-  const setDockOpen = shell.setDockOpen;
-  const dockOpen = shell.dock.open;
-  useEffect(() => {
-    const handleShortcut = (event: KeyboardEvent) => {
-      const shellKey = shellShortcut(event);
-      if (shellKey === "sidebar") {
-        event.preventDefault();
-        toggleSidebar();
-        return;
-      }
-      if (shellKey === "inspector") {
-        event.preventDefault();
-        setDockOpen(!dockOpen);
-        return;
-      }
-      if (!shouldOpenCommandPaletteShortcut(event)) return;
-      event.preventDefault();
-      setCommandPaletteOpen(true);
-    };
-    window.addEventListener("keydown", handleShortcut);
-    return () => window.removeEventListener("keydown", handleShortcut);
-  }, [dockOpen, setDockOpen, toggleSidebar]);
+  useShellShortcuts({
+    toggleSidebar: shell.toggleSidebar,
+    dockOpen: shell.dock.open,
+    setDockOpen: shell.setDockOpen,
+    setCommandPaletteOpen,
+  });
 
   const wireGroups = useMemo(() => props.groups.map(toWireGroup), [props.groups]);
   const containerVisibility = useMemo(() => Object.fromEntries(props.workspaces.map((workspace) => {
@@ -490,25 +372,23 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   );
   const contextAlerts = nearlyFullContexts(props.workspaces, props.exited, props.contextUsage);
   const activeWorkspace = props.workspaces.find((workspace) => workspace.id === props.activeId) ?? null;
+  const activeAgents = (activeWorkspace?.terminals ?? []).map((terminal) => ({
+    id: terminal.id,
+    label: agentLabels[terminal.id]?.primary ?? terminal.command,
+    running: isTerminalRunning(terminal, props.exited),
+  }));
   const tasksPanel = (
     <TasksPanel
       workspaceId={activeWorkspace?.id ?? null}
       workspaceName={activeWorkspace?.name ?? null}
-      agents={(activeWorkspace?.terminals ?? []).map((terminal) => ({
-        id: terminal.id,
-        label: agentLabels[terminal.id]?.primary ?? terminal.command,
-      }))}
+      agents={activeAgents}
     />
   );
   const taskBoard = (
     <TaskBoard
       workspaceId={activeWorkspace?.id ?? null}
       workspaceName={activeWorkspace?.name ?? null}
-      agents={(activeWorkspace?.terminals ?? []).map((terminal) => ({
-        id: terminal.id,
-        label: agentLabels[terminal.id]?.primary ?? terminal.command,
-        running: !terminal.suspended && !(terminal.id in props.exited),
-      }))}
+      agents={activeAgents}
       onSendPrompt={(terminalId, prompt) => sendPromptToTerminal(terminalId, prompt)}
     />
   );
@@ -564,27 +444,11 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     </div>
   );
 
-  // A fullscreen project covers the sidebar and the inspector. Opening the
-  // inspector leaves fullscreen so it is not opened out of sight, and Esc
-  // (outside a terminal, where agents use it) leaves it too.
-  const fullscreenIds = useMemo(
-    () => (props.snapshot?.containers ?? []).filter((container) => container.fullscreen).map((container) => container.id),
-    [props.snapshot],
-  );
-  useEffect(() => {
-    if (shell.dock.open) fullscreenIds.forEach((id) => orchestration.setContainerFullscreen(id, false));
-  }, [shell.dock.open]); // Keyed on opening the inspector only, so entering fullscreen while it is open still works.
-  useEffect(() => {
-    if (fullscreenIds.length === 0) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      const target = event.target as HTMLElement | null;
-      if (target?.closest(".xterm, [role='dialog'], [role='menu']")) return;
-      fullscreenIds.forEach((id) => orchestration.setContainerFullscreen(id, false));
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [fullscreenIds, orchestration]);
+  useFullscreenExit({
+    snapshot: props.snapshot,
+    dockOpen: shell.dock.open,
+    setContainerFullscreen: orchestration.setContainerFullscreen,
+  });
 
   const focusWorkbenchTab = (id: string, location?: WorkbenchLocation) => {
     if (location) {
@@ -793,57 +657,24 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         onOpenLibrary: (dialog) => useLibraryStore.getState().openDialog(dialog),
         onReopenTab: () => {
           const candidate = shell.recentlyClosedTabs[0];
-          if (shell.reopenWorkspaceTab() && candidate) props.onSelectWorkspace(candidate.workspaceId);
+          if (!candidate) return;
+          shell.reopenWorkspaceTab(candidate.workspaceId);
+          props.onSelectWorkspace(candidate.workspaceId);
         },
       }}
       onRequestConfirm={(request) => {
         setPendingCommandConfirmation(request);
       }}
     />
-    <ConfirmActionDialog
-      open={pendingCommandConfirmation !== null}
-      onOpenChange={(open) => {
-        if (!open) setPendingCommandConfirmation(null);
-      }}
-      title={pendingCommandConfirmation?.title}
-      description={pendingCommandConfirmation ? t("dialogs.resourceDescription", { resource: pendingCommandConfirmation.resourceLabel, description: pendingCommandConfirmation.description }) : ""}
-      intent={pendingCommandConfirmation?.kind === "stop-agent" ? "destructive" : "default"}
-      confirmLabel={pendingCommandConfirmation?.kind === "import-snapshot" ? t("system.continueImport") : pendingCommandConfirmation?.kind === "stop-agent" ? t("pane.confirmKill.confirm") : t("dialogs.confirmTitle")}
-      onConfirm={() => {
-        const request = pendingCommandConfirmation;
-        if (!request) return;
-        setPendingCommandConfirmation(null);
-        if (request.kind === "import-snapshot") {
-          props.onImportWorkspace?.();
-          return;
-        }
-        if (request.action && request.workspaceId && request.terminalId) {
-          props.onFocusedAgentAction?.(request.action, {
-            workspaceId: request.workspaceId,
-            terminalId: request.terminalId,
-            command: request.resourceLabel,
-          });
-        }
-      }}
-    />
-    <ConfirmActionDialog
-      open={pendingInspectorAction !== null}
-      onOpenChange={(open) => {
-        if (!open) setPendingInspectorAction(null);
-      }}
-      title={pendingInspectorAction?.action === "kill" ? t("pane.confirmKill.confirm") : t("system.restartSession")}
-      description={pendingInspectorAction
-        ? `${pendingInspectorAction.target.displayName} · ${pendingInspectorAction.target.command}`
-        : ""}
-      intent={pendingInspectorAction?.action === "kill" ? "destructive" : "default"}
-      confirmLabel={pendingInspectorAction?.action === "kill" ? t("pane.confirmKill.confirm") : t("system.restartSession")}
-      onConfirm={() => {
-        const request = pendingInspectorAction;
-        if (!request) return;
-        setPendingInspectorAction(null);
-        if (request.action === "kill") props.onKill(request.target.terminalId);
-        else props.onRestart(request.target.terminalId, request.target.command);
-      }}
+    <ShellConfirmDialogs
+      commandRequest={pendingCommandConfirmation}
+      onCommandRequestChange={setPendingCommandConfirmation}
+      inspectorRequest={pendingInspectorAction}
+      onInspectorRequestChange={setPendingInspectorAction}
+      onImportWorkspace={props.onImportWorkspace}
+      onFocusedAgentAction={props.onFocusedAgentAction}
+      onKill={props.onKill}
+      onRestart={props.onRestart}
     />
   </>;
 }

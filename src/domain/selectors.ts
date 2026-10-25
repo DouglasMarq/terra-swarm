@@ -1,10 +1,4 @@
-import type {
-  Pane,
-  Project,
-  TerminalTab,
-  WorkspaceContainer,
-  WorkspaceSnapshotV2,
-} from "../types";
+import type { Pane, Project, TerminalTab, WorkspaceContainer, WorkspaceSnapshotV2 } from "./workspace.model";
 
 /** The item with `id`, or null when `id` is empty or not in `items`. */
 export function byId<T extends { id: string }>(items: readonly T[], id: string | null | undefined): T | null {

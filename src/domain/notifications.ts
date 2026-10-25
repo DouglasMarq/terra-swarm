@@ -1,4 +1,21 @@
-import type { NotificationItem } from "../types";
+import type { NotificationItem } from "./notification.model";
+
+/** One native notification per agent at most this often. */
+const PER_AGENT_COOLDOWN_MS = 30_000;
+
+/** Whether a native notification should be shown for this agent now. */
+export function shouldNotify(
+  lastShown: Map<string, number>,
+  terminalId: string,
+  now: number,
+  appFocused: boolean,
+): boolean {
+  if (appFocused) return false;
+  const last = lastShown.get(terminalId);
+  if (last !== undefined && now - last < PER_AGENT_COOLDOWN_MS) return false;
+  lastShown.set(terminalId, now);
+  return true;
+}
 
 /** The latest unread agent message per terminal, newest first: one per agent that needs the user. */
 export function latestUnreadPerAgent(items: readonly NotificationItem[]): NotificationItem[] {

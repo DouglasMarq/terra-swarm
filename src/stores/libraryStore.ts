@@ -1,11 +1,7 @@
 import { create } from "zustand";
 import { t } from "../i18n";
-
-export interface SavedPrompt {
-  id: string;
-  title: string;
-  body: string;
-}
+import { storageGet, storageSet } from "../lib/storage/safeStorage";
+import { promptTitle, type SavedPrompt } from "../domain/prompts";
 
 const STORAGE_KEY = "terra-prompt-library";
 
@@ -20,7 +16,7 @@ function defaultPrompts(): SavedPrompt[] {
 
 function load(): SavedPrompt[] {
   try {
-    const raw = typeof localStorage === "undefined" ? null : localStorage.getItem(STORAGE_KEY);
+    const raw = storageGet(STORAGE_KEY);
     if (!raw) return defaultPrompts();
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return defaultPrompts();
@@ -34,16 +30,7 @@ function load(): SavedPrompt[] {
 }
 
 function persist(prompts: readonly SavedPrompt[]) {
-  try {
-    if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(prompts));
-  } catch {
-    // Private mode or full storage: the library still works for this session.
-  }
-}
-
-/** `{project}` becomes the active project's name. */
-export function fillPrompt(body: string, values: { project?: string | null }): string {
-  return body.replace(/\{project\}/g, values.project?.trim() || "this project");
+  storageSet(STORAGE_KEY, JSON.stringify(prompts));
 }
 
 export type LibraryDialog = "prompts" | "team" | null;
@@ -65,7 +52,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   savePrompt: ({ id, title, body }) => {
     const saved: SavedPrompt = {
       id: id ?? `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      title: title.trim() || body.trim().split(/\s+/).slice(0, 6).join(" ") || "Prompt",
+      title: promptTitle(title, body),
       body,
     };
     const exists = get().prompts.some((prompt) => prompt.id === saved.id);

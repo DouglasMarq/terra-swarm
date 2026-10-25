@@ -3,7 +3,7 @@ import { Bell, CheckCircle2, Info } from "lucide-react";
 import type { AgentLabel } from "../../domain/agentLabels";
 import { elapsedTime } from "../../domain/elapsedTime";
 import { latestUnreadPerAgent } from "../../domain/notifications";
-import type { NotificationItem } from "../../types";
+import type { NotificationItem } from "../../domain/notification.model";
 import { intlLocale, useT, type Translate } from "../../i18n";
 import "./notifications.css";
 

@@ -1,16 +1,14 @@
-import { listen } from "@tauri-apps/api/event";
+import { onVoiceAudioLevel } from "../../../lib/tauri/voice";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 
-import type {
-  AgentInfo,
-  VoiceModelInfo,
-} from "../../../types";
+import type { AgentInfo } from "../../../domain/agent.model";
+import type { VoiceModelInfo } from "../../../domain/voice.model";
 import {
   DEFAULT_AGENT_PROFILES,
   fallbackProfile,
   type AgentProfile,
-} from "../../../lib/features/agentProfiles";
+} from "../../../domain/agentProfiles";
 import {
   type FeatureFlagId,
   type FeatureFlags,
@@ -23,10 +21,10 @@ import {
   MIN_FONT_SIZE,
   DEFAULT_HOTKEYS,
   formatHotkey,
-  parseEnvLines,
   type Hotkey,
   type HotkeyActionId,
 } from "../../../stores/preferencesStore";
+import { parseEnvLines } from "../../../domain/agentLaunchEnv";
 import type {
   SettingsSectionDefinition,
   SettingsSectionId,
@@ -149,10 +147,10 @@ function MicLevelMeter({ active }: { active: boolean }) {
 
   useEffect(() => {
     if (!active) return undefined;
-    const unlisten = listen<number>("voice-audio-level", (event) => {
+    const unlisten = onVoiceAudioLevel((level) => {
       const element = fillRef.current;
       if (!element) return;
-      element.style.transform = `scaleX(${Math.min(1, event.payload * MIC_LEVEL_GAIN)})`;
+      element.style.transform = `scaleX(${Math.min(1, level * MIC_LEVEL_GAIN)})`;
     });
     return () => {
       void unlisten.then((cleanup) => cleanup());

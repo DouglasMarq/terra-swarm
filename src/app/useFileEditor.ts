@@ -3,7 +3,7 @@ import { api } from "../api";
 import { errorMessage } from "../lib/errors/errorMessage";
 import { isIpcError } from "../lib/tauri/errors";
 import type { EditorTarget } from "../stores/editorStore";
-import type { WorkspaceFileContent } from "../types";
+import type { WorkspaceFileContent } from "../domain/workspaceFiles.model";
 
 export interface FileEditor {
   /** The file as last read or saved; null while loading or after a failed read. */

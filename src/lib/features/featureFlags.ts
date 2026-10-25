@@ -1,3 +1,5 @@
+import { isRecord } from "../records/records";
+
 /** Versioned, fail-closed feature flags for capabilities introduced in waves 3/4. */
 
 export const FEATURE_FLAGS_VERSION = 1 as const;
@@ -19,10 +21,6 @@ export const DEFAULT_FEATURE_FLAGS: Readonly<FeatureFlags> = Object.freeze({
   durableScrollback: false,
   voiceCommands: false,
 });
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function parseInput(raw: unknown): unknown {
   if (typeof raw !== "string") return raw;

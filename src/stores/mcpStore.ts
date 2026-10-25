@@ -1,48 +1,15 @@
 import { useMemo } from "react";
 import { create } from "zustand";
-import { listen } from "@tauri-apps/api/event";
 import {
-  MCP_EVENTS,
   mcpApi,
+  onMcpAgentStatus,
+  onMcpNudge,
+  onMcpTasksChanged,
   type McpAgentStatusPayload,
   type McpNudgePayload,
-  type McpTasksChangedPayload,
 } from "../lib/tauri/mcp";
-import { taskNumber } from "../domain/tasks";
 import { errorMessage } from "../lib/errors/errorMessage";
-import type {
-  McpAgentState,
-  McpAgentStatus,
-  McpServerInfo,
-  McpTask,
-  McpTaskPatch,
-  McpTaskPriority,
-  McpTaskStatus,
-} from "../types";
-
-/** Column order of the board: what is moving first, finished work last. */
-export const TASK_STATUS_ORDER: readonly McpTaskStatus[] = ["in_progress", "todo", "blocked", "review", "done"];
-export const TASK_PRIORITIES: readonly McpTaskPriority[] = ["urgent", "high", "medium", "low"];
-
-const PRIORITY_RANK: Record<McpTaskPriority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
-
-/** Tasks bucketed by status, each bucket sorted by priority, then board position. */
-export function groupTasksByStatus(tasks: readonly McpTask[]): Record<McpTaskStatus, McpTask[]> {
-  const groups = Object.fromEntries(TASK_STATUS_ORDER.map((status) => [status, [] as McpTask[]])) as Record<
-    McpTaskStatus,
-    McpTask[]
-  >;
-  for (const task of tasks) (groups[task.status] ?? groups.todo).push(task);
-  for (const status of TASK_STATUS_ORDER) {
-    groups[status].sort(
-      (a, b) =>
-        PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
-        a.position - b.position ||
-        taskNumber(a.id) - taskNumber(b.id),
-    );
-  }
-  return groups;
-}
+import type { McpAgentState, McpAgentStatus, McpServerInfo, McpTask, McpTaskPatch, McpTaskPriority } from "../domain/mcp.model";
 
 export interface McpState {
   server: McpServerInfo | null;
@@ -178,17 +145,17 @@ export function useReportedStates(): Record<string, McpAgentState> {
  */
 export function startMcpEventBridge(onNudge: (payload: McpNudgePayload) => void): () => void {
   const pending = [
-    listen<McpTasksChangedPayload>(MCP_EVENTS.tasksChanged, (event) => {
-      const workspaceId = event.payload?.workspace_id;
+    onMcpTasksChanged((payload) => {
+      const workspaceId = payload?.workspace_id;
       if (workspaceId && workspaceId in useMcpStore.getState().tasks) {
         void useMcpStore.getState().loadTasks(workspaceId);
       }
     }),
-    listen<McpAgentStatusPayload>(MCP_EVENTS.agentStatus, (event) => {
-      if (event.payload?.terminal_id) useMcpStore.getState().applyStatus(event.payload);
+    onMcpAgentStatus((payload) => {
+      if (payload?.terminal_id) useMcpStore.getState().applyStatus(payload);
     }),
-    listen<McpNudgePayload>(MCP_EVENTS.nudge, (event) => {
-      if (event.payload?.terminal_id && event.payload.prompt) onNudge(event.payload);
+    onMcpNudge((payload) => {
+      if (payload?.terminal_id && payload.prompt) onNudge(payload);
     }),
   ];
   return () => {

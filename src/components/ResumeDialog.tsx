@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { History } from "lucide-react";
 
-import type { ResumeItem } from "../types";
+import type { ResumeItem } from "../domain/terminal.model";
 import { intlLocale, useT } from "../i18n";
 import { COMMAND_PALETTE_SHORTCUT, formatShortcut } from "../lib/platform/shortcuts";
 import { agentKind } from "../domain/agentLabels";

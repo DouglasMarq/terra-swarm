@@ -1,16 +1,8 @@
-import type {
-  ActivePaneSelection,
-  TerminalPlacement,
-  Workspace,
-  WorkspaceContainerPatch,
-  WorkspaceGroup,
-  WorkspaceLayout,
-  WorkspaceSnapshotTransfer,
-  WorkspaceFileContent,
-  WorkspaceFileListing,
-  WorkspaceFileSaved,
-} from "../../types";
+import type { TerminalPlacement } from "../../domain/terminal.model";
+import type { ActivePaneSelection, Workspace, WorkspaceContainerPatch, WorkspaceGroup, WorkspaceLayout, WorkspaceSnapshotTransfer } from "../../domain/workspace.model";
+import type { WorkspaceFileContent, WorkspaceFileListing, WorkspaceFileSaved } from "../../domain/workspaceFiles.model";
 import { invokeCommand } from "./commands";
+import { listenPayload, type UnlistenFn } from "./events";
 
 export function listWorkspaces(): Promise<Workspace[]> {
   return invokeCommand("listWorkspaces");
@@ -171,6 +163,10 @@ export function setTerminalWidth(
   width: number,
 ): Promise<void> {
   return invokeCommand("setTerminalWidth", { wsId, terminalId, width });
+}
+
+export function onWorkspacesChanged(handler: () => void): Promise<UnlistenFn> {
+  return listenPayload("workspaces-changed", handler);
 }
 
 export const workspaceApi = {

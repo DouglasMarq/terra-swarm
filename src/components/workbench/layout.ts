@@ -1,4 +1,4 @@
-import type { WorkspaceLayout } from "../../types";
+import type { WorkspaceLayout } from "../../domain/workspace.model";
 import type { WorkbenchLayoutMode } from "./types";
 
 const WORKBENCH_LAYOUT_MODES: readonly WorkbenchLayoutMode[] = [

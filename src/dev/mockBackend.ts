@@ -8,7 +8,9 @@
  */
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
-import type { AgentInfo, McpAgentStatus, McpTask, McpTaskPatch, Workspace, WorkspaceGitStatus, WorkspaceGroup, WorkspaceSnapshotTransfer } from "../types";
+import type { AgentInfo } from "../domain/agent.model";
+import type { McpAgentStatus, McpTask, McpTaskPatch } from "../domain/mcp.model";
+import type { Workspace, WorkspaceGitStatus, WorkspaceGroup, WorkspaceSnapshotTransfer } from "../domain/workspace.model";
 
 const workspaces: Workspace[] = [
   {

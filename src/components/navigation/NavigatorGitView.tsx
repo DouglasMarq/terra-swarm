@@ -2,7 +2,7 @@ import { useT, type MessageKey } from "../../i18n";
 import { errorMessage } from "../../lib/errors/errorMessage";
 import { AlertCircle, FileText, GitBranch, LoaderCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Workspace, WorkspaceGitStatus } from "../../types";
+import type { Workspace, WorkspaceGitStatus } from "../../domain/workspace.model";
 import type { NavigatorGitLoader } from "./types";
 import styles from "./Navigator.module.css";
 

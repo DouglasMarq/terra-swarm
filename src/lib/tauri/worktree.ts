@@ -1,4 +1,4 @@
-import type { WorktreeDiff, WorktreeStatus } from "../../types";
+import type { WorktreeDiff, WorktreeStatus } from "../../domain/worktree.model";
 import { invokeCommand } from "./commands";
 
 function worktreeStatus(workspaceId: string, terminalId: string): Promise<WorktreeStatus | null> {

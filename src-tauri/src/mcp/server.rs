@@ -235,6 +235,23 @@ mod tests {
         runtime: tokio::runtime::Runtime,
     }
 
+    struct HttpPost<'a> {
+        token: Option<&'a str>,
+        body: Value,
+        headers: &'a [(&'a str, &'a str)],
+    }
+
+    struct RpcCall<'a> {
+        id: u64,
+        method: &'a str,
+        params: Value,
+    }
+
+    struct HookEvent<'a> {
+        integration: &'a str,
+        body: Value,
+    }
+
     impl TestServer {
         fn start(hub: Arc<McpHub<tauri::test::MockRuntime>>) -> Self {
             let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -253,15 +270,14 @@ mod tests {
         }
 
         fn post(&self, token: Option<&str>, body: Value) -> (u16, String) {
-            self.post_with(token, body, &[])
+            self.post_with(HttpPost {
+                token,
+                body,
+                headers: &[],
+            })
         }
 
-        fn post_with(
-            &self,
-            token: Option<&str>,
-            body: Value,
-            extra: &[(&str, &str)],
-        ) -> (u16, String) {
+        fn post_with(&self, post: HttpPost<'_>) -> (u16, String) {
             self.runtime.block_on(async {
                 let mut request = self
                     .client
@@ -269,11 +285,11 @@ mod tests {
                     .header("content-type", "application/json")
                     .header("accept", "application/json, text/event-stream")
                     .header("mcp-protocol-version", "2025-06-18")
-                    .body(body.to_string());
-                if let Some(token) = token {
+                    .body(post.body.to_string());
+                if let Some(token) = post.token {
                     request = request.header("authorization", format!("Bearer {}", token));
                 }
-                for (name, value) in extra {
+                for (name, value) in post.headers {
                     request = request.header(*name, *value);
                 }
                 let response = request.send().await.unwrap();
@@ -282,12 +298,12 @@ mod tests {
             })
         }
 
-        fn rpc(&self, token: &str, id: u64, method: &str, params: Value) -> Value {
+        fn rpc(&self, token: &str, call: RpcCall<'_>) -> Value {
             let (status, body) = self.post(
                 Some(token),
-                json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }),
+                json!({ "jsonrpc": "2.0", "id": call.id, "method": call.method, "params": call.params }),
             );
-            assert_eq!(status, 200, "{} -> {}", method, body);
+            assert_eq!(status, 200, "{} -> {}", call.method, body);
             parse_rpc(&body)
         }
     }
@@ -306,13 +322,15 @@ mod tests {
     fn initialize(server: &TestServer, token: &str) -> Value {
         let reply = server.rpc(
             token,
-            1,
-            "initialize",
-            json!({
-                "protocolVersion": "2025-06-18",
-                "capabilities": {},
-                "clientInfo": { "name": "terra-test", "version": "1.0" }
-            }),
+            RpcCall {
+                id: 1,
+                method: "initialize",
+                params: json!({
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": { "name": "terra-test", "version": "1.0" }
+                }),
+            },
         );
         let (status, _) = server.post(
             Some(token),
@@ -341,7 +359,14 @@ mod tests {
             .unwrap()
             .contains("whoami"));
 
-        let list = server.rpc(&token, 2, "tools/list", json!({}));
+        let list = server.rpc(
+            &token,
+            RpcCall {
+                id: 2,
+                method: "tools/list",
+                params: json!({}),
+            },
+        );
         let names: Vec<&str> = list["result"]["tools"]
             .as_array()
             .unwrap()
@@ -354,26 +379,32 @@ mod tests {
 
         let created = server.rpc(
             &token,
-            3,
-            "tools/call",
-            json!({ "name": "create_task", "arguments": { "title": "Ship it" } }),
+            RpcCall {
+                id: 3,
+                method: "tools/call",
+                params: json!({ "name": "create_task", "arguments": { "title": "Ship it" } }),
+            },
         );
         assert_eq!(created["result"]["isError"], false);
         assert_eq!(tool_json(&created)["id"], "T-1");
 
         let me = server.rpc(
             &token,
-            4,
-            "tools/call",
-            json!({ "name": "whoami", "arguments": {} }),
+            RpcCall {
+                id: 4,
+                method: "tools/call",
+                params: json!({ "name": "whoami", "arguments": {} }),
+            },
         );
         assert_eq!(tool_json(&me)["terminal_id"], "t-1");
 
         let failed = server.rpc(
             &token,
-            5,
-            "tools/call",
-            json!({ "name": "get_task", "arguments": { "id": "T-99" } }),
+            RpcCall {
+                id: 5,
+                method: "tools/call",
+                params: json!({ "name": "get_task", "arguments": { "id": "T-99" } }),
+            },
         );
         assert_eq!(failed["result"]["isError"], true);
         assert!(failed["result"]["content"][0]["text"]
@@ -411,15 +442,19 @@ mod tests {
         initialize(&server, &mine);
         server.rpc(
             &mine,
-            2,
-            "tools/call",
-            json!({ "name": "create_task", "arguments": { "title": "ws-1 only" } }),
+            RpcCall {
+                id: 2,
+                method: "tools/call",
+                params: json!({ "name": "create_task", "arguments": { "title": "ws-1 only" } }),
+            },
         );
         let listed = server.rpc(
             &theirs,
-            3,
-            "tools/call",
-            json!({ "name": "list_tasks", "arguments": {} }),
+            RpcCall {
+                id: 3,
+                method: "tools/call",
+                params: json!({ "name": "list_tasks", "arguments": {} }),
+            },
         );
         assert_eq!(tool_json(&listed)["tasks"], json!([]));
     }
@@ -429,24 +464,24 @@ mod tests {
         let (hub, _) = hub();
         let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
-        let (status, _) = server.post_with(
-            Some(&token),
-            json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {} }),
-            &[("origin", "https://evil.example")],
-        );
+        let (status, _) = server.post_with(HttpPost {
+            token: Some(&token),
+            body: json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {} }),
+            headers: &[("origin", "https://evil.example")],
+        });
         assert_eq!(status, 403);
     }
 
     impl TestServer {
-        fn post_hook(&self, token: &str, integration: &str, body: Value) -> u16 {
+        fn post_hook(&self, token: &str, event: HookEvent<'_>) -> u16 {
             let url = self
                 .url
-                .replace(MCP_PATH, &format!("/hooks/{}", integration));
+                .replace(MCP_PATH, &format!("/hooks/{}", event.integration));
             self.runtime.block_on(async {
                 self.client
                     .post(url)
                     .header("authorization", format!("Bearer {}", token))
-                    .body(body.to_string())
+                    .body(event.body.to_string())
                     .send()
                     .await
                     .unwrap()
@@ -464,11 +499,12 @@ mod tests {
         let server = TestServer::start(Arc::clone(&hub));
         let event = json!({ "hook_event_name": "Notification", "message": "Approve?" });
 
-        assert_eq!(server.post_hook(&token, "claude", event.clone()), 200);
-        assert_eq!(server.post_hook(&token, "codex", event.clone()), 404);
-        assert_eq!(server.post_hook(&token, "unknown", event), 404);
+        let hook = |integration, body| HookEvent { integration, body };
+        assert_eq!(server.post_hook(&token, hook("claude", event.clone())), 200);
+        assert_eq!(server.post_hook(&token, hook("codex", event.clone())), 404);
+        assert_eq!(server.post_hook(&token, hook("unknown", event)), 404);
         assert_eq!(
-            server.post_hook(&token, "claude", json!({ "message": "no event" })),
+            server.post_hook(&token, hook("claude", json!({ "message": "no event" }))),
             400
         );
         let status = hub.statuses().unwrap().status_of("t-1").cloned().unwrap();

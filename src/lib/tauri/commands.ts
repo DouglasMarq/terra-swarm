@@ -268,7 +268,6 @@ export interface IpcCommandContract {
   };
   voiceIsMicAvailable: {
     args: undefined;
-    // eslint-disable-next-line @typescript-eslint/naming-convention -- `result` is the contract's slot for the command's return type, not a boolean flag name.
     result: boolean;
   };
   voiceListInputDevices: {

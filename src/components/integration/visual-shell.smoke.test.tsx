@@ -8,12 +8,8 @@ import { useShellStore, SHELL_STORAGE_KEY } from "../../stores/shellStore";
 import { useOrchestrationStore } from "../../stores/orchestrationStore";
 import { ptyApi } from "../../lib/tauri/pty";
 import { useLocaleStore } from "../../i18n";
-import {
-  shellShortcutLabels,
-  shouldOpenCommandPaletteShortcut,
-  VisualShellSurface,
-  type VisualShellSurfaceProps,
-} from "./VisualShellSurface";
+import { shellShortcutLabels, shouldOpenCommandPaletteShortcut } from "./shellShortcuts";
+import { VisualShellSurface, type VisualShellSurfaceProps } from "./VisualShellSurface";
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(async () => vi.fn()),

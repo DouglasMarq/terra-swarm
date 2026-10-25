@@ -842,7 +842,8 @@ fn given_a_stored_worktree_with_an_option_like_branch_drops_it_on_load() {
         save_path: None,
     };
 
-    assert!(store.validate());
+    assert!(!store.is_normalized());
+    store.normalize();
     assert_eq!(store.workspaces[0].terminals[0].worktree, None);
     assert_eq!(store.workspaces[0].terminals[0].id, "ws-1-terminal");
     assert!(store.workspaces[1].terminals[0].worktree.is_some());

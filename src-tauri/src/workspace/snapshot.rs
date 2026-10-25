@@ -87,12 +87,12 @@ pub(crate) fn parse_import_snapshot(raw: &str) -> Result<WorkspaceStore, String>
     if decoded.dropped_entries {
         return Err("snapshot contains malformed workspace or group entries".to_string());
     }
-    let mut candidate = WorkspaceStore {
+    let candidate = WorkspaceStore {
         workspaces: decoded.workspaces,
         groups: decoded.groups,
         save_path: None,
     };
-    if candidate.validate() {
+    if !candidate.is_normalized() {
         return Err("snapshot failed workspace metadata validation".to_string());
     }
 

@@ -377,9 +377,10 @@ impl WorkspaceStore {
         // normalization discarded anything, retain the original file before
         // writing the canonical representation.  A legacy array is migrated
         // on load so future app versions only need to understand the envelope.
-        if store.validate() {
+        if !store.is_normalized() {
             needs_backup = true;
         }
+        store.normalize();
         for group in &store.groups {
             bump_next_group_id(&group.id);
         }
@@ -405,7 +406,7 @@ impl WorkspaceStore {
             groups: self.groups.clone(),
             save_path: None,
         };
-        snapshot.validate();
+        snapshot.normalize();
         serde_json::to_string_pretty(&WorkspaceFile {
             version: WORKSPACE_FILE_VERSION,
             workspaces: snapshot.workspaces,

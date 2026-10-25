@@ -104,13 +104,7 @@ impl WorkspaceStore {
                 pane.tabs.retain(|tab| {
                     tab.pty_id.as_deref() != Some(terminal_id) && tab.id.as_str() != terminal_id
                 });
-                if pane
-                    .active_tab_id
-                    .as_deref()
-                    .is_some_and(|id| !pane.tabs.iter().any(|tab| tab.id == id))
-                {
-                    pane.active_tab_id = pane.tabs.first().map(|tab| tab.id.clone());
-                }
+                pane.repair_active_tab();
             }
         }
     }

@@ -232,6 +232,18 @@ pub struct TerminalTab {
     pub suspended: bool,
 }
 
+impl Pane {
+    pub(crate) fn repair_active_tab(&mut self) {
+        if self
+            .active_tab_id
+            .as_deref()
+            .is_some_and(|id| !self.tabs.iter().any(|tab| tab.id == id))
+        {
+            self.active_tab_id = self.tabs.first().map(|tab| tab.id.clone());
+        }
+    }
+}
+
 fn default_tab_kind() -> String {
     "shell".to_string()
 }

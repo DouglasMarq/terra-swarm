@@ -7,8 +7,9 @@ use std::process::Command;
 
 use super::{git, git_command, status, WorktreeInfo, WorktreeStatus};
 
-/// The patch shown in the review is capped; the file list never is.
 const MAX_PATCH_BYTES: usize = 1024 * 1024;
+
+const MAX_UNTRACKED_FILES: usize = 200;
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +64,62 @@ fn diff_new_file(dir: &Path, file: &str) -> String {
     }
 }
 
+fn untracked_change(file: &str, text: &str) -> ChangedFile {
+    let added_lines = text
+        .lines()
+        .filter(|line| line.starts_with('+') && !line.starts_with("+++"))
+        .count();
+    let additions = u32::try_from(added_lines).unwrap_or(u32::MAX);
+    let binary = text.contains("Binary files");
+    ChangedFile {
+        path: file.to_string(),
+        change: "untracked".into(),
+        additions: (!binary).then_some(additions),
+        deletions: (!binary).then_some(0),
+    }
+}
+
+struct PatchBuilder {
+    text: String,
+    has_dropped_text: bool,
+}
+
+impl PatchBuilder {
+    fn new(text: String) -> Self {
+        Self {
+            text,
+            has_dropped_text: false,
+        }
+    }
+
+    fn append(&mut self, file_patch: &str) {
+        if self.text.len() >= MAX_PATCH_BYTES {
+            self.has_dropped_text |= !file_patch.is_empty();
+            return;
+        }
+        if !self.text.is_empty() && !self.text.ends_with('\n') {
+            self.text.push('\n');
+        }
+        self.text.push_str(file_patch);
+    }
+
+    fn is_truncated(&self) -> bool {
+        self.has_dropped_text || self.text.len() > MAX_PATCH_BYTES
+    }
+
+    fn finish(mut self) -> String {
+        if self.text.len() <= MAX_PATCH_BYTES {
+            return self.text;
+        }
+        let mut cut = MAX_PATCH_BYTES;
+        while !self.text.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        self.text.truncate(cut);
+        self.text
+    }
+}
+
 pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
     info.check()?;
     let dir = Path::new(&info.path);
@@ -91,34 +148,17 @@ pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
             deletions,
         });
     }
-    let mut patch = git(dir, &["diff", "-M", &base])?;
+    let mut patch = PatchBuilder::new(git(dir, &["diff", "-M", &base])?);
     let untracked = git(dir, &["ls-files", "--others", "--exclude-standard"])?;
-    for file in untracked.lines().filter(|line| !line.is_empty()) {
+    let untracked_paths: Vec<&str> = untracked.lines().filter(|line| !line.is_empty()).collect();
+    for file in untracked_paths.iter().take(MAX_UNTRACKED_FILES) {
         let text = diff_new_file(dir, file);
-        let additions = text
-            .lines()
-            .filter(|line| line.starts_with('+') && !line.starts_with("+++"))
-            .count() as u32;
-        let binary = text.contains("Binary files");
-        files.push(ChangedFile {
-            path: file.to_string(),
-            change: "untracked".into(),
-            additions: (!binary).then_some(additions),
-            deletions: (!binary).then_some(0),
-        });
-        if !patch.is_empty() && !patch.ends_with('\n') {
-            patch.push('\n');
-        }
-        patch.push_str(&text);
+        files.push(untracked_change(file, &text));
+        patch.append(&text);
     }
-    let truncated = patch.len() > MAX_PATCH_BYTES;
-    if truncated {
-        let mut cut = MAX_PATCH_BYTES;
-        while !patch.is_char_boundary(cut) {
-            cut -= 1;
-        }
-        patch.truncate(cut);
-    }
+    let is_file_list_cut = untracked_paths.len() > MAX_UNTRACKED_FILES;
+    let truncated = is_file_list_cut || patch.is_truncated();
+    let patch = patch.finish();
     Ok(WorktreeDiff {
         status: status(info)?,
         files,
@@ -298,6 +338,24 @@ mod tests {
         assert!(diff.patch.contains("+++ b/app/notes.md"));
         assert!(!diff.patch.contains("other.txt"));
         assert_eq!((diff.status.ahead, diff.status.behind), (1, 1));
+        cleanup(&repo, &root);
+    }
+
+    #[test]
+    fn given_more_untracked_files_than_the_cap_when_diffing_then_it_lists_the_cap_and_reports_truncation(
+    ) {
+        let repo = init("untracked-cap");
+        let root = repo.with_extension("worktrees");
+        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let dir = Path::new(&info.path);
+        for file_number in 0..=MAX_UNTRACKED_FILES {
+            std::fs::write(dir.join(format!("new-{file_number:04}.txt")), "x\n").unwrap();
+        }
+
+        let diff = diff(&info).unwrap();
+
+        assert_eq!(diff.files.len(), MAX_UNTRACKED_FILES);
+        assert!(diff.truncated);
         cleanup(&repo, &root);
     }
 

@@ -123,4 +123,23 @@ describe("fleet model", () => {
     expect(byId).toEqual({ a: "idle", b: "attention", c: "working" });
     expect(model.summary.idle).toBe(1);
   });
+
+  it("Given shells the rest of the UI recognizes, when deriving the fleet, then they are labelled as shells", () => {
+    const commands = ["sh", "pwsh", "nu", "cmd.exe", "/usr/bin/zsh -l", "powershell"];
+    const model = deriveFleetModel({
+      workspaces: [{ id: "ws", name: "ws", cwd: "/", terminals: commands.map((command, position) => ({ id: `t${position}`, command, width: null })) }],
+    }, t);
+    expect(model.agents.map((agent) => agent.label)).toEqual(commands.map(() => t("fleet.shellAgent")));
+  });
+
+  it("Given an agent, a script or a command without an executable, when deriving the fleet, then it labels the agent, the script or the shell", () => {
+    const model = deriveFleetModel({
+      workspaces: [{ id: "ws", name: "ws", cwd: "/", terminals: [
+        { id: "a", command: "codex --full-auto", width: null },
+        { id: "b", command: "./scripts/run.sh", width: null },
+        { id: "c", command: "/", width: null },
+      ] }],
+    }, t);
+    expect(model.agents.map((agent) => agent.label)).toEqual(["Codex", "Run", t("fleet.shellAgent")]);
+  });
 });

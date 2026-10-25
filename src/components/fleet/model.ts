@@ -1,3 +1,4 @@
+import { agentKind } from "../../domain/agentLabels";
 import { deriveAgentStatus, type AgentRunStatus } from "../../domain/agentStatus";
 import type { McpAgentState } from "../../types";
 import { DEFAULT_AGENT_PROFILES } from "../../lib/features/agentProfiles";
@@ -117,19 +118,16 @@ function mapValue<T>(record: Readonly<Record<string, T>> | undefined, id: string
   return record?.[id];
 }
 
+const SCRIPT_EXTENSION = /\.(?:cmd|sh)$/i;
+const SHELL_KIND = "shell";
+const KNOWN_AGENT_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
+  DEFAULT_AGENT_PROFILES.filter((profile) => profile.command).map((profile) => [profile.command, profile.label]),
+);
+
 function agentLabelFromCommand(command: string, t: Translate): string {
-  const token = command.trim().split(/\s+/)[0] ?? "";
-  const executable = token.split(/[\\/]/).pop()?.replace(/\.(?:exe|cmd|sh)$/i, "") ?? "";
-  if (!executable) return t("fleet.terminalAgent");
-  const shell = t("fleet.shellAgent");
-  const known: Record<string, string> = {
-    ...Object.fromEntries(DEFAULT_AGENT_PROFILES.filter((profile) => profile.command).map((profile) => [profile.command, profile.label])),
-    shell,
-    zsh: shell,
-    bash: shell,
-    fish: shell,
-  };
-  return known[executable.toLowerCase()] ?? executable.charAt(0).toUpperCase() + executable.slice(1);
+  const kind = agentKind(command).replace(SCRIPT_EXTENSION, "");
+  if (kind === SHELL_KIND) return t("fleet.shellAgent");
+  return KNOWN_AGENT_LABELS[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
 function clampContext(value: number | undefined): number | null {

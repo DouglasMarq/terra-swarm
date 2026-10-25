@@ -186,7 +186,6 @@ export const ptBR: Dictionary<typeof en> = {
   },
   fleet: {
     statusCount: "{status} · {count}",
-    terminalAgent: "Terminal",
     shellAgent: "Shell",
     summary: { one: "{count} agente em {projects}", other: "{count} agentes em {projects}" },
     projectCount: { one: "{count} projeto", other: "{count} projetos" },

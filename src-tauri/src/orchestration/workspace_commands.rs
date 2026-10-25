@@ -1,5 +1,6 @@
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Runtime};
 
 use crate::mcp::McpHub;
 use crate::pty::{bump_next_terminal_id, kill_all, kill_terminal_inner, PtyManager};
@@ -13,9 +14,16 @@ use crate::workspace::{
 
 /// Called by `close_workspace`: workspaces live in `workspaces.json`, so
 /// their MCP data has no foreign key to cascade from.
-fn purge_workspace(app: &AppHandle, workspace_id: &str) {
-    if let Some(hub) = app.try_state::<Arc<McpHub>>() {
+fn purge_workspace<R: Runtime>(app: &AppHandle<R>, workspace_id: &str) {
+    if let Some(hub) = app.try_state::<Arc<McpHub<R>>>() {
         hub.purge_workspace(workspace_id);
+    }
+}
+
+fn stop_terminals<R: Runtime>(app: &AppHandle<R>, terminal_ids: &[String]) {
+    let manager = app.state::<Mutex<PtyManager>>();
+    for terminal_id in terminal_ids {
+        kill_terminal_inner(&manager, terminal_id);
     }
 }
 
@@ -24,40 +32,45 @@ fn purge_workspace(app: &AppHandle, workspace_id: &str) {
 /// the frontend decides when to enqueue respawns.
 #[tauri::command(async)]
 pub fn suspend_group(app: AppHandle, id: String) -> Result<(), String> {
+    suspend_and_stop(&app, &id)
+}
+
+fn suspend_and_stop<R: Runtime>(app: &AppHandle<R>, id: &str) -> Result<(), String> {
     let store = app.state::<Mutex<WorkspaceStore>>();
     let terminal_ids = change_and_save(&store, |store| {
-        let terminal_ids = store.group_terminal_ids(&id)?;
-        store.suspend_group(&id)?;
+        let terminal_ids = store.group_terminal_ids(id)?;
+        store.suspend_group(id)?;
         Ok(terminal_ids)
     })?;
-    let manager = app.state::<Mutex<PtyManager>>();
-    for terminal_id in terminal_ids {
-        kill_terminal_inner(&manager, &terminal_id);
-    }
-    emit_workspaces_changed(&app);
+    stop_terminals(app, &terminal_ids);
+    emit_workspaces_changed(app);
     Ok(())
 }
 
 #[tauri::command(async)]
 pub fn close_workspace(app: AppHandle, id: String) -> Result<(), String> {
-    let store = app.state::<Mutex<WorkspaceStore>>();
-    let terminals = {
-        let mut store = store.lock_or_recover();
-        let removed = store.remove(&id);
-        if removed.is_some() {
-            store.save();
-        }
-        removed.map(|ws| ws.terminals)
-    };
-    purge_workspace(&app, &id);
-    if let Some(terminals) = terminals {
-        let manager = app.state::<Mutex<PtyManager>>();
-        for t in terminals {
-            kill_terminal_inner(&manager, &t.id);
-        }
-    }
-    emit_workspaces_changed(&app);
+    close_and_stop(&app, &id);
     Ok(())
+}
+
+fn close_and_stop<R: Runtime>(app: &AppHandle<R>, id: &str) {
+    let store = app.state::<Mutex<WorkspaceStore>>();
+    let terminal_ids = change_and_save(&store, |store| {
+        store
+            .remove(id)
+            .ok_or_else(|| format!("workspace {} not found", id))
+    })
+    .map(|workspace| {
+        workspace
+            .terminals
+            .into_iter()
+            .map(|terminal| terminal.id)
+            .collect::<Vec<_>>()
+    })
+    .unwrap_or_default();
+    purge_workspace(app, id);
+    stop_terminals(app, &terminal_ids);
+    emit_workspaces_changed(app);
 }
 
 /// Import a validated legacy/v1/v2 snapshot.  The current store is backed up
@@ -68,30 +81,51 @@ pub fn import_workspace_snapshot(
     app: AppHandle,
     path: String,
 ) -> Result<WorkspaceSnapshotTransfer, String> {
-    let source = validate_explicit_path(&path)?;
-    let raw = read_snapshot_file(&source)?;
-    let mut imported = parse_import_snapshot(&raw)?;
+    import_snapshot(&app, &path)
+}
+
+fn import_snapshot<R: Runtime>(
+    app: &AppHandle<R>,
+    path: &str,
+) -> Result<WorkspaceSnapshotTransfer, String> {
+    let source = validate_explicit_path(path)?;
+    let mut imported = parse_import_snapshot(&read_snapshot_file(&source)?)?;
     mark_imported_sessions_suspended(&mut imported);
     let mut transfer = transfer_summary(&imported, &source);
     let json = imported
         .serialized_snapshot()
         .map_err(|error| format!("failed to serialize imported workspace snapshot: {}", error))?;
+    let backup = replace_running_store(app, imported, &json)?;
+    emit_workspaces_changed(app);
+    transfer.backup_path = backup.map(|path| path.to_string_lossy().into_owned());
+    Ok(transfer)
+}
 
+fn replace_running_store<R: Runtime>(
+    app: &AppHandle<R>,
+    mut imported: WorkspaceStore,
+    json: &str,
+) -> Result<Option<PathBuf>, String> {
     let state = app.state::<Mutex<WorkspaceStore>>();
     let mut current = state.lock_or_recover();
     let target = current
         .save_path
         .clone()
         .ok_or_else(|| "workspace store has no persistence path".to_string())?;
-    let backup = replace_store_file(&target, &json)?;
+    let backup = replace_store_file(&target, json)?;
 
     // A transfer is metadata-only. Stop every process known to this app
     // before swapping the in-memory store, including sessions absent from the
     // old persisted file after a previous interrupted operation.
-    let manager = app.state::<Mutex<PtyManager>>();
-    kill_all(&manager);
+    kill_all(&app.state::<Mutex<PtyManager>>());
 
     imported.save_path = Some(target);
+    bump_imported_ids(&imported);
+    *current = imported;
+    Ok(backup)
+}
+
+fn bump_imported_ids(imported: &WorkspaceStore) {
     for workspace in &imported.workspaces {
         bump_next_id(&workspace.id);
         for terminal in &workspace.terminals {
@@ -101,10 +135,4 @@ pub fn import_workspace_snapshot(
     for group in &imported.groups {
         bump_next_group_id(&group.id);
     }
-    *current = imported;
-    drop(current);
-    emit_workspaces_changed(&app);
-
-    transfer.backup_path = backup.map(|path| path.to_string_lossy().into_owned());
-    Ok(transfer)
 }

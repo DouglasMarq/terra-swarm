@@ -312,7 +312,7 @@ fn restore_backup(backup: Option<&Path>, path: &Path) -> Result<(), String> {
     })
 }
 
-fn next_save_seq() -> u64 {
+pub(crate) fn next_save_seq() -> u64 {
     SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1
 }
 

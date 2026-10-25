@@ -7,8 +7,8 @@ use crate::sync::LockExt;
 use crate::workspace::{
     bump_next_group_id, bump_next_id, change_and_save, emit_workspaces_changed,
     mark_imported_sessions_suspended, parse_import_snapshot, read_snapshot_file,
-    replace_store_file, transfer_counts, validate_explicit_path, WorkspaceSnapshotTransfer,
-    WorkspaceStore, WORKSPACE_FILE_VERSION,
+    replace_store_file, transfer_summary, validate_explicit_path, WorkspaceSnapshotTransfer,
+    WorkspaceStore,
 };
 
 /// Called by `close_workspace`: workspaces live in `workspaces.json`, so
@@ -72,7 +72,7 @@ pub fn import_workspace_snapshot(
     let raw = read_snapshot_file(&source)?;
     let mut imported = parse_import_snapshot(&raw)?;
     mark_imported_sessions_suspended(&mut imported);
-    let counts = transfer_counts(&imported);
+    let mut transfer = transfer_summary(&imported, &source);
     let json = imported
         .serialized_snapshot()
         .map_err(|error| format!("failed to serialize imported workspace snapshot: {}", error))?;
@@ -105,13 +105,6 @@ pub fn import_workspace_snapshot(
     drop(current);
     emit_workspaces_changed(&app);
 
-    Ok(WorkspaceSnapshotTransfer {
-        version: WORKSPACE_FILE_VERSION,
-        path: source.to_string_lossy().into_owned(),
-        backup_path: backup.map(|path| path.to_string_lossy().into_owned()),
-        workspace_count: counts.0,
-        group_count: counts.1,
-        terminal_count: counts.2,
-        suspended_terminal_count: counts.3,
-    })
+    transfer.backup_path = backup.map(|path| path.to_string_lossy().into_owned());
+    Ok(transfer)
 }

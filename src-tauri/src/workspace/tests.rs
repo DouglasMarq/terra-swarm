@@ -758,7 +758,10 @@ fn snapshot_roundtrip_preserves_layout_but_suspends_imported_sessions() {
         imported.workspaces[0].panes[0].tabs[0].pty_id.as_deref(),
         Some("ws-transfer-terminal")
     );
-    assert_eq!(transfer_counts(&imported).3, 1);
+    assert_eq!(
+        transfer_summary(&imported, &source).suspended_terminal_count,
+        1
+    );
     cleanup(&source);
 }
 

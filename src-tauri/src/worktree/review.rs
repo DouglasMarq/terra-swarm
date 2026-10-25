@@ -23,7 +23,7 @@ pub struct WorktreeDiff {
     pub status: WorktreeStatus,
     pub files: Vec<ChangedFile>,
     pub patch: String,
-    pub truncated: bool,
+    pub is_truncated: bool,
 }
 
 fn fork_point(info: &WorktreeInfo) -> Result<String, String> {
@@ -153,7 +153,7 @@ pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
         status: status(info)?,
         files,
         patch,
-        truncated: is_truncated,
+        is_truncated,
     })
 }
 
@@ -341,7 +341,7 @@ mod tests {
         let diff = diff(&info).unwrap();
 
         assert_eq!(diff.files.len(), MAX_UNTRACKED_FILES);
-        assert!(diff.truncated);
+        assert!(diff.is_truncated);
         cleanup(&repo, &root);
     }
 

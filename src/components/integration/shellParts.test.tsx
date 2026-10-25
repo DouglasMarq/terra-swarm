@@ -158,7 +158,7 @@ describe("useNotificationMute", () => {
 
 function paletteProps(overrides: Partial<ShellPaletteProps> = {}): ShellPaletteProps {
   return {
-    groups: [{ id: "group-core", name: "Core", projectIds: ["ws-api"], parentGroupId: null, collapsed: false, suspended: false, layout: { mode: "auto" } }],
+    groups: [{ id: "group-core", name: "Core", projectIds: ["ws-api"], parentGroupId: null, isCollapsed: false, isSuspended: false, layout: { mode: "auto" } }],
     activeId: "ws-api",
     detachedTerminalIds: ["term-detached"],
     onOpenSettings: vi.fn(),

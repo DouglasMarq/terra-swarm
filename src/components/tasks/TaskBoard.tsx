@@ -137,9 +137,9 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
             <Plus size={14} aria-hidden="true" />
           </button>
         </form>
-        {server && !server.available ? (
+        {server && !server.isAvailable ? (
           <p className="terra-tasks-notice">{translate("tasks.serverUnavailable")}</p>
-        ) : server && !server.enabled ? (
+        ) : server && !server.isEnabled ? (
           <p className="terra-tasks-notice">{translate("tasks.serverOff")}</p>
         ) : null}
         {error ? (

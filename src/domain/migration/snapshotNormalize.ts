@@ -1,7 +1,7 @@
 import type { Group, Pane, Project, TerminalTab, WorkspaceContainer, WorkspaceLayout, WorkspaceSnapshotV2 } from "../workspace.model";
 import { asRecord } from "../../lib/records/records";
 import { uniqueStrings } from "../../lib/collections/uniqueStrings";
-import { DOMAIN_SNAPSHOT_VERSION, readArray, readFiniteNumber, readString, uniqueId, type ActiveSelection, type RecordLike, type RuntimeTab } from "./snapshotReaders";
+import { DOMAIN_SNAPSHOT_VERSION, readArray, readFiniteNumber, readFlag, readString, uniqueId, type ActiveSelection, type RecordLike, type RuntimeTab } from "./snapshotReaders";
 import { normalizeLayout, restrictLayoutItems } from "./workspaceLayout";
 import { migrateLegacyWorkspaces } from "./legacyMigration";
 
@@ -118,8 +118,8 @@ function readSnapshotProject({ id, raw }: IdRow, ids: SnapshotIdMaps, fallbackLa
     activePaneId: resolveId(raw.activePaneId, ids.paneIds),
     activeContainerId: resolveId(raw.activeContainerId, ids.containerIds),
     layout: normalizeLayout(raw.layout, fallbackLayout),
-    collapsed: Boolean(raw.collapsed),
-    ...(Boolean(raw.archived) ? { archived: true } : {}),
+    isCollapsed: Boolean(readFlag(raw, "isCollapsed", "collapsed")),
+    ...(Boolean(readFlag(raw, "isArchived", "archived")) ? { isArchived: true } : {}),
   };
 }
 
@@ -130,8 +130,8 @@ function readSnapshotGroup({ id, raw }: IdRow, ids: SnapshotIdMaps, fallbackLayo
     name: readString(raw.name) || id,
     projectIds: resolveIds(raw.projectIds, ids.projectIds),
     parentGroupId: parentGroupId === id ? null : parentGroupId,
-    collapsed: Boolean(raw.collapsed),
-    suspended: Boolean(raw.suspended),
+    isCollapsed: Boolean(readFlag(raw, "isCollapsed", "collapsed")),
+    isSuspended: Boolean(readFlag(raw, "isSuspended", "suspended")),
     layout: normalizeLayout(raw.layout, fallbackLayout),
   };
 }
@@ -141,7 +141,7 @@ function readSnapshotContainer(
   ids: SnapshotIdMaps,
   fallbackLayout: WorkspaceLayout,
 ): WorkspaceContainer {
-  const isClosed = raw.closed === true || raw.visible === false;
+  const isClosed = readFlag(raw, "isClosed", "closed") === true || readFlag(raw, "isVisible", "visible") === false;
   return {
     id,
     projectId: resolveId(raw.projectId, ids.projectIds),
@@ -150,10 +150,10 @@ function readSnapshotContainer(
     activePaneId: resolveId(raw.activePaneId, ids.paneIds),
     internalLayout: readString(raw.internalLayout) || undefined,
     size: readFiniteNumber(raw.size) ?? undefined,
-    visible: !isClosed,
-    collapsed: Boolean(raw.collapsed),
-    closed: isClosed,
-    fullscreen: Boolean(raw.fullscreen),
+    isVisible: !isClosed,
+    isCollapsed: Boolean(readFlag(raw, "isCollapsed", "collapsed")),
+    isClosed,
+    isFullscreen: Boolean(readFlag(raw, "isFullscreen", "fullscreen")),
   };
 }
 
@@ -184,7 +184,7 @@ function readSnapshotTab({ id, sourceId, raw }: IdRow, ptyId: string | null, con
   const isOrphaned =
     paneId === null ||
     ptyId === null ||
-    raw.orphaned === true ||
+    readFlag(raw, "isOrphaned", "orphaned") === true ||
     context.sourceOrphanedTabIds.has(id);
   return {
     id,
@@ -202,8 +202,8 @@ function readSnapshotTab({ id, sourceId, raw }: IdRow, ptyId: string | null, con
       ? { legacyWorkspaceId: readString(raw.legacyWorkspaceId) }
       : {}),
     ...(readString(raw.groupId) ? { groupId: readString(raw.groupId) } : {}),
-    ...(raw.suspended === true ? { suspended: true } : {}),
-    orphaned: isOrphaned,
+    ...(readFlag(raw, "isSuspended", "suspended") === true ? { isSuspended: true } : {}),
+    isOrphaned,
   };
 }
 
@@ -332,7 +332,7 @@ function orphanUnownedPaneTabs(panes: readonly Pane[], index: SnapshotIndex): vo
     if (pane.projectId) continue;
     for (const tabId of pane.tabIds) {
       const tab = index.tabById.get(tabId);
-      if (tab) tab.orphaned = true;
+      if (tab) tab.isOrphaned = true;
     }
   }
 }
@@ -418,7 +418,7 @@ function normalizeSnapshotObject(source: RecordLike): WorkspaceSnapshotV2 {
   return {
     version: DOMAIN_SNAPSHOT_VERSION,
     ...entities,
-    orphanedTabIds: entities.tabs.filter((tab) => tab.orphaned).map((tab) => tab.id),
+    orphanedTabIds: entities.tabs.filter((tab) => tab.isOrphaned).map((tab) => tab.id),
     activeProjectId: activeSelection.activeProjectId,
     activeGroupId: resolveId(source.activeGroupId, ids.groupIds),
     activeContainerId: activeSelection.activeContainerId,

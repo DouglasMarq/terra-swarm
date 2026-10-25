@@ -12,9 +12,25 @@ afterEach(() => {
 });
 
 describe("preferences loaded from storage", () => {
+  it("Given a shortcut saved with the old modifier names, when the store loads, then its modifiers survive under the new names", async () => {
+    localStorage.setItem("hotkeys", JSON.stringify({
+      newWorkspace: { key: "y", meta: false, shift: true, ctrl: true, alt: false },
+    }));
+
+    const { usePreferencesStore } = await loadStore();
+
+    expect(usePreferencesStore.getState().hotkeys.newWorkspace).toEqual({
+      key: "y",
+      hasMeta: false,
+      hasShift: true,
+      hasCtrl: true,
+      hasAlt: false,
+    });
+  });
+
   it("Given a stored shortcut and a malformed one, when the store loads, then the valid one is kept and the other falls back to the default", async () => {
-    const custom = { key: "y", meta: false, shift: true, ctrl: true, alt: false };
-    localStorage.setItem("hotkeys", JSON.stringify({ newWorkspace: custom, newTerminal: { key: "", meta: true } }));
+    const custom = { key: "y", hasMeta: false, hasShift: true, hasCtrl: true, hasAlt: false };
+    localStorage.setItem("hotkeys", JSON.stringify({ newWorkspace: custom, newTerminal: { key: "", hasMeta: true } }));
 
     const { usePreferencesStore, DEFAULT_HOTKEYS } = await loadStore();
 

@@ -243,12 +243,12 @@ fn read_inbox_tool() -> ToolDef {
         title: "Read inbox",
         description: "Returns messages sent to you or to \"all\", oldest first (at most \
             `limit`, default 50), and marks them as read. By default only unread messages \
-            are returned; pass `unread_only: false` to see the history too.",
+            are returned; pass `is_unread_only: false` to see the history too.",
         is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
-                "unread_only": { "type": "boolean", "default": true },
+                "is_unread_only": { "type": "boolean", "default": true },
                 "limit": { "type": "integer", "minimum": 1, "maximum": MAX_LIMIT, "default": DEFAULT_INBOX_LIMIT }
             }
         }),
@@ -421,7 +421,8 @@ struct SendMessageArgs {
 
 #[derive(Deserialize)]
 struct ReadInboxArgs {
-    unread_only: Option<bool>,
+    #[serde(alias = "unread_only")]
+    is_unread_only: Option<bool>,
     limit: Option<usize>,
 }
 
@@ -783,7 +784,7 @@ fn assign_task<R: Runtime>(
             prompt: &prompt,
         });
     }
-    Ok(json!({ "task": task, "woken": is_target_idle }))
+    Ok(json!({ "task": task, "is_assignee_woken": is_target_idle }))
 }
 
 fn read_inbox<R: Runtime>(
@@ -793,7 +794,7 @@ fn read_inbox<R: Runtime>(
 ) -> Result<Value, ToolError> {
     let args: ReadInboxArgs = parse(args)?;
     let request = InboxRequest {
-        is_unread_only: args.unread_only.unwrap_or(true),
+        is_unread_only: args.is_unread_only.unwrap_or(true),
         limit: args.limit,
     };
     let messages = messages::read_inbox(&mut *hub.repo()?, &who.actor(), &request)?;
@@ -907,6 +908,55 @@ mod tests {
                 }
             ),
             Err(ToolError::UnknownTool("nope".into()))
+        );
+    }
+
+    #[test]
+    fn given_a_read_message_when_reading_the_inbox_with_the_old_or_new_unread_flag_then_both_return_the_history(
+    ) {
+        let (hub, _) = hub();
+        hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
+        hub.issue(identity("t-2", "ws-1", "claude")).unwrap();
+        let lead = identity("t-1", "ws-1", "claude");
+        let helper = identity("t-2", "ws-1", "claude");
+        call(
+            &hub,
+            &lead,
+            ToolCall {
+                name: "send_message",
+                args: json!({ "to": "t-2", "body": "already read" }),
+            },
+        )
+        .unwrap();
+        let read_inbox = |args: Value| {
+            call(
+                &hub,
+                &helper,
+                ToolCall {
+                    name: "read_inbox",
+                    args,
+                },
+            )
+            .unwrap()["messages"]
+                .clone()
+        };
+        read_inbox(json!({}));
+
+        let schema = definitions()
+            .into_iter()
+            .find(|def| def.name == "read_inbox")
+            .expect("read_inbox is listed")
+            .schema;
+        assert!(schema["properties"]["is_unread_only"].is_object());
+        assert!(schema["properties"]["unread_only"].is_null());
+        assert_eq!(read_inbox(json!({ "is_unread_only": true })), json!([]));
+        assert_eq!(
+            read_inbox(json!({ "is_unread_only": false }))[0]["body"],
+            "already read"
+        );
+        assert_eq!(
+            read_inbox(json!({ "unread_only": false }))[0]["body"],
+            "already read"
         );
     }
 
@@ -1477,7 +1527,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(busy["woken"], false);
+        assert_eq!(busy["is_assignee_woken"], false);
         assert_eq!(busy["task"]["assignee"], "t-2");
         assert_eq!(busy["task"]["status"], "in_progress");
         let inbox = call(
@@ -1517,7 +1567,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(idle["woken"], true);
+        assert_eq!(idle["is_assignee_woken"], true);
         let events = events.lock().unwrap();
         let nudge = events
             .iter()

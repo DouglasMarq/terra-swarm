@@ -13,18 +13,18 @@ const groups: WorkspaceGroup[] = [
   {
     id: "core",
     name: "Core",
-    collapsed: false,
+    isCollapsed: false,
     projectIds: ["terra"],
     parentGroupId: null,
-    suspended: false,
+    isSuspended: false,
   },
   {
     id: "paused",
     name: "Paused",
-    collapsed: false,
+    isCollapsed: false,
     projectIds: ["archive"],
     parentGroupId: null,
-    suspended: true,
+    isSuspended: true,
   },
 ];
 

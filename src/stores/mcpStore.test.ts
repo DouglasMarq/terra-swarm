@@ -147,11 +147,11 @@ describe("mcp store", () => {
 
   it("Given the server is on, when turning it off, then the backend is told and the store follows", async () => {
     api.mcpSetEnabled.mockResolvedValue({
-      enabled: false, available: true, running: true, url: "http://127.0.0.1:1/mcp", port: 1, db_path: "/tmp/mcp.db", error: null,
+      isEnabled: false, isAvailable: true, isRunning: true, url: "http://127.0.0.1:1/mcp", port: 1, dbPath: "/tmp/mcp.db", error: null,
     });
     await useMcpStore.getState().setEnabled(false);
     expect(api.mcpSetEnabled).toHaveBeenCalledWith(false);
-    expect(useMcpStore.getState().server?.enabled).toBe(false);
+    expect(useMcpStore.getState().server?.isEnabled).toBe(false);
   });
 });
 

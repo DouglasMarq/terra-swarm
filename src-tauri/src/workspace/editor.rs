@@ -1,7 +1,7 @@
 use super::{safe_relative_path, write_atomic, WorkspaceStore};
 use crate::ipc_error::{IpcError, IpcErrorCode};
 use crate::sync::LockExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::State;
@@ -17,7 +17,7 @@ const BYTES_PER_KB: u64 = 1024;
 pub struct WorkspaceFileContent {
     pub path: String,
     pub content: String,
-    pub binary: bool,
+    pub is_binary: bool,
     pub size: u64,
     pub modified: u64,
 }
@@ -84,7 +84,7 @@ pub(crate) fn read_file(root: &Path, relative: &str) -> Result<WorkspaceFileCont
     };
     Ok(WorkspaceFileContent {
         path: relative.trim().replace('\\', "/"),
-        binary: text.is_none(),
+        is_binary: text.is_none(),
         content: text.unwrap_or_default(),
         size,
         modified: modified_millis(&target)?,
@@ -150,19 +150,25 @@ pub fn read_workspace_file(
 #[tauri::command(async)]
 pub fn write_workspace_file(
     store: State<'_, Mutex<WorkspaceStore>>,
-    workspace_id: String,
-    relative_path: String,
-    content: String,
-    expected_modified: Option<u64>,
+    request: WorkspaceFileWriteRequest,
 ) -> Result<WorkspaceFileSaved, IpcError> {
     write_file(
-        Path::new(&workspace_cwd(&store, &workspace_id)?),
+        Path::new(&workspace_cwd(&store, &request.workspace_id)?),
         FileSave {
-            relative: &relative_path,
-            content: &content,
-            expected_modified,
+            relative: &request.relative_path,
+            content: &request.content,
+            expected_modified: request.expected_modified,
         },
     )
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFileWriteRequest {
+    pub workspace_id: String,
+    pub relative_path: String,
+    pub content: String,
+    pub expected_modified: Option<u64>,
 }
 
 #[cfg(test)]
@@ -186,7 +192,7 @@ mod tests {
         std::fs::write(root.join("src/main.ts"), "let a = 1;\n").unwrap();
         let file = read_file(&root, "src/main.ts").unwrap();
         assert_eq!(file.content, "let a = 1;\n");
-        assert!(!file.binary);
+        assert!(!file.is_binary);
         let saved = write_file(
             &root,
             FileSave {
@@ -320,7 +326,7 @@ mod tests {
         }
         std::fs::write(root.join("logo.png"), [0x89, b'P', b'N', b'G', 0, 1, 2]).unwrap();
         let binary = read_file(&root, "logo.png").unwrap();
-        assert!(binary.binary);
+        assert!(binary.is_binary);
         assert!(binary.content.is_empty());
         let _ = std::fs::remove_dir_all(&root);
         let _ = std::fs::remove_file(outside);

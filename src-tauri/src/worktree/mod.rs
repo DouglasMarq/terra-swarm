@@ -60,7 +60,7 @@ pub struct WorktreeStatus {
     pub dirty: Vec<String>,
     pub ahead: u32,
     pub behind: u32,
-    pub exists: bool,
+    pub is_present: bool,
 }
 
 pub(crate) fn git_command(dir: &Path) -> Command {
@@ -221,7 +221,7 @@ pub fn status(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
         dirty,
         ahead,
         behind,
-        exists: is_present,
+        is_present,
     })
 }
 
@@ -310,7 +310,7 @@ mod tests {
         assert!(Path::new(&info.cwd).join("readme.txt").exists());
 
         let clean = status(&info).unwrap();
-        assert!(clean.exists);
+        assert!(clean.is_present);
         assert!(clean.dirty.is_empty());
         assert_eq!((clean.ahead, clean.behind), (0, 0));
 
@@ -445,7 +445,7 @@ mod tests {
         std::fs::remove_dir_all(&info.path).unwrap();
 
         let kept_branch = status(&info).unwrap();
-        assert!(!kept_branch.exists);
+        assert!(!kept_branch.is_present);
         assert_eq!((kept_branch.ahead, kept_branch.behind), (1, 0));
 
         git(&repo, &["worktree", "prune"]).unwrap();

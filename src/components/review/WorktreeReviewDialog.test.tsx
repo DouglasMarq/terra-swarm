@@ -19,10 +19,10 @@ import { WorktreeReviewDialog } from "./WorktreeReviewDialog";
 
 function diff(extra: Partial<WorktreeDiff["status"]> = {}): WorktreeDiff {
   return {
-    status: { branch: "terra/t-1", base: "main", path: "/wt", dirty: [], ahead: 2, behind: 0, exists: true, ...extra },
+    status: { branch: "terra/t-1", base: "main", path: "/wt", dirty: [], ahead: 2, behind: 0, isPresent: true, ...extra },
     files: [{ path: "src/a.ts", change: "modified", additions: 1, deletions: 1 }],
     patch: "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new\n",
-    truncated: false,
+    isTruncated: false,
   };
 }
 

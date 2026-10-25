@@ -196,13 +196,14 @@ impl SpawnOptions {
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct LaunchExtras {
     #[serde(default)]
     pub args: Option<String>,
     #[serde(default)]
     pub env: HashMap<String, String>,
-    #[serde(default)]
-    pub worktree: bool,
+    #[serde(default, alias = "worktree")]
+    pub should_use_worktree: bool,
     #[serde(default)]
     pub role: Option<crate::roles::Role>,
 }
@@ -226,8 +227,8 @@ pub struct TerminalRuntimeInfo {
     pub pid: Option<u32>,
     pub cols: u16,
     pub rows: u16,
-    pub running: bool,
-    pub reaped: bool,
+    pub is_running: bool,
+    pub is_reaped: bool,
     pub generation: u64,
 }
 
@@ -253,8 +254,8 @@ fn runtime_info_from_values(facts: RuntimeFacts<'_>) -> TerminalRuntimeInfo {
         pid: unrecycled_pid(&facts),
         cols: facts.cols,
         rows: facts.rows,
-        running: !facts.is_reaped,
-        reaped: facts.is_reaped,
+        is_running: !facts.is_reaped,
+        is_reaped: facts.is_reaped,
         generation: facts.generation,
     }
 }
@@ -397,7 +398,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
         pane_id: None,
         tab_id: None,
         group_id: None,
-        suspended: false,
+        is_suspended: false,
         worktree,
         role,
     };
@@ -858,27 +859,38 @@ impl Drop for CreatedWorktree {
     }
 }
 
-// Each argument is a field of the `spawn_terminal` IPC contract (`src/lib/tauri/commands.ts`).
-#[allow(clippy::too_many_arguments)]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpawnTerminalRequest {
+    pub workspace_id: String,
+    pub command: String,
+    pub cols: u16,
+    pub rows: u16,
+    pub terminal_id: Option<String>,
+    pub shell: Option<String>,
+    pub launch: Option<LaunchExtras>,
+}
+
+#[derive(Deserialize)]
+pub struct TerminalSizeRequest {
+    pub id: String,
+    pub cols: u16,
+    pub rows: u16,
+}
+
 #[tauri::command(async)]
 pub fn spawn_terminal(
     app: AppHandle,
-    manager: State<'_, Mutex<PtyManager>>,
-    store: State<'_, Mutex<WorkspaceStore>>,
-    workspace_id: String,
-    command: String,
-    cols: u16,
-    rows: u16,
-    terminal_id: Option<String>,
-    shell: Option<String>,
-    launch: Option<LaunchExtras>,
+    request: SpawnTerminalRequest,
 ) -> Result<SpawnedTerminal, String> {
-    let launch = launch.unwrap_or_default();
+    let manager = app.state::<Mutex<PtyManager>>();
+    let store = app.state::<Mutex<WorkspaceStore>>();
+    let launch = request.launch.unwrap_or_default();
     let options = SpawnOptions {
-        shell,
+        shell: request.shell,
         args: launch.args,
         env: launch.env,
-        should_use_worktree: launch.worktree,
+        should_use_worktree: launch.should_use_worktree,
         worktree_root: None,
         role: launch.role,
     };
@@ -889,11 +901,11 @@ pub fn spawn_terminal(
             store: &store,
         },
         SpawnRequest {
-            workspace_id: &workspace_id,
-            command: &command,
-            cols,
-            rows,
-            terminal_id: terminal_id.as_deref(),
+            workspace_id: &request.workspace_id,
+            command: &request.command,
+            cols: request.cols,
+            rows: request.rows,
+            terminal_id: request.terminal_id.as_deref(),
             options: &options,
         },
     )
@@ -978,10 +990,9 @@ fn send_input(
 #[tauri::command(async)]
 pub fn resize_terminal(
     manager: State<'_, Mutex<PtyManager>>,
-    id: String,
-    cols: u16,
-    rows: u16,
+    request: TerminalSizeRequest,
 ) -> Result<(), String> {
+    let TerminalSizeRequest { id, cols, rows } = request;
     let (master, last_size) = {
         let manager = manager.lock_or_recover();
         let entry = manager
@@ -1096,10 +1107,10 @@ pub fn terminal_backlog(
 #[tauri::command(async)]
 pub fn set_durable_scrollback_enabled(
     manager: State<'_, Mutex<PtyManager>>,
-    enabled: bool,
+    is_enabled: bool,
 ) -> Result<(), String> {
     let manager = manager.lock_or_recover();
-    manager.set_durable_scrollback_enabled(enabled);
+    manager.set_durable_scrollback_enabled(is_enabled);
     Ok(())
 }
 
@@ -1180,6 +1191,47 @@ mod scrollback_flag_tests {
 }
 
 #[cfg(test)]
+mod request_tests {
+    use super::SpawnTerminalRequest;
+
+    #[test]
+    fn given_a_camel_case_spawn_request_when_parsing_then_every_field_and_the_worktree_flag_are_read(
+    ) {
+        let request: SpawnTerminalRequest = serde_json::from_value(serde_json::json!({
+            "workspaceId": "ws-1",
+            "command": "codex",
+            "cols": 120,
+            "rows": 40,
+            "terminalId": "pty-1",
+            "shell": null,
+            "launch": { "shouldUseWorktree": true },
+        }))
+        .unwrap();
+
+        assert_eq!(request.workspace_id, "ws-1");
+        assert_eq!((request.cols, request.rows), (120, 40));
+        assert_eq!(request.terminal_id.as_deref(), Some("pty-1"));
+        assert!(request.shell.is_none());
+        assert!(request.launch.unwrap().should_use_worktree);
+    }
+
+    #[test]
+    fn given_launch_extras_with_the_old_worktree_name_when_parsing_then_the_flag_is_kept() {
+        let request: SpawnTerminalRequest = serde_json::from_value(serde_json::json!({
+            "workspaceId": "ws-1",
+            "command": "codex",
+            "cols": 80,
+            "rows": 24,
+            "launch": { "worktree": true },
+        }))
+        .unwrap();
+
+        assert!(request.terminal_id.is_none());
+        assert!(request.launch.unwrap().should_use_worktree);
+    }
+}
+
+#[cfg(test)]
 mod input_tests {
     use super::send_input;
     use crate::ipc_error::IpcErrorCode;
@@ -1227,8 +1279,8 @@ mod runtime_info_tests {
         assert_eq!(info.id, "term-live");
         assert_eq!(info.pid, Some(42));
         assert_eq!((info.cols, info.rows), (120, 40));
-        assert!(info.running);
-        assert!(!info.reaped);
+        assert!(info.is_running);
+        assert!(!info.is_reaped);
         assert_eq!(info.generation, 7);
     }
 
@@ -1243,8 +1295,8 @@ mod runtime_info_tests {
             is_reaped: true,
         });
         assert_eq!(info.pid, None);
-        assert!(!info.running);
-        assert!(info.reaped);
+        assert!(!info.is_running);
+        assert!(info.is_reaped);
     }
 
     #[test]

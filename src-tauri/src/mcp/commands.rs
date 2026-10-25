@@ -47,9 +47,9 @@ pub fn mcp_server_info(hub: Hub<'_>) -> ServerInfo {
 }
 
 #[tauri::command(async)]
-pub fn mcp_set_enabled(hub: Hub<'_>, enabled: bool) -> Result<ServerInfo, String> {
+pub fn mcp_set_enabled(hub: Hub<'_>, is_enabled: bool) -> Result<ServerInfo, String> {
     hub.repo()
-        .and_then(|repo| repo.set_enabled(enabled))
+        .and_then(|repo| repo.set_enabled(is_enabled))
         .inspect_err(|error| error.log_internal(COMMAND_FAILED))
         .map_err(|error| error.to_string())?;
     Ok(hub.info())
@@ -69,15 +69,27 @@ pub fn mcp_list_tasks(hub: Hub<'_>, workspace_id: String) -> Result<Vec<Task>, S
         .map_err(|error| error.to_string())
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewTaskRequest {
+    pub workspace_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub priority: Option<TaskPriority>,
+    pub assignee: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskUpdateRequest {
+    pub workspace_id: String,
+    pub id: String,
+    pub patch: TaskPatchInput,
+}
+
 #[tauri::command(async)]
-pub fn mcp_create_task(
-    hub: Hub<'_>,
-    workspace_id: String,
-    title: String,
-    description: Option<String>,
-    priority: Option<TaskPriority>,
-    assignee: Option<String>,
-) -> Result<Task, String> {
+pub fn mcp_create_task(hub: Hub<'_>, request: NewTaskRequest) -> Result<Task, String> {
+    let workspace_id = request.workspace_id;
     let task = hub
         .repo()
         .and_then(|mut repo| {
@@ -85,10 +97,10 @@ pub fn mcp_create_task(
                 &mut repo,
                 &user(&workspace_id),
                 NewTask {
-                    title,
-                    description,
-                    priority,
-                    assignee,
+                    title: request.title,
+                    description: request.description,
+                    priority: request.priority,
+                    assignee: request.assignee,
                     ..NewTask::default()
                 },
             )
@@ -100,12 +112,12 @@ pub fn mcp_create_task(
 }
 
 #[tauri::command(async)]
-pub fn mcp_update_task(
-    hub: Hub<'_>,
-    workspace_id: String,
-    id: String,
-    patch: TaskPatchInput,
-) -> Result<Task, String> {
+pub fn mcp_update_task(hub: Hub<'_>, request: TaskUpdateRequest) -> Result<Task, String> {
+    let TaskUpdateRequest {
+        workspace_id,
+        id,
+        patch,
+    } = request;
     let task = hub
         .repo()
         .and_then(|mut repo| {

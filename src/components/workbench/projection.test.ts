@@ -30,13 +30,13 @@ describe("workbench projection", () => {
       ...snapshot,
       containers: snapshot.containers.map((container) => ({
         ...container,
-        visible: false,
-        closed: true,
+        isVisible: false,
+        isClosed: true,
       })),
     };
     const projection = projectWorkbench(hidden);
     expect(projection.containers).toHaveLength(1);
-    expect(projection.containers[0].container.visible).toBe(false);
+    expect(projection.containers[0].container.isVisible).toBe(false);
     expect(projection.containers[0].panes[0].tabs).toHaveLength(2);
     expect(hidden.tabs.map((tab) => tab.ptyId)).toEqual(["pty-1", "pty-2"]);
   });

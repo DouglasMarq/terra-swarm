@@ -3,6 +3,7 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { AgentInfo } from "../domain/agent.model";
 import type { McpAgentStatus, McpTask, McpTaskPatch } from "../domain/mcp.model";
 import type { Workspace, WorkspaceGitStatus, WorkspaceGroup, WorkspaceSnapshotTransfer } from "../domain/workspace.model";
+import { asRecord, isRecord, type UnknownRecord } from "../lib/records/records";
 
 const workspaces: Workspace[] = [
   {
@@ -29,22 +30,22 @@ const workspaces: Workspace[] = [
     id: "ws-cli",
     name: "cli-tools",
     cwd: "/Users/me/projects/cli-tools",
-    terminals: [{ id: "pty-opencode", command: "opencode", width: null, suspended: true }],
+    terminals: [{ id: "pty-opencode", command: "opencode", width: null, isSuspended: true }],
   },
 ];
 
 const groups: WorkspaceGroup[] = [];
 
 const agents: AgentInfo[] = [
-  { id: "claude", label: "Claude Code", available: true },
-  { id: "codex", label: "Codex", available: true },
-  { id: "opencode", label: "OpenCode", available: true },
-  { id: "kimi", label: "Kimi", available: true },
-  { id: "copilot", label: "GitHub Copilot", available: true },
-  { id: "gemini", label: "Gemini", available: false },
-  { id: "grok", label: "Grok", available: false },
-  { id: "deepseek", label: "DeepSeek", available: false },
-  { id: "shell", label: "Shell", available: true },
+  { id: "claude", label: "Claude Code", isAvailable: true },
+  { id: "codex", label: "Codex", isAvailable: true },
+  { id: "opencode", label: "OpenCode", isAvailable: true },
+  { id: "kimi", label: "Kimi", isAvailable: true },
+  { id: "copilot", label: "GitHub Copilot", isAvailable: true },
+  { id: "gemini", label: "Gemini", isAvailable: false },
+  { id: "grok", label: "Grok", isAvailable: false },
+  { id: "deepseek", label: "DeepSeek", isAvailable: false },
+  { id: "shell", label: "Shell", isAvailable: true },
 ];
 
 const now = Date.now();
@@ -90,12 +91,12 @@ const mcpStatuses: McpAgentStatus[] = [
 let isMcpEnabled = true;
 const mockFiles: Record<string, string> = {};
 const mcpInfo = () => ({
-  enabled: isMcpEnabled,
-  available: true,
-  running: true,
+  isEnabled: isMcpEnabled,
+  isAvailable: true,
+  isRunning: true,
   url: "http://127.0.0.1:52817/mcp",
   port: 52817,
-  db_path: "/Users/me/Library/Application Support/com.terra-swarm.app/mcp.db",
+  dbPath: "/Users/me/Library/Application Support/com.terra-swarm.app/mcp.db",
   error: null,
 });
 
@@ -125,7 +126,7 @@ function snapshotTransfer(path: string, backupPath: string | null): WorkspaceSna
     workspaceCount: workspaces.length,
     groupCount: groups.length,
     terminalCount: terminals.length,
-    suspendedTerminalCount: terminals.filter((terminal) => terminal.suspended).length,
+    suspendedTerminalCount: terminals.filter((terminal) => terminal.isSuspended).length,
   };
 }
 
@@ -148,11 +149,16 @@ const backlog: Record<string, string> = {
   "pty-claude-docs": "● Gerando exemplos de atalhos\r\n",
 };
 
+function commandArgs(payload: unknown): UnknownRecord {
+  const args = asRecord(payload);
+  return isRecord(args.request) ? args.request : args;
+}
+
 export function installMockBackend(): void {
   const scenario = new URLSearchParams(window.location.search).get("mock");
   mockWindows("main");
   mockIPC((cmd, payload) => {
-    const args = (payload ?? {}) as Record<string, unknown>;
+    const args = commandArgs(payload);
     switch (cmd) {
       case "list_workspaces": return workspaces;
       case "list_groups": return groups;
@@ -162,7 +168,7 @@ export function installMockBackend(): void {
         return workspace;
       }
       case "create_group": {
-        const group: WorkspaceGroup = { id: `group-${Date.now()}`, name: String(args.name), collapsed: false, projectIds: [], parentGroupId: null, suspended: false };
+        const group: WorkspaceGroup = { id: `group-${Date.now()}`, name: String(args.name), isCollapsed: false, projectIds: [], parentGroupId: null, isSuspended: false };
         groups.push(group);
         return group;
       }
@@ -170,13 +176,13 @@ export function installMockBackend(): void {
       case "import_workspace_snapshot": return snapshotTransfer(String(args.path), "/Users/me/.terra-swarm/backups/workspaces.json");
       case "git_status": return gitStatus;
       case "detect_agents": return agents;
-      case "running_terminals": return scenario === "resume" ? [] : workspaces.flatMap((ws) => ws.terminals.filter((terminal) => !terminal.suspended).map((terminal) => ({ id: terminal.id, seq: 1 })));
+      case "running_terminals": return scenario === "resume" ? [] : workspaces.flatMap((ws) => ws.terminals.filter((terminal) => !terminal.isSuspended).map((terminal) => ({ id: terminal.id, seq: 1 })));
       case "terminal_backlog": {
         const data = backlog[String(args.id)] ?? "";
         return { data, total: data.length };
       }
       case "terminal_runtime_info":
-        return { id: args.id, pid: 48213, cols: 132, rows: 38, running: true, reaped: false, generation: 1 };
+        return { id: args.id, pid: 48213, cols: 132, rows: 38, isRunning: true, isReaped: false, generation: 1 };
       case "git_branch": return "main";
       case "store_saved_at": return Date.now() - 86_400_000;
       case "list_available_shells": return ["/bin/zsh", "/bin/bash"];
@@ -185,28 +191,28 @@ export function installMockBackend(): void {
           ["Andale Mono", true], ["Arial", false], ["Avenir Next", false], ["Courier New", true], ["Fira Code", true],
           ["Georgia", false], ["Helvetica Neue", false], ["JetBrains Mono", true], ["Menlo", true], ["Monaco", true],
           ["PT Mono", true], ["SF Mono", true], ["Times New Roman", false], ["Verdana", false],
-        ].map(([name, monospace]) => ({ name, monospace }));
+        ].map(([name, isMonospace]) => ({ name, isMonospace }));
       case "voice_list_models":
         return [
-          { id: "base", display_name: "Base", size_label: "142 MB", description: "", downloaded: true, active: false },
-          { id: "small", display_name: "Small", size_label: "466 MB", description: "", downloaded: true, active: true },
+          { id: "base", displayName: "Base", sizeLabel: "142 MB", description: "", isDownloaded: true, isActive: false },
+          { id: "small", displayName: "Small", sizeLabel: "466 MB", description: "", isDownloaded: true, isActive: true },
         ];
       case "voice_list_input_devices": return ["MacBook Pro Microphone"];
-      case "voice_mic_available": return true;
+      case "voice_is_mic_available": return true;
       case "plugin:app|version": return "2.2.1";
       case "plugin:updater|check": return null;
       case "spawn_terminal": return { meta: { id: String(args.terminalId ?? `pty-${Date.now()}`), command: String(args.command ?? "claude"), width: null }, seq: 1 };
       case "worktree_status":
         return args.terminalId === "pty-claude-2"
-          ? { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: ["src/styles/motion.css", "src/components/shell/shell.css"], ahead: 1, behind: 0, exists: true }
+          ? { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: ["src/styles/motion.css", "src/components/shell/shell.css"], ahead: 1, behind: 0, isPresent: true }
           : null;
       case "worktree_remove": return undefined;
       case "list_workspace_files":
         return args.relativePath
-          ? { path: String(args.relativePath), entries: [{ name: "main.ts", path: `${String(args.relativePath)}/main.ts`, kind: "file", size: 40 }], truncated: false, limit: 200 }
-          : { path: "", entries: [{ name: "src", path: "src", kind: "directory", size: null }, { name: "README.md", path: "README.md", kind: "file", size: 120 }], truncated: false, limit: 200 };
+          ? { path: String(args.relativePath), entries: [{ name: "main.ts", path: `${String(args.relativePath)}/main.ts`, kind: "file", size: 40 }], isTruncated: false, limit: 200 }
+          : { path: "", entries: [{ name: "src", path: "src", kind: "directory", size: null }, { name: "README.md", path: "README.md", kind: "file", size: 120 }], isTruncated: false, limit: 200 };
       case "read_workspace_file":
-        return { path: String(args.relativePath), content: mockFiles[String(args.relativePath)] ?? (String(args.relativePath).endsWith(".md") ? "# terra-swarm\n\nMission control for AI coding agents.\n\n## Getting started\n\n```sh\nnpm install\nnpm run tauri dev\n```\n" : `// ${String(args.relativePath)}\nexport const answer = 42;\n`), binary: false, size: 40, modified: 1 };
+        return { path: String(args.relativePath), content: mockFiles[String(args.relativePath)] ?? (String(args.relativePath).endsWith(".md") ? "# terra-swarm\n\nMission control for AI coding agents.\n\n## Getting started\n\n```sh\nnpm install\nnpm run tauri dev\n```\n" : `// ${String(args.relativePath)}\nexport const answer = 42;\n`), isBinary: false, size: 40, modified: 1 };
       case "write_workspace_file":
         mockFiles[String(args.relativePath)] = String(args.content);
         return { size: String(args.content).length, modified: 2 };
@@ -215,20 +221,20 @@ export function installMockBackend(): void {
       case "probe_dev_servers": return (args.ports as number[]).filter((port) => port === 8000);
       case "worktree_diff":
         return {
-          status: { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: ["src/styles/motion.css"], ahead: 1, behind: 0, exists: true },
+          status: { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: ["src/styles/motion.css"], ahead: 1, behind: 0, isPresent: true },
           files: [
             { path: "src/styles/motion.css", change: "modified", additions: 2, deletions: 1 },
             { path: "src/components/shell/shell.css", change: "untracked", additions: 3, deletions: 0 },
           ],
           patch: "diff --git a/src/styles/motion.css b/src/styles/motion.css\n--- a/src/styles/motion.css\n+++ b/src/styles/motion.css\n@@ -10,3 +10,4 @@\n .terra-anim-rise {\n-  animation: terra-rise 320ms;\n+  animation: terra-rise 240ms var(--terra-ease-out);\n+  will-change: transform;\n }\ndiff --git a/src/components/shell/shell.css b/src/components/shell/shell.css\nnew file mode 100644\n--- /dev/null\n+++ b/src/components/shell/shell.css\n@@ -0,0 +1,3 @@\n+.terra-shell {\n+  display: grid;\n+}\n",
-          truncated: false,
+          isTruncated: false,
         };
       case "worktree_commit":
       case "worktree_merge":
-        return { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: [], ahead: 1, behind: 0, exists: true };
+        return { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: [], ahead: 1, behind: 0, isPresent: true };
       case "worktree_open_pr": return "https://github.com/example/terra-swarm/pull/42";
       case "mcp_server_info": return mcpInfo();
-      case "mcp_set_enabled": isMcpEnabled = Boolean(args.enabled); return mcpInfo();
+      case "mcp_set_enabled": isMcpEnabled = Boolean(args.isEnabled); return mcpInfo();
       case "mcp_list_tasks": return mcpTasks.filter((task) => task.workspace_id === args.workspaceId);
       case "mcp_agent_statuses": return mcpStatuses.filter((status) => status.workspace_id === args.workspaceId);
       case "mcp_create_task": {

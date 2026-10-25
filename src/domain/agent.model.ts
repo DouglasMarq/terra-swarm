@@ -14,12 +14,12 @@ export type AgentRole = "orchestrator" | "planner" | "executor" | "reviewer" | "
 export interface AgentInfo {
   id: string;
   label: string;
-  available: boolean;
+  isAvailable: boolean;
 }
 
 export interface AgentLaunchExtras {
   args?: string;
   env?: Record<string, string>;
-  worktree?: boolean;
+  shouldUseWorktree?: boolean;
   role?: AgentRole;
 }

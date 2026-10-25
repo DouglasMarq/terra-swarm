@@ -39,10 +39,11 @@ pub struct WorkspaceInfo {
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct ServerInfo {
-    pub enabled: bool,
-    pub available: bool,
-    pub running: bool,
+    pub is_enabled: bool,
+    pub is_available: bool,
+    pub is_running: bool,
     pub url: Option<String>,
     pub port: Option<u16>,
     pub db_path: Option<String>,
@@ -159,9 +160,9 @@ impl<R: Runtime> McpHub<R> {
     pub fn info(&self) -> ServerInfo {
         let port = self.port();
         ServerInfo {
-            enabled: self.is_enabled(),
-            available: self.is_available(),
-            running: port.is_some(),
+            is_enabled: self.is_enabled(),
+            is_available: self.is_available(),
+            is_running: port.is_some(),
             url: self.url(),
             port,
             db_path: self.db_path.as_ref().map(|path| path.display().to_string()),
@@ -466,8 +467,8 @@ mod tests {
         let hub = Arc::new(McpHub::open(path.clone(), None, app()));
         hub.set_port(4100);
         let info = hub.info();
-        assert!(!info.available);
-        assert!(!info.enabled);
+        assert!(!info.is_available);
+        assert!(!info.is_enabled);
         assert!(info.error.is_some());
         assert_eq!(
             info.db_path.as_deref(),

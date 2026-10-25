@@ -52,8 +52,8 @@ describe("orchestration store", () => {
         name: "Agents",
         projectIds: [],
         parentGroupId: null,
-        collapsed: false,
-        suspended: false,
+        isCollapsed: false,
+        isSuspended: false,
       },
     ]);
 
@@ -74,11 +74,11 @@ describe("orchestration store", () => {
 
     const state = useOrchestrationStore.getState();
     expect(state.containerVisibility[defined(containerId)]).toBe(false);
-    expect(state.snapshot?.containers[0]?.closed).toBe(true);
+    expect(state.snapshot?.containers[0]?.isClosed).toBe(true);
     expect(state.snapshot?.tabs[0]?.ptyId).toBe("pty-a");
 
     useOrchestrationStore.getState().openContainer(defined(containerId));
-    expect(useOrchestrationStore.getState().snapshot?.containers[0]?.visible).toBe(true);
+    expect(useOrchestrationStore.getState().snapshot?.containers[0]?.isVisible).toBe(true);
   });
 
   it("Given feature flags and group suspension, when persisting, then both are kept", () => {
@@ -88,8 +88,8 @@ describe("orchestration store", () => {
         name: "Agents",
         projectIds: ["workspace-a"],
         parentGroupId: null,
-        collapsed: false,
-        suspended: false,
+        isCollapsed: false,
+        isSuspended: false,
       },
     ]);
     useOrchestrationStore.getState().setFeatureFlag("voiceCommands", true);
@@ -97,8 +97,8 @@ describe("orchestration store", () => {
 
     const state = useOrchestrationStore.getState();
     expect(state.flags.voiceCommands).toBe(true);
-    expect(state.groups[0]?.suspended).toBe(true);
-    expect(state.snapshot?.groups[0]?.suspended).toBe(true);
+    expect(state.groups[0]?.isSuspended).toBe(true);
+    expect(state.snapshot?.groups[0]?.isSuspended).toBe(true);
   });
 
   it("Given a visual detachment, when persisting, then the terminal identity is not removed", () => {
@@ -129,7 +129,7 @@ describe("orchestration store", () => {
     expect(containerId).toBe("container-workspace-layout");
 
     useOrchestrationStore.getState().setContainerState(defined(containerId), {
-      collapsed: true,
+      isCollapsed: true,
       activePaneId: "pane-two",
       internalLayout: "vertical",
       size: 42,
@@ -146,7 +146,7 @@ describe("orchestration store", () => {
     expect(state.snapshot?.containers[0]).toMatchObject({
       id: containerId,
       paneIds: ["pane-two", "pane-one"],
-      collapsed: true,
+      isCollapsed: true,
       activePaneId: "pane-two",
       internalLayout: "vertical",
       size: 42,
@@ -164,7 +164,7 @@ describe("orchestration store", () => {
     });
     expect(state.snapshot?.projects[0]).toMatchObject({
       id: "workspace-layout",
-      collapsed: true,
+      isCollapsed: true,
       layout: { mode: "spotlight", metadata: { surface: "workbench" } },
     });
     expect(workspaceApiMock.setWorkspaceContainerState).toHaveBeenCalled();
@@ -359,7 +359,7 @@ describe("orchestration store", () => {
         cwd: "/grouped",
         groupId: "group-luna",
         terminals: [
-          { id: "pty-live", command: "luna", width: 80, groupId: "group-luna", suspended: true },
+          { id: "pty-live", command: "luna", width: 80, groupId: "group-luna", isSuspended: true },
           { id: "pty-stale", command: "luna", width: 80, groupId: "group-luna" },
         ],
       },
@@ -370,8 +370,8 @@ describe("orchestration store", () => {
         name: "Luna Max",
         projectIds: ["workspace-grouped"],
         parentGroupId: null,
-        collapsed: false,
-        suspended: true,
+        isCollapsed: false,
+        isSuspended: true,
         layoutMode: "grid",
       },
     ];
@@ -382,7 +382,7 @@ describe("orchestration store", () => {
     );
 
     const state = useOrchestrationStore.getState();
-    expect(state.groups[0]).toMatchObject({ id: "group-luna", suspended: true });
+    expect(state.groups[0]).toMatchObject({ id: "group-luna", isSuspended: true });
     expect(state.snapshot?.tabs.map((tab) => tab.ptyId)).toEqual(["pty-live"]);
     expect(state.snapshot?.projects[0]?.groupId).toBe("group-luna");
   });

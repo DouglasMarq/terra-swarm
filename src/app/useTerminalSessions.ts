@@ -133,10 +133,17 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
       .find((terminal) => terminal && terminal.cols > 0 && terminal.rows > 0);
     const extras = {
       ...launchExtras(command),
-      ...(options.shouldUseWorktree ? { worktree: true } : {}),
+      ...(options.shouldUseWorktree ? { shouldUseWorktree: true } : {}),
       ...(options.role ? { role: options.role } : {}),
     };
-    const result = await api.spawnTerminal(workspaceId, command, undefined, sibling?.cols, sibling?.rows, defaultShell(), extras);
+    const result = await api.spawnTerminal({
+      workspaceId,
+      command,
+      cols: sibling?.cols,
+      rows: sibling?.rows,
+      shell: defaultShell(),
+      launch: extras,
+    });
     await registerSpawned(result);
     nameNewAgent(result.meta.id);
     if (placement?.paneId) {
@@ -174,7 +181,15 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
 
   const respawn = async (workspaceId: string, terminalId: string, command: string) => {
     const term = getTerminal(terminalId);
-    const result = await api.spawnTerminal(workspaceId, command, terminalId, term?.cols, term?.rows, defaultShell(), launchExtras(command));
+    const result = await api.spawnTerminal({
+      workspaceId,
+      command,
+      terminalId,
+      cols: term?.cols,
+      rows: term?.rows,
+      shell: defaultShell(),
+      launch: launchExtras(command),
+    });
     await registerSpawned(result);
   };
 

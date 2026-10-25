@@ -9,8 +9,8 @@ const liveInfo = {
   pid: 99,
   cols: 120,
   rows: 40,
-  running: true,
-  reaped: false,
+  isRunning: true,
+  isReaped: false,
   generation: 4,
 };
 

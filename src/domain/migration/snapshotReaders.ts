@@ -17,6 +17,10 @@ export function readArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+export function readFlag(raw: RecordLike, key: string, legacyKey: string): unknown {
+  return raw[key] ?? raw[legacyKey];
+}
+
 export function uniqueId(preferred: string, fallback: string, used: Set<string>): string {
   const base = preferred || fallback;
   let candidate = base;
@@ -31,8 +35,8 @@ export function uniqueId(preferred: string, fallback: string, used: Set<string>)
 
 export type RuntimeTab = TerminalTab & {
   groupId?: string | null;
-  suspended?: boolean;
-  placementExplicit?: boolean;
+  isSuspended?: boolean;
+  isPlacementExplicit?: boolean;
 };
 
 export function runtimeTab(tab: TerminalTab): RuntimeTab {

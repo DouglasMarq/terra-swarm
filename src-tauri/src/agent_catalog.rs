@@ -18,6 +18,9 @@ struct Catalog {
     agents: Vec<CatalogAgent>,
 }
 
+// agents.json is embedded with include_str! and parsed by the catalog tests,
+// so a parse failure is a build-time bug, never a runtime condition.
+#[allow(clippy::expect_used)]
 pub fn catalog() -> &'static [CatalogAgent] {
     static CATALOG: OnceLock<Vec<CatalogAgent>> = OnceLock::new();
     CATALOG.get_or_init(|| {

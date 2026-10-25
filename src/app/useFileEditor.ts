@@ -49,11 +49,16 @@ export function useFileEditor(target: EditorTarget | null): FileEditor {
   }, [load]);
 
   const save = async (shouldOverwrite = false): Promise<boolean> => {
-    if (!target || !file || isSaving || file.binary) return false;
+    if (!target || !file || isSaving || file.isBinary) return false;
     setIsSaving(true);
     setSaveError(null);
     try {
-      const saved = await api.writeWorkspaceFile(target.workspaceId, target.path, text, shouldOverwrite ? null : file.modified);
+      const saved = await api.writeWorkspaceFile({
+        workspaceId: target.workspaceId,
+        relativePath: target.path,
+        content: text,
+        expectedModified: shouldOverwrite ? null : file.modified,
+      });
       setFile({ ...file, content: text, size: saved.size, modified: saved.modified });
       setHasConflict(false);
       return true;

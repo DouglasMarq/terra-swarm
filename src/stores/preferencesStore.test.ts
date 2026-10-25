@@ -42,10 +42,10 @@ describe("preferences store", () => {
   it("Given shortcuts, when formatting them, then it works independently from App rendering", () => {
     const hotkey = {
       key: "k",
-      meta: true,
-      shift: true,
-      ctrl: false,
-      alt: false,
+      hasMeta: true,
+      hasShift: true,
+      hasCtrl: false,
+      hasAlt: false,
     };
 
     expect(formatHotkey(hotkey, "mac")).toBe("⇧⌘K");
@@ -54,11 +54,11 @@ describe("preferences store", () => {
 
   it("Given a macOS preference, when executing it on Linux, then it is normalized first", () => {
     const linuxHotkey = normalizeHotkeyForPlatform(
-      { key: "n", meta: true, shift: true, ctrl: false, alt: false },
+      { key: "n", hasMeta: true, hasShift: true, hasCtrl: false, hasAlt: false },
       "other",
     );
 
-    expect(linuxHotkey).toEqual({ key: "n", meta: false, shift: true, ctrl: true, alt: false });
+    expect(linuxHotkey).toEqual({ key: "n", hasMeta: false, hasShift: true, hasCtrl: true, hasAlt: false });
     expect(matchHotkey({
       key: "n",
       metaKey: false,

@@ -24,7 +24,7 @@ interface GroupPlacement {
 }
 
 function group(id: string, name: string, { parentGroupId = null, projectIds = [] }: GroupPlacement = {}): WorkspaceGroup {
-  return { id, name, collapsed: false, projectIds, parentGroupId, layoutMode: "auto", suspended: false };
+  return { id, name, isCollapsed: false, projectIds, parentGroupId, layoutMode: "auto", isSuspended: false };
 }
 
 describe("navigator tree model", () => {
@@ -81,7 +81,7 @@ describe("navigator tree model", () => {
         activePaneId: "pane-one",
         activeContainerId: "container-one",
         layout: { mode: "auto", itemIds: ["container-one"] },
-        collapsed: false,
+        isCollapsed: false,
       }],
       groups: [],
       containers: [{
@@ -89,10 +89,10 @@ describe("navigator tree model", () => {
         projectId: "p-one",
         paneIds: ["pane-one"],
         layout: { mode: "auto", itemIds: ["pane-one"] },
-        visible: true,
-        collapsed: false,
-        closed: false,
-        fullscreen: false,
+        isVisible: true,
+        isCollapsed: false,
+        isClosed: false,
+        isFullscreen: false,
       }],
       panes: [{
         id: "pane-one",
@@ -110,7 +110,7 @@ describe("navigator tree model", () => {
         cwd: "/tmp/p-one",
         width: 100,
         title: "Luna Max",
-        orphaned: false,
+        isOrphaned: false,
       }],
       orphanedTabIds: [],
       activeProjectId: "p-one",

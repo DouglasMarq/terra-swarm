@@ -1,4 +1,4 @@
-import type { AgentRole } from "./agent.model";
+import type { AgentLaunchExtras, AgentRole } from "./agent.model";
 import type { WorktreeInfo } from "./worktree.model";
 
 export interface TerminalMeta {
@@ -8,9 +8,19 @@ export interface TerminalMeta {
   paneId?: string | null;
   tabId?: string | null;
   groupId?: string | null;
-  suspended?: boolean;
+  isSuspended?: boolean;
   worktree?: WorktreeInfo | null;
   role?: AgentRole | null;
+}
+
+export interface TerminalSpawn {
+  workspaceId: string;
+  command: string;
+  terminalId?: string;
+  cols?: number;
+  rows?: number;
+  shell?: string;
+  launch?: AgentLaunchExtras;
 }
 
 export interface TerminalPlacement {
@@ -47,8 +57,8 @@ export interface TerminalRuntimeInfo {
   pid: number | null;
   cols: number;
   rows: number;
-  running: boolean;
-  reaped: boolean;
+  isRunning: boolean;
+  isReaped: boolean;
   generation: number;
 }
 

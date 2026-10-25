@@ -13,11 +13,18 @@ export interface WorktreeChangedFile {
   deletions: number | null;
 }
 
+export interface WorktreePullRequest {
+  workspaceId: string;
+  terminalId: string;
+  title: string;
+  body: string;
+}
+
 export interface WorktreeDiff {
   status: WorktreeStatus;
   files: WorktreeChangedFile[];
   patch: string;
-  truncated: boolean;
+  isTruncated: boolean;
 }
 
 export interface WorktreeStatus {
@@ -27,5 +34,5 @@ export interface WorktreeStatus {
   dirty: string[];
   ahead: number;
   behind: number;
-  exists: boolean;
+  isPresent: boolean;
 }

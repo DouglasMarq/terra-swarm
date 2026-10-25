@@ -2,11 +2,11 @@ export type VoiceStatus = "idle" | "recording" | "transcribing";
 
 export interface VoiceModelInfo {
   id: string;
-  display_name: string;
-  size_label: string;
+  displayName: string;
+  sizeLabel: string;
   description: string;
-  downloaded: boolean;
-  active: boolean;
+  isDownloaded: boolean;
+  isActive: boolean;
 }
 
 export interface VoiceDownloadProgress {

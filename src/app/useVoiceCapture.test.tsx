@@ -30,7 +30,7 @@ import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useVoiceCapture } from "./useVoiceCapture";
 
 const groups: WorkspaceGroup[] = [
-  { id: "group-front", name: "Frontend", collapsed: false, projectIds: [], parentGroupId: null, suspended: false },
+  { id: "group-front", name: "Frontend", isCollapsed: false, projectIds: [], parentGroupId: null, isSuspended: false },
 ];
 
 function renderVoiceCapture() {

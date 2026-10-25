@@ -14,7 +14,7 @@ const workspaces: Workspace[] = [{
   terminals: [
     { id: "term-claude", command: "claude", width: 100 },
     { id: "term-codex", command: "codex", width: 100 },
-    { id: "term-idle", command: "opencode", width: 100, suspended: true },
+    { id: "term-idle", command: "opencode", width: 100, isSuspended: true },
   ],
 }];
 

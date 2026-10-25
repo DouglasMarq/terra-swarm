@@ -4,7 +4,7 @@ import { FULL_PERCENT } from "../lib/math/percent";
 import { safeStorage } from "../lib/storage/safeStorage";
 
 export const SHELL_STORAGE_KEY = "terra-shell-state";
-export const SHELL_STATE_VERSION = 3;
+export const SHELL_STATE_VERSION = 4;
 const MAX_HISTORY_ENTRIES = 100;
 const MAX_RECENTLY_CLOSED_TABS = 20;
 const ENTRY_ID_RADIX = 36;
@@ -25,7 +25,7 @@ export interface ShellWorkspaceTab {
   label: string;
   workspaceId: string;
   state?: "ready" | "busy" | "attention" | "paused";
-  pinned?: boolean;
+  isPinned?: boolean;
 }
 
 export interface ShellHistoryEntry {
@@ -36,7 +36,7 @@ export interface ShellHistoryEntry {
 }
 
 export interface ShellDockState {
-  open: boolean;
+  isOpen: boolean;
   activeTab: DockTab;
 }
 
@@ -51,7 +51,7 @@ export interface ShellStateData {
   historyIndex: number;
   panelLayout: ShellPanelLayout | null;
   navigatorCollapsedIds: string[];
-  sidebarCollapsed: boolean;
+  isSidebarCollapsed: boolean;
 }
 
 export interface ShellState extends ShellStateData {
@@ -74,7 +74,7 @@ export interface ShellState extends ShellStateData {
 }
 
 const DEFAULT_DOCK: ShellDockState = {
-  open: false,
+  isOpen: false,
   activeTab: "inspector",
 };
 
@@ -124,9 +124,15 @@ function normalizePanelLayout(value: unknown): ShellPanelLayout | null {
   return entries.length > 0 ? Object.fromEntries(entries) : null;
 }
 
+type LegacyShellWorkspaceTab = Partial<ShellWorkspaceTab> & { pinned?: unknown };
+
+type LegacyShellDockState = Partial<ShellDockState> & { open?: unknown };
+
+type LegacyShellStateData = Partial<ShellStateData> & { sidebarCollapsed?: unknown };
+
 function normalizeTab(value: unknown): ShellWorkspaceTab | null {
   if (!value || typeof value !== "object") return null;
-  const candidate = value as Partial<ShellWorkspaceTab>;
+  const candidate = value as LegacyShellWorkspaceTab;
   const id = cleanId(candidate.id);
   const workspaceId = cleanId(candidate.workspaceId ?? candidate.id);
   if (!id || !workspaceId) return null;
@@ -143,7 +149,7 @@ function normalizeTab(value: unknown): ShellWorkspaceTab | null {
     workspaceId,
     label,
     ...(state ? { state } : {}),
-    ...(candidate.pinned === true ? { pinned: true } : {}),
+    ...((candidate.isPinned ?? candidate.pinned) === true ? { isPinned: true } : {}),
   };
 }
 
@@ -185,14 +191,14 @@ function initialData(): ShellStateData {
     historyIndex: 0,
     panelLayout: null,
     navigatorCollapsedIds: [],
-    sidebarCollapsed: false,
+    isSidebarCollapsed: false,
   };
 }
 
 export function normalizeShellState(value: unknown): ShellStateData {
   const fallback = initialData();
   if (!value || typeof value !== "object") return fallback;
-  const candidate = value as Partial<ShellStateData>;
+  const candidate = value as LegacyShellStateData;
   const activeSurface = toSurface(candidate.activeSurface) ?? fallback.activeSurface;
   const rawTabs = Array.isArray(candidate.workspaceTabs)
     ? candidate.workspaceTabs
@@ -225,11 +231,11 @@ export function normalizeShellState(value: unknown): ShellStateData {
   const current = safeHistory[historyIndex] ?? fallback.history[0];
   const requestedWorkspace = cleanId(candidate.activeWorkspaceId);
   const activeWorkspaceId = requestedWorkspace ?? current.workspaceId;
-  const dockCandidate = candidate.dock && typeof candidate.dock === "object"
+  const dockCandidate: LegacyShellDockState = candidate.dock && typeof candidate.dock === "object"
     ? candidate.dock
     : DEFAULT_DOCK;
   const dock: ShellDockState = {
-    open: dockCandidate.open === true,
+    isOpen: (dockCandidate.isOpen ?? dockCandidate.open) === true,
     activeTab: isDockTab(dockCandidate.activeTab)
       ? dockCandidate.activeTab
       : DEFAULT_DOCK.activeTab,
@@ -249,7 +255,7 @@ export function normalizeShellState(value: unknown): ShellStateData {
     historyIndex,
     panelLayout,
     navigatorCollapsedIds,
-    sidebarCollapsed: candidate.sidebarCollapsed === true,
+    isSidebarCollapsed: (candidate.isSidebarCollapsed ?? candidate.sidebarCollapsed) === true,
   };
 }
 
@@ -316,14 +322,14 @@ export const useShellStore = create<ShellState>()(
         });
       },
 
-      setDockOpen: (isOpen) => set((state) => ({ dock: { ...state.dock, open: isOpen } })),
+      setDockOpen: (isOpen) => set((state) => ({ dock: { ...state.dock, isOpen } })),
 
       toggleDock: () =>
-        set((state) => ({ dock: { ...state.dock, open: !state.dock.open } })),
+        set((state) => ({ dock: { ...state.dock, isOpen: !state.dock.isOpen } })),
 
       setDockTab: (activeTab) =>
         set((state) => ({
-          dock: { activeTab, open: true },
+          dock: { activeTab, isOpen: true },
           activeSurface: state.activeSurface,
         })),
 
@@ -428,9 +434,9 @@ export const useShellStore = create<ShellState>()(
         });
       },
 
-      setSidebarCollapsed: (isSidebarCollapsed) => set({ sidebarCollapsed: isSidebarCollapsed }),
+      setSidebarCollapsed: (isSidebarCollapsed) => set({ isSidebarCollapsed }),
 
-      toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      toggleSidebar: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
 
       reset: () => set(initialData()),
     }),
@@ -449,7 +455,7 @@ export const useShellStore = create<ShellState>()(
         historyIndex: state.historyIndex,
         panelLayout: state.panelLayout,
         navigatorCollapsedIds: state.navigatorCollapsedIds,
-        sidebarCollapsed: state.sidebarCollapsed,
+        isSidebarCollapsed: state.isSidebarCollapsed,
       }),
       migrate: (persistedState) => normalizeShellState(persistedState),
     },

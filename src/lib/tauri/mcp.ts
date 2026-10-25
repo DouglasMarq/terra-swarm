@@ -31,7 +31,7 @@ export function mcpServerInfo(): Promise<McpServerInfo> {
 }
 
 export function mcpSetEnabled(isEnabled: boolean): Promise<McpServerInfo> {
-  return invokeCommand("mcpSetEnabled", { enabled: isEnabled });
+  return invokeCommand("mcpSetEnabled", { isEnabled });
 }
 
 export function mcpListTasks(workspaceId: string): Promise<McpTask[]> {
@@ -43,16 +43,18 @@ export function mcpCreateTask(
   input: { title: string; description?: string; priority?: McpTaskPriority; assignee?: string | null },
 ): Promise<McpTask> {
   return invokeCommand("mcpCreateTask", {
-    workspaceId,
-    title: input.title,
-    description: input.description ?? null,
-    priority: input.priority ?? null,
-    assignee: input.assignee ?? null,
+    request: {
+      workspaceId,
+      title: input.title,
+      description: input.description ?? null,
+      priority: input.priority ?? null,
+      assignee: input.assignee ?? null,
+    },
   });
 }
 
 export function mcpUpdateTask(workspaceId: string, id: string, patch: McpTaskPatch): Promise<McpTask> {
-  return invokeCommand("mcpUpdateTask", { workspaceId, id, patch });
+  return invokeCommand("mcpUpdateTask", { request: { workspaceId, id, patch } });
 }
 
 export function mcpDeleteTask(workspaceId: string, id: string): Promise<void> {

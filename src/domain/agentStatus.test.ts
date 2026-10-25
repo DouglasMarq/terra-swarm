@@ -7,7 +7,7 @@ describe("isTerminalRunning", () => {
   });
 
   it("Given a suspended or exited terminal, when checking it, then it is not running", () => {
-    expect(isTerminalRunning({ id: "a", suspended: true }, {})).toBe(false);
+    expect(isTerminalRunning({ id: "a", isSuspended: true }, {})).toBe(false);
     expect(isTerminalRunning({ id: "a" }, { a: null })).toBe(false);
   });
 });

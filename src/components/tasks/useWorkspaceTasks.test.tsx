@@ -19,12 +19,12 @@ import { useMcpStore } from "../../stores/mcpStore";
 import { useWorkspaceTasks } from "./useWorkspaceTasks";
 
 const server: McpServerInfo = {
-  enabled: true,
-  available: true,
-  running: true,
+  isEnabled: true,
+  isAvailable: true,
+  isRunning: true,
   url: "http://127.0.0.1:9/mcp",
   port: 9,
-  db_path: "/tmp/mcp.db",
+  dbPath: "/tmp/mcp.db",
   error: null,
 };
 

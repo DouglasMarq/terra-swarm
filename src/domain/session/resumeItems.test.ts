@@ -40,7 +40,7 @@ describe("resumableItems", () => {
     cwd: "/projects/second",
     terminals: [
       { id: "t-exited", command: "claude", width: null },
-      { id: "t-suspended", command: "codex", width: null, suspended: true },
+      { id: "t-suspended", command: "codex", width: null, isSuspended: true },
       { id: "t-live", command: "zsh", width: null },
     ],
   };

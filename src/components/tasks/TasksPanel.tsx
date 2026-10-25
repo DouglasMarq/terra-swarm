@@ -51,9 +51,9 @@ export function TasksPanel({ workspaceId, workspaceName, agents }: TasksPanelPro
 
   return (
     <div className="terra-tasks" aria-label={translate("tasks.label", { name: workspaceName ?? workspaceId })}>
-      {server && !server.available ? (
+      {server && !server.isAvailable ? (
         <p className="terra-tasks-notice">{translate("tasks.serverUnavailable")}</p>
-      ) : server && !server.enabled ? (
+      ) : server && !server.isEnabled ? (
         <p className="terra-tasks-notice">{translate("tasks.serverOff")}</p>
       ) : null}
       {error ? (

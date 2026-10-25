@@ -9,7 +9,7 @@ export type AgentResumeCommandStrategy =
 export type AgentVoicePromptMode = "disabled" | "append" | "prepend" | "replace";
 
 export type AgentVoicePromptBehavior = {
-  enabled: boolean;
+  isEnabled: boolean;
   mode: AgentVoicePromptMode;
   prefix: string;
   suffix: string;
@@ -32,7 +32,7 @@ export type RawAgentProfile = Partial<AgentProfile> & {
 };
 
 const DEFAULT_VOICE_BEHAVIOR: AgentVoicePromptBehavior = {
-  enabled: true,
+  isEnabled: true,
   mode: "append",
   prefix: "",
   suffix: "",
@@ -110,10 +110,10 @@ function strategyFrom(raw: unknown, fallback: AgentResumeCommandStrategy): Agent
 function voiceFrom(raw: unknown, fallback: AgentVoicePromptBehavior): AgentVoicePromptBehavior {
   if (raw === undefined || raw === null) return { ...fallback };
   if (raw === false || raw === "disabled" || raw === "none") {
-    return { enabled: false, mode: "disabled", prefix: "", suffix: "" };
+    return { isEnabled: false, mode: "disabled", prefix: "", suffix: "" };
   }
   if (raw === true || raw === "append") {
-    return { ...fallback, enabled: true, mode: "append" };
+    return { ...fallback, isEnabled: true, mode: "append" };
   }
   if (typeof raw !== "object" || Array.isArray(raw)) return { ...fallback };
   const value = raw as Record<string, unknown>;
@@ -125,8 +125,9 @@ function voiceFrom(raw: unknown, fallback: AgentVoicePromptBehavior): AgentVoice
         ? "append"
         : fallback.mode;
   const template = text(value.template);
+  const storedEnabled = value.isEnabled ?? value.enabled;
   return {
-    enabled: typeof value.enabled === "boolean" ? value.enabled : mode !== "disabled",
+    isEnabled: typeof storedEnabled === "boolean" ? storedEnabled : mode !== "disabled",
     mode,
     prefix: typeof value.prefix === "string" ? value.prefix : fallback.prefix,
     suffix: typeof value.suffix === "string" ? value.suffix : fallback.suffix,
@@ -226,7 +227,7 @@ export function buildVoicePrompt(
   values: Record<string, string> = {},
 ): string {
   const behavior = profile.voicePromptBehavior;
-  if (!behavior.enabled || behavior.mode === "disabled") return transcript;
+  if (!behavior.isEnabled || behavior.mode === "disabled") return transcript;
   const rendered = behavior.template
       ? behavior.template
         .replace(/\{text\}/g, transcript)

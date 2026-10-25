@@ -14,11 +14,11 @@ import {
 } from "./visualShellModel";
 
 function tab(id: string, ptyId: string): TerminalTab {
-  return { id, paneId: "pane-1", ptyId, command: "claude", cwd: "/Users/me/project", width: null, title: id, orphaned: false };
+  return { id, paneId: "pane-1", ptyId, command: "claude", cwd: "/Users/me/project", width: null, title: id, isOrphaned: false };
 }
 
 function container(id: string, projectId: string): WorkspaceContainer {
-  return { id, projectId, paneIds: [], layout: { mode: "grid" }, visible: true, collapsed: false, closed: false, fullscreen: false };
+  return { id, projectId, paneIds: [], layout: { mode: "grid" }, isVisible: true, isCollapsed: false, isClosed: false, isFullscreen: false };
 }
 
 function snapshot(): WorkspaceSnapshotV2 {
@@ -94,7 +94,7 @@ describe("nearlyFullContexts", () => {
     cwd: "/Users/me/alpha",
     terminals: [
       { id: "t-1", command: "claude", width: null },
-      { id: "t-2", command: "claude", width: null, suspended: true },
+      { id: "t-2", command: "claude", width: null, isSuspended: true },
       { id: "t-3", command: "claude", width: null },
       { id: "t-4", command: "claude", width: null },
     ],

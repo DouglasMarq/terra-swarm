@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use std::sync::Mutex;
 use tauri::State;
 
@@ -35,15 +36,38 @@ pub fn worktree_status(
     }
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeRemoveRequest {
+    pub workspace_id: String,
+    pub terminal_id: String,
+    pub should_delete_branch: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeCommitRequest {
+    pub workspace_id: String,
+    pub terminal_id: String,
+    pub message: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreePullRequestRequest {
+    pub workspace_id: String,
+    pub terminal_id: String,
+    pub title: String,
+    pub body: String,
+}
+
 #[tauri::command(async)]
 pub fn worktree_remove(
     store: State<'_, Mutex<WorkspaceStore>>,
-    workspace_id: String,
-    terminal_id: String,
-    delete_branch: bool,
+    request: WorktreeRemoveRequest,
 ) -> Result<(), String> {
-    let info = recorded(&store, &workspace_id, &terminal_id)?;
-    worktree::remove(&info, delete_branch)
+    let info = recorded(&store, &request.workspace_id, &request.terminal_id)?;
+    worktree::remove(&info, request.should_delete_branch)
 }
 
 #[tauri::command(async)]
@@ -58,11 +82,10 @@ pub fn worktree_diff(
 #[tauri::command(async)]
 pub fn worktree_commit(
     store: State<'_, Mutex<WorkspaceStore>>,
-    workspace_id: String,
-    terminal_id: String,
-    message: String,
+    request: WorktreeCommitRequest,
 ) -> Result<WorktreeStatus, String> {
-    review::commit(&recorded(&store, &workspace_id, &terminal_id)?, &message)
+    let info = recorded(&store, &request.workspace_id, &request.terminal_id)?;
+    review::commit(&info, &request.message)
 }
 
 #[tauri::command(async)]
@@ -77,14 +100,8 @@ pub fn worktree_merge(
 #[tauri::command(async)]
 pub fn worktree_open_pr(
     store: State<'_, Mutex<WorkspaceStore>>,
-    workspace_id: String,
-    terminal_id: String,
-    title: String,
-    body: String,
+    request: WorktreePullRequestRequest,
 ) -> Result<String, String> {
-    review::open_pull_request(
-        &recorded(&store, &workspace_id, &terminal_id)?,
-        &title,
-        &body,
-    )
+    let info = recorded(&store, &request.workspace_id, &request.terminal_id)?;
+    review::open_pull_request(&info, &request.title, &request.body)
 }

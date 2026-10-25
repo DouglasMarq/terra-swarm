@@ -25,10 +25,10 @@ function container(id: string, projectId: string): WorkspaceContainer {
     projectId,
     paneIds: [],
     layout: { mode: "grid", itemIds: [] },
-    visible: true,
-    collapsed: false,
-    closed: false,
-    fullscreen: false,
+    isVisible: true,
+    isCollapsed: false,
+    isClosed: false,
+    isFullscreen: false,
   };
 }
 
@@ -43,7 +43,7 @@ function project(id: string, containerId: string) {
     activePaneId: null,
     activeContainerId: containerId,
     layout: { mode: "grid" as const, itemIds: [containerId] },
-    collapsed: false,
+    isCollapsed: false,
   };
 }
 
@@ -69,7 +69,7 @@ function navigation(activeId: string | null) {
 }
 
 function isVisible(containerId: string): boolean | undefined {
-  return useOrchestrationStore.getState().snapshot?.containers.find((candidate) => candidate.id === containerId)?.visible;
+  return useOrchestrationStore.getState().snapshot?.containers.find((candidate) => candidate.id === containerId)?.isVisible;
 }
 
 beforeEach(() => {

@@ -20,7 +20,7 @@ describe("FileEditorDialog", () => {
   beforeEach(() => {
     api.readWorkspaceFile.mockReset();
     api.writeWorkspaceFile.mockReset();
-    api.readWorkspaceFile.mockResolvedValue({ path: "src/a.ts", content: "one", binary: false, size: 3, modified: 10 });
+    api.readWorkspaceFile.mockResolvedValue({ path: "src/a.ts", content: "one", isBinary: false, size: 3, modified: 10 });
   });
 
   afterEach(() => act(() => useEditorStore.getState().close()));
@@ -33,9 +33,9 @@ describe("FileEditorDialog", () => {
 
     fireEvent.change(await screen.findByLabelText("code"), { target: { value: "two" } });
     await userEvent.click(screen.getByRole("button", { name: /salvar/i }));
-    expect(api.writeWorkspaceFile).toHaveBeenLastCalledWith("ws", "src/a.ts", "two", 10);
+    expect(api.writeWorkspaceFile).toHaveBeenLastCalledWith({ workspaceId: "ws", relativePath: "src/a.ts", content: "two", expectedModified: 10 });
     await userEvent.click(await screen.findByRole("button", { name: /sobrescrever/i }));
-    expect(api.writeWorkspaceFile).toHaveBeenLastCalledWith("ws", "src/a.ts", "two", null);
+    expect(api.writeWorkspaceFile).toHaveBeenLastCalledWith({ workspaceId: "ws", relativePath: "src/a.ts", content: "two", expectedModified: null });
     expect(await screen.findByRole("button", { name: /salvar/i })).toBeTruthy();
   });
 
@@ -51,7 +51,7 @@ describe("FileEditorDialog", () => {
   });
 
   it("Given a binary file, when opening it, then the editor does not open it", async () => {
-    api.readWorkspaceFile.mockResolvedValue({ path: "logo.png", content: "", binary: true, size: 9, modified: 1 });
+    api.readWorkspaceFile.mockResolvedValue({ path: "logo.png", content: "", isBinary: true, size: 9, modified: 1 });
     render(<FileEditorDialog />);
     act(() => useEditorStore.getState().open({ workspaceId: "ws", path: "logo.png" }));
     expect(await screen.findByText(/binário/i)).toBeTruthy();

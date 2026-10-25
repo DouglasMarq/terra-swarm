@@ -7,7 +7,7 @@ import { useUiStore } from "../stores/uiStore";
 function chooseActiveWorkspace(list: readonly Workspace[]) {
   const visible = new Set(
     (useOrchestrationStore.getState().snapshot?.containers ?? [])
-      .filter((container) => container.visible)
+      .filter((container) => container.isVisible)
       .map((container) => container.projectId)
       .filter((id): id is string => Boolean(id)),
   );

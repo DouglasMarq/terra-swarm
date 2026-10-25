@@ -84,8 +84,8 @@ pub struct TerminalMeta {
     pub tab_id: Option<String>,
     #[serde(default, alias = "group_id")]
     pub group_id: Option<String>,
-    #[serde(default)]
-    pub suspended: bool,
+    #[serde(default, alias = "suspended")]
+    pub is_suspended: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worktree: Option<crate::worktree::WorktreeInfo>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -110,10 +110,10 @@ pub struct Workspace {
     pub active_pane_id: Option<String>,
     #[serde(default, alias = "active_container_id")]
     pub active_container_id: Option<String>,
-    #[serde(default)]
-    pub collapsed: bool,
-    #[serde(default)]
-    pub archived: bool,
+    #[serde(default, alias = "collapsed")]
+    pub is_collapsed: bool,
+    #[serde(default, alias = "archived")]
+    pub is_archived: bool,
     #[serde(default, alias = "created_at")]
     pub created_at: Option<u64>,
     #[serde(default, alias = "layout_mode")]
@@ -133,18 +133,18 @@ pub struct Group {
     pub color: Option<String>,
     #[serde(default, alias = "icon_url")]
     pub icon_url: Option<String>,
-    #[serde(default)]
-    pub collapsed: bool,
+    #[serde(default, alias = "collapsed")]
+    pub is_collapsed: bool,
     #[serde(default, alias = "project_ids")]
     pub project_ids: Vec<String>,
     #[serde(default, alias = "parent_group_id")]
     pub parent_group_id: Option<String>,
     #[serde(default)]
     pub layout_mode: Option<String>,
-    #[serde(default)]
-    pub suspended: bool,
-    #[serde(default)]
-    pub archived: bool,
+    #[serde(default, alias = "suspended")]
+    pub is_suspended: bool,
+    #[serde(default, alias = "archived")]
+    pub is_archived: bool,
     #[serde(default, alias = "created_at")]
     pub created_at: Option<u64>,
 }
@@ -164,10 +164,10 @@ pub struct Pane {
     pub active_tab_id: Option<String>,
     #[serde(default)]
     pub kind: Option<String>,
-    #[serde(default)]
-    pub disabled: bool,
-    #[serde(default)]
-    pub collapsed: bool,
+    #[serde(default, alias = "disabled")]
+    pub is_disabled: bool,
+    #[serde(default, alias = "collapsed")]
+    pub is_collapsed: bool,
     #[serde(default)]
     pub width: Option<f64>,
     #[serde(default)]
@@ -195,12 +195,12 @@ pub struct TerminalTab {
     pub session_id: Option<String>,
     #[serde(default, alias = "last_used_at")]
     pub last_used_at: Option<u64>,
-    #[serde(default, alias = "completion_unread")]
-    pub completion_unread: bool,
+    #[serde(default, alias = "completionUnread", alias = "completion_unread")]
+    pub has_unread_completion: bool,
     #[serde(default, alias = "extra_args")]
     pub extra_args: Vec<String>,
-    #[serde(default)]
-    pub suspended: bool,
+    #[serde(default, alias = "suspended")]
+    pub is_suspended: bool,
 }
 
 impl Pane {
@@ -234,16 +234,16 @@ pub struct WorkspaceContainer {
     pub size: f64,
     #[serde(default = "default_layout_mode", alias = "internal_layout")]
     pub internal_layout: String,
-    #[serde(default)]
-    pub collapsed: bool,
+    #[serde(default, alias = "collapsed")]
+    pub is_collapsed: bool,
     #[serde(default, alias = "active_pane_id")]
     pub active_pane_id: Option<String>,
-    #[serde(default = "is_visible_by_default")]
-    pub visible: bool,
-    #[serde(default)]
-    pub closed: bool,
-    #[serde(default)]
-    pub fullscreen: bool,
+    #[serde(default = "is_visible_by_default", alias = "visible")]
+    pub is_visible: bool,
+    #[serde(default, alias = "closed")]
+    pub is_closed: bool,
+    #[serde(default, alias = "fullscreen")]
+    pub is_fullscreen: bool,
     #[serde(default)]
     pub layout: Option<WorkspaceLayout>,
 }
@@ -317,13 +317,17 @@ impl Default for WorkspaceLayout {
 #[derive(Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceContainerPatch {
-    pub visible: Option<bool>,
-    pub closed: Option<bool>,
-    pub collapsed: Option<bool>,
-    pub fullscreen: Option<bool>,
+    #[serde(alias = "visible")]
+    pub is_visible: Option<bool>,
+    #[serde(alias = "closed")]
+    pub is_closed: Option<bool>,
+    #[serde(alias = "collapsed")]
+    pub is_collapsed: Option<bool>,
+    #[serde(alias = "fullscreen")]
+    pub is_fullscreen: Option<bool>,
     pub active_pane_id: Option<String>,
-    #[serde(default)]
-    pub clear_active_pane: bool,
+    #[serde(default, alias = "clearActivePane")]
+    pub should_clear_active_pane: bool,
     pub internal_layout: Option<String>,
     pub size: Option<f64>,
     pub layout: Option<WorkspaceLayout>,

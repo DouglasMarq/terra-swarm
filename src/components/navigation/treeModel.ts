@@ -53,13 +53,13 @@ function branchMatches(branch: NavigatorBranch, workspaceId: string, terminalId?
 
 function agentNodeStatus(
   terminalId: string,
-  source: { suspended?: boolean },
+  source: { isSuspended?: boolean },
   options: BuildNavigatorTreeOptions,
 ): NavigatorStatus {
   const explicit = options.statuses?.agents?.[terminalId];
   if (explicit) return explicit;
   return deriveAgentStatus({
-    isSuspended: source.suspended,
+    isSuspended: source.isSuspended,
     hasExited: terminalId in (options.exited ?? {}),
     notifications: notificationCount(options.notifications ?? {}, terminalId),
     contextUsed: options.contextUsage?.[terminalId],
@@ -92,7 +92,7 @@ function statusForProject(
       "exited",
     );
   }
-  return workspace.archived ? "suspended" : "working";
+  return workspace.isArchived ? "suspended" : "working";
 }
 
 function statusForGroup(
@@ -102,7 +102,7 @@ function statusForGroup(
 ): NavigatorStatus {
   const explicit = options.statuses?.groups?.[group.id];
   if (explicit) return explicit;
-  if (group.suspended) return "suspended";
+  if (group.isSuspended) return "suspended";
   return projects.reduce<NavigatorStatus>(
     (best, project) => (statusRank(project.status) > statusRank(best) ? project.status : best),
     projects.length > 0 ? "exited" : "working",
@@ -124,10 +124,10 @@ function normalizeContainer(
     activePaneId: source.activePaneId ?? paneIds[0] ?? null,
     internalLayout: source.internalLayout,
     size: source.size,
-    visible: source.visible !== false,
-    collapsed: source.collapsed === true,
-    closed: source.closed === true,
-    fullscreen: source.fullscreen === true,
+    isVisible: source.isVisible !== false,
+    isCollapsed: source.isCollapsed === true,
+    isClosed: source.isClosed === true,
+    isFullscreen: source.isFullscreen === true,
   };
 }
 
@@ -158,7 +158,7 @@ function tabFromPersisted(tab: PersistedWorkspaceTab): TerminalTab {
     cwd: tab.cwd ?? "",
     width: null,
     title: tab.name ?? tab.id,
-    orphaned: false,
+    isOrphaned: false,
   };
 }
 
@@ -206,10 +206,10 @@ function hierarchyForWorkspace(
       paneIds: panes.map((pane) => pane.id),
       layout: { ...EMPTY_LAYOUT, itemIds: panes.map((pane) => pane.id) },
       activePaneId: panes[0]?.id ?? null,
-      visible: true,
-      collapsed: false,
-      closed: false,
-      fullscreen: false,
+      isVisible: true,
+      isCollapsed: false,
+      isClosed: false,
+      isFullscreen: false,
     });
   }
   if (containers.length > 0 && panes.length === 0 && snapshotProject) {
@@ -281,11 +281,11 @@ function makeGroupNode(group: WorkspaceGroup): NavigatorGroupNode {
     parentId: group.parentGroupId && group.parentGroupId !== group.id ? group.parentGroupId : null,
     depth: 0,
     children: [],
-    status: group.suspended ? "suspended" : "working",
+    status: group.isSuspended ? "suspended" : "working",
     count: 0,
     source: group,
     projectIds: [],
-    isSuspended: group.suspended,
+    isSuspended: group.isSuspended,
   };
 }
 
@@ -324,7 +324,7 @@ function terminalForTab(build: ProjectBuild, tab: TerminalTab, paneId: string): 
       id: tab.ptyId ?? tab.id,
       command: tab.command || tab.title || tab.id,
       width: tab.width,
-      suspended: false,
+      isSuspended: false,
     };
   build.usedTerminalIds.add(terminal.id);
   return {
@@ -333,7 +333,7 @@ function terminalForTab(build: ProjectBuild, tab: TerminalTab, paneId: string): 
     tabId: tab.id,
     command: terminal.command || tab.command || tab.title || tab.id,
     width: terminal.width ?? tab.width,
-    suspended: terminal.suspended || undefined,
+    isSuspended: terminal.isSuspended || undefined,
   };
 }
 
@@ -415,9 +415,9 @@ function makeContainer(build: ProjectBuild, container: WorkspaceContainer): Navi
     projectId: workspace.id,
     containerId: container.id,
     paneIds: effectivePanes.map((pane) => pane.id),
-    isVisible: container.visible && !container.closed,
-    isCollapsed: container.collapsed,
-    isFullscreen: container.fullscreen,
+    isVisible: container.isVisible && !container.isClosed,
+    isCollapsed: container.isCollapsed,
+    isFullscreen: container.isFullscreen,
   };
 }
 

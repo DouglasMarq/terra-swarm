@@ -20,7 +20,7 @@ async function loaded() {
 
 describe("useFileEditor", () => {
   beforeEach(() => {
-    api.readWorkspaceFile.mockReset().mockResolvedValue({ path: "src/a.ts", content: "one", binary: false, size: 3, modified: 10 });
+    api.readWorkspaceFile.mockReset().mockResolvedValue({ path: "src/a.ts", content: "one", isBinary: false, size: 3, modified: 10 });
     api.writeWorkspaceFile.mockReset();
   });
 
@@ -50,7 +50,7 @@ describe("useFileEditor", () => {
     });
 
     expect(isSaved).toBe(true);
-    expect(api.writeWorkspaceFile).toHaveBeenCalledWith("ws-1", "src/a.ts", "two", 10);
+    expect(api.writeWorkspaceFile).toHaveBeenCalledWith({ workspaceId: "ws-1", relativePath: "src/a.ts", content: "two", expectedModified: 10 });
     expect(result.current.isDirty).toBe(false);
     expect(result.current.file?.modified).toBe(20);
   });
@@ -71,7 +71,7 @@ describe("useFileEditor", () => {
     await act(async () => {
       await result.current.save(true);
     });
-    expect(api.writeWorkspaceFile).toHaveBeenLastCalledWith("ws-1", "src/a.ts", "two", null);
+    expect(api.writeWorkspaceFile).toHaveBeenLastCalledWith({ workspaceId: "ws-1", relativePath: "src/a.ts", content: "two", expectedModified: null });
     expect(result.current.hasConflict).toBe(false);
   });
 

@@ -140,7 +140,7 @@ function ensureMergedPane(merge: SnapshotMerge, placement: PanePlacement): Pane 
 
 function mergedPaneFor(merge: SnapshotMerge, placement: TabPlacement, oldTab: TerminalTab | null): Pane {
   const { project: incomingProject, pane: incomingPane } = placement;
-  const isIncomingPlacementExplicit = runtimeTab(placement.tab).placementExplicit === true;
+  const isIncomingPlacementExplicit = runtimeTab(placement.tab).isPlacementExplicit === true;
   const oldPane = oldTab?.paneId ? merge.oldPaneById.get(oldTab.paneId) ?? null : null;
   const directOldPane = merge.oldPaneById.get(incomingPane.id) ?? null;
   const preferredPaneId =
@@ -172,9 +172,9 @@ function mergedTab(
     ...incomingTab,
     id: ids.id,
     paneId: ids.paneId,
-    orphaned: incomingTab.orphaned,
-    ...(oldRuntime?.suspended !== undefined && incomingRuntime.suspended === undefined
-      ? { suspended: oldRuntime.suspended }
+    isOrphaned: incomingTab.isOrphaned,
+    ...(oldRuntime?.isSuspended !== undefined && incomingRuntime.isSuspended === undefined
+      ? { isSuspended: oldRuntime.isSuspended }
       : {}),
     ...(oldRuntime?.groupId !== undefined && incomingRuntime.groupId === undefined
       ? { groupId: oldRuntime.groupId }
@@ -214,8 +214,8 @@ function retainOrphanTabs(merge: SnapshotMerge): void {
     const orphan: RuntimeTab = {
       ...oldTab,
       id: uniqueStableId(oldTab.id, `orphan-tab-${merge.finalTabs.length + 1}`, merge.usedTabIds),
-      orphaned: true,
-      ...(oldRuntime.suspended !== undefined ? { suspended: oldRuntime.suspended } : {}),
+      isOrphaned: true,
+      ...(oldRuntime.isSuspended !== undefined ? { isSuspended: oldRuntime.isSuspended } : {}),
     };
     merge.finalTabs.push(orphan);
     if (orphan.paneId) {
@@ -312,10 +312,10 @@ function mergedContainer(
     projectId,
     paneIds: [],
     layout: merge.incoming.layout,
-    visible: true,
-    collapsed: false,
-    closed: false,
-    fullscreen: false,
+    isVisible: true,
+    isCollapsed: false,
+    isClosed: false,
+    isFullscreen: false,
   };
   const container: WorkspaceContainer = {
     ...base,
@@ -334,8 +334,8 @@ function mergedContainer(
   };
   const isRequestedVisible = merge.containerVisibility?.[container.id];
   if (isRequestedVisible !== undefined) {
-    container.visible = isRequestedVisible;
-    container.closed = !isRequestedVisible;
+    container.isVisible = isRequestedVisible;
+    container.isClosed = !isRequestedVisible;
   }
   return container;
 }
@@ -488,7 +488,7 @@ export function mergeWorkspaceSnapshot(
     containers: finalContainers,
     panes: finalPanes,
     tabs: merge.finalTabs,
-    orphanedTabIds: merge.finalTabs.filter((tab) => tab.orphaned).map((tab) => tab.id),
+    orphanedTabIds: merge.finalTabs.filter((tab) => tab.isOrphaned).map((tab) => tab.id),
     activeProjectId: activeSelection.activeProjectId,
     activeGroupId: old.activeGroupId && groups.some((group) => group.id === old.activeGroupId)
       ? old.activeGroupId

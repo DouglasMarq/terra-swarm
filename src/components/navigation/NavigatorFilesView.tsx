@@ -195,7 +195,7 @@ export function NavigatorFilesView({
             </div>
           );
         })}
-        {state.listing.truncated ? <div className={styles.integrationNotice}>{translate("nav.filesView.truncated", { count: state.listing.limit })}</div> : null}
+        {state.listing.isTruncated ? <div className={styles.integrationNotice}>{translate("nav.filesView.truncated", { count: state.listing.limit })}</div> : null}
         {state.error !== null ? <div className={styles.integrationNotice}>{state.error || translate("nav.filesView.error")}</div> : null}
       </>
     );

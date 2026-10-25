@@ -19,10 +19,10 @@ const target: ReviewTarget = { workspaceId: "ws-1", terminalId: "t-1", label: "V
 
 function diff(ahead = 1): WorktreeDiff {
   return {
-    status: { branch: "terra/t-1", base: "main", path: "/Users/me/wt/t-1", dirty: [], ahead, behind: 0, exists: true },
+    status: { branch: "terra/t-1", base: "main", path: "/Users/me/wt/t-1", dirty: [], ahead, behind: 0, isPresent: true },
     files: [{ path: "src/a.ts", change: "modified", additions: 1, deletions: 1 }],
     patch: "",
-    truncated: false,
+    isTruncated: false,
   };
 }
 
@@ -96,7 +96,7 @@ describe("useWorktreeReview", () => {
       await result.current.openPullRequest("Changes from Vega", "");
     });
 
-    expect(api.worktreeOpenPr).toHaveBeenCalledWith("ws-1", "t-1", "Changes from Vega", "");
+    expect(api.worktreeOpenPr).toHaveBeenCalledWith({ workspaceId: "ws-1", terminalId: "t-1", title: "Changes from Vega", body: "" });
     expect(result.current.prUrl).toBe("https://example.test/pr/1");
   });
 });

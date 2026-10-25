@@ -238,7 +238,7 @@ fn invoke_handler() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'stat
         mcp::commands::agent_usage,
         voice::voice_toggle_recording,
         voice::voice_set_language,
-        voice::voice_mic_available,
+        voice::voice_is_mic_available,
         voice::voice_list_input_devices,
         voice::voice_set_input_device,
         voice::voice_test_mic_start,

@@ -20,8 +20,8 @@ beforeEach(() => {
 describe("useAgentCatalog", () => {
   it("Given installed agents, when detection finishes, then they are listed and only available ones report as available", async () => {
     apiMock.detectAgents.mockResolvedValue([
-      { id: "codex", label: "Codex", available: true },
-      { id: "claude", label: "Claude Code", available: false },
+      { id: "codex", label: "Codex", isAvailable: true },
+      { id: "claude", label: "Claude Code", isAvailable: false },
     ]);
     const { result } = renderHook(() => useAgentCatalog());
 

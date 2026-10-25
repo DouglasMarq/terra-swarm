@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 import { formatShortcut, type ShortcutDefinition, type ShortcutPlatform } from "../../lib/platform/shortcuts";
 
-const NO_MODIFIERS = { meta: false, shift: false, ctrl: false, alt: false } as const;
+const NO_MODIFIERS = { hasMeta: false, hasShift: false, hasCtrl: false, hasAlt: false } as const;
 
 const SHELL_SHORTCUTS = {
-  interrupt: { ...NO_MODIFIERS, key: "c", ctrl: true },
-  inspector: { ...NO_MODIFIERS, key: "i", meta: true },
-  sidebar: { ...NO_MODIFIERS, key: "b", meta: true },
+  interrupt: { ...NO_MODIFIERS, key: "c", hasCtrl: true },
+  inspector: { ...NO_MODIFIERS, key: "i", hasMeta: true },
+  sidebar: { ...NO_MODIFIERS, key: "b", hasMeta: true },
 } satisfies Record<string, ShortcutDefinition>;
 
 interface ShellShortcutHandlers {

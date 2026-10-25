@@ -12,8 +12,8 @@ export interface Workspace {
   layout?: WorkspaceLayout | null;
   panes?: PersistedWorkspacePane[];
   containers?: PersistedWorkspaceContainer[];
-  collapsed?: boolean;
-  archived?: boolean;
+  isCollapsed?: boolean;
+  isArchived?: boolean;
 }
 
 export interface WorkspaceGitStatus {
@@ -50,11 +50,11 @@ export interface PersistedWorkspaceContainer {
   lastUsedAt?: number | null;
   size?: number;
   internalLayout?: string;
-  collapsed?: boolean;
+  isCollapsed?: boolean;
   activePaneId?: string | null;
-  visible?: boolean;
-  closed?: boolean;
-  fullscreen?: boolean;
+  isVisible?: boolean;
+  isClosed?: boolean;
+  isFullscreen?: boolean;
   layout?: WorkspaceLayout | null;
 }
 
@@ -66,8 +66,8 @@ export interface PersistedWorkspacePane {
   tabs?: PersistedWorkspaceTab[];
   activeTabId?: string | null;
   kind?: string | null;
-  disabled?: boolean;
-  collapsed?: boolean;
+  isDisabled?: boolean;
+  isCollapsed?: boolean;
   width?: number | null;
   height?: number | null;
   layout?: WorkspaceLayout | null;
@@ -80,7 +80,7 @@ export interface PersistedWorkspaceTab {
   cwd?: string;
   ptyId?: string | null;
   sessionId?: string | null;
-  suspended?: boolean;
+  isSuspended?: boolean;
 }
 
 export interface Project {
@@ -93,8 +93,8 @@ export interface Project {
   activePaneId: string | null;
   activeContainerId: string | null;
   layout: WorkspaceLayout;
-  collapsed: boolean;
-  archived?: boolean;
+  isCollapsed: boolean;
+  isArchived?: boolean;
 }
 
 export interface Group {
@@ -102,8 +102,8 @@ export interface Group {
   name: string;
   projectIds: string[];
   parentGroupId: string | null;
-  collapsed: boolean;
-  suspended: boolean;
+  isCollapsed: boolean;
+  isSuspended: boolean;
   layout: WorkspaceLayout;
 }
 
@@ -112,12 +112,12 @@ export interface WorkspaceGroup {
   name: string;
   color?: string | null;
   iconUrl?: string | null;
-  collapsed: boolean;
+  isCollapsed: boolean;
   projectIds: string[];
   parentGroupId: string | null;
   layoutMode?: string | null;
-  suspended: boolean;
-  archived?: boolean;
+  isSuspended: boolean;
+  isArchived?: boolean;
   createdAt?: number | null;
 }
 
@@ -136,6 +136,13 @@ export interface ActivePaneSelection {
   paneId: string | null;
 }
 
+export interface WorkspacePaneMove {
+  workspaceId: string;
+  paneId: string;
+  toContainerId: string;
+  index?: number | null;
+}
+
 export interface WorkspaceContainer {
   id: string;
   projectId: string | null;
@@ -144,19 +151,19 @@ export interface WorkspaceContainer {
   activePaneId?: string | null;
   internalLayout?: string;
   size?: number;
-  visible: boolean;
-  collapsed: boolean;
-  closed: boolean;
-  fullscreen: boolean;
+  isVisible: boolean;
+  isCollapsed: boolean;
+  isClosed: boolean;
+  isFullscreen: boolean;
 }
 
 export interface WorkspaceContainerPatch {
-  visible?: boolean;
-  closed?: boolean;
-  collapsed?: boolean;
-  fullscreen?: boolean;
+  isVisible?: boolean;
+  isClosed?: boolean;
+  isCollapsed?: boolean;
+  isFullscreen?: boolean;
   activePaneId?: string | null;
-  clearActivePane?: boolean;
+  shouldClearActivePane?: boolean;
   internalLayout?: string;
   size?: number;
   layout?: WorkspaceLayout;
@@ -181,7 +188,7 @@ export interface TerminalTab {
   title: string;
   legacyTerminalId?: string;
   legacyWorkspaceId?: string;
-  orphaned: boolean;
+  isOrphaned: boolean;
 }
 
 export interface WorkspaceSnapshotV2 {

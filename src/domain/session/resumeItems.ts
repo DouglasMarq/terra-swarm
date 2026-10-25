@@ -27,7 +27,7 @@ export function resumableItems(
   return ids.flatMap((id) => {
     for (const workspace of workspaces) {
       const terminal = workspace.terminals.find((candidate) => candidate.id === id);
-      if (terminal && (terminal.id in exited || terminal.suspended)) return [resumeItemFor(workspace, terminal)];
+      if (terminal && (terminal.id in exited || terminal.isSuspended)) return [resumeItemFor(workspace, terminal)];
     }
     return [];
   });

@@ -370,8 +370,9 @@ fn is_valid_percent(used: f64) -> bool {
     used.is_finite() && (0.0..=FULL_PERCENT).contains(&used)
 }
 
+// `used` was checked to lie in 0..=100, so the rounded value always fits in a u8.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn rounded_percent(used: f64) -> u8 {
-    // `used` was checked to lie in 0..=100, so the rounded value always fits in a u8.
     used.round() as u8
 }
 

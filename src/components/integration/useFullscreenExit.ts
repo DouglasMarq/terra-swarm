@@ -35,7 +35,7 @@ function useLeaveFullscreenOnEscape(fullscreenIds: readonly string[], setContain
 
 export function useFullscreenExit({ snapshot, isDockOpen, setContainerFullscreen }: FullscreenExitOptions) {
   const fullscreenIds = useMemo(
-    () => (snapshot?.containers ?? []).filter((container) => container.fullscreen).map((container) => container.id),
+    () => (snapshot?.containers ?? []).filter((container) => container.isFullscreen).map((container) => container.id),
     [snapshot],
   );
   useLeaveFullscreenWhenDockOpens(isDockOpen, fullscreenIds, setContainerFullscreen);

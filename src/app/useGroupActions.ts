@@ -63,7 +63,7 @@ export function useGroupActions({ workspaces, groups, sessions, refresh, setWork
     setWorkspaces((previous) => previous.map((workspace) => ({
       ...workspace,
       terminals: workspace.terminals.map((terminal) =>
-        suspendedIds.has(terminal.id) ? { ...terminal, suspended: true } : terminal,
+        suspendedIds.has(terminal.id) ? { ...terminal, isSuspended: true } : terminal,
       ),
     })));
     await refresh();

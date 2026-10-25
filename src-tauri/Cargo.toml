@@ -49,3 +49,12 @@ libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 whisper-rs = { version = "0.16.0", features = ["metal"] }
+
+[lints.clippy]
+too_many_arguments = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+cast_possible_truncation = "warn"
+cast_sign_loss = "warn"
+cast_possible_wrap = "warn"
+undocumented_unsafe_blocks = "warn"

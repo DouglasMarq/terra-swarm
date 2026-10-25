@@ -116,7 +116,7 @@ describe("shell store", () => {
     expect(normalized.version).toBe(SHELL_STATE_VERSION);
     expect(normalized.activeSurface).toBe("workbench");
     expect(normalized.activeWorkspaceId).toBe("workspace-a");
-    expect(normalized.dock).toEqual({ open: true, activeTab: "inspector" });
+    expect(normalized.dock).toEqual({ isOpen: true, activeTab: "inspector" });
     expect(normalized.workspaceTabs).toHaveLength(1);
     expect(normalized.workspaceTabs[0]).toMatchObject({
       workspaceId: "workspace-a",
@@ -129,7 +129,7 @@ describe("shell store", () => {
     const store = useShellStore.getState();
     store.setDockOpen(false);
     store.setDockTab("inspector");
-    expect(useShellStore.getState().dock).toEqual({ open: true, activeTab: "inspector" });
+    expect(useShellStore.getState().dock).toEqual({ isOpen: true, activeTab: "inspector" });
   });
 
   it("Given navigator disclosure and shell panel layout, when persisting, then they are normalized and kept", () => {
@@ -163,13 +163,13 @@ describe("shell store", () => {
     });
     expect(normalized.activeSurface).toBe("fleet");
     expect(normalized.history.map((entry) => entry.surface)).toEqual(["workbench", "fleet"]);
-    expect(normalized.sidebarCollapsed).toBe(true);
+    expect(normalized.isSidebarCollapsed).toBe(true);
   });
 
   it("Given an expanded sidebar, when toggling it, then it collapses", () => {
     const store = useShellStore.getState();
     store.setSidebarCollapsed(false);
     store.toggleSidebar();
-    expect(useShellStore.getState().sidebarCollapsed).toBe(true);
+    expect(useShellStore.getState().isSidebarCollapsed).toBe(true);
   });
 });

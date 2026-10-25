@@ -17,7 +17,7 @@ export interface ShellAgentSignals {
   contextUsage: Readonly<Record<string, number>>;
 }
 
-export type AgentStatusOf = (terminal: { id: string; suspended?: boolean }) => AgentRunStatus;
+export type AgentStatusOf = (terminal: { id: string; isSuspended?: boolean }) => AgentRunStatus;
 
 export interface ShellAgentOverview {
   agentLabels: Record<string, AgentLabel>;
@@ -38,7 +38,7 @@ export function useShellAgentOverview({ workspaces, titles, exited, notification
   const agentLabels = useMemo(() => buildAgentLabels(workspaces, { titles, names: agentNames }), [agentNames, titles, workspaces]);
   const reported = useReportedStates();
   const agentStatus = useCallback<AgentStatusOf>((terminal) => deriveAgentStatus({
-    isSuspended: terminal.suspended,
+    isSuspended: terminal.isSuspended,
     hasExited: terminal.id in exited,
     notifications: notifications[terminal.id],
     contextUsed: contextUsage[terminal.id],
@@ -51,7 +51,7 @@ export function useShellAgentOverview({ workspaces, titles, exited, notification
       const detail = translate(`status.${status}Lower` as const);
       return { id: terminal.id, label: label?.primary ?? terminal.command, status, detail };
     });
-    const isSuspended = workspace.terminals.length > 0 && workspace.terminals.every((terminal) => terminal.suspended);
+    const isSuspended = workspace.terminals.length > 0 && workspace.terminals.every((terminal) => terminal.isSuspended);
     const status = projectStatus(agents.map((agent) => agent.status));
     return { id: workspace.id, name: workspace.name, status, isSuspended, agents };
   }), [agentLabels, agentStatus, workspaces, translate]);
@@ -60,7 +60,7 @@ export function useShellAgentOverview({ workspaces, titles, exited, notification
     agentStatus,
     reported,
     attentionCount: countTerminals(workspaces, (terminal) => agentStatus(terminal) === "attention"),
-    activeCount: countTerminals(workspaces, (terminal) => !(terminal.id in exited) && !terminal.suspended),
+    activeCount: countTerminals(workspaces, (terminal) => !(terminal.id in exited) && !terminal.isSuspended),
     railProjects,
   };
 }

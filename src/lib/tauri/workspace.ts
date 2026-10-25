@@ -1,6 +1,6 @@
 import type { TerminalPlacement } from "../../domain/terminal.model";
-import type { ActivePaneSelection, Workspace, WorkspaceContainerPatch, WorkspaceGroup, WorkspaceLayout, WorkspaceSnapshotTransfer } from "../../domain/workspace.model";
-import type { WorkspaceFileContent, WorkspaceFileListing, WorkspaceFileSaved } from "../../domain/workspaceFiles.model";
+import type { ActivePaneSelection, Workspace, WorkspaceContainerPatch, WorkspaceGroup, WorkspaceLayout, WorkspacePaneMove, WorkspaceSnapshotTransfer } from "../../domain/workspace.model";
+import type { WorkspaceFileContent, WorkspaceFileListing, WorkspaceFileSaved, WorkspaceFileWrite } from "../../domain/workspaceFiles.model";
 import { invokeCommand } from "./commands";
 import { listenPayload, type UnlistenFn } from "./events";
 
@@ -16,9 +16,11 @@ export function listWorkspaceFiles(
   limit = DEFAULT_FILE_LIST_LIMIT,
 ): Promise<WorkspaceFileListing> {
   return invokeCommand("listWorkspaceFiles", {
-    workspaceId,
-    relativePath,
-    limit,
+    request: {
+      workspaceId,
+      relativePath,
+      limit,
+    },
   });
 }
 
@@ -26,13 +28,8 @@ export function readWorkspaceFile(workspaceId: string, relativePath: string): Pr
   return invokeCommand("readWorkspaceFile", { workspaceId, relativePath });
 }
 
-export function writeWorkspaceFile(
-  workspaceId: string,
-  relativePath: string,
-  content: string,
-  expectedModified: number | null,
-): Promise<WorkspaceFileSaved> {
-  return invokeCommand("writeWorkspaceFile", { workspaceId, relativePath, content, expectedModified });
+export function writeWorkspaceFile(write: WorkspaceFileWrite): Promise<WorkspaceFileSaved> {
+  return invokeCommand("writeWorkspaceFile", { request: write });
 }
 
 export function exportWorkspaceSnapshot(
@@ -48,7 +45,7 @@ export function importWorkspaceSnapshot(
 }
 
 export function createWorkspace(name: string, cwd: string): Promise<Workspace> {
-  return invokeCommand("createWorkspace", { name, cwd });
+  return invokeCommand("createWorkspace", { request: { name, cwd } });
 }
 
 export function closeWorkspace(id: string): Promise<void> {
@@ -56,7 +53,7 @@ export function closeWorkspace(id: string): Promise<void> {
 }
 
 export function renameWorkspace(id: string, name: string): Promise<void> {
-  return invokeCommand("renameWorkspace", { id, name });
+  return invokeCommand("renameWorkspace", { request: { id, name } });
 }
 
 export function listGroups(): Promise<WorkspaceGroup[]> {
@@ -68,7 +65,7 @@ export function createGroup(name: string): Promise<WorkspaceGroup> {
 }
 
 export function renameGroup(id: string, name: string): Promise<void> {
-  return invokeCommand("renameGroup", { id, name });
+  return invokeCommand("renameGroup", { request: { id, name } });
 }
 
 export function removeGroup(id: string): Promise<void> {
@@ -87,22 +84,22 @@ export function setWorkspaceGroup(
   workspaceId: string,
   groupId: string | null,
 ): Promise<void> {
-  return invokeCommand("setWorkspaceGroup", { workspaceId, groupId });
+  return invokeCommand("setWorkspaceGroup", { request: { workspaceId, groupId } });
 }
 
 export function setTerminalPlacement(placement: TerminalPlacement): Promise<void> {
-  return invokeCommand("setTerminalPlacement", placement);
+  return invokeCommand("setTerminalPlacement", { request: placement });
 }
 
 export function setActivePane(selection: ActivePaneSelection): Promise<void> {
-  return invokeCommand("setActivePane", selection);
+  return invokeCommand("setActivePane", { request: selection });
 }
 
 export function reorderWorkspaceContainers(
   workspaceId: string,
   order: string[],
 ): Promise<void> {
-  return invokeCommand("reorderWorkspaceContainers", { workspaceId, order });
+  return invokeCommand("reorderWorkspaceContainers", { request: { workspaceId, order } });
 }
 
 export function reorderWorkspacePanes(
@@ -110,20 +107,16 @@ export function reorderWorkspacePanes(
   containerId: string,
   order: string[],
 ): Promise<void> {
-  return invokeCommand("reorderWorkspacePanes", { workspaceId, containerId, order });
+  return invokeCommand("reorderWorkspacePanes", { request: { workspaceId, containerId, order } });
 }
 
-export function moveWorkspacePane(
-  workspaceId: string,
-  paneId: string,
-  toContainerId: string,
-  index?: number | null,
-): Promise<void> {
+export function moveWorkspacePane(move: WorkspacePaneMove): Promise<void> {
+  const { index, ...pane } = move;
   return invokeCommand("moveWorkspacePane", {
-    workspaceId,
-    paneId,
-    toContainerId,
-    ...(index === undefined ? {} : { index }),
+    request: {
+      ...pane,
+      ...(index === undefined ? {} : { index }),
+    },
   });
 }
 
@@ -132,21 +125,21 @@ export function setWorkspaceContainerState(
   containerId: string,
   patch: WorkspaceContainerPatch,
 ): Promise<void> {
-  return invokeCommand("setWorkspaceContainerState", { workspaceId, containerId, patch });
+  return invokeCommand("setWorkspaceContainerState", { request: { workspaceId, containerId, patch } });
 }
 
 export function setWorkspaceLayout(
   workspaceId: string,
   layout: WorkspaceLayout,
 ): Promise<void> {
-  return invokeCommand("setWorkspaceLayout", { workspaceId, layout });
+  return invokeCommand("setWorkspaceLayout", { request: { workspaceId, layout } });
 }
 
 export function setWorkspaceCollapsed(
   workspaceId: string,
   isCollapsed: boolean,
 ): Promise<void> {
-  return invokeCommand("setWorkspaceCollapsed", { workspaceId, collapsed: isCollapsed });
+  return invokeCommand("setWorkspaceCollapsed", { request: { workspaceId, isCollapsed } });
 }
 
 export function reorderWorkspaces(order: string[]): Promise<void> {
@@ -158,7 +151,7 @@ export function setTerminalWidth(
   terminalId: string,
   width: number,
 ): Promise<void> {
-  return invokeCommand("setTerminalWidth", { wsId, terminalId, width });
+  return invokeCommand("setTerminalWidth", { request: { wsId, terminalId, width } });
 }
 
 export function onWorkspacesChanged(handler: () => void): Promise<UnlistenFn> {

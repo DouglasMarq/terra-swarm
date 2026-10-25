@@ -115,17 +115,17 @@ export interface VisualShellSurfaceProps extends ShellVoiceProps {
 interface VisualAgent {
   id: string;
   label: string;
-  available: boolean;
+  isAvailable: boolean;
 }
 
 function toWireGroup(group: Group): WorkspaceGroup {
   return {
     id: group.id,
     name: group.name,
-    collapsed: group.collapsed,
+    isCollapsed: group.isCollapsed,
     projectIds: group.projectIds,
     parentGroupId: group.parentGroupId,
-    suspended: group.suspended,
+    isSuspended: group.isSuspended,
     layoutMode: group.layout.mode,
   };
 }
@@ -151,7 +151,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     dock: state.dock,
     panelLayout: state.panelLayout,
     navigatorCollapsedIds: state.navigatorCollapsedIds,
-    sidebarCollapsed: state.sidebarCollapsed,
+    isSidebarCollapsed: state.isSidebarCollapsed,
     setSidebarCollapsed: state.setSidebarCollapsed,
     toggleSidebar: state.toggleSidebar,
     workspaceTabs: state.workspaceTabs,
@@ -172,13 +172,13 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     reorderWorkspaceTabs: state.reorderWorkspaceTabs,
   })));
 
-  const isInspectorActive = shell.dock.open && shell.dock.activeTab === "inspector";
+  const isInspectorActive = shell.dock.isOpen && shell.dock.activeTab === "inspector";
   useEffect(() => startMcpEventBridge(nudgeAgent), []);
   useEffect(() => startPreviewBridge(), []);
 
   useShellShortcuts({
     toggleSidebar: shell.toggleSidebar,
-    isDockOpen: shell.dock.open,
+    isDockOpen: shell.dock.isOpen,
     setDockOpen: shell.setDockOpen,
     setCommandPaletteOpen,
   });
@@ -293,7 +293,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const focusedLabel = props.focusedId ? agentLabels[props.focusedId] ?? null : null;
   useFullscreenExit({
     snapshot: props.snapshot,
-    isDockOpen: shell.dock.open,
+    isDockOpen: shell.dock.isOpen,
     setContainerFullscreen: orchestration.setContainerFullscreen,
   });
 
@@ -447,7 +447,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
   const paletteCallbacks = shellPaletteCallbacks(props, {
     navigate,
     focusTerminal,
-    toggleDock: () => shell.setDockOpen(!shell.dock.open),
+    toggleDock: () => shell.setDockOpen(!shell.dock.isOpen),
     reopenLastClosedTab: () => {
       const candidate = shell.recentlyClosedTabs[0];
       if (!candidate) return;
@@ -463,11 +463,11 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       onLayoutChanged={shell.setPanelLayout}
       sidebar={sidebar}
       collapsedSidebar={collapsedSidebar}
-      isSidebarCollapsed={shell.sidebarCollapsed}
+      isSidebarCollapsed={shell.isSidebarCollapsed}
       chrome={{
         breadcrumb: surface !== "workbench" ? undefined : { project: activeWorkspace?.name ?? null, agent: focusedLabel?.primary ?? null, branch: props.activeId ? props.branches[props.activeId] ?? null : null },
         title: shellSurfaceTitle(surface, translate),
-        isSidebarCollapsed: shell.sidebarCollapsed,
+        isSidebarCollapsed: shell.isSidebarCollapsed,
         onToggleSidebar: shell.toggleSidebar,
         sidebarShortcut: shortcutLabels.sidebar,
         onOpenLauncher: () => setCommandPaletteOpen(true),
@@ -479,12 +479,12 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         isVoiceActive,
         voiceLabel,
         voiceShortcut,
-        isInspectorOpen: shell.dock.open,
-        onToggleInspector: () => shell.setDockOpen(!shell.dock.open),
+        isInspectorOpen: shell.dock.isOpen,
+        onToggleInspector: () => shell.setDockOpen(!shell.dock.isOpen),
         inspectorShortcut: shortcutLabels.inspector,
       }}
       rightDock={{
-        isOpen: shell.dock.open,
+        isOpen: shell.dock.isOpen,
         onOpen: () => shell.setDockOpen(true),
         onClose: () => shell.setDockOpen(false),
         tabs: dockTabs,
@@ -509,7 +509,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       agentLabels={agentLabels}
       resumeCount={props.resumeCount ?? 0}
       exitedTerminalIds={exitedIds}
-      isDockOpen={shell.dock.open}
+      isDockOpen={shell.dock.isOpen}
       isVoiceEnabled={props.isVoiceEnabled}
       isVoiceRecording={isVoiceRecording}
       callbacks={paletteCallbacks}

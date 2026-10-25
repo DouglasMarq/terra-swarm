@@ -10,9 +10,9 @@ import type {
 } from "./types";
 
 type ExtendedTab = PaneFrameProps["projection"]["tabs"][number] & {
-  unread?: boolean;
+  isUnread?: boolean;
   status?: SubTabLaneTab["status"];
-  suspended?: boolean;
+  isSuspended?: boolean;
 };
 
 function locationFor(
@@ -26,7 +26,7 @@ function locationFor(
 }
 
 function tabStatus(tab: ExtendedTab): SubTabLaneTab["status"] {
-  if (tab.suspended) return "suspended";
+  if (tab.isSuspended) return "suspended";
   return tab.status ?? "running";
 }
 
@@ -50,7 +50,7 @@ export function PaneFrame({
     return {
       tab,
       isActive: tab.id === activeTabId,
-      isUnread: extended.unread,
+      isUnread: extended.isUnread,
       status: tabStatus(extended),
     };
   });

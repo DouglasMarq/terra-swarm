@@ -27,8 +27,8 @@ const group: Group = {
   name: "Core",
   projectIds: [workspace.id],
   parentGroupId: null,
-  collapsed: false,
-  suspended: false,
+  isCollapsed: false,
+  isSuspended: false,
   layout: { mode: "auto", itemIds: [workspace.id] },
 };
 
@@ -36,7 +36,7 @@ function shellProps(overrides: Partial<VisualShellSurfaceProps> = {}): VisualShe
   return {
     workspaces: [workspace],
     groups: [group],
-    agents: [{ id: "codex", label: "Codex", available: true }],
+    agents: [{ id: "codex", label: "Codex", isAvailable: true }],
     snapshot: null,
     activeId: workspace.id,
     focusedId: "term-codex",
@@ -160,7 +160,7 @@ describe("VisualShellSurface smoke flow", () => {
   it("Given the sidebar, when pressing ⌘B, then it collapses into a rail", async () => {
     render(<VisualShellSurface {...shellProps()} />);
     fireEvent.keyDown(window, { key: "b", metaKey: true });
-    await waitFor(() => expect(useShellStore.getState().sidebarCollapsed).toBe(true));
+    await waitFor(() => expect(useShellStore.getState().isSidebarCollapsed).toBe(true));
     expect(screen.getByRole("navigation", { name: "Barra lateral recolhida" })).toBeInTheDocument();
   });
 
@@ -194,8 +194,8 @@ describe("VisualShellSurface smoke flow", () => {
       pid: 42,
       cols: 120,
       rows: 40,
-      running: true,
-      reaped: false,
+      isRunning: true,
+      isReaped: false,
       generation: 1,
     });
 

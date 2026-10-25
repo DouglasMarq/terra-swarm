@@ -83,7 +83,7 @@ export function useWorktreeReview(target: ReviewTarget | null): WorktreeReview {
 
   const openPullRequest = (title: string, body: string) =>
     run("pr", async ({ workspaceId, terminalId }) => {
-      setPrUrl(await api.worktreeOpenPr(workspaceId, terminalId, title, body));
+      setPrUrl(await api.worktreeOpenPr({ workspaceId, terminalId, title, body }));
       return translateNow("review.prOpened");
     });
 

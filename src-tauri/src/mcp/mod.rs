@@ -16,6 +16,7 @@ pub mod db;
 pub mod hooks;
 pub mod integration;
 pub mod launch;
+pub mod model;
 pub mod repo;
 pub mod server;
 pub mod tools;
@@ -29,7 +30,8 @@ use crate::sync::LockExt;
 use crate::workspace::{Workspace, WorkspaceStore};
 use auth::TokenRegistry;
 pub use auth::{AgentIdentity, McpLease};
-use repo::{AgentStatus, Message, Repo, StoreError, StoreResult};
+use model::{AgentStatus, Message, StoreError, StoreResult};
+use repo::Repo;
 
 pub const EVENT_TASKS_CHANGED: &str = "mcp-tasks-changed";
 pub const EVENT_MESSAGE: &str = "mcp-message";
@@ -426,7 +428,7 @@ mod tests {
             .create_task(
                 "ws-1",
                 "t-1",
-                repo::NewTask {
+                model::NewTask {
                     title: "x".into(),
                     ..Default::default()
                 },

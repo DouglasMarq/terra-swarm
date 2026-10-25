@@ -6,7 +6,7 @@ use std::ffi::OsStr;
 use std::path::Path;
 
 use super::launch::Quoting;
-use super::repo::AgentState;
+use super::model::AgentState;
 use crate::usage::{SessionLog, TokenUsage};
 
 pub(super) const MAX_SUMMARY_CHARS: usize = 200;

@@ -5,10 +5,9 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::Runtime;
 
+use super::model::{AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus};
 use super::repo::{
-    AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus,
-    DEFAULT_INBOX_LIMIT, DEFAULT_SEARCH_LIMIT, MAX_LIMIT, MAX_STATUS_SUMMARY_CHARS,
-    MAX_TITLE_CHARS,
+    DEFAULT_INBOX_LIMIT, DEFAULT_SEARCH_LIMIT, MAX_LIMIT, MAX_STATUS_SUMMARY_CHARS, MAX_TITLE_CHARS,
 };
 use super::{AgentIdentity, McpHub};
 

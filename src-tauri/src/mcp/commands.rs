@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer};
 use std::sync::Arc;
 use tauri::State;
 
-use super::repo::{AgentStatus, NewTask, Task, TaskPatch, TaskPriority, TaskStatus};
+use super::model::{AgentStatus, NewTask, Task, TaskPatch, TaskPriority, TaskStatus};
 use super::{McpHub, ServerInfo};
 
 pub const USER_ACTOR: &str = "user";

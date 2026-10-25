@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use super::{text_field, AgentIntegration, LaunchContext};
 use crate::mcp::launch::{quote, Quoting, ENV_TOKEN, SERVER_NAME};
-use crate::mcp::repo::AgentState;
+use crate::mcp::model::AgentState;
 use crate::usage::{number, SessionLog, TokenUsage};
 
 const ID: &str = "codex";

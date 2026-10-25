@@ -13,7 +13,7 @@ use serde_json::Value;
 use tauri::Runtime;
 
 use super::integration;
-use super::repo::AgentState;
+use super::model::AgentState;
 use super::{AgentIdentity, McpHub};
 use crate::usage::SessionLog;
 

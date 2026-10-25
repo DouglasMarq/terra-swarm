@@ -121,7 +121,7 @@ fn post_hook(url: &str, token: &str, body: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::repo::AgentState;
+    use crate::mcp::model::AgentState;
     use crate::mcp::test_support::{hub, identity};
     use std::sync::Arc;
 

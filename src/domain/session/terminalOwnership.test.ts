@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Workspace, WorkspaceSnapshotV2 } from "../workspace.model";
+import { containerFixture, paneFixture, projectFixture, snapshotFixture, tabFixture } from "../../test/snapshotFixtures";
 import { neighborTerminalId, workspaceIdForTerminal } from "./terminalOwnership";
 
 const workspace = (id: string, terminalId: string): Workspace => ({
@@ -75,6 +76,38 @@ describe("workspaceIdForTerminal", () => {
 
     expect(workspaceIdForTerminal([], snapshot, "terminal-b")).toBe("project-b");
   });
+
+  it("Given no snapshot entry for the terminal, when resolving its owner, then there is none", () => {
+    expect(workspaceIdForTerminal([], null, "ghost")).toBeNull();
+    expect(workspaceIdForTerminal([], snapshotFixture({ tabs: [tabFixture("tab-1", "pty-1")] }), "ghost")).toBeNull();
+  });
+
+  it("Given a tab with its legacy workspace, when resolving by tab or legacy id, then the legacy workspace is used", () => {
+    const snapshot = snapshotFixture({ tabs: [tabFixture("tab-1", null, { legacyTerminalId: "old-1", legacyWorkspaceId: "ws-old" })] });
+
+    expect(workspaceIdForTerminal([], snapshot, "old-1")).toBe("ws-old");
+    expect(workspaceIdForTerminal([], snapshot, "tab-1")).toBe("ws-old");
+  });
+
+  it("Given a pane without a project, when resolving its tab, then the owning container's project is used", () => {
+    const snapshot = snapshotFixture({
+      tabs: [tabFixture("tab-1", "pty-1")],
+      panes: [paneFixture("pane-1", [], { projectId: null, containerId: null, activeTabId: "tab-1" })],
+      containers: [containerFixture("c1", ["pane-1"], { projectId: "p-container" })],
+    });
+
+    expect(workspaceIdForTerminal([], snapshot, "pty-1")).toBe("p-container");
+  });
+
+  it("Given neither pane nor container know the project, when resolving, then the project listing them is used", () => {
+    const tabs = [tabFixture("tab-1", "pty-1", { paneId: "pane-1" })];
+    const panes = [paneFixture("pane-1", [], { projectId: null, containerId: "c1" })];
+    const containers = [containerFixture("c1", [], { projectId: null })];
+
+    expect(workspaceIdForTerminal([], snapshotFixture({ tabs, panes, containers, projects: [projectFixture("by-container", { containerIds: ["c1"] })] }), "pty-1")).toBe("by-container");
+    expect(workspaceIdForTerminal([], snapshotFixture({ tabs, panes, containers: [], projects: [projectFixture("by-pane", { paneIds: ["pane-1"] })] }), "pty-1")).toBe("by-pane");
+    expect(workspaceIdForTerminal([], snapshotFixture({ tabs, projects: [projectFixture("unrelated")] }), "pty-1")).toBeNull();
+  });
 });
 
 describe("neighborTerminalId", () => {
@@ -98,5 +131,9 @@ describe("neighborTerminalId", () => {
 
   it("Given a terminal that no project owns, when finding its neighbor, then there is none", () => {
     expect(neighborTerminalId([project], "unknown")).toBeNull();
+  });
+
+  it("Given the only terminal, when finding its neighbor, then there is none", () => {
+    expect(neighborTerminalId([workspace("solo", "alone")], "alone")).toBeNull();
   });
 });

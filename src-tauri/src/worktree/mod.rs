@@ -13,6 +13,8 @@ pub mod review;
 
 pub const BRANCH_PREFIX: &str = "terra/";
 
+const FIRST_BRANCH_SUFFIX: u32 = 2;
+
 /// Stored with the terminal record, so a resumed agent returns to it.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -131,40 +133,13 @@ pub fn create(
     workspace_id: &str,
     terminal_id: &str,
 ) -> Result<WorktreeInfo, String> {
-    for id in [workspace_id, terminal_id] {
-        if !is_plain_path_component(id) {
-            return Err(format!("invalid id for a worktree folder: {:?}", id));
-        }
-    }
+    check_folder_ids(workspace_id, terminal_id)?;
     let repo = repo_root(project_cwd).ok_or("this project is not inside a git repository")?;
-    let canonical_cwd =
-        std::fs::canonicalize(project_cwd).unwrap_or_else(|_| project_cwd.to_path_buf());
-    let canonical_repo = std::fs::canonicalize(&repo).unwrap_or_else(|_| repo.clone());
-    let relative = canonical_cwd
-        .strip_prefix(&canonical_repo)
-        .map(Path::to_path_buf)
-        .unwrap_or_default();
-    let base = match git(&repo, &["symbolic-ref", "--quiet", "--short", "HEAD"]) {
-        Ok(branch) if !branch.is_empty() => branch,
-        _ => git(&repo, &["rev-parse", "--short", "HEAD"])
-            .map_err(|error| format!("the repository has no commits yet: {}", error))?,
-    };
-    let mut branch = format!("{}{}", BRANCH_PREFIX, terminal_id);
-    let mut suffix = 2;
-    while branch_exists(&repo, &branch) {
-        branch = format!("{}{}-{}", BRANCH_PREFIX, terminal_id, suffix);
-        suffix += 1;
-    }
+    let relative = subfolder_in_repo(project_cwd, &repo);
+    let base = base_ref(&repo)?;
+    let branch = free_branch(&repo, terminal_id);
     let path = root.join(workspace_id).join(terminal_id);
-    if !path.starts_with(root) {
-        return Err(format!("{} is outside the worktree folder", path.display()));
-    }
-    if path.exists() {
-        return Err(format!("{} already exists", path.display()));
-    }
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
+    prepare_worktree_folder(&path, root)?;
     let path_text = path.to_string_lossy().to_string();
     git(
         &repo,
@@ -178,6 +153,56 @@ pub fn create(
         base,
         repo: repo.to_string_lossy().to_string(),
     })
+}
+
+fn check_folder_ids(workspace_id: &str, terminal_id: &str) -> Result<(), String> {
+    for id in [workspace_id, terminal_id] {
+        if !is_plain_path_component(id) {
+            return Err(format!("invalid id for a worktree folder: {:?}", id));
+        }
+    }
+    Ok(())
+}
+
+fn subfolder_in_repo(project_cwd: &Path, repo: &Path) -> PathBuf {
+    let canonical_cwd =
+        std::fs::canonicalize(project_cwd).unwrap_or_else(|_| project_cwd.to_path_buf());
+    let canonical_repo = std::fs::canonicalize(repo).unwrap_or_else(|_| repo.to_path_buf());
+    canonical_cwd
+        .strip_prefix(&canonical_repo)
+        .map(Path::to_path_buf)
+        .unwrap_or_default()
+}
+
+fn base_ref(repo: &Path) -> Result<String, String> {
+    match git(repo, &["symbolic-ref", "--quiet", "--short", "HEAD"]) {
+        Ok(branch) if !branch.is_empty() => Ok(branch),
+        _ => git(repo, &["rev-parse", "--short", "HEAD"])
+            .map_err(|error| format!("the repository has no commits yet: {}", error)),
+    }
+}
+
+fn free_branch(repo: &Path, terminal_id: &str) -> String {
+    let mut branch = format!("{}{}", BRANCH_PREFIX, terminal_id);
+    let mut suffix = FIRST_BRANCH_SUFFIX;
+    while branch_exists(repo, &branch) {
+        branch = format!("{}{}-{}", BRANCH_PREFIX, terminal_id, suffix);
+        suffix += 1;
+    }
+    branch
+}
+
+fn prepare_worktree_folder(path: &Path, root: &Path) -> Result<(), String> {
+    if !path.starts_with(root) {
+        return Err(format!("{} is outside the worktree folder", path.display()));
+    }
+    if path.exists() {
+        return Err(format!("{} already exists", path.display()));
+    }
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    std::fs::create_dir_all(parent).map_err(|error| error.to_string())
 }
 
 fn count(text: &str) -> u32 {

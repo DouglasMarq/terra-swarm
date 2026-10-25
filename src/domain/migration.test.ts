@@ -303,6 +303,25 @@ describe("mergeWorkspaceSnapshot", () => {
     expect(refreshed).toEqual(first);
   });
 
+  it("Given a previous orphan tab and a visibility override, when refreshing, then the orphan is kept and the container follows the override", () => {
+    const first = mergeWorkspaceSnapshot(sharedPaneWorkspaces, null);
+    const previous = {
+      ...first,
+      tabs: [...first.tabs, { ...first.tabs[0], id: "tab-orphan", ptyId: null, orphaned: true }],
+      panes: first.panes.map((pane) => ({ ...pane, tabIds: [...pane.tabIds, "tab-orphan"] })),
+    };
+    const containerId = first.containers[0]?.id ?? "";
+
+    const refreshed = mergeWorkspaceSnapshot(sharedPaneWorkspaces, previous, {
+      containerVisibility: { [containerId]: false },
+    });
+
+    expect(refreshed.tabs.find((tab) => tab.id === "tab-orphan")).toMatchObject({ orphaned: true, ptyId: null });
+    expect(refreshed.orphanedTabIds).toEqual(["tab-orphan"]);
+    expect(refreshed.panes[0]?.tabIds).toEqual(["tab-one", "tab-two", "tab-orphan"]);
+    expect(refreshed.containers[0]).toMatchObject({ id: containerId, visible: false, closed: true });
+  });
+
   it("preserves visual active state and layout while removing a stale PTY", () => {
     const first = mergeWorkspaceSnapshot(sharedPaneWorkspaces, null);
     const visualState = {

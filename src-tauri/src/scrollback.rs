@@ -1,10 +1,8 @@
 //! Small, local-only durable scrollback store.
 //!
-//! Scrollback is deliberately kept outside the workspace JSON.  It is a
-//! bounded append-only-ish log: writes append while there is room and replace
-//! the file with its tail when the cap is reached.  The store never trusts a
-//! caller supplied id as a path component and refuses symlinks, which keeps
-//! terminal ids from escaping the app-data directory.
+//! Scrollback is deliberately kept outside the workspace JSON.  The store
+//! never trusts a caller supplied id as a path component and refuses symlinks,
+//! which keeps terminal ids from escaping the app-data directory.
 
 use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
@@ -18,6 +16,7 @@ use crate::sync::LockExt;
 /// A terminal's durable log is intentionally smaller than an unbounded
 /// transcript.  The in-memory PTY backlog uses the same cap.
 pub const SCROLLBACK_CAP: usize = 256 * 1024;
+const COMPACTION_THRESHOLD: usize = 2 * SCROLLBACK_CAP;
 const SCROLLBACK_EXTENSION: &str = "scrollback";
 const DEFAULT_ORPHAN_AGE: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
@@ -102,9 +101,6 @@ impl ScrollbackStore {
         fs::rename(tmp, path)
     }
 
-    /// Append output and retain only the newest `SCROLLBACK_CAP` bytes.
-    /// A chunk larger than the cap is truncated before any write, preventing a
-    /// hostile or accidental PTY burst from causing an oversized allocation.
     pub fn append(&self, id: &str, chunk: &[u8]) -> io::Result<()> {
         let Some(path) = self.path_for(id) else {
             return Ok(());
@@ -122,11 +118,9 @@ impl ScrollbackStore {
         let current_len = fs::metadata(&path)
             .map(|metadata| metadata.len().min(usize::MAX as u64) as usize)
             .unwrap_or(0);
-        if current_len.saturating_add(chunk.len()) <= SCROLLBACK_CAP {
+        if current_len.saturating_add(chunk.len()) <= COMPACTION_THRESHOLD {
             let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
-            file.write_all(chunk)?;
-            file.sync_data()?;
-            return Ok(());
+            return file.write_all(chunk);
         }
 
         let mut retained = Self::read_path(&path)?;
@@ -245,6 +239,44 @@ mod tests {
         let data = store.read("t-1").expect("capped read");
         assert_eq!(data.len(), SCROLLBACK_CAP);
         assert!(data.iter().all(|byte| *byte == b'x'));
+        cleanup(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn given_a_full_log_when_appending_a_small_chunk_then_it_appends_without_rewriting_the_file() {
+        use std::os::unix::fs::MetadataExt;
+        let (store, root) = store("full");
+        store
+            .append("t-1", &vec![b'x'; SCROLLBACK_CAP])
+            .expect("fill");
+        let path = root.join("t-1.scrollback");
+        let inode = fs::metadata(&path).expect("metadata").ino();
+
+        store.append("t-1", b"tail").expect("append");
+
+        assert_eq!(fs::metadata(&path).expect("metadata").ino(), inode);
+        let data = store.read("t-1").expect("read");
+        assert_eq!(data.len(), SCROLLBACK_CAP);
+        assert!(data.ends_with(b"tail"));
+        cleanup(&root);
+    }
+
+    #[test]
+    fn given_a_log_at_the_compaction_threshold_when_appending_then_the_file_shrinks_to_the_cap() {
+        let (store, root) = store("compact");
+        store
+            .append("t-1", &vec![b'x'; 2 * SCROLLBACK_CAP])
+            .expect("fill");
+
+        store.append("t-1", b"tail").expect("append");
+
+        let path = root.join("t-1.scrollback");
+        assert_eq!(
+            fs::metadata(&path).expect("metadata").len(),
+            SCROLLBACK_CAP as u64
+        );
+        assert!(store.read("t-1").expect("read").ends_with(b"tail"));
         cleanup(&root);
     }
 

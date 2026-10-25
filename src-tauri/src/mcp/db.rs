@@ -11,6 +11,7 @@ use std::time::Duration;
 pub const DB_FILE: &str = "mcp.db";
 /// How long a connection waits for another one's write lock.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
+const OPTIMIZE_ALL_TABLES: &str = "PRAGMA optimize = 0x10002";
 
 const MIGRATION_1: &str = r#"
 CREATE TABLE settings (
@@ -160,7 +161,14 @@ pub fn open(path: &Path) -> Result<Connection, String> {
     let mut conn = Connection::open(path).map_err(|error| error.to_string())?;
     configure(&conn, true).map_err(|error| error.to_string())?;
     migrate(&mut conn)?;
+    optimize(&conn);
     Ok(conn)
+}
+
+fn optimize(conn: &Connection) {
+    if let Err(error) = conn.execute_batch(OPTIMIZE_ALL_TABLES) {
+        eprintln!("cannot optimize mcp.db: {}", error);
+    }
 }
 
 #[cfg(test)]
@@ -273,6 +281,33 @@ mod tests {
             .unwrap();
 
         assert!(plan.contains("idx_task_deps_depends_on"), "{}", plan);
+    }
+
+    #[test]
+    fn given_a_board_with_tasks_when_reopening_the_database_then_the_tasks_have_planner_statistics()
+    {
+        let path = temp_path("optimize");
+        {
+            let conn = open(&path).unwrap();
+            conn.execute_batch(
+                "WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers WHERE n < 1000)
+                 INSERT INTO tasks(id, workspace_id, title, created_by, created_at, updated_at)
+                 SELECT 'T-' || n, 'ws-' || (n % 10), 'task', 'user', n, n FROM numbers",
+            )
+            .unwrap();
+        }
+
+        let conn = open(&path).unwrap();
+
+        let analyzed: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_stat1 WHERE tbl = 'tasks'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(analyzed > 0);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
     #[test]

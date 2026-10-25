@@ -4,7 +4,6 @@ import { useT } from "../../i18n";
 import { GRID_MAX, defaultGridDimensions, type GridDimensions } from "./layout";
 
 export interface GridSizePickerProps {
-  /** Dimensions currently in effect (automatic or fixed). */
   dimensions: GridDimensions;
   isAuto: boolean;
   paneCount: number;
@@ -13,7 +12,6 @@ export interface GridSizePickerProps {
   onAuto: () => void;
 }
 
-/** Above this many cells the picker warns that panes get small. */
 const DENSE_GRID_CELLS = 16;
 
 const CELLS = Array.from({ length: GRID_MAX * GRID_MAX }, (_cell, index) => ({
@@ -21,10 +19,6 @@ const CELLS = Array.from({ length: GRID_MAX * GRID_MAX }, (_cell, index) => ({
   row: Math.floor(index / GRID_MAX) + 1,
 }));
 
-/**
- * "Grade" button with a popover: Automatic | Fixed and an 8×8 matrix you
- * hover to preview and click to fix. Automatic follows the pane count.
- */
 export function GridSizePicker({ dimensions, isAuto, paneCount, isDisabled, onSelect, onAuto }: GridSizePickerProps) {
   const translate = useT();
   const [isOpen, setOpen] = useState(false);

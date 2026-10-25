@@ -35,10 +35,8 @@ import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
 import type { TerminalSessions } from "./useTerminalSessions";
 
-/** Time a resumed agent's CLI gets to draw its prompt before dictation is pasted. */
 const RESUMED_AGENT_PROMPT_DELAY_MS = 1500;
 
-/** Audio levels kept for the capsule's waveform. */
 const VOICE_WAVEFORM_SAMPLES = 32;
 
 interface VoiceCaptureInput {
@@ -49,7 +47,6 @@ interface VoiceCaptureInput {
   focusedId: string | null;
   titles: Record<string, string>;
   isVoiceEnabled: boolean;
-  /** Parse spoken commands ("foca no claude 2") instead of only dictating. */
   isVoiceCommandsEnabled: boolean;
   sessions: Pick<TerminalSessions, "spawnInto" | "close" | "restart">;
   openVoiceSettings: () => void;
@@ -61,11 +58,6 @@ interface VoiceCaptureInput {
   };
 }
 
-/**
- * Voice capture from the capsule: recording state, transcription events,
- * delivering dictation to an agent (resuming it first if it exited) and
- * running parsed voice commands after an explicit Send/Confirm.
- */
 export function useVoiceCapture({
   workspaces,
   groups,
@@ -217,8 +209,6 @@ export function useVoiceCapture({
       .catch((err) => console.error("voice toggle failed:", err));
   }, [isVoiceEnabled, openVoiceSettings]);
 
-  // Latest focused terminal for the voice paste target, readable from
-  // listeners that are registered once.
   const voiceFocusRef = useRef<string | null>(null);
   const [voiceTargetId, setVoiceTargetId] = useState<string | null>(null);
   const shouldSendVoiceToOrchestrator = usePreferencesStore((state) => state.shouldSendVoiceToOrchestrator);
@@ -232,11 +222,8 @@ export function useVoiceCapture({
     if (meta && id in useTerminalRuntimeStore.getState().exited) {
       setVoiceFeedback(translateNow("app.voice.resuming"));
       await sessions.restart(id, resolveResumeCommand(profileForCommand(meta.command), meta.command));
-      // Give the agent's CLI a moment to draw its prompt before pasting.
       await new Promise((resolve) => setTimeout(resolve, RESUMED_AGENT_PROMPT_DELAY_MS));
     }
-    // Outside the Workbench (Fleet, Settings) the xterm is not mounted; the
-    // PTY still is, so write straight to it. Agent CLIs take bracketed paste.
     const term = getTerminal(id);
     if (!term && !meta) {
       setVoiceFeedback(translateNow("app.voice.targetUnavailable"));
@@ -267,10 +254,6 @@ export function useVoiceCapture({
   const voiceCommandsEnabledRef = useRef(isVoiceCommandsEnabled);
   voiceCommandsEnabledRef.current = isVoiceCommandsEnabled;
 
-  // Voice backend events. Parsed intents stop at the capsule preview; they
-  // are executed only by the explicit Send/Confirm action below. Everything
-  // else becomes a profile-aware prompt; transcript text is never interpreted
-  // as a shell command.
   const openVoiceSettingsFromEvent = useEffectEvent(() => openVoiceSettings());
 
   useEffect(() => {
@@ -315,9 +298,6 @@ export function useVoiceCapture({
         }
       }
 
-      // Ordinary dictation keeps the useful legacy behavior: it is pasted
-      // into the focused terminal as text and never evaluated by the voice
-      // layer. The transcript remains visible after the send.
       dispatchVoiceCapsule({ type: "transcription-ready", transcript: text, intent: null });
       setVoiceSubmitted(false);
       const id = voiceFocusRef.current;
@@ -405,9 +385,6 @@ export function useVoiceCapture({
       return;
     }
 
-    // A transcript without a parsed intent is ordinary dictation. It can be
-    // retried from the capsule if no terminal was focused when transcription
-    // completed, but is always sent as text (never interpreted here).
     const id = voiceFocusRef.current;
     if (!id) {
       setVoiceFeedback(translateNow("app.voice.pickTarget"));

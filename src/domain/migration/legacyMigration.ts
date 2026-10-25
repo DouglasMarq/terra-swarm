@@ -6,7 +6,6 @@ import { DOMAIN_SNAPSHOT_VERSION, readArray, readFiniteNumber, readString, uniqu
 import { DEFAULT_WORKSPACE_LAYOUT, cloneLayout, mergeWorkspaceLayout, normalizeLayout } from "./workspaceLayout";
 
 export interface LegacyMigrationOptions {
-  /** A layout is cloned for each migrated entity, so callers can mutate safely. */
   defaultLayout?: Partial<WorkspaceLayout>;
 }
 
@@ -45,12 +44,6 @@ function workspacePaneRows(rawWorkspace: RecordLike): RecordLike[] {
   return readArray(rawWorkspace.panes).map(asRecord);
 }
 
-/**
- * Older workspace stores sometimes persisted placement only in the nested
- * pane/tab records. Resolve it before falling back to the terminal metadata
- * fields. This keeps migration compatible with both representations without
- * making the nested records a second source of truth.
- */
 function placementFromNestedPane(
   rawWorkspace: RecordLike,
   terminalId: string,
@@ -453,13 +446,6 @@ function legacySnapshot(state: LegacyMigrationState): WorkspaceSnapshotV2 {
   };
 }
 
-/**
- * Converts the pre-Onda-2 `Workspace[]` contract into normalized entities.
- *
- * IDs are kept where possible and generated IDs are derived only from array
- * position and the source identity. No clock/randomness is used, which makes
- * the migration safe to run repeatedly and easy to test or replay.
- */
 export function migrateLegacyWorkspaces(
   input: readonly Workspace[] | unknown,
   options: LegacyMigrationOptions = {},
@@ -471,5 +457,4 @@ export function migrateLegacyWorkspaces(
   return legacySnapshot(state);
 }
 
-/** Portuguese-friendly alias used by callers that describe this as a migration. */
 export const migrateWorkspacesToSnapshotV2 = migrateLegacyWorkspaces;

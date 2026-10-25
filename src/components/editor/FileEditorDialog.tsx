@@ -8,17 +8,12 @@ import { DialogFooter, TerraDialog } from "../overlays/Dialog";
 import { Button } from "../ui/Button";
 import "./editor.css";
 
-/** CodeMirror's `Mod-s`: Cmd on macOS, Ctrl elsewhere. */
 const SAVE_SHORTCUT: ShortcutDefinition = { key: "s", meta: true, shift: false, ctrl: false, alt: false };
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
 
 const BYTES_PER_KIB = 1024;
 
-/**
- * A light editor for one project file, opened from the Files view. Saving
- * refuses to overwrite a file an agent changed meanwhile, unless asked to.
- */
 export function FileEditorDialog() {
   const translate = useT();
   const target = useEditorStore((state) => state.target);

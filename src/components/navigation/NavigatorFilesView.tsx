@@ -21,7 +21,6 @@ export interface NavigatorFilesViewProps {
   activeWorkspaceId?: string | null;
   loadFiles: NavigatorFilesLoader;
   onSelectWorkspace?: (workspaceId: string) => void;
-  /** Open a file in the editor; files stay static rows without it. */
   onOpenFile?: (workspaceId: string, path: string) => void;
 }
 

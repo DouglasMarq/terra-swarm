@@ -10,7 +10,6 @@ interface WorkspaceNavigationInput {
   focusedId: string | null;
 }
 
-/** Showing, hiding and switching projects. Hiding never touches a PTY. */
 export function useWorkspaceNavigation({ workspaces, snapshot, activeId, focusedId }: WorkspaceNavigationInput) {
   const ui = () => useUiStore.getState();
 
@@ -25,7 +24,6 @@ export function useWorkspaceNavigation({ workspaces, snapshot, activeId, focused
       isVisibleOnly,
     });
 
-  /** Hide exactly one visual container. PTYs and sibling containers remain intact. */
   const hideContainer = (containerId: string) => {
     const before = useOrchestrationStore.getState().snapshot;
     const container = before?.containers.find((candidate) => candidate.id === containerId);
@@ -45,7 +43,6 @@ export function useWorkspaceNavigation({ workspaces, snapshot, activeId, focused
     ui().setFocusedId(null);
   };
 
-  /** Hide the workspace's persisted active container when invoked by chrome/navigation. */
   const hideWorkspace = (id: string) => {
     const containerId = containerIdForWorkspace(id);
     if (containerId) {
@@ -65,7 +62,6 @@ export function useWorkspaceNavigation({ workspaces, snapshot, activeId, focused
   const selectWorkspace = (id: string, focusedTerminalId?: string) => {
     const containerId = containerIdForWorkspace(id, false, focusedTerminalId);
     if (containerId) useOrchestrationStore.getState().setContainerVisible(containerId, true);
-    // Clicking into a pane of the open project must not undo its maximize.
     if (id !== activeId) ui().setExpandedId(null);
     ui().setActiveId(id);
   };

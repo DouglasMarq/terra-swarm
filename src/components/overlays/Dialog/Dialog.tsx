@@ -12,11 +12,6 @@ import styles from "./Dialog.module.css";
 
 const cx = (...classes: Array<string | undefined | false>) => classes.filter(Boolean).join(" ");
 
-/**
- * Terra's dialog foundation. Radix owns focus management, inert background,
- * Escape handling, and portal mounting; these wrappers only add the Terra
- * visual language and a small, composable API.
- */
 export const DialogRoot = DialogPrimitive.Root;
 export const DialogPortal = DialogPrimitive.Portal;
 export const DialogClose = DialogPrimitive.Close;
@@ -88,7 +83,6 @@ export interface TerraDialogProps extends Omit<DialogPrimitive.DialogProps, "chi
   shouldShowCloseButton?: boolean;
 }
 
-/** A complete dialog for small forms and confirmations. */
 export function TerraDialog({
   children,
   className,

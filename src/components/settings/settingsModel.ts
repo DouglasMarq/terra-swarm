@@ -15,7 +15,6 @@ export type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number];
 
 export interface SettingsSectionDefinition {
   id: SettingsSectionId;
-  /** Translated on read, so the current locale always wins. */
   readonly label: string;
   readonly description: string;
   keywords: readonly string[];
@@ -34,7 +33,6 @@ function section(id: SettingsSectionId, keywords: readonly string[]): SettingsSe
   };
 }
 
-/** Stable registry: ordering is part of the settings navigation contract. */
 export const SETTINGS_SECTIONS: readonly SettingsSectionDefinition[] = [
   section("general", ["perfil", "profile", "aparência", "appearance", "idioma", "language", "movimento", "motion", "labs", "orquestração", "fleet", "frota", "grupo"]),
   section("terminal", ["shell", "fonte", "font", "scrollback", "grade", "grid", "colunas", "pty", "comando"]),

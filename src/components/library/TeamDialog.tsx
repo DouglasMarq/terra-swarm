@@ -13,13 +13,10 @@ export interface TeamDialogProps {
   projectName: string | null;
   agents: readonly AgentInfo[];
   defaultAgent: string | null;
-  /** The project is a git repository, so members can get worktrees. */
   canIsolate: boolean;
-  /** Start one agent; resolves when it is spawned. */
   onSpawn: (agent: string, options: { role: AgentRole; shouldUseWorktree: boolean }) => Promise<void>;
 }
 
-/** Start a ready-made team of agents with roles in the active project. */
 export function TeamDialog({ projectName, agents, defaultAgent, canIsolate, onSpawn }: TeamDialogProps) {
   const translate = useT();
   const isOpen = useLibraryStore((state) => state.dialog === "team");
@@ -34,7 +31,6 @@ export function TeamDialog({ projectName, agents, defaultAgent, canIsolate, onSp
     setStarting(true);
     setError(null);
     try {
-      // One at a time: each spawn sizes itself from the panes already open.
       for (const member of plan.members) await onSpawn(member.agent, { role: member.role, shouldUseWorktree: member.shouldUseWorktree });
       closeDialog();
     } catch (failure) {

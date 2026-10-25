@@ -20,9 +20,7 @@ import "./fleet.css";
 export type FleetBatchAction = "focus" | "voice" | "resume" | "stop";
 
 export interface FleetCommandCenterProps extends Omit<FleetDerivationInput, "agentLabels"> {
-  /** Task title / numbered kind per terminal, see domain/agentLabels. */
   labels?: Readonly<Record<string, AgentLabel | undefined>>;
-  /** Latest unread message per terminal, for the "Needs you" cards. */
   attentionMessages?: Readonly<Record<string, string | undefined>>;
   now?: number;
   onFocus?: (terminalId: string, workspaceId?: string) => void;
@@ -35,10 +33,6 @@ function statusRank(status: FleetStatus): number {
   return FLEET_STATUS_PRIORITY.indexOf(status);
 }
 
-/**
- * Triage for the whole fleet: what needs you first, then every agent in one
- * table with batch actions. Replaces the old Home and Events surfaces.
- */
 export function FleetCommandCenter({
   labels = {},
   attentionMessages = {},

@@ -14,7 +14,6 @@ export interface NotificationCenterProps {
   labels: Readonly<Record<string, AgentLabel | undefined>>;
   workspaceNames: Readonly<Record<string, string | undefined>>;
   isMuted: boolean;
-  /** Agents whose context window is nearly full (≥ `CONTEXT_ATTENTION_PERCENT`). */
   contextAlerts?: readonly { terminalId: string; workspaceId: string; used: number }[];
   onJump: (item: NotificationItem) => void;
   onFocusAgent?: (terminalId: string) => void;

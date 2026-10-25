@@ -25,19 +25,15 @@ import { useWorkspaceTasks } from "./useWorkspaceTasks";
 import { MAX_TASK_TITLE_CHARS } from "../../domain/tasks";
 import "./tasks.css";
 
-/** How long a board notice stays visible. */
 const NOTICE_DURATION_MS = 4000;
 
-/** What is under the pointer wins; corners only decide in the gaps. */
 const collision: CollisionDetection = (args) => {
   const under = pointerWithin(args);
   if (under.length === 0) return closestCorners(args);
-  // A card sits inside its column: prefer the innermost target.
   return [...under].sort((left, right) => Number(String(right.id).startsWith("card:")) - Number(String(left.id).startsWith("card:")));
 };
 
 export interface BoardAgent extends TaskAgentOption {
-  /** Agents that are not running cannot take a task. */
   isRunning: boolean;
 }
 
@@ -45,16 +41,9 @@ export interface TaskBoardProps {
   workspaceId: string | null;
   workspaceName?: string | null;
   agents: readonly BoardAgent[];
-  /** Hand a task to an agent: type the prompt into its terminal. */
   onSendPrompt: (terminalId: string, prompt: string) => Promise<void>;
 }
 
-/**
- * The Kanban of a project's shared tasks. Drag a card between columns to
- * change its status, or onto an agent to assign it and tell the agent to
- * start. Cards move on their own as agents claim and finish work, since the
- * store refetches on every `mcp-tasks-changed` event.
- */
 export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: TaskBoardProps) {
   const translate = useT();
   const { tasks, statuses, server, error } = useWorkspaceTasks(workspaceId);
@@ -63,7 +52,6 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
   const [dragging, setDragging] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const sensors = useSensors(
-    // A short distance keeps the card's own selects and buttons clickable.
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor),
   );

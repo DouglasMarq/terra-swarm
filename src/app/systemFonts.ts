@@ -1,9 +1,3 @@
-/**
- * Installed font families for the terminal font picker. The backend lists
- * every installed family (the webview has no font listing API); when it
- * can't (browser preview), the well-known monospace fonts are detected by
- * measuring text instead.
- */
 import { api } from "../api";
 import { quoteFontFamily, type SystemFont } from "../lib/terminalFonts";
 
@@ -36,10 +30,6 @@ const KNOWN_TERMINAL_FONTS: readonly string[] = [
 
 let probe: CanvasRenderingContext2D | null | undefined;
 
-/**
- * True when `name` renders differently from both generic fallbacks, i.e. the
- * font exists. Wide and narrow glyphs make most fonts measurably distinct.
- */
 function isFontInstalled(name: string): boolean {
   if (typeof document === "undefined") return false;
   if (probe === undefined) {
@@ -66,7 +56,6 @@ function installedTerminalFonts(candidates: readonly string[] = KNOWN_TERMINAL_F
 
 let cached: Promise<SystemFont[]> | null = null;
 
-/** Installed font families, alphabetical. Loaded once per session. */
 export function loadSystemFonts(): Promise<SystemFont[]> {
   cached ??= api
     .listSystemFonts()

@@ -9,7 +9,6 @@ import { useWorkspaceTasks } from "./useWorkspaceTasks";
 import "./tasks.css";
 
 export interface TaskAgentOption {
-  /** Terminal id, as agents see it in `whoami`. */
   id: string;
   label: string;
 }
@@ -17,15 +16,9 @@ export interface TaskAgentOption {
 export interface TasksPanelProps {
   workspaceId: string | null;
   workspaceName?: string | null;
-  /** Agents of the workspace that tasks can be assigned to. */
   agents: readonly TaskAgentOption[];
 }
 
-/**
- * The shared task board of the active project, grouped by status. Cards are
- * self-contained (`TaskCard`) and the grouping lives in the store, so a
- * drag-and-drop Kanban can reuse both.
- */
 export function TasksPanel({ workspaceId, workspaceName, agents }: TasksPanelProps) {
   const translate = useT();
   const { tasks, statuses, server, error } = useWorkspaceTasks(workspaceId);
@@ -126,7 +119,6 @@ export interface TaskCardProps {
   task: McpTask;
   agents: readonly TaskAgentOption[];
   agentLabel: (terminalId: string) => string;
-  /** Reported state of the assignee, when it has one. */
   status?: McpAgentStatus;
   onChange: (patch: McpTaskPatch) => void;
   onDelete: () => void;

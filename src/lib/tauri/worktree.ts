@@ -21,7 +21,6 @@ function worktreeMerge(workspaceId: string, terminalId: string): Promise<Worktre
   return invokeCommand("worktreeMerge", { workspaceId, terminalId });
 }
 
-/** Pushes the agent's branch to origin and opens a pull request; returns its URL. */
 function worktreeOpenPr(workspaceId: string, terminalId: string, title: string, body: string): Promise<string> {
   return invokeCommand("worktreeOpenPr", { workspaceId, terminalId, title, body });
 }

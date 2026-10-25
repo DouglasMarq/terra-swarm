@@ -32,7 +32,6 @@ import "./terminal-pane.css";
 import { FULL_PERCENT } from "../lib/math/percent";
 
 const SCROLLBACK_LINES = 10_000;
-/** Minimum gap between console warnings for one terminal's failed IPC calls. */
 const WARN_THROTTLE_MS = 2000;
 
 interface Props {
@@ -49,32 +48,21 @@ interface Props {
   contextUsed?: number;
   title?: string;
   branch?: string;
-  /** Branch of the agent's own git worktree, when it is isolated. */
   worktreeBranch?: string;
-  /** The agent's team role, already translated. */
   roleLabel?: string;
-  /** Opens the review of the worktree's changes. */
   onOpenReview?: () => void;
-  /** Task title (or name) shown first; falls back to the command. */
   label?: string;
-  /** "claude 2" / "Lyra · claude" under or beside the label. */
   tag?: string;
-  /** Latest unread message from the agent, shown in the attention strip. */
   attentionMessage?: string | null;
-  /** Lifecycle actions for the "…" menu. */
   menu?: PaneMenuGroups;
   onClearNotifications: () => void;
   isFocused: boolean;
   onFocus: () => void;
   onToggleExpand: () => void;
   onRestart: () => void;
-  /** Legacy close means the visual terminal close action. */
   onClose: () => void;
-  /** Detach a tab without ending its PTY, when the orchestration model is on. */
   onDetach?: () => void;
-  /** Explicitly destructive PTY action; intentionally separate from detach. */
   onKill?: () => void;
-  /** Hidden tabs remain mounted so switching tabs never kills a PTY. */
   isHidden?: boolean;
 }
 
@@ -107,10 +95,6 @@ export function TerminalPane(props: Props) {
   const appliedFontSize = useRef(fontSize);
   const fontFamily = terminalFontStack(usePreferencesStore((state) => state.terminalFontFamily));
   const appliedFontFamily = useRef(fontFamily);
-  // Keep the long-lived xterm effect aware of the latest backend lifecycle.
-  // The component intentionally survives a PTY exit so it can show scrollback
-  // and restart controls, but geometry observers must stop addressing a PTY
-  // that no longer exists.
   const exitedRef = useRef(hasExited);
   exitedRef.current = hasExited;
   const hiddenRef = useRef(isHidden);
@@ -163,21 +147,13 @@ export function TerminalPane(props: Props) {
     });
 
     const resizeQueue = createTerminalResizeQueue(({ cols, rows }) => {
-      // A skipped resize must reject rather than resolve: the queue only
-      // remembers dimensions after a successful send, and a PTY exit can be
-      // followed by a restart with the same geometry.
       if (exitedRef.current) return Promise.reject(new Error("terminal exited"));
       return api.resizeTerminal(id, cols, rows).catch((err) => {
-        // An exit event can race an in-flight resize. Once the UI knows the
-        // process is gone this is expected lifecycle, not an actionable error.
         if (!exitedRef.current) warnThrottled("resize", err);
         throw err;
       });
     });
 
-    // FitAddon intentionally returns a minimum 2x1 geometry even for a
-    // display:none parent. Check the real box first so a zero-sized mount
-    // never poisons the PTY with a tiny resize.
     const fitAndSend = (): void => {
       try {
         if (exitedRef.current || !hasVisibleBox(container)) return;
@@ -185,11 +161,7 @@ export function TerminalPane(props: Props) {
         fit.fit();
         if (term.cols < 1 || term.rows < 1) return;
         resizeQueue.request({ cols: term.cols, rows: term.rows });
-      } catch {
-        // The renderer can still be measuring while the pane is entering the
-        // layout. The observer/focus/visibility signals will schedule a new
-        // coalesced fit once a real box exists.
-      }
+      } catch {}
     };
 
     const fitScheduler = createFitScheduler(fitAndSend);
@@ -246,8 +218,6 @@ export function TerminalPane(props: Props) {
     };
   }, [id]);
 
-  // Every pane hears every drop; only the one under the cursor takes it, and
-  // the paths are pasted as a native terminal does so agents see the file.
   useEffect(() => {
     const platform = detectDropPlatform();
     const isUnderCursor = (position: { x: number; y: number }): boolean => {
@@ -309,10 +279,6 @@ export function TerminalPane(props: Props) {
     fitRef.current?.();
   }, [fontFamily, id]);
 
-  // A hidden workbench tab can keep the same box dimensions while its
-  // `display` state changes. ResizeObserver is not guaranteed to report that
-  // transition, so treat visibility/focus/preset changes as explicit fit
-  // signals as well.
   useEffect(() => {
     const isResumed = previousExited.current && !hasExited;
     previousExited.current = hasExited;
@@ -346,8 +312,6 @@ export function TerminalPane(props: Props) {
         props.onFocus();
         if (notifications > 0) props.onClearNotifications();
       }}
-      // Tabbing into the terminal must move focus too, or ⌘Enter and the
-      // other focused-pane shortcuts act on the previously clicked pane.
       onFocusCapture={() => {
         if (!isHidden && !isFocused) props.onFocus();
       }}

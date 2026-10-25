@@ -233,8 +233,6 @@ function indexSnapshotEntities(entities: SnapshotEntities): SnapshotIndex {
   };
 }
 
-// A pane can be recovered from either side of a malformed reference. The
-// first deterministic owner wins, and all other references are deduplicated.
 function repairContainerPanes(containers: readonly WorkspaceContainer[], index: SnapshotIndex): void {
   for (const container of containers) {
     const validPaneIds: string[] = [];
@@ -287,8 +285,6 @@ function attachTabsToPanes(tabs: readonly TerminalTab[], index: SnapshotIndex): 
   }
 }
 
-// Infer ownership from project/container references when a pane lost its
-// direct project id. This keeps a valid terminal reachable by group selectors.
 function repairProjectOwnership(snapshot: IndexedSnapshot): void {
   const { entities, index } = snapshot;
   for (const project of entities.projects) {
@@ -432,10 +428,6 @@ function normalizeSnapshotObject(source: RecordLike): WorkspaceSnapshotV2 {
   };
 }
 
-/**
- * Repairs an existing v2 snapshot. Invalid references are removed from
- * indexes, while their terminal tabs remain available as explicit orphans.
- */
 export function normalizeSnapshotV2(value: unknown): WorkspaceSnapshotV2 {
   if (Array.isArray(value)) return migrateLegacyWorkspaces(value);
   return normalizeSnapshotObject(asRecord(value));

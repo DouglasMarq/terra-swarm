@@ -24,11 +24,6 @@ export function resolveLayoutMode(
   return isWorkbenchLayoutMode(layout?.mode) ? layout.mode : "auto";
 }
 
-/**
- * Workspace presets are persisted in the project layout. `sidebar` is a
- * Terra-only visual preset and therefore lives in the extensible metadata
- * field instead of widening the Rust/legacy LayoutMode wire union.
- */
 export function workbenchModeForLayout(
   layout: WorkspaceLayout | null | undefined,
 ): WorkbenchLayoutMode {
@@ -55,28 +50,20 @@ export interface GridDimensions {
   rows: number;
 }
 
-/** Largest grid the picker offers: 8 columns × 8 rows. */
 export const GRID_MAX = 8;
 
-/** Automatic grids grow with the pane count up to this many columns. */
 const AUTO_GRID_MAX_COLUMNS = 4;
 
-/**
- * v3 shows two modes: Grade (a CSS grid, automatic or fixed) and Foco
- * (spotlight). Older persisted modes read as an automatic grid.
- */
 export type VisibleWorkbenchMode = "grid" | "spotlight";
 
 export function visibleWorkbenchMode(mode: WorkbenchLayoutMode): VisibleWorkbenchMode {
   return mode === "spotlight" ? "spotlight" : "grid";
 }
 
-/** A grid is automatic until the user fixes its columns and rows. */
 export function isAutoGrid(layout: WorkspaceLayout | null | undefined): boolean {
   return !(typeof layout?.columns === "number" && layout.columns >= 1 && typeof layout?.rows === "number" && layout.rows >= 1);
 }
 
-/** Drop fixed dimensions so the grid follows the pane count again. */
 export function workspaceLayoutForAutoGrid(layout: WorkspaceLayout): WorkspaceLayout {
   const next: WorkspaceLayout = { ...layout, mode: "grid" };
   delete next.columns;
@@ -97,11 +84,6 @@ function positiveInteger(value: unknown, fallback: number): number {
     : fallback;
 }
 
-/**
- * Choose a stable, useful grid for a pane count. The square-root heuristic
- * keeps the surface balanced while the four-column cap keeps the header
- * editor compact and deterministic.
- */
 export function defaultGridDimensions(paneCount: number): GridDimensions {
   const count = Math.max(0, Math.floor(paneCount));
   if (count === 0) return { columns: 1, rows: 1 };
@@ -109,11 +91,6 @@ export function defaultGridDimensions(paneCount: number): GridDimensions {
   return { columns, rows: Math.max(1, Math.ceil(count / columns)) };
 }
 
-/**
- * Read persisted grid hints without dropping valid empty tracks. A user may
- * intentionally choose four columns for a two-pane workspace, so dimensions
- * are not clamped to the current pane count.
- */
 export function gridDimensionsForLayout(
   layout: WorkspaceLayout | null | undefined,
   paneCount: number,
@@ -124,11 +101,6 @@ export function gridDimensionsForLayout(
   return { columns, rows };
 }
 
-/**
- * Persist grid dimensions while retaining all unrelated layout metadata.
- * Cloning the collection fields prevents an editor update from mutating the
- * caller's snapshot and keeps pane/PTY identities mounted and untouched.
- */
 export function workspaceLayoutForGrid(
   layout: WorkspaceLayout,
   paneCount: number,
@@ -220,7 +192,6 @@ export function nextLayout(containerId: string, arrangement: PaneArrangement): {
   };
 }
 
-/** Closing/hiding is visual-only; a PTY is killed only through onKillTab. */
 export const CONTAINER_CLOSE_SEMANTICS = Object.freeze({
   hidesContainer: true,
   unmountsPanes: false,

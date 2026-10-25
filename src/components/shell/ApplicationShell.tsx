@@ -9,7 +9,6 @@ import { WindowChrome, type WindowChromeProps } from "./WindowChrome";
 import "./shell.css";
 import { FULL_PERCENT } from "../../lib/math/percent";
 
-/** The content panel never shrinks below this share of the window, in percent. */
 const MIN_CONTENT_PERCENT = 35;
 const DEFAULT_NAVIGATOR_PERCENT = 18;
 const DEFAULT_DOCK_PERCENT = 22;
@@ -17,14 +16,11 @@ const DEFAULT_DOCK_PERCENT = 22;
 export interface ApplicationShellProps {
   chrome?: WindowChromeProps;
   surface?: ShellSurface;
-  /** Full sidebar: surface switch, projects and agents, footer. */
   sidebar: ReactNode;
-  /** 56px rail shown instead of the sidebar while it is collapsed. */
   collapsedSidebar?: ReactNode;
   isSidebarCollapsed?: boolean;
   children: ReactNode;
   rightDock?: RightDockProps | false;
-  /** Floating layers that sit above the content (voice capsule). */
   overlay?: ReactNode;
   className?: string;
   defaultLayout?: Layout;
@@ -50,7 +46,6 @@ function useCompactShell(): boolean {
   return isCompact;
 }
 
-/** Keep only the panels that are mounted; react-resizable-panels rejects unknown ids. */
 function layoutFor(stored: Layout | undefined, hasSidebar: boolean, hasDock: boolean): Layout {
   const sidebar = hasSidebar ? stored?.navigator ?? DEFAULT_NAVIGATOR_PERCENT : 0;
   const dock = hasDock ? stored?.dock ?? DEFAULT_DOCK_PERCENT : 0;
@@ -89,8 +84,6 @@ export function ApplicationShell({
     if (!isCompact) setCompactSidebarOpen(false);
   }, [isCompact]);
 
-  // In compact mode ⌘B (which flips the persisted collapse flag) opens and
-  // closes the drawer, and leaving a surface closes it.
   const lastCollapsed = useRef(isSidebarCollapsed);
   useEffect(() => {
     if (lastCollapsed.current === isSidebarCollapsed) return;
@@ -126,7 +119,6 @@ export function ApplicationShell({
                 <div
                   className="terra-shell-compact-drawer terra-shell-compact-navigator"
                   onClick={(event) => {
-                    // Picking a project or agent closes the drawer; the row's own buttons don't.
                     const target = event.target as HTMLElement;
                     if (target.closest('[role="treeitem"]') && !target.closest("button")) setCompactSidebarOpen(false);
                   }}

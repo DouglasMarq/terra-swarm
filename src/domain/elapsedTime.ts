@@ -1,13 +1,11 @@
 import { HOURS_PER_DAY, MINUTES_PER_HOUR, MS_PER_SECOND, SECONDS_PER_MINUTE } from "../lib/time/durations";
 
-/** Elapsed time under which a moment still reads as "now", in seconds. */
 export const JUST_NOW_SECONDS = 45;
 
 export type ElapsedTime =
   | { unit: "now" }
   | { unit: "minutes" | "hours" | "days"; count: number };
 
-/** How long before `nowMs` the moment `timestampMs` was, in its largest whole unit. */
 export function elapsedTime(timestampMs: number, nowMs: number): ElapsedTime {
   const seconds = Math.max(0, Math.floor((nowMs - timestampMs) / MS_PER_SECOND));
   if (seconds < JUST_NOW_SECONDS) return { unit: "now" };

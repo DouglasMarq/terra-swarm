@@ -23,10 +23,6 @@ export interface ConfirmActionDialogProps {
   isBusy?: boolean;
 }
 
-/**
- * A controlled confirmation dialog. The callback is intentionally unreachable
- * until the user presses the explicit confirmation action.
- */
 export function ConfirmActionDialog({
   isBusy = false,
   cancelLabel,

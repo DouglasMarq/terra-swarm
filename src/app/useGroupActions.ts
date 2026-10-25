@@ -20,7 +20,6 @@ interface GroupActionsInput {
   setWorkspaces: Dispatch<SetStateAction<Workspace[]>>;
 }
 
-/** Project groups: create, rename, suspend and resume every agent in them. */
 export function useGroupActions({ workspaces, groups, sessions, refresh, setWorkspaces }: GroupActionsInput) {
   const notify = (message: string) => useTerminalRuntimeStore.getState().pushSystemNotification(message);
 
@@ -54,8 +53,6 @@ export function useGroupActions({ workspaces, groups, sessions, refresh, setWork
   const suspendGroup = async (groupId: string) => {
     const entries = terminalEntriesForGroup(groupId);
     try {
-      // The backend owns the group lifecycle now: it marks metadata first and
-      // then stops every PTY without deleting scrollback or terminal records.
       await api.suspendGroup(groupId);
     } catch (err) {
       console.error(`failed to suspend group ${groupId}:`, err);
@@ -101,8 +98,6 @@ export function useGroupActions({ workspaces, groups, sessions, refresh, setWork
     sessions.notifyResumeFailures(results, labels);
     const failed = results.filter((result) => result.status !== "succeeded");
     if (failed.length > 0) {
-      // Restore the group-wide suspended invariant. Successful spawns are
-      // stopped again so a retry never leaves a half-active group behind.
       await api.suspendGroup(groupId).catch((err) => {
         console.error(`failed to restore suspended group ${groupId}:`, err);
       });

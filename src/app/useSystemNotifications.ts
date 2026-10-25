@@ -10,10 +10,6 @@ import { usePreferencesStore } from "../stores/preferencesStore";
 import { useReportedStates } from "../stores/mcpStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 
-/**
- * Native notifications when an agent needs a human while the app is in the
- * background, and the number of such agents on the app icon.
- */
 export function useSystemNotifications(workspaces: readonly Workspace[]) {
   const isEnabled = usePreferencesStore((state) => state.isSystemNotificationsEnabled);
   const exited = useTerminalRuntimeStore((state) => state.exited);

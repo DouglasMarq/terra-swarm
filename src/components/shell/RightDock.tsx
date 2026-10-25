@@ -14,13 +14,11 @@ export interface RightDockProps {
   onClose?: () => void;
   title?: string;
   content?: ReactNode;
-  /** With two or more tabs the header becomes a tab strip. */
   tabs?: readonly RightDockTab[];
   activeTab?: DockTab;
   onTabChange?: (id: DockTab) => void;
 }
 
-/** The right dock: the agent inspector (⌘I) and the shared task board. */
 export function RightDock({
   isOpen = true,
   onClose,

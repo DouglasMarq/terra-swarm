@@ -28,7 +28,6 @@ export interface FocusedAgentContext {
   workspaceName: string;
   terminalId: string;
   command: string;
-  /** Readable agent label ("Animações · claude 2"); falls back to the command. */
   label?: string;
 }
 
@@ -56,13 +55,9 @@ export interface CommandPaletteData {
   hasRecentlyClosedTabs?: boolean;
   isDockOpen?: boolean;
   isVoiceEnabled?: boolean;
-  /** True only while the runtime is actively capturing audio. */
   isVoiceRecording?: boolean;
-  /** Task title / numbered kind per terminal id (domain/agentLabels). */
   agentLabels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
-  /** Saved sessions waiting to be resumed. */
   resumeCount?: number;
-  /** Agents whose process has exited; only these can be resumed in place. */
   exitedTerminalIds?: readonly string[];
 }
 
@@ -79,13 +74,10 @@ export interface CommandPaletteCallbacks {
   onStartVoice?: () => void;
   onStopVoice?: () => void;
   onExportWorkspace?: () => void;
-  /** Import is intentionally not called by executeCommand; use the typed confirmation request. */
   onImportWorkspace?: () => void;
-  /** Reattach a detached terminal; distinct from reopening a closed workspace tab. */
   onReattachTerminal?: () => void;
   onReopenTab?: () => void;
   onOpenResume?: () => void;
-  /** The prompt library or the team templates. */
   onOpenLibrary?: (dialog: "prompts" | "team") => void;
   onFocusedAgentAction?: (action: FocusedAgentAction, context: FocusedAgentContext) => void;
 }
@@ -142,9 +134,7 @@ export interface CommandDescriptor {
   isDisabled?: boolean;
   intent: CommandIntent;
   confirmation?: CommandConfirmRequest;
-  /** Search text is exposed for a host that wants to render its own list. */
   searchText: string;
-  /** The source command id when this item is mirrored under Recentes. */
   recentOf?: string;
 }
 
@@ -167,7 +157,6 @@ const COMMAND_GROUP_ORDER: readonly CommandGroupId[] = [
   "settings",
 ];
 
-/** Group headings, translated on read so the palette follows the locale. */
 const COMMAND_GROUP_LABELS: Readonly<Record<CommandGroupId, string>> = {
   get recent() { return translateNow("palette.groups.recent"); },
   get navigation() { return translateNow("palette.groups.navigation"); },
@@ -551,8 +540,6 @@ function resumeAgentCommand(context: FocusedAgentContext): CommandDescriptor {
 
 function focusedAgentCommands(data: CommandPaletteData, context: FocusedAgentContext | null): CommandDescriptor[] {
   if (!context) return [];
-  // Resuming spawns into the same id, which the backend refuses while the
-  // process is alive, so it is offered only once the agent has exited.
   const isExited = data.exitedTerminalIds?.includes(context.terminalId) ?? false;
   return [
     focusAgentCommand(context),
@@ -679,15 +666,11 @@ function settingsCommands(data: CommandPaletteData): CommandDescriptor[] {
 }
 
 function agentWorkspaceId(data: CommandPaletteData): string | null {
-  // Starting an agent needs a real workspace target. Keep the command visible
-  // so the palette explains what is missing, but never dispatch an empty id
-  // to the host (which would turn into a failed spawn request).
   const focusedWorkspaceId = data.focusedWorkspaceId;
   if (!focusedWorkspaceId) return null;
   return data.workspaces.some((workspace) => workspace.id === focusedWorkspaceId) ? focusedWorkspaceId : null;
 }
 
-/** Build the complete, callback-free command model for the current Terra state. */
 export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[] {
   const groups = data.groups ?? [];
   const agents = data.agents ?? [];
@@ -738,10 +721,6 @@ function unavailable(commandId: string): CommandRunResult {
   return { kind: "unavailable", commandId };
 }
 
-/**
- * Dispatch a command through host callbacks. Confirmation-required intents are
- * returned without invoking any side effect, so the host owns the final dialog.
- */
 export function executeCommand(
   command: CommandDescriptor,
   callbacks: CommandPaletteCallbacks,

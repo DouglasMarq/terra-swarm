@@ -71,21 +71,18 @@ export interface VisualShellSurfaceProps extends ShellVoiceProps {
   branches: Readonly<Record<string, string>>;
   notificationItems: readonly NotificationItem[];
   resumeCount?: number;
-  /** Runtime version resolved once by App from Tauri's app metadata. */
   appVersion?: string;
   onOpenResume?: () => void;
   detachedTerminalIds: readonly string[];
   fontSize: number;
   voiceStatus: VoiceStatus;
   voiceState?: VoiceCapsuleState;
-  /** Settings rendered as a page when the shell surface is "settings". */
   settingsPage?: ReactNode;
   onRenameAgent?: (terminalId: string) => void;
   onFocus: (id: string) => void;
   onSelectWorkspace: (id: string, focusedTerminalId?: string) => void;
   onNewWorkspace: () => void;
   onNewAgent: (workspaceId: string, paneId?: string | null, agentId?: string) => void;
-  /** Starts the default agent (⌘T); opens the picker when there is none. */
   onQuickNewAgent?: (workspaceId: string) => void;
   onClearNotifications: (id: string) => void;
   onMarkAllRead: () => void;
@@ -251,9 +248,6 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
       props.onReattach(target.terminalId);
       return;
     }
-    // Restarting and terminating a PTY are lifecycle mutations. Keep their
-    // callbacks behind the same explicit confirmation affordance used by the
-    // command palette and Fleet.
     if (inspectorActionRequiresConfirmation(action)) {
       setPendingInspectorAction({ action, target });
     }

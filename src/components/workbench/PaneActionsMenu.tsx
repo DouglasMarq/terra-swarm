@@ -8,7 +8,6 @@ export interface PaneMenuItem {
   id: string;
   label: string;
   icon?: ReactNode;
-  /** Secondary line, e.g. the resume command that will be copied. */
   detail?: string;
   shortcut?: string;
   isDanger?: boolean;
@@ -16,7 +15,6 @@ export interface PaneMenuItem {
   onSelect: () => void;
 }
 
-/** Items in a group render together; groups are separated by a rule. */
 export type PaneMenuGroups = readonly (readonly PaneMenuItem[])[];
 
 export interface PaneActionsMenuProps {
@@ -24,19 +22,12 @@ export interface PaneActionsMenuProps {
   groups: PaneMenuGroups;
 }
 
-/**
- * The pane's "…" menu. It is the single home for the agent's lifecycle
- * actions; the header itself only keeps Maximize visible.
- */
 export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
   const [isOpen, setOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // The list lives in a portal with fixed coordinates: panes clip their
-  // overflow, so an in-pane dropdown was cut off in dense grids. Open below
-  // the trigger, flip above when there is no room, and stay on screen.
   useLayoutEffect(() => {
     if (!isOpen) {
       setPosition(null);

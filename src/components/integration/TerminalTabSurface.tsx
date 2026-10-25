@@ -14,9 +14,7 @@ export interface TerminalTabSurfaceProps {
   contextUsage: Readonly<Record<string, number>>;
   titles: Readonly<Record<string, string>>;
   branch?: string;
-  /** Worktree branch per terminal id, for isolated agents. */
   worktreeBranches?: Readonly<Record<string, string>>;
-  /** Translated team role per terminal id. */
   roleLabels?: Readonly<Record<string, string>>;
   detachedIds?: ReadonlySet<string>;
   labels?: Readonly<Record<string, { primary: string; tag: string; title?: string | null } | undefined>>;
@@ -31,11 +29,6 @@ export interface TerminalTabSurfaceProps {
   onOpenReview?: (id: string) => void;
 }
 
-/**
- * Adapter between the normalized workbench tab contract and the existing
- * xterm/PTY lifecycle. It deliberately never calls a backend command during
- * unmount: removing a visual tab is not the same operation as killing a PTY.
- */
 export function TerminalTabSurface({
   context,
   fontSize,

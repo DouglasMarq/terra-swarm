@@ -8,7 +8,6 @@ const UPDATE_CHECK_MS = MS_PER_HOUR;
 
 export type UpdateCheckState = "idle" | "checking" | "uptodate" | "error";
 
-/** App version, the hourly update check and the manual check/install actions. */
 export function useUpdater() {
   const [appVersion, setAppVersion] = useState("");
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);

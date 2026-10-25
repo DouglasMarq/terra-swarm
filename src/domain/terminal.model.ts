@@ -9,9 +9,7 @@ export interface TerminalMeta {
   tabId?: string | null;
   groupId?: string | null;
   suspended?: boolean;
-  /** The git worktree the agent is isolated in, if any. */
   worktree?: WorktreeInfo | null;
-  /** The agent's team role, if it was started with one. */
   role?: AgentRole | null;
 }
 
@@ -44,7 +42,6 @@ export interface RunningTerminal {
   seq: number;
 }
 
-/** Point-in-time facts exposed by the PTY runtime for the focused Inspector. */
 export interface TerminalRuntimeInfo {
   id: string;
   pid: number | null;

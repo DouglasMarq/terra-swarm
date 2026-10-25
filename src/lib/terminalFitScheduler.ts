@@ -21,7 +21,6 @@ const cancelAnimationFrameSafe = (handle: number): void => {
   }
 };
 
-/** Coalesces every geometry signal that arrives during one animation frame. */
 export function createFitScheduler(
   fit: () => void,
   options: FitSchedulerOptions = {},
@@ -69,16 +68,10 @@ function sameDimensions(previous: TerminalDimensions | null, next: TerminalDimen
   return previous?.cols === next.cols && previous.rows === next.rows;
 }
 
-/**
- * Sends PTY dimensions in order while collapsing intermediate layout states.
- * A resize observer can produce several values in one drag/fullscreen change;
- * only the latest value is relevant once the current IPC call completes.
- */
 export function createTerminalResizeQueue(
   send: (dimensions: TerminalDimensions) => Promise<void>,
 ): {
   request: (dimensions: TerminalDimensions) => void;
-  /** Forget the last PTY geometry after a lifecycle restart. */
   reset: () => void;
   dispose: () => void;
 } {
@@ -104,10 +97,7 @@ export function createTerminalResizeQueue(
       () => {
         if (!isDisposed && requestGeneration === generation) lastSent = next;
       },
-      () => {
-        // A later observer/focus signal may retry the same dimensions. Do not
-        // manufacture a timer here: resize events are the source of truth.
-      },
+      () => {},
     ).finally(() => {
       inFlight = null;
       pump();

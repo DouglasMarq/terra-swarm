@@ -35,13 +35,6 @@ function ContainerItem({
   );
 }
 
-/**
- * Multi-container Terra workbench.
- *
- * Agent panels are intentionally static. Layout presets and resize separators
- * remain available, but containers, panes and agent tabs cannot be dragged or
- * reordered from this surface.
- */
 export function WorkspaceWorkbench({
   source,
   renderTab,

@@ -17,13 +17,10 @@ export interface PromptTarget {
 
 export interface PromptLibraryDialogProps {
   projectName: string | null;
-  /** Running agents of the active project. */
   targets: readonly PromptTarget[];
-  /** Pre-selected target: the orchestrator or the focused agent. */
   defaultTargetId: string | null;
 }
 
-/** Saved prompts: edit them, and send one to an agent of the project. */
 export function PromptLibraryDialog({ projectName, targets, defaultTargetId }: PromptLibraryDialogProps) {
   const translate = useT();
   const isOpen = useLibraryStore((state) => state.dialog === "prompts");

@@ -7,7 +7,6 @@ import { LanguageDescription } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 
 export interface CodeEditorProps {
-  /** Identifies the document; a new one resets the editor. */
   docKey: string;
   path: string;
   initial: string;
@@ -30,7 +29,6 @@ const theme = EditorView.theme(
   { dark: true },
 );
 
-/** CodeMirror 6 with the language guessed from the file name. Loaded lazily. */
 export default function CodeEditor({ docKey, path, initial, onChange, onSave }: CodeEditorProps) {
   const host = useRef<HTMLDivElement | null>(null);
   const handlers = useRef({ onChange, onSave });
@@ -70,7 +68,6 @@ export default function CodeEditor({ docKey, path, initial, onChange, onSave }: 
       isDisposed = true;
       view.destroy();
     };
-    // The editor owns the text after mount; only a new document resets it.
   }, [docKey]);
 
   return <div ref={host} className="terra-editor-host" />;

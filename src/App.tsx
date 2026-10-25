@@ -84,7 +84,6 @@ function AppLoadingSurface() {
 }
 
 function App() {
-  // Re-render on a language switch so dialogs and labels built here follow it.
   useLocale();
   const workspaceData = useWorkspaces();
   const { workspaces, setWorkspaces, refresh } = workspaceData;
@@ -380,7 +379,6 @@ function App() {
     }
   };
 
-  /** Detaching is visual-only and durable; the PTY remains alive for re-open. */
   const detachTab = (id: string) => {
     setTerminalDetached(id, true);
     setExpandedId((current) => (current === id ? null : current));

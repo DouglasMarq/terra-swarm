@@ -2,26 +2,17 @@ import { create } from "zustand";
 import type { NotificationItem, NotificationPayload } from "../domain/notification.model";
 import type { ResumeItem, TitlePayload } from "../domain/terminal.model";
 
-/** Maximum number of notification entries retained by the desktop client. */
 export const MAX_NOTIF_ITEMS = 50;
 
 type TerminalRuntimeState = {
-  /** Exit code by terminal id. `null` means the process exited without a code. */
   exited: Record<string, number | null>;
-  /** Number of unread notifications by terminal id. */
   notifications: Record<string, number>;
-  /** Notification history shown by the top bar. */
   notifItems: NotificationItem[];
-  /** Context usage reported by an agent, keyed by terminal id. */
   contextUsage: Record<string, number>;
-  /** Dynamic terminal titles reported by the backend. */
   titles: Record<string, string>;
-  /** Git branch by workspace id. */
   branches: Record<string, string>;
-  /** Startup resume prompt state. */
   resumeItems: ResumeItem[] | null;
   resumeSavedAt: number | null;
-  /** Monotonic key used by notification list entries. */
   nextNotificationKey: number;
 
   setExited: (value: RuntimeUpdater<Record<string, number | null>>) => void;

@@ -33,9 +33,6 @@ const wsSelect = (digit: string): Hotkey =>
 const termSelect = (digit: string): Hotkey =>
   isMacPlatform ? mk(digit, { meta: true, shift: true }) : mk(digit, { shift: true, ctrl: true });
 
-// On Windows the meta key is the Win key: Win+W opens Widgets, Win+Enter
-// launches Narrator, Win+= drives the Magnifier, etc. Use Ctrl+Shift / Alt
-// combos there; keep Cmd combos on macOS.
 export const DEFAULT_HOTKEYS: Readonly<Record<HotkeyActionId, Hotkey>> = {
   newWorkspace: isMacPlatform ? mk("n", { meta: true, shift: true }) : mk("n", { shift: true, ctrl: true }),
   renameWorkspace: isMacPlatform ? mk("r", { meta: true, shift: true }) : mk("r", { shift: true, ctrl: true }),
@@ -114,14 +111,12 @@ function isNumberedHotkeyAction(id: HotkeyActionId): id is NumberedHotkeyActionI
   return id.startsWith("selectWorkspace") || id.startsWith("selectTerminal");
 }
 
-/** The action's name in the current language. */
 export function hotkeyActionLabel(id: HotkeyActionId): string {
   if (!isNumberedHotkeyAction(id)) return translateNow(`hotkeys.${id}` as const);
   const slotNumber = id.slice(-1);
   return id.startsWith("selectWorkspace") ? translateNow("hotkeys.selectWorkspace", { n: slotNumber }) : translateNow("hotkeys.selectTerminal", { n: slotNumber });
 }
 
-/** Keep persisted shortcuts executable when a profile moves between OSes. */
 export function normalizeHotkeyForPlatform(
   hotkey: Hotkey,
   platform: ShortcutPlatform = detectShortcutPlatform(),
@@ -148,23 +143,17 @@ function loadNameSet(): NameSetId {
   return stored === "rivers" || stored === "custom" ? stored : "stars";
 }
 
-/** The user's own list lives apart from the presets, so picking "Stars" and
- * coming back to "Custom" keeps it ("agentNameList" is the legacy key). */
 function loadCustomNameList(): string[] {
   try {
     const parsed = JSON.parse(storageGet("agentNameListCustom") ?? storageGet("agentNameList") ?? "null");
     if (Array.isArray(parsed)) return parsed.filter((name): name is string => typeof name === "string" && name.trim().length > 0);
-  } catch {
-    // Fall back to the default list below.
-  }
+  } catch {}
   return [...DEFAULT_NAME_LIST];
 }
 
 function nameListFor(set: NameSetId): string[] {
   return set === "custom" ? loadCustomNameList() : [...NAME_SETS[set]];
 }
-
-/** User launch settings of one agent: extra arguments and `KEY=VALUE` lines. */
 
 function loadAgentLaunch(): Record<string, AgentLaunchSettings> {
   try {
@@ -191,9 +180,7 @@ function loadAgentNames(): Record<string, string> {
     if (parsed && typeof parsed === "object") {
       return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
     }
-  } catch {
-    // Corrupt storage starts empty.
-  }
+  } catch {}
   return {};
 }
 
@@ -227,9 +214,7 @@ function loadHotkeys(): Record<HotkeyActionId, Hotkey> {
   try {
     const raw = storageGet("hotkeys");
     if (raw) return parseHotkeys(raw);
-  } catch {
-    // Corrupted value; fall back to defaults.
-  }
+  } catch {}
   return { ...DEFAULT_HOTKEYS };
 }
 
@@ -247,7 +232,6 @@ export function matchHotkey(event: KeyboardEvent, hotkey: Hotkey): boolean {
   );
 }
 
-/** Unknown persisted values (an older or edited preference) fall back to auto-detection. */
 function loadVoiceLanguage(): VoiceLanguage {
   const stored = storageGet("voiceLanguage");
   return isVoiceLanguage(stored) ? stored : DEFAULT_VOICE_LANGUAGE;
@@ -272,25 +256,18 @@ export type PreferencesState = {
   hotkeys: Record<HotkeyActionId, Hotkey>;
   isSidebarCollapsed: boolean;
   fontSize: number;
-  /** Terminal font family name; empty means the default stack. */
   terminalFontFamily: string;
   defaultShell: string;
   shouldReduceMotion: boolean;
-  /** Resume every saved session at startup without showing the opening screen. */
   shouldAutoResume: boolean;
-  /** Native notifications and the app icon badge when an agent needs you. */
   isSystemNotificationsEnabled: boolean;
-  /** Dictation goes to the project's orchestrator when one is running. */
   shouldSendVoiceToOrchestrator: boolean;
-  /** Give each new agent a name from `agentNameList` (off by default). */
   shouldAutoNameAgents: boolean;
   agentNameSet: NameSetId;
   agentNameList: string[];
   shouldAvoidSimilarNames: boolean;
   namesExhausted: NamesExhaustedStrategy;
-  /** Names given to agents (automatically or through Rename), by terminal id. */
   agentNames: Record<string, string>;
-  /** Extra arguments and environment per agent id. */
   agentLaunch: Record<string, AgentLaunchSettings>;
   gridCols: number;
   isVoiceEnabled: boolean;

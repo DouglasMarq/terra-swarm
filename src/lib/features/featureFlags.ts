@@ -1,7 +1,5 @@
 import { isRecord } from "../records/records";
 
-/** Versioned, fail-closed feature flags for capabilities introduced in waves 3/4. */
-
 export const FEATURE_FLAGS_VERSION = 1 as const;
 
 export const FEATURE_FLAG_IDS = [
@@ -51,11 +49,6 @@ function withDefaults(flags: Partial<FeatureFlags>): FeatureFlags {
   };
 }
 
-/**
- * Normalizes legacy flat settings and the current versioned envelope. Unknown
- * future versions fail closed, so a new flag cannot accidentally enable an
- * unsupported capability in an older binary.
- */
 export function normalizeFeatureFlags(raw: unknown): FeatureFlags {
   const parsed = parseInput(raw);
   if (!isRecord(parsed)) return { ...DEFAULT_FEATURE_FLAGS };
@@ -68,7 +61,6 @@ export function normalizeFeatureFlags(raw: unknown): FeatureFlags {
     return withDefaults(flagValues(source));
   }
 
-  // Version 0 was the unwrapped map used by early development builds.
   return withDefaults(flagValues(parsed));
 }
 

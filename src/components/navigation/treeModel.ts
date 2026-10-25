@@ -26,11 +26,8 @@ export interface BuildNavigatorTreeOptions {
   statuses?: NavigatorStatusMaps;
   branches?: readonly NavigatorBranch[];
   containerVisibility?: Readonly<Record<string, boolean>>;
-  /** Display labels per terminal id (task title, numbered kind, optional name). */
   agentLabels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
-  /** Put agents directly under their project, skipping container and pane levels. */
   shouldFlatten?: boolean;
-  /** State the agents reported through their hooks, by terminal id. */
   reported?: Readonly<Record<string, McpAgentState>>;
 }
 
@@ -201,10 +198,6 @@ function hierarchyForWorkspace(
     });
   }
 
-  // Legacy workspaces sometimes carry pane metadata without a copied
-  // container list. Keep the hierarchy truthful by giving those panes a
-  // stable synthetic visual container rather than flattening them into the
-  // project row.
   if (containers.length === 0 && panes.length > 0) {
     const id = `${workspace.id}:container`;
     containers.push({
@@ -220,8 +213,6 @@ function hierarchyForWorkspace(
     });
   }
   if (containers.length > 0 && panes.length === 0 && snapshotProject) {
-    // A partially migrated snapshot may still expose project pane ids while
-    // the pane records arrive in a later refresh. Do not lose that location.
     for (const paneId of snapshotProject.paneIds) {
       panes.push(normalizePane({
         id: paneId,
@@ -516,11 +507,6 @@ function assignDepth(nodes: readonly NavigatorNode[], parentId: string | null, d
   });
 }
 
-/**
- * Converts the legacy workspace/group wire model into one deterministic tree.
- * The model deliberately keeps projects and agents separate from visual containers;
- * hiding a project therefore never removes its terminals from the tree.
- */
 export function buildNavigatorTree(
   workspaces: readonly Workspace[],
   options: BuildNavigatorTreeOptions = {},
@@ -557,7 +543,6 @@ function cloneVisibleNode(node: NavigatorNode, children: NavigatorNode[]): Navig
   return { ...node, children };
 }
 
-/** Keeps matching descendants and their path so search never loses context. */
 export function filterNavigatorTree(tree: NavigatorTree, query: string): NavigatorTree {
   const needle = normalizeSearchText(query);
   if (!needle) return tree;

@@ -9,7 +9,6 @@ import { MS_PER_SECOND, SECONDS_PER_HOUR, SECONDS_PER_MINUTE } from "../../lib/t
 import type { TerminalMeta } from "../../domain/terminal.model";
 import type { Workspace, WorkspaceGroup } from "../../domain/workspace.model";
 
-/** The four states exposed by the fleet command center. */
 export type FleetStatus = AgentRunStatus;
 
 export type FleetStatusFilter = FleetStatus | "all";
@@ -33,13 +32,9 @@ export interface FleetDerivationInput {
   contextUsage?: Readonly<Record<string, number>>;
   titles?: Readonly<Record<string, string>>;
   branches?: Readonly<Record<string, string>>;
-  /** Optional telemetry keyed by terminal id. A value can be a timestamp or display text. */
   lastActivity?: Readonly<Record<string, FleetValue>>;
-  /** Optional duration keyed by terminal id. Milliseconds are formatted for the card. */
   durations?: Readonly<Record<string, FleetValue>>;
-  /** Allows a host to supply a stable display label for a terminal. */
   agentLabels?: Readonly<Record<string, string>>;
-  /** State the agents reported through their hooks, by terminal id. */
   reported?: Readonly<Record<string, McpAgentState>>;
 }
 
@@ -107,7 +102,6 @@ export const DEFAULT_FLEET_FILTERS: FleetFilters = {
 };
 
 const EMPTY_RECORD: Readonly<Record<string, never>> = {};
-/** Durations below this are taken as seconds, larger ones as milliseconds. */
 const DURATION_SECONDS_LIMIT = 1000;
 const UNGROUPED_ID = "ungrouped";
 const UNGROUPED_NAME = "—";
@@ -159,7 +153,6 @@ function membershipByWorkspace(
   return result;
 }
 
-/** Fleet statuses from the one that most needs a human to the least. */
 export const FLEET_STATUS_PRIORITY: readonly FleetStatus[] = ["attention", "working", "idle", "suspended", "exited"];
 
 export function fleetAggregateStatus(statuses: readonly FleetStatus[]): FleetStatus {
@@ -269,11 +262,6 @@ function groupModelFromAgents(
   };
 }
 
-/**
- * Normalizes the legacy workspace response into a board-friendly fleet model.
- * This function is deliberately pure so filters and rendering can be tested
- * without a Tauri runtime or a mounted React tree.
- */
 export function deriveFleetModel(input: FleetDerivationInput, translate: Translate): FleetModel {
   const workspaces = input.workspaces ?? [];
   const groups = input.groups ?? [];
@@ -312,7 +300,6 @@ function searchText(agent: FleetAgentModel): string {
   ].join(" ").toLocaleLowerCase();
 }
 
-/** Applies a filter without mutating the normalized source model. */
 export function filterFleetModel(model: FleetModel, filters: Partial<FleetFilters> = {}): FleetModel {
   const groupId = filters.groupId ?? "all";
   const status = filters.status ?? "all";

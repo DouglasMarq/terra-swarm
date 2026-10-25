@@ -13,10 +13,6 @@ export interface VoiceButtonProps
   isPushToTalk?: boolean;
 }
 
-/**
- * Small, composable microphone control.  The parent owns recording state;
- * this button only emits the intent to start/stop and advertises the shortcut.
- */
 export function VoiceButton({
   ariaLabel,
   className,

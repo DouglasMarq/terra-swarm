@@ -111,7 +111,6 @@ function renderNode(node: NavigatorNode, props: ProjectTreeViewProps, actions: N
   );
 }
 
-/** Tree renderer kept separate so the panel can own headers and actions. */
 export function ProjectTree({ tree, expandedIds, onToggle, onCreateGroup, ...props }: ProjectTreeViewProps) {
   const translate = useT();
   const viewProps: ProjectTreeViewProps = { tree, expandedIds, onToggle, onCreateGroup, ...props };

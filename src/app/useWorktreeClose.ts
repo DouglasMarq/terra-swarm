@@ -16,18 +16,12 @@ interface PendingClose {
   status: WorktreeStatus;
 }
 
-/**
- * Closing an agent that works in its own worktree. A worktree with nothing
- * to lose is removed with its branch; one with uncommitted changes or
- * unmerged commits asks first.
- */
 export type WorktreeCloseSessions = Pick<TerminalSessions, "close">;
 
 export function useWorktreeClose(workspaces: readonly Workspace[], sessions: WorktreeCloseSessions) {
   const [pending, setPending] = useState<PendingClose | null>(null);
 
   const removeWorktree = async (workspaceId: string, terminalId: string, shouldDeleteBranch: boolean) => {
-    // The agent's shell must not keep running inside the folder.
     await api.stopTerminal(terminalId).catch((error) => console.warn(`failed to stop ${terminalId}:`, error));
     await api.worktreeRemove(workspaceId, terminalId, shouldDeleteBranch).catch((error) => {
       console.error(`failed to remove the worktree of ${terminalId}:`, error);
@@ -35,7 +29,6 @@ export function useWorktreeClose(workspaces: readonly Workspace[], sessions: Wor
     });
   };
 
-  /** Close an agent, asking about its worktree when there is work to lose. */
   const request = async (terminalId: string) => {
     const workspace = workspaces.find((candidate) => candidate.terminals.some((terminal) => terminal.id === terminalId));
     const terminal = workspace?.terminals.find((candidate) => candidate.id === terminalId);
@@ -88,7 +81,6 @@ export function useWorktreeClose(workspaces: readonly Workspace[], sessions: Wor
       onKeep: () => void keep(),
       onDelete: (shouldDeleteBranch: boolean) => void remove(shouldDeleteBranch),
       onCancel: () => setPending(null),
-      /** Look at the work before deciding; the agent stays open. */
       onReview: () => {
         if (!pending) return;
         setPending(null);

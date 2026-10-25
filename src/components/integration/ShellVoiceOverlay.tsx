@@ -12,7 +12,6 @@ export interface ShellVoiceProps {
   voiceFinalTranscript?: string;
   voiceIntent?: VoiceCapsuleIntent | null;
   voiceTargetAgent?: string | null;
-  /** Terminal that receives dictation (explicit choice or the focused one). */
   voiceTargetId?: string | null;
   onVoiceTargetChange?: (terminalId: string | null) => void;
   voiceLevel?: number;

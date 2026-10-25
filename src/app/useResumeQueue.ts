@@ -8,23 +8,16 @@ import { usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import type { TerminalSessions } from "./useTerminalSessions";
 
-/**
- * Sessions that were running when the app last closed: offered on the
- * opening screen (or resumed right away when the user chose that), resumed
- * or discarded one at a time or all together.
- */
 export type ResumeSessions = Pick<TerminalSessions, "resumeItem" | "forget" | "resumeItems" | "notifyResumeFailures">;
 
 export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<void>) {
   const items = useTerminalRuntimeStore((state) => state.resumeItems);
   const [isVisible, setVisible] = useState(false);
   const [isAutoPending, setAutoPending] = useState(false);
-  // One queue mutation at a time; a single item is never resumed twice.
   const mutating = useRef(false);
   const resuming = useRef<Set<string>>(new Set());
   const runtime = () => useTerminalRuntimeStore.getState();
 
-  /** Offer sessions found at startup. */
   const offer = (found: ResumeItem[]) => {
     runtime().setResumeItems(found);
     if (usePreferencesStore.getState().shouldAutoResume) setAutoPending(true);
@@ -50,7 +43,6 @@ export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<
     await refresh();
   };
 
-  /** Forget a discarded session locally once the backend deleted it. */
   const forgetDismissed = (item: ResumeItem) => {
     sessions.forget([item.terminalId]);
     usePreferencesStore.getState().setAgentName(item.terminalId, null);
@@ -60,8 +52,6 @@ export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<
     if (mutating.current) return;
     mutating.current = true;
     try {
-      // Clear local ownership only after the backend confirms the deletion:
-      // a rejected kill leaves the item retryable and the refs intact.
       const [result] = await dismissResumeItems([item], (candidate) => api.killTerminal(candidate.terminalId));
       if (result?.status === "failed") {
         console.error(`failed to dismiss resume item ${item.terminalId}:`, result.error);
@@ -81,8 +71,6 @@ export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<
     if (queued.length === 0 || mutating.current) return;
     mutating.current = true;
     try {
-      // Close the dialog while the queue owns these terminal ids; failed
-      // items come back below for an explicit retry.
       runtime().setResumeItems(null);
       const results = await sessions.resumeItems(queued);
       sessions.notifyResumeFailures(results, new Map(queued.map((item) => [item.terminalId, item.wsName])));
@@ -117,7 +105,6 @@ export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<
     }
   };
 
-  // "Always resume without asking": run the queue once it is loaded.
   const autoResume = useEffectEvent(() => {
     void resumeAll();
   });
@@ -126,12 +113,10 @@ export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<
     if (!isAutoPending || !items || items.length === 0) return;
     setAutoPending(false);
     autoResume();
-    // Keyed on the queue loading only: resumeAll changes every render and reads the latest state itself.
   }, [isAutoPending, items]);
 
   return {
     items,
-    /** The opening screen is showing. */
     isOpen: isVisible && items !== null && items.length > 0,
     show: () => setVisible(true),
     defer: () => setVisible(false),

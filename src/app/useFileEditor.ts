@@ -6,25 +6,19 @@ import type { EditorTarget } from "../stores/editorStore";
 import type { WorkspaceFileContent } from "../domain/workspaceFiles.model";
 
 export interface FileEditor {
-  /** The file as last read or saved; null while loading or after a failed read. */
   file: WorkspaceFileContent | null;
-  /** The editor's current text. */
   text: string;
   setText: (text: string) => void;
   isDirty: boolean;
-  /** Changes on every read, so the editor starts a fresh document. */
   generation: number;
   loadError: string | null;
   saveError: string | null;
-  /** The last save was refused because the file changed on disk since it was read. */
   hasConflict: boolean;
   isSaving: boolean;
   load: () => Promise<void>;
-  /** Saves `text`; `overwrite` skips the changed-on-disk check. Resolves to whether it saved. */
   save: (shouldOverwrite?: boolean) => Promise<boolean>;
 }
 
-/** Read and save one workspace file for the built-in editor; reads again when the target changes. */
 export function useFileEditor(target: EditorTarget | null): FileEditor {
   const [file, setFile] = useState<WorkspaceFileContent | null>(null);
   const [text, setText] = useState("");

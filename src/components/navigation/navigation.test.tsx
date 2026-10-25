@@ -37,7 +37,6 @@ describe("NavigatorPanel", () => {
     const search = screen.getByRole("searchbox", { name: "Buscar projetos e agentes" });
     await user.type(search, "luna");
     expect(screen.getByRole("treeitem", { name: "Agente luna-max" })).toBeInTheDocument();
-    // Search keeps the matching agent's project ancestor visible for context.
     expect(screen.getByRole("treeitem", { name: "Projeto Terra API" })).toBeInTheDocument();
 
     const agent = screen.getByRole("treeitem", { name: "Agente luna-max" });
@@ -286,7 +285,6 @@ describe("NavigatorPanel", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /Abrir main\.ts/ })).toBeInTheDocument());
     expect(loadFiles).toHaveBeenLastCalledWith("ws-api", "src", 200);
     expect(screen.queryByText("fn main")).not.toBeInTheDocument();
-    // A file opens in the editor; the listing itself never reads contents.
     await user.click(screen.getByRole("button", { name: /Abrir main\.ts/ }));
     expect(useEditorStore.getState().target).toEqual({ workspaceId: "ws-api", path: "src/main.ts" });
   });

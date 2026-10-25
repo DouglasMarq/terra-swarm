@@ -21,11 +21,6 @@ interface InitializationInput {
   voiceSettings: ReturnType<typeof useVoiceSettings>;
 }
 
-/**
- * First load: projects, which persisted terminals are still alive (the rest
- * go to the resume queue), agent detection and voice settings. A gate
- * coalesces StrictMode and concurrent attempts; a failure can be retried.
- */
 export function useAppInitialization({ workspaces, sessions, resumeQueue, agentCatalog, voiceSettings }: InitializationInput) {
   const [error, setError] = useState<string | null>(null);
   const [isRunning, setRunning] = useState(false);
@@ -51,7 +46,6 @@ export function useAppInitialization({ workspaces, sessions, resumeQueue, agentC
     for (const workspace of list) {
       for (const terminal of workspace.terminals) {
         if (liveIds.has(terminal.id)) continue;
-        // Suspended sessions are deliberately dormant (imported snapshots too).
         if (isTerminalSuspended(workspace, terminal, suspendedGroups) || suspendedProjects.has(workspace.id)) continue;
         items.push(resumeItemFor(workspace, terminal));
       }
@@ -93,7 +87,6 @@ export function useAppInitialization({ workspaces, sessions, resumeQueue, agentC
 
   useEffect(() => {
     startOnMount();
-    // Mount only: later attempts go through `retry`.
   }, []);
 
   return { error, isRunning, retry: start };

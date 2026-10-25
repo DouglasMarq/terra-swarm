@@ -19,7 +19,6 @@ function AttentionCount({ count }: { count: number }) {
   return <span className="terra-sidebar-count" aria-label={translate("shell.attention.button", { count })}>{count}</span>;
 }
 
-/** Workbench | Frota | Quadro. The places work happens. */
 export function SurfaceSwitch({ surface, attentionCount, onNavigate }: SurfaceSwitchProps) {
   const translate = useT();
   return (
@@ -54,7 +53,6 @@ export function SurfaceSwitch({ surface, attentionCount, onNavigate }: SurfaceSw
 }
 
 export interface SidebarProps extends SurfaceSwitchProps {
-  /** The project → agent navigator, rendered with the switch as its header. */
   children: ReactNode;
   activeAgents: number;
   version?: string;
@@ -114,7 +112,6 @@ export interface CollapsedSidebarProps {
   expandShortcut?: string;
 }
 
-/** 56px rail: surfaces, project initials, one dot per agent of the active project. */
 export function CollapsedSidebar({
   surface,
   attentionCount,

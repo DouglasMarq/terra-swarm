@@ -1,11 +1,3 @@
-/**
- * Browser preview of the app without the Rust backend.
- *
- * Loaded only in `vite dev` when the URL carries `?mock` and no Tauri runtime
- * is present. It answers every IPC command with sample data and emits a few
- * terminal events so the Workbench, Fleet, notifications and inspector have
- * something to show. Never shipped: the import is behind import.meta.env.DEV.
- */
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { AgentInfo } from "../domain/agent.model";
@@ -157,7 +149,6 @@ const backlog: Record<string, string> = {
 };
 
 export function installMockBackend(): void {
-  // ?mock=resume: nothing is running, so every agent lands in the resume queue.
   const scenario = new URLSearchParams(window.location.search).get("mock");
   mockWindows("main");
   mockIPC((cmd, payload) => {
@@ -261,7 +252,6 @@ export function installMockBackend(): void {
     }
   }, { shouldMockEvents: true });
 
-  // Signals that arrive after the app has mounted.
   window.setTimeout(() => {
     void emit("terminal-title", { id: "pty-claude-1", workspace_id: "ws-terra", title: "✳ Refatorar planejador de retomada" });
     void emit("terminal-title", { id: "pty-claude-2", workspace_id: "ws-terra", title: "✳ Animações do Workbench" });
@@ -274,7 +264,6 @@ export function installMockBackend(): void {
     void emit("terminal-exit", { id: "pty-shell", workspace_id: "ws-terra", code: 1, seq: 1 });
   }, 1200);
 
-  // An agent claims a task a few seconds in, so the Tasks panel updates live.
   window.setTimeout(() => {
     const task = mcpTasks.find((candidate) => candidate.id === "T-4");
     if (task && !task.assignee) {

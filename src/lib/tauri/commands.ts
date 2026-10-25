@@ -8,14 +8,6 @@ import type { WorkspaceFileContent, WorkspaceFileListing, WorkspaceFileSaved } f
 import type { WorktreeDiff, WorktreeStatus } from "../../domain/worktree.model";
 import { toIpcError } from "./errors";
 
-/**
- * The frontend half of the Tauri IPC contract.
- *
- * Keeping argument shapes and result types together makes it harder for a
- * domain wrapper to drift away from the Rust command it calls. The command
- * identifiers themselves live in `IPC_COMMANDS` below, so each identifier is
- * declared exactly once.
- */
 export interface IpcCommandContract {
   listWorkspaces: {
     args: undefined;
@@ -308,7 +300,6 @@ export interface IpcCommandContract {
 
 type CommandKey = keyof IpcCommandContract;
 
-/** Command identifiers are declared once and checked against the contract. */
 const IPC_COMMANDS = {
   listWorkspaces: "list_workspaces",
   storeSavedAt: "store_saved_at",
@@ -385,11 +376,6 @@ function rejectTyped(error: unknown): never {
   throw toIpcError(error);
 }
 
-/**
- * Invoke one of the commands declared in {@link IpcCommandContract}. A command
- * that rejects with a coded error rejects here with an `IpcError`; plain
- * messages are passed through.
- */
 export function invokeCommand<K extends CommandKey>(
   key: K,
   ...args: CommandArgs<K> extends undefined ? [] : [args: CommandArgs<K>]

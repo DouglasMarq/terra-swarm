@@ -66,9 +66,6 @@ function editActions(node: NavigatorNode, actions: NavigatorNodeActions, transla
   if (actions.onCreate) {
     result.push({ id: "create", label: translate("nav.createInside"), icon: <Plus aria-hidden="true" size={13} />, run: () => actions.onCreate?.(ref) });
   }
-  // The host only persists names for groups and projects. Containers, panes
-  // and agents are structural/runtime nodes, so do not advertise a rename
-  // action that would open an unsupported dialog or silently do nothing.
   if (actions.onRename) {
     result.push({ id: "rename", label: translate("nav.rename"), icon: <Pencil aria-hidden="true" size={13} />, run: () => actions.onRename?.(ref) });
   }
@@ -162,7 +159,6 @@ export function NavigatorNodeRow({
     isVisible ? "" : styles.hiddenRow,
   ].filter(Boolean).join(" ");
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    // Keys on the row's own buttons (rename, delete, …) belong to them.
     if (event.target !== event.currentTarget) return;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -195,8 +191,6 @@ export function NavigatorNodeRow({
         if (node.kind === "group") {
           if (canToggle) onToggle?.(node.id);
         } else {
-          // A project click opens its workspace; the disclosure button is the
-          // explicit affordance for expanding its agent children.
           actions.onOpen?.(ref);
         }
       }}

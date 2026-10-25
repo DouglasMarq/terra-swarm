@@ -9,16 +9,10 @@ import { Button } from "../ui/Button";
 import { parsePatch, suggestTitle, type DiffFileSection } from "./diffModel";
 import "./review.css";
 
-/** How long the "copied" check stays on the copy button. */
 const COPIED_FEEDBACK_MS = 1500;
 const MAX_COMMIT_MESSAGE_CHARS = 300;
 const MAX_PR_TITLE_CHARS = 200;
 
-/**
- * Review what an isolated agent changed on its branch, then commit it, merge
- * it into the base branch, or push it and open a pull request. Every action
- * here is one the user clicks for; nothing runs on its own.
- */
 export function WorktreeReviewDialog() {
   const translate = useT();
   const target = useReviewStore((state) => state.target);
@@ -45,7 +39,6 @@ export function WorktreeReviewDialog() {
     setMessage(title);
     setPrTitle(title);
     setPrBody("");
-    // The summary seeds the drafts once, when the dialog opens.
   }, [target]);
 
   const selected = chosen && diff?.files.some((file) => file.path === chosen) ? chosen : diff?.files[0]?.path ?? null;

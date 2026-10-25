@@ -5,20 +5,17 @@ export interface Workspace {
   name: string;
   cwd: string;
   terminals: TerminalMeta[];
-  /** Wave 2 metadata is optional so legacy callers remain source compatible. */
   groupId?: string | null;
   activePaneId?: string | null;
   activeContainerId?: string | null;
   layoutMode?: LayoutMode | string | null;
   layout?: WorkspaceLayout | null;
-  /** Backend-owned visual metadata; PTY identities remain in terminals. */
   panes?: PersistedWorkspacePane[];
   containers?: PersistedWorkspaceContainer[];
   collapsed?: boolean;
   archived?: boolean;
 }
 
-/** Structured git metadata for one workspace; paths are repository-relative. */
 export interface WorkspaceGitStatus {
   branch: string | null;
   ahead: number;
@@ -29,11 +26,6 @@ export interface WorkspaceGitStatus {
   conflicted: string[];
 }
 
-/**
- * The legacy workspace API remains intentionally small.  The orchestration
- * model below is an additive contract: callers that still consume
- * `Workspace[]` do not need to know about projects, containers, or tabs.
- */
 export type LayoutMode =
   | "auto"
   | "grid"
@@ -44,18 +36,13 @@ export type LayoutMode =
 
 export interface WorkspaceLayout {
   mode: LayoutMode;
-  /** Optional grid hints. They are not required for the legacy migration. */
   columns?: number;
   rows?: number;
-  /** Ordered visual children for deterministic rendering. */
   itemIds?: string[];
-  /** Relative sizing keyed by child id. */
   sizes?: Record<string, number>;
-  /** Extensible visual metadata owned by the surface that renders the layout. */
   metadata?: Record<string, unknown>;
 }
 
-/** Wire shape returned by Rust for durable workspace layout metadata. */
 export interface PersistedWorkspaceContainer {
   id: string;
   projectId: string;
@@ -71,7 +58,6 @@ export interface PersistedWorkspaceContainer {
   layout?: WorkspaceLayout | null;
 }
 
-/** Wire shape returned by Rust for a pane's durable container/layout link. */
 export interface PersistedWorkspacePane {
   id: string;
   name?: string;
@@ -117,16 +103,10 @@ export interface Group {
   projectIds: string[];
   parentGroupId: string | null;
   collapsed: boolean;
-  /** Suspending a group is a domain state; the visual containers stay data. */
   suspended: boolean;
   layout: WorkspaceLayout;
 }
 
-/**
- * Shape returned by the Rust group commands. The frontend domain snapshot
- * adds a normalized layout, while this wire shape remains compatible with
- * the persisted workspace store and future optional metadata.
- */
 export interface WorkspaceGroup {
   id: string;
   name: string;
@@ -141,12 +121,9 @@ export interface WorkspaceGroup {
   createdAt?: number | null;
 }
 
-/** Result shared by the versioned local snapshot import/export commands. */
 export interface WorkspaceSnapshotTransfer {
   version: 2;
-  /** Export destination or import source, depending on the operation. */
   path: string;
-  /** Backup of the active store created before an import, when applicable. */
   backupPath: string | null;
   workspaceCount: number;
   groupCount: number;
@@ -159,10 +136,6 @@ export interface ActivePaneSelection {
   paneId: string | null;
 }
 
-/**
- * A container is a visual surface only. Closing/hiding it must not imply
- * killing any PTY referenced by one of its panes.
- */
 export interface WorkspaceContainer {
   id: string;
   projectId: string | null;
@@ -173,7 +146,6 @@ export interface WorkspaceContainer {
   size?: number;
   visible: boolean;
   collapsed: boolean;
-  /** Kept as a separate flag for consumers that model close independently. */
   closed: boolean;
   fullscreen: boolean;
 }
@@ -201,15 +173,12 @@ export interface Pane {
 
 export interface TerminalTab {
   id: string;
-  /** Null means that the tab was retained but its pane reference was invalid. */
   paneId: string | null;
-  /** PTY identity is separate from visual identity and may be absent for an orphan. */
   ptyId: string | null;
   command: string;
   cwd: string;
   width: number | null;
   title: string;
-  /** Original terminal id when a malformed/duplicate legacy entry is retained. */
   legacyTerminalId?: string;
   legacyWorkspaceId?: string;
   orphaned: boolean;
@@ -222,7 +191,6 @@ export interface WorkspaceSnapshotV2 {
   containers: WorkspaceContainer[];
   panes: Pane[];
   tabs: TerminalTab[];
-  /** IDs are used instead of a duplicate tab collection to avoid two sources of truth. */
   orphanedTabIds: string[];
   activeProjectId: string | null;
   activeGroupId: string | null;
@@ -232,7 +200,6 @@ export interface WorkspaceSnapshotV2 {
   layout: WorkspaceLayout;
 }
 
-/** Domain aliases make the migration contract discoverable without forcing a rename. */
 export type OrchestrationSnapshotV2 = WorkspaceSnapshotV2;
 export type DomainSnapshotV2 = WorkspaceSnapshotV2;
 export type SnapshotV2 = WorkspaceSnapshotV2;

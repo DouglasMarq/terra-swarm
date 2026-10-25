@@ -41,9 +41,7 @@ afterEach(() => {
   useOrchestrationStore.getState().reset();
   try {
     localStorage.removeItem(ORCHESTRATION_STORAGE_KEY);
-  } catch {
-    // Vitest's default environment has no localStorage.
-  }
+  } catch {}
 });
 
 describe("orchestration store", () => {

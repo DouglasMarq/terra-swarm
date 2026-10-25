@@ -20,9 +20,7 @@ export interface AppErrorFallbackProps {
 
 export interface AppErrorBoundaryProps {
   children: ReactNode;
-  /** Render a custom fallback without receiving raw stack/path data. */
   fallback?: ReactNode | ((props: AppErrorFallbackProps) => ReactNode);
-  /** Changes in these values reset a recovered subtree. */
   resetKeys?: readonly unknown[];
   onError?: (error: unknown, info: ErrorInfo) => void;
   onReset?: () => void;
@@ -36,7 +34,6 @@ interface AppErrorBoundaryState {
 
 const INITIAL_STATE: AppErrorBoundaryState = { isCopied: false, error: null, info: null };
 
-/** How long the "copied" confirmation stays on the copy button. */
 const COPIED_FEEDBACK_MS = 2_400;
 
 export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorBoundaryState> {
@@ -89,8 +86,6 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
       if (this.copyTimer !== undefined) clearTimeout(this.copyTimer);
       this.copyTimer = setTimeout(() => this.setState({ isCopied: false }), COPIED_FEEDBACK_MS);
     } catch {
-      // Clipboard permissions are optional; do not expose the raw report or
-      // turn a recoverable error surface into a second error.
       this.setState({ isCopied: false });
     }
   };

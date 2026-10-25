@@ -3,7 +3,6 @@ import { mcpApi } from "../lib/tauri/mcp";
 import type { AgentTokenUsage } from "../domain/agent.model";
 
 interface UsageState {
-  /** Usage by terminal id. */
   usage: Record<string, AgentTokenUsage>;
   load: (workspaceId: string) => Promise<void>;
 }

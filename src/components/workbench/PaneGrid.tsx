@@ -17,9 +17,7 @@ import type {
 import { useT } from "../../i18n";
 import { FULL_PERCENT } from "../../lib/math/percent";
 
-/** Share of the row the focused pane takes in spotlight mode, in percent. */
 const SPOTLIGHT_ACTIVE_PERCENT = 72;
-/** Share of the row the first pane takes in sidebar mode, in percent. */
 const SIDEBAR_PANE_PERCENT = 26;
 
 export interface PaneGridProps {
@@ -93,10 +91,6 @@ function persistedLayout(
   return { containerId, layout };
 }
 
-/**
- * Resizable pane surface. `Panel` and `Separator` stay direct children of
- * `Group`, as required by react-resizable-panels v4.
- */
 export function PaneGrid({
   projection,
   mode: explicitMode,
@@ -107,9 +101,6 @@ export function PaneGrid({
   const translate = useT();
   const mode = resolveLayoutMode(projection.container.layout, explicitMode);
   const isSpotlight = mode === "spotlight";
-  // Grade and Foco share one CSS grid with cells in a stable order, so
-  // focusing a pane or switching modes only moves cells; the terminals inside
-  // are never remounted (that lost scrollback, selection and keyboard focus).
   const panes = paneOrder(projection, isSpotlight ? "grid" : mode, activePaneId);
   if (panes.length === 0) return null;
 
@@ -126,10 +117,6 @@ export function PaneGrid({
       ? (panes.find(({ pane }) => pane.id === activePaneId) ?? panes[0]).pane.id
       : null;
     const sideCount = panes.length - 1;
-    // A fixed grid with free slots: the last row's agents share the whole
-    // width instead of leaving empty cells. Columns are subdivided by the
-    // last row's count so both rows split evenly (4 cols, 3 in the last row
-    // → 12 tracks: full rows span 3, the last row spans 4).
     const usedRows = Math.max(1, Math.ceil(panes.length / columns));
     const lastRowStart = (usedRows - 1) * columns;
     const lastRowCount = panes.length - lastRowStart;

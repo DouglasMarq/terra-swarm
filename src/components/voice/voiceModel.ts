@@ -1,11 +1,6 @@
 import type { Translate } from "../../i18n";
 import type { VoiceIntent } from "../../domain/voiceCommands";
 
-/**
- * Visual states intentionally describe the lifecycle of a voice capture, not
- * its semantic outcome.  The host owns this value so the capsule stays a
- * controlled view component.
- */
 export type VoiceCapsuleState =
   | "idle"
   | "listening"
@@ -13,11 +8,6 @@ export type VoiceCapsuleState =
   | "preview"
   | "error";
 
-/**
- * `stop` is kept here as a forward-compatible intent.  The current parser
- * does not emit it yet, but the capsule must still protect it if a host adds
- * the command or receives it from a remote agent.
- */
 export type VoiceCapsuleIntent = VoiceIntent | { type: "stop"; target?: string };
 
 export interface VoiceSendPayload {
@@ -59,11 +49,6 @@ export function isDestructiveVoiceIntent(
 
 export const requiresVoiceConfirmation = isDestructiveVoiceIntent;
 
-/**
- * Hosts must call this gate immediately before mutating application state.
- * A destructive intent is never executable merely because it was parsed; it
- * needs the explicit confirmation action emitted by the capsule.
- */
 export function canExecuteVoiceIntent(
   intent: VoiceCapsuleIntent | null | undefined,
   isConfirmed = false,
@@ -86,11 +71,6 @@ export function createInitialVoiceCapsuleModel(
   return { ...model, ...overrides };
 }
 
-/**
- * A small pure lifecycle model for hosts that need to coordinate recording,
- * transcription and confirmation.  VoiceCapsule itself remains controlled;
- * this reducer is an optional, testable contract rather than hidden state.
- */
 export function reduceVoiceCapsuleModel(
   model: VoiceCapsuleModel,
   event: VoiceCapsuleEvent,

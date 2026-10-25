@@ -8,13 +8,8 @@ import {
   type InspectorRuntimeState,
 } from "../components/inspector/inspectorRuntime";
 
-/** How often the inspector refreshes the focused agent's runtime info. */
 export const INSPECTOR_RUNTIME_POLL_MS = 1500;
 
-/**
- * Poll the runtime info of `terminalId` while the inspector shows it; stops
- * as soon as the inspector closes or the focus moves, and ignores late answers.
- */
 export function useInspectorRuntime(terminalId: string | null, isActive: boolean): InspectorRuntimeState {
   const [runtime, dispatch] = useReducer(reduceInspectorRuntime, INITIAL_INSPECTOR_RUNTIME_STATE);
   const requestIdRef = useRef(0);

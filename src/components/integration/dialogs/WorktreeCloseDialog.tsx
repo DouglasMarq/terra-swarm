@@ -8,16 +8,13 @@ import styles from "./ModalForms.module.css";
 const MAX_LISTED_DIRTY_FILES = 20;
 
 export interface WorktreeCloseDialogProps {
-  /** The agent being closed and its worktree; `null` closes the dialog. */
   target: { label: string; status: WorktreeStatus } | null;
   onKeep: () => void;
   onDelete: (shouldDeleteBranch: boolean) => void;
   onCancel: () => void;
-  /** Open the review of the worktree instead of closing. */
   onReview?: () => void;
 }
 
-/** Closing an isolated agent whose work is not merged anywhere yet. */
 export function WorktreeCloseDialog({ target, onKeep, onDelete, onCancel, onReview }: WorktreeCloseDialogProps) {
   const translate = useT();
   const [shouldDeleteBranch, setDeleteBranch] = useState(false);

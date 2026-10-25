@@ -16,22 +16,14 @@ export interface AgentInspectorProps {
   target: InspectorTarget | null;
   label: AgentLabel | null;
   status: InspectorStatus;
-  /** Latest unread message from the agent, if any. */
   request: NotificationItem | null;
-  /** Most recent signals for this agent, newest first. */
   activity: readonly NotificationItem[];
   runtime: InspectorRuntimeState;
-  /** Tokens from the agent's own session log, when its hooks reported one. */
   usage?: AgentTokenUsage | null;
   onAction: (action: InspectorActionKind, target: InspectorTarget) => void;
   now?: number;
 }
 
-/**
- * The agent first: what it is doing, how much context is left and what it
- * asked. Container, pane, tab and PTY identifiers wait behind "Technical
- * details".
- */
 export function AgentInspector({ target, label, status, request, activity, runtime, usage = null, onAction, now = Date.now() }: AgentInspectorProps) {
   const translate = useT();
   if (!target) {

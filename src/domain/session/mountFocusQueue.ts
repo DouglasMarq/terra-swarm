@@ -1,8 +1,3 @@
-/**
- * Serializes mount/focus transitions. UI adapters can enqueue effects here;
- * this module itself has no dependency on a renderer or browser APIs.
- */
-
 export type MountFocusPhase = "mount" | "focus";
 export type MountFocusStatus = "completed" | "failed" | "cancelled";
 
@@ -16,7 +11,6 @@ export type MountFocusEffect = {
   id: string;
   mount?: (context: MountFocusContext) => unknown | PromiseLike<unknown>;
   focus?: (context: MountFocusContext) => unknown | PromiseLike<unknown>;
-  /** Pending effects with the same key may be replaced by a newer request. */
   coalesceKey?: string;
 };
 
@@ -62,7 +56,6 @@ function reasonFor(reason: unknown): unknown {
   return reason ?? new Error("mount/focus effect cancelled");
 }
 
-/** `now` is the clock for `startedAt` / `finishedAt`, in milliseconds. */
 export function createMountFocusQueue(now: () => number): MountFocusQueue {
   const effects = new Map<string, InternalEffect>();
   const settled = new Map<string, MountFocusResult>();
@@ -152,8 +145,6 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
     effect.status = "running";
     running = 1;
     void process(effect).then(startNext, (error: unknown) => {
-      // Effect functions are already guarded, but keep a final safety net so
-      // one malformed thenable cannot leave the serial queue blocked.
       finish(effect, { status: effect.isCancelRequested ? "cancelled" : "failed", error });
       startNext();
     });

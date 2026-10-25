@@ -5,16 +5,6 @@ import { en } from "./locales/en";
 import { ptBR } from "./locales/pt-BR";
 import type { Dictionary, PluralLeaf } from "./dictionary";
 
-/**
- * Tiny, dependency-free i18n.
- *
- * - English is the source dictionary and the default locale; every other
- *   locale must provide the same keys (enforced by the `Dictionary` type).
- * - Keys are dotted paths ("shell.search.label"). A leaf is either a string
- *   or a plural object `{ one, other }` chosen with `Intl.PluralRules`.
- * - `{name}` placeholders are replaced from the `vars` argument.
- */
-
 export type Locale = "en" | "pt-BR";
 
 export const LOCALES: readonly { id: Locale; label: string }[] = [
@@ -79,8 +69,6 @@ export function translate(locale: Locale, key: MessageKey | string, vars?: Messa
     template = leaf;
   } else {
     const count = Number(vars?.count ?? 0);
-    // Zero reads as plural in both locales ("0 agents", "0 agentes"); CLDR
-    // would make Portuguese singular here.
     template = count === 0
       ? leaf.zero ?? leaf.other
       : pluralFor(locale, count) === "one" ? leaf.one : leaf.other;
@@ -106,7 +94,6 @@ export const useLocaleStore = create<LocaleState>((set) => ({
   },
 }));
 
-/** Non-React access, e.g. inside stores or event handlers. */
 export function translateNow(key: MessageKey, vars?: MessageVars): string {
   return translate(useLocaleStore.getState().locale, key, vars);
 }
@@ -115,13 +102,11 @@ export function useLocale(): Locale {
   return useLocaleStore((state) => state.locale);
 }
 
-/** Re-renders the caller when the locale changes. */
 export function useT(): Translate {
   const locale = useLocale();
   return useCallback((key: MessageKey, vars?: MessageVars) => translate(locale, key, vars), [locale]);
 }
 
-/** BCP 47 tag for Intl date/number formatting. */
 export function intlLocale(locale: Locale = useLocaleStore.getState().locale): string {
   return locale === "pt-BR" ? "pt-BR" : "en-US";
 }

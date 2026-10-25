@@ -22,7 +22,6 @@ export interface WorkspaceDialogProps {
   onSubmit: () => void | Promise<void>;
 }
 
-/** Controlled workspace form used by both the home launcher and navigator. */
 export function WorkspaceDialog({
   cwd,
   groupName,

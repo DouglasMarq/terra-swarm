@@ -14,15 +14,12 @@ import {
 import type { ActivityTab, NavigatorActivityCapabilities, NavigatorNode, NavigatorNodeRef, NavigatorPanelProps } from "./types";
 import styles from "./Navigator.module.css";
 
-/** The agent menu is wider and taller than the single "Delete project" item. */
 const AGENT_MENU_WIDTH_PX = 272;
 const AGENT_MENU_HEIGHT_PX = 360;
 const PROJECT_MENU_WIDTH_PX = 196;
 const PROJECT_MENU_HEIGHT_PX = 52;
-/** Keeps context menus clear of the 48px window chrome and the macOS traffic lights. */
 const MENU_MIN_TOP_PX = 56;
 const MENU_MIN_LEFT_PX = 8;
-/** Viewport assumed when there is no window (tests, prerender). */
 const FALLBACK_VIEWPORT_WIDTH_PX = 1024;
 const FALLBACK_VIEWPORT_HEIGHT_PX = 768;
 
@@ -85,8 +82,6 @@ function viewportSize(): { width: number; height: number } {
 }
 
 function menuAnchor(event: MouseEvent<HTMLElement>): MenuPosition {
-  // Opened from the keyboard (ContextMenu key, Shift+F10, Enter on "…")
-  // there is no pointer position: anchor to the row or button instead.
   if (event.clientX !== 0 || event.clientY !== 0) return { x: event.clientX, y: event.clientY };
   const rect = event.currentTarget.getBoundingClientRect();
   return { x: rect.left, y: rect.bottom };
@@ -118,10 +113,6 @@ function useMenuDismiss(isOpen: boolean, onDismiss: () => void): void {
   }, [isOpen, onDismiss]);
 }
 
-/**
- * Full navigator surface. Project ordering is intentionally static; the
- * panel only exposes explicit create, focus, hide and delete actions.
- */
 export function NavigatorPanel({
   workspaces,
   snapshot = null,

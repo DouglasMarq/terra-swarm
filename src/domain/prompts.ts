@@ -7,7 +7,6 @@ export interface SavedPrompt {
 const DERIVED_TITLE_WORDS = 6;
 const FALLBACK_TITLE = "Prompt";
 
-/** `{project}` becomes the active project's name. */
 export function fillPrompt(body: string, values: { project?: string | null }): string {
   return body.replace(/\{project\}/g, values.project?.trim() || "this project");
 }

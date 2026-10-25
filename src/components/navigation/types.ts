@@ -4,7 +4,6 @@ import type { TerminalMeta } from "../../domain/terminal.model";
 import type { Pane, Workspace, WorkspaceContainer, WorkspaceGroup, WorkspaceGitStatus, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import type { WorkspaceFileListing } from "../../domain/workspaceFiles.model";
 
-/** The three visible nesting levels in the Terra navigator. */
 export type NavigatorNodeKind = "group" | "project" | "container" | "pane" | "agent";
 
 export type NavigatorStatus = "working" | "idle" | "attention" | "exited" | "suspended";
@@ -19,14 +18,8 @@ export type NavigatorFilesLoader = (
 
 export type NavigatorGitLoader = (workspaceId: string) => Promise<WorkspaceGitStatus>;
 
-/**
- * Activities are provider-backed surfaces. Projects is the only activity
- * available without an integration, so callers can opt into the others only
- * when they can actually render and persist them.
- */
 export type NavigatorActivityCapabilities = Readonly<Partial<Record<ActivityTab, boolean>>>;
 
-/** A branch is intentionally a small adapter type: SCM integrations can add data later. */
 export interface NavigatorBranch {
   id: string;
   name?: string;
@@ -56,7 +49,6 @@ export interface NavigatorNodeActions {
   onOpen?: (node: NavigatorNodeRef) => void;
   onCreate?: (node: NavigatorNodeRef) => void;
   onRename?: (node: NavigatorNodeRef) => void;
-  /** Request destructive removal of a persisted project/workspace. */
   onDelete?: (node: NavigatorNodeRef) => void;
   onHide?: (node: NavigatorNodeRef) => void;
   onSuspend?: (node: NavigatorNodeRef) => void;
@@ -117,14 +109,12 @@ export interface NavigatorAgentNode extends NavigatorBaseNode {
   source: TerminalMeta;
   workspaceId: string;
   terminalId: string;
-  /** Visual tab identity when the agent came from the v2 snapshot. */
   tabId?: string;
   paneId?: string;
   containerId?: string;
   branchIds: string[];
   contextUsage: number | null;
   notifications: number;
-  /** "claude 2" or "Lyra · claude"; shown under the task title. */
   tag?: string;
 }
 
@@ -155,7 +145,6 @@ export interface FlatNavigatorNode {
 
 export interface NavigatorPanelProps {
   workspaces: readonly Workspace[];
-  /** Optional v2 hierarchy; legacy Workspace[] remains a supported fallback. */
   snapshot?: WorkspaceSnapshotV2 | null;
   groups?: readonly WorkspaceGroup[];
   activeWorkspaceId?: string | null;
@@ -167,7 +156,6 @@ export interface NavigatorPanelProps {
   contextUsage?: Readonly<Record<string, number>>;
   statuses?: NavigatorStatusMaps;
   branches?: readonly NavigatorBranch[];
-  /** Visibility is keyed by project/workspace id. Missing means visible. */
   containerVisibility?: Readonly<Record<string, boolean>>;
   collapsedIds?: readonly string[];
   defaultCollapsedIds?: readonly string[];
@@ -186,27 +174,19 @@ export interface NavigatorPanelProps {
   onSuspendGroup?: (groupId: string) => void;
   onResumeGroup?: (groupId: string) => void;
   onContextMenu?: (event: MouseEvent<HTMLElement>, node: NavigatorNodeRef) => void;
-  /** Lazy metadata-only directory loader for the Files activity. */
   loadFiles?: NavigatorFilesLoader;
-  /** Structured branch/status loader for the Git activity. */
   loadGitStatus?: NavigatorGitLoader;
   activeActivity?: ActivityTab;
   onActivityChange?: (tab: ActivityTab) => void;
-  /** Explicit provider capabilities. Projects remains the safe default. */
   capabilities?: NavigatorActivityCapabilities;
-  /** Alternate list form for hosts that discover available providers. */
   availableActivities?: readonly ActivityTab[];
   title?: string;
   className?: string;
   style?: CSSProperties;
   emptyState?: ReactNode;
-  /** Task title / numbered kind per terminal id, see domain/agentLabels. */
   agentLabels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
-  /** Skip container and pane levels: group → project → agent. */
   shouldFlatten?: boolean;
-  /** Replaces the title row (the sidebar puts its surface switch there). */
   headerSlot?: ReactNode;
-  /** Actions for an agent row's "…" / right-click menu (same as the pane menu). */
   agentMenu?: (terminalId: string, command: string) => PaneMenuGroups;
 }
 

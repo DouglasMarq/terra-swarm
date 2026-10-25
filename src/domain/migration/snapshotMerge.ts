@@ -6,7 +6,6 @@ import { migrateLegacyWorkspaces, type LegacyMigrationOptions } from "./legacyMi
 import { normalizeSnapshotV2 } from "./snapshotNormalize";
 
 export interface SnapshotMergeOptions extends LegacyMigrationOptions {
-  /** Visibility is UI state and therefore survives a backend refresh. */
   containerVisibility?: Readonly<Record<string, boolean>>;
 }
 
@@ -208,9 +207,6 @@ function mergeIncomingTabs(merge: SnapshotMerge): void {
   }
 }
 
-// Orphan tabs have no live PTY identity. Retain them as recoverable records;
-// a tab with an identity absent from the authoritative backend projection is
-// stale and is intentionally not reintroduced after a refresh.
 function retainOrphanTabs(merge: SnapshotMerge): void {
   for (const oldTab of merge.old.tabs) {
     if (oldTab.ptyId || merge.finalTabIdByOldId.has(oldTab.id)) continue;
@@ -453,16 +449,6 @@ function selectMergedActiveIds(merge: SnapshotMerge, entities: MergedEntities): 
   return { activeProjectId, activeContainerId, activePaneId, activeTabId };
 }
 
-/**
- * Merge a fresh backend projection into the persisted v2 domain snapshot.
- *
- * The workspace API is authoritative for process metadata (name, cwd,
- * command, placement, suspension and membership), while the snapshot owns
- * visual state (container visibility, pane/tab ordering, active selections
- * and layout). Matching first by tab/pane ids and then by PTY id lets a
- * refresh become idempotent even while the backend is still catching up with
- * a spawn or placement command.
- */
 export function mergeWorkspaceSnapshot(
   input: readonly Workspace[] | unknown,
   previous: WorkspaceSnapshotV2 | null | undefined,

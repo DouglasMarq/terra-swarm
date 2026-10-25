@@ -8,7 +8,6 @@ const RANDOM_ID_END = 6;
 
 const STORAGE_KEY = "terra-prompt-library";
 
-/** Starting points in the user's language; they can edit or delete them. */
 function defaultPrompts(): SavedPrompt[] {
   return [
     { id: "review-diff", title: translateNow("library.defaults.reviewTitle"), body: translateNow("library.defaults.reviewBody") },

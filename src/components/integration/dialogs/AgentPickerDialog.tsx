@@ -11,21 +11,17 @@ export interface AgentPickerDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   agents: readonly AgentInfo[];
-  /** Existing quick-add default, when the picker was opened from the panel. */
   defaultAgent?: string | null;
   shouldSaveDefault: boolean;
   onSaveDefaultChange: (shouldSave: boolean) => void;
   onChoose: (agentId: string) => void | Promise<void>;
-  /** The project is a git repository, so the agent can get its own worktree. */
   canIsolate?: boolean;
   shouldIsolate?: boolean;
   onIsolateChange?: (shouldIsolate: boolean) => void;
-  /** Team role for the new agent; the select shows when this is handled. */
   role?: AgentRole | null;
   onRoleChange?: (role: AgentRole | null) => void;
 }
 
-/** Agent profile picker; unavailable profiles remain visible and explain why. */
 export function AgentPickerDialog({
   agents,
   onChoose,

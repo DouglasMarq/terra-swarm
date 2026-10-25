@@ -3,10 +3,8 @@ import { onDevServer, previewApi } from "../lib/tauri/preview";
 
 const MAX_DETECTED_URLS = 12;
 
-/** Ports dev servers usually take, tried when nothing was printed. */
 export const COMMON_DEV_PORTS: readonly number[] = [3000, 3001, 4200, 4321, 5000, 5173, 5174, 8000, 8080, 8081, 8888, 9000];
 
-/** Only pages served from this machine may load in the panel. */
 export function loopbackUrl(input: string): string | null {
   const text = input.trim();
   if (!text) return null;
@@ -24,14 +22,11 @@ export function loopbackUrl(input: string): string | null {
 }
 
 export interface PreviewState {
-  /** Detected URLs per workspace, newest first. */
   detected: Record<string, string[]>;
-  /** The URL each workspace's panel shows. */
   selected: Record<string, string>;
   isProbing: boolean;
   addDetected: (workspaceId: string, url: string) => void;
   select: (workspaceId: string, url: string) => void;
-  /** Look for listening dev servers; `exclude` is Terra's own MCP port. */
   probe: (workspaceId: string, exclude?: number | null) => Promise<void>;
   reset: () => void;
 }
@@ -71,7 +66,6 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
   reset: () => set({ detected: {}, selected: {}, isProbing: false }),
 }));
 
-/** Collect the URLs terminals print, per workspace. */
 export function startPreviewBridge(): () => void {
   const pending = onDevServer((payload) => {
     if (payload?.workspace_id && payload.url) usePreviewStore.getState().addDetected(payload.workspace_id, payload.url);

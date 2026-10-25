@@ -1,12 +1,8 @@
-/** Pure planning helpers for restoring sessions after an application restart. */
-
 export type ResumeCandidate = {
-  /** Stable persisted session ID. `id` is accepted for integrations that use a generic name. */
   terminalId?: string;
   id?: string;
   projectId?: string;
   projectName?: string;
-  /** Legacy workspace aliases accepted while the domain migrates to projects. */
   workspaceId?: string;
   workspaceName?: string;
   wsId?: string;
@@ -51,7 +47,6 @@ export type ResumeDuplicate = {
 
 export type ResumePlan = {
   projects: readonly ResumeProjectPlan[];
-  /** Flat groups are convenient for a queue; projects preserve the hierarchy. */
   groups: readonly ResumeGroupPlan[];
   items: readonly NormalizedResumeCandidate[];
   duplicates: readonly ResumeDuplicate[];
@@ -89,10 +84,6 @@ function fallbackId(value: string, fallback: string): string {
   return text(value) ?? fallback;
 }
 
-/**
- * Computes a stable identity for a persisted session. Explicit IDs win; for
- * old records without IDs the relevant launch fields form a deterministic key.
- */
 export function resumeCandidateKey(candidate: ResumeCandidate): string {
   const explicit = text(candidate.terminalId) ?? text(candidate.id);
   if (explicit) return `terminal:${explicit}`;
@@ -148,11 +139,6 @@ function normalizeResumeCandidate(
   };
 }
 
-/**
- * Groups candidates by project and group while retaining input order. The
- * first item for a key wins; duplicates are reported instead of silently
- * spawning the same persisted session twice.
- */
 export function planResume(
   candidates: readonly ResumeCandidate[],
   options: ResumePlannerOptions = {},
@@ -205,9 +191,6 @@ export function planResume(
     group.items.push(normalized);
   }
 
-  // The mutable fields are implementation details used during construction;
-  // expose fresh readonly-shaped objects so callers cannot mutate the plan's
-  // internal arrays through a cast.
   const stableGroups: ResumeGroupPlan[] = groups.map((group) => ({
     ...group,
     items: [...group.items],

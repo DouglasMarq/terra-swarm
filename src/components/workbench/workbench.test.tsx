@@ -557,7 +557,6 @@ describe("WorkspaceWorkbench", () => {
         source={source}
       />,
     );
-    // No empty "+ New agent" slots: the lone pane fills the free width.
     expect(screen.queryByRole("button", { name: "Novo agente" })).not.toBeInTheDocument();
     expect((document.querySelector(".terra-pane-grid__cell") as HTMLElement).style.gridColumn).toBe("span 3");
     await user.click(screen.getByRole("button", { name: "Tamanho da grade" }));

@@ -74,7 +74,6 @@ export interface SettingsPanelsProps {
   isMicTesting: boolean;
   onMicTestToggle: () => void;
   voiceModels: readonly VoiceModelInfo[];
-  /** "error" when the model list could not be read; "loading" until it is. */
   voiceModelsStatus?: "loading" | "ready" | "error";
   onRetryVoiceModels?: () => void;
   voiceDownload: VoiceDownloadState | null;
@@ -97,12 +96,10 @@ export interface SettingsPanelsProps {
 }
 
 
-// Groups, sub-tabs and the Fleet are product foundations; only these remain optional.
 const LAB_FEATURE_FLAG_IDS = ["durableScrollback", "voiceCommands"] as const;
 
 const PROFILE_BY_ID = new Map(DEFAULT_AGENT_PROFILES.map((profile) => [profile.id, profile]));
 
-/** Speech levels are low; the meter scales them up so normal speech fills it. */
 const MIC_LEVEL_GAIN = 10;
 
 function PanelLead({ section }: { section: SettingsSectionDefinition }) {
@@ -189,8 +186,6 @@ interface FontOptionRow {
   note?: string;
 }
 
-/** Font family picker: every installed family, a search box and a
- * monospace-only filter; each row renders in its own font. */
 function TerminalFontPicker({ fontSize }: { fontSize: number }) {
   const translate = useT();
   const family = usePreferencesStore((state) => state.terminalFontFamily);
@@ -284,13 +279,11 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
   );
 }
 
-/** Names currently held by open agents, for "in use" and the next pick. */
 function useNamesInUse(): string[] {
   const agentNames = usePreferencesStore((state) => state.agentNames);
   return useMemo(() => Object.values(agentNames), [agentNames]);
 }
 
-/** Dictation goes to the project's orchestrator agent when one is running. */
 function VoiceToOrchestratorRow() {
   const translate = useT();
   const isEnabled = usePreferencesStore((state) => state.shouldSendVoiceToOrchestrator);
@@ -306,7 +299,6 @@ function VoiceToOrchestratorRow() {
   );
 }
 
-/** Native notifications and the app icon badge. */
 function SystemNotificationsCard() {
   const translate = useT();
   const isEnabled = usePreferencesStore((state) => state.isSystemNotificationsEnabled);
@@ -325,7 +317,6 @@ function SystemNotificationsCard() {
   );
 }
 
-/** Extra arguments and environment variables used every time an agent starts. */
 function AgentLaunchEditor({ agentId, label }: { agentId: string; label: string }) {
   const translate = useT();
   const saved = usePreferencesStore((state) => state.agentLaunch[agentId]);
@@ -384,7 +375,6 @@ function AgentLaunchEditor({ agentId, label }: { agentId: string; label: string 
   );
 }
 
-/** The embedded MCP server: the on/off switch and where it listens. */
 function McpCard() {
   const translate = useT();
   const server = useMcpStore((state) => state.server);

@@ -10,7 +10,6 @@ export interface ChromeBreadcrumb {
 }
 
 export interface WindowChromeProps {
-  /** Where the user is; falls back to `title` when no project is active. */
   breadcrumb?: ChromeBreadcrumb;
   title?: string;
   isSidebarCollapsed?: boolean;
@@ -18,7 +17,6 @@ export interface WindowChromeProps {
   sidebarShortcut?: string;
   onOpenLauncher?: () => void;
   launcherShortcut?: string;
-  /** Agents that need the user; drives the amber notification button. */
   attentionCount?: number;
   isNotificationsOpen?: boolean;
   onNotificationsOpenChange?: (isOpen: boolean) => void;
@@ -36,10 +34,6 @@ function withShortcut(translate: Translate, label: string, shortcut?: string): s
   return shortcut ? translate("common.withShortcut", { label, shortcut }) : label;
 }
 
-/**
- * Top bar: where you are, one way to search or command (⌘K), what needs you,
- * and the voice and inspector toggles. Everything else lives in the sidebar.
- */
 export function WindowChrome({
   breadcrumb,
   title,

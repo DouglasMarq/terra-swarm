@@ -44,7 +44,6 @@ export interface CommandPaletteProps extends Omit<CommandPaletteData, "workspace
   groups?: readonly WorkspaceGroup[];
   agents?: readonly AgentInfo[];
   callbacks?: CommandPaletteCallbacks;
-  /** Called for destructive actions; the command is not dispatched until the host confirms. */
   onRequestConfirm?: (request: CommandConfirmRequest) => void;
   onOpenChange: (isOpen: boolean) => void;
 }
@@ -81,7 +80,6 @@ function commandKey(command: CommandDescriptor): string {
   return command.id;
 }
 
-/** Terra's keyboard-first command surface. Ctrl/Cmd+K ownership remains with the host. */
 export function CommandPalette({
   isOpen,
   workspaces,

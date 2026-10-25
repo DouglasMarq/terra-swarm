@@ -11,11 +11,6 @@ export interface PreviewPanelProps {
 
 const EMPTY: readonly string[] = [];
 
-/**
- * The project's local dev server, side by side with its agents. URLs come
- * from what the terminals print and from probing common ports; only pages
- * on this machine (localhost) load here.
- */
 export function PreviewPanel({ workspaceId }: PreviewPanelProps) {
   const translate = useT();
   const detected = usePreviewStore((state) => (workspaceId ? state.detected[workspaceId] ?? EMPTY : EMPTY));
@@ -29,7 +24,6 @@ export function PreviewPanel({ workspaceId }: PreviewPanelProps) {
 
   useEffect(() => setDraft(selected ?? ""), [selected]);
 
-  // Probe once per project when nothing has been printed yet.
   useEffect(() => {
     if (!workspaceId || detected.length > 0 || probed.current.has(workspaceId)) return;
     probed.current.add(workspaceId);

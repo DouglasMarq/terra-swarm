@@ -30,7 +30,6 @@ type PersistedOrchestrationState = {
   version: 1;
   containerVisibility: Record<string, boolean>;
   flags: FeatureFlags;
-  /** Visual detachments are durable UI state; they never imply PTY death. */
   detachedTerminalIds?: string[];
   snapshot?: WorkspaceSnapshotV2 | null;
 };
@@ -206,17 +205,12 @@ function patchProjectGroup(
 }
 
 export type OrchestrationState = {
-  /** The normalized v2 domain snapshot derived from the legacy API. */
   snapshot: WorkspaceSnapshotV2 | null;
-  /** Convenience projection for sidebar and command handlers. */
   groups: Group[];
-  /** `false` means the visual container is hidden, never that its PTYs died. */
   containerVisibility: Record<string, boolean>;
-  /** Terminal ids hidden from the visual tab strip while their PTYs continue. */
   detachedTerminalIds: string[];
   flags: FeatureFlags;
   isHydrated: boolean;
-  /** Last rejected durable layout command, surfaced once by the shell. */
   persistenceError: OrchestrationPersistenceError | null;
   sync: (workspaces: readonly Workspace[], groups?: readonly WorkspaceGroup[]) => void;
   hydrate: (workspaces: readonly Workspace[], groups?: readonly WorkspaceGroup[]) => void;
@@ -290,8 +284,6 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     persistenceError: null,
 
     sync: (workspaces, sourceGroups = []) => {
-    // An explicit backend refresh is already authoritative. Any rejection
-    // from a command issued before it must not replace this newer projection.
     markNewerProjection();
     const state = get();
     const derived = deriveSnapshot(
@@ -512,9 +504,6 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     const snapshot = updateSnapshotPaneTabs(current, paneId, order);
     if (!snapshot || snapshot === current) return;
     markNewerProjection();
-    // There is no separate PTY mutation for a visual tab order. The v2
-    // snapshot is the durable frontend projection, and `persist` keeps this
-    // order through backend refreshes via mergeWorkspaceSnapshot.
     persist({ ...get(), snapshot });
     set({ snapshot });
   },
@@ -526,8 +515,6 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     const source = current?.containers.find((candidate) =>
       candidate.id === pane?.containerId || candidate.paneIds.includes(paneId),
     );
-    // Pane moves are project-scoped. Reject a stale/forged cross-project
-    // destination before constructing optimistic state or issuing IPC.
     if (
       !current ||
       !pane ||
@@ -677,8 +664,6 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
   reattachTerminal: (terminalId) => get().setTerminalDetached(terminalId, false),
 
   reset: () => {
-    // Reset is a newer local projection; pending failures must not restore
-    // the state that existed before the reset.
     markNewerProjection();
     const next = emptyState();
     persist({ containerVisibility: next.containerVisibility, flags: next.flags, snapshot: next.snapshot });

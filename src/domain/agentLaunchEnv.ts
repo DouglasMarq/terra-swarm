@@ -5,7 +5,6 @@ export interface AgentLaunchSettings {
   env: string;
 }
 
-/** Parse `KEY=VALUE` lines; blank lines and `#` comments are skipped. */
 export function parseEnvLines(text: string): { env: Record<string, string>; invalid: string[] } {
   const env: Record<string, string> = {};
   const invalid: string[] = [];

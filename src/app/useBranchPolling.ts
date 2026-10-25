@@ -5,10 +5,6 @@ import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 
 const BRANCH_POLL_MS = 10000;
 
-/**
- * Poll the git branch of every workspace folder. Keyed off the id:cwd
- * signature so terminal spawns and resizes don't restart the interval.
- */
 export function useBranchPolling(workspaces: readonly Workspace[]) {
   const signature = workspaces.map((workspace) => `${workspace.id}:${workspace.cwd}`).join("|");
   useEffect(() => {

@@ -96,8 +96,6 @@ vi.mock("@xterm/addon-fit", () => ({
     terminal?: { cols: number; rows: number };
     proposeDimensions = vi.fn(() => {
       if (mocks.geometry.width <= 0 || mocks.geometry.height <= 0) {
-        // This is the real addon's minimum fallback. TerminalPane must reject
-        // it when its host is display:none or otherwise has no box.
         return { cols: 2, rows: 1 };
       }
       return { ...mocks.fitDimensions };

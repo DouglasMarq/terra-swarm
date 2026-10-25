@@ -81,9 +81,7 @@ export interface SettingsDialogProps {
   defaultSection?: SettingsSectionId;
   onActiveSectionChange?: (section: SettingsSectionId) => void;
   sections?: readonly SettingsSectionDefinition[];
-  /** A slot map is useful when forms already live in the host application. */
   slots?: Partial<Record<SettingsSectionId, SettingsSectionSlot>>;
-  /** Render prop takes precedence over the matching slot. */
   renderSection?: (context: SettingsSectionRenderContext) => ReactNode;
   headerSlot?: ReactNode | (() => ReactNode);
   footerSlot?: ReactNode | (() => ReactNode);
@@ -91,7 +89,6 @@ export interface SettingsDialogProps {
   description?: ReactNode;
   searchPlaceholder?: string;
   className?: string;
-  /** "page" renders inline as a surface instead of a modal dialog. */
   variant?: "dialog" | "page";
 }
 
@@ -121,7 +118,6 @@ function DefaultSectionContent({ section }: { section: SettingsSectionDefinition
   );
 }
 
-/** Full Terra settings surface with independently scrolling navigation and content. */
 export function SettingsDialog({
   activeSection,
   className,
@@ -262,7 +258,6 @@ export function SettingsDialog({
                     type="search"
                     value={query}
                   />
-                  {/* On the page ⌘K opens the command palette, not this search. */}
                   {isPage ? null : <kbd className={styles.searchShortcut}>{formatShortcut(SEARCH_HOTKEY)}</kbd>}
                 </label>
                 <div className={styles.resultCount} aria-live="polite">

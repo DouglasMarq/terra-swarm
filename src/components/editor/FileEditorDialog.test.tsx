@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({ readWorkspaceFile: vi.fn(), writeWorkspaceFile: vi.fn() }));
 vi.mock("../../api", () => ({ api }));
-// CodeMirror needs a real layout engine; a textarea stands in for it.
 vi.mock("./CodeEditor", () => ({
   default: ({ initial, onChange }: { initial: string; onChange: (text: string) => void }) => (
     <textarea aria-label="code" defaultValue={initial} onChange={(event) => onChange(event.target.value)} />

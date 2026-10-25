@@ -11,7 +11,6 @@ export interface ProjectNodeProps {
   onSelect?: (node: NavigatorProjectNode) => void;
 }
 
-/** Project rows represent visible containers while preserving PTY identity underneath. */
 export function ProjectNode({ node, actions = {}, onSelect, isSelected = false, isActive = false, ...props }: ProjectNodeProps) {
   return <NavigatorNodeRow {...props} actions={actions} isActive={isActive} node={node} onSelect={(selected) => onSelect?.(selected as typeof node)} isSelected={isSelected} isVisible={node.isVisible} />;
 }

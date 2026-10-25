@@ -2,14 +2,11 @@ import type { AgentInfo, AgentRole } from "./agent.model";
 
 export interface TeamMember {
   role: AgentRole;
-  /** Preferred agent profile; another available one stands in when it is missing. */
   agent: string;
-  /** Work in an isolated git worktree (only in git projects). */
   shouldUseWorktree?: boolean;
 }
 
 export interface TeamTemplate {
-  /** Also the i18n key under `teams.`. */
   id: "feature" | "pair" | "review";
   members: readonly TeamMember[];
 }
@@ -45,20 +42,14 @@ export interface PlannedMember {
   role: AgentRole;
   agent: string;
   shouldUseWorktree: boolean;
-  /** The preferred agent was not installed, so `agent` stands in. */
   isSubstituted: boolean;
 }
 
 export interface TeamPlan {
   members: PlannedMember[];
-  /** Nothing usable is installed: the team cannot start. */
   isBlocked: boolean;
 }
 
-/**
- * Which agent fills each seat: the template's choice when installed, else
- * the user's default agent, else the first installed coding agent.
- */
 export interface TeamRoster {
   agents: readonly AgentInfo[];
   defaultAgent: string | null;

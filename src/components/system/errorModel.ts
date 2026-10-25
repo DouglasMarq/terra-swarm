@@ -34,7 +34,6 @@ function safeErrorMessage(error: unknown, translate: Translate) {
   return message ? sanitizeText(message, MAX_MESSAGE_LENGTH) : translate("system.unexpectedError");
 }
 
-/** Convert React's error payload into a bounded, path/token-redacted report. */
 export function getSafeErrorDetails(error: unknown, info: ErrorInfo | null | undefined, translate: Translate): SafeErrorDetails {
   const name = errorName(error);
   const message = safeErrorMessage(error, translate);

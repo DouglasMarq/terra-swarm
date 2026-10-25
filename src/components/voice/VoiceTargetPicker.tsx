@@ -25,10 +25,6 @@ export interface VoiceTargetPickerProps {
   onChange: (terminalId: string) => void;
 }
 
-/**
- * "Send to" chip for the voice capsule. Opens a project → agent tree; an
- * exited agent stays selectable and is resumed before it receives the prompt.
- */
 export function VoiceTargetPicker({ projects, targetId, onChange }: VoiceTargetPickerProps) {
   const translate = useT();
   const [isOpen, setOpen] = useState(false);
@@ -40,7 +36,6 @@ export function VoiceTargetPicker({ projects, targetId, onChange }: VoiceTargetP
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      // Close the list only; the capsule stays open.
       event.stopPropagation();
       setOpen(false);
     };

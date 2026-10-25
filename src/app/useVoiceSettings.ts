@@ -15,17 +15,10 @@ import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 const warn = (what: string) => (error: unknown) => console.warn(`${what}:`, error);
 
 interface VoiceSettingsInput {
-  /** The Settings page is open: refresh what it shows. */
   isSettingsOpen: boolean;
-  /** Its Voice section is the one on screen (the mic test lives there). */
   isVoiceSectionOpen: boolean;
 }
 
-/**
- * Everything the Voice settings need: whether a microphone exists, the input
- * devices, the Whisper models and their downloads, the mic test, and pushing
- * the stored choices into the backend.
- */
 export function useVoiceSettings({ isSettingsOpen, isVoiceSectionOpen }: VoiceSettingsInput) {
   const prefs = usePreferencesStore;
   const isVoiceEnabled = usePreferencesStore((state) => state.isVoiceEnabled);
@@ -67,7 +60,6 @@ export function useVoiceSettings({ isSettingsOpen, isVoiceSectionOpen }: VoiceSe
     if (shouldAnnounce) notify(translateNow("app.voice.micDisconnected"));
   };
 
-  /** Send the stored language, device and model to the backend. */
   const pushStoredSettings = () => {
     const { voiceLang, voiceInputDevice, voiceModel } = prefs.getState();
     api.voiceSetLanguage(voiceLang).catch(warn("could not set the voice language"));
@@ -75,10 +67,6 @@ export function useVoiceSettings({ isSettingsOpen, isVoiceSectionOpen }: VoiceSe
     if (voiceModel) api.voiceSetModel(voiceModel).catch(handleModelLoadError);
   };
 
-  /**
-   * At startup: if voice was left on, push its settings (the model loads in
-   * the background) — or turn it off when the microphone is gone.
-   */
   const applyStoredSettings = () => {
     if (!prefs.getState().isVoiceEnabled) return;
     api
@@ -96,7 +84,6 @@ export function useVoiceSettings({ isSettingsOpen, isVoiceSectionOpen }: VoiceSe
       prefs.getState().setVoiceEnabled(false);
       return;
     }
-    // Never turn voice on without a microphone.
     api
       .voiceMicAvailable()
       .then((isAvailable) => {
@@ -180,9 +167,6 @@ export function useVoiceSettings({ isSettingsOpen, isVoiceSectionOpen }: VoiceSe
     };
   }, [prefs, refreshModels, refreshInputDevices]);
 
-  // Refresh mic presence, models and shells whenever Settings opens. The
-  // model list is just files on disk: show it even while voice is off, so a
-  // model can be picked and downloaded before turning voice on.
   useEffect(() => {
     if (!isSettingsOpen) return;
     api.voiceMicAvailable().then(setMicAvailable).catch(warn("could not check the microphone"));
@@ -191,8 +175,6 @@ export function useVoiceSettings({ isSettingsOpen, isVoiceSectionOpen }: VoiceSe
     api.listShells().then(setAvailableShells).catch(warn("could not list shells"));
   }, [isSettingsOpen, isVoiceEnabled, refreshModels, refreshInputDevices]);
 
-  // A live test stream must not outlive the Voice section, or the mic stays
-  // open and blocks real recording.
   useEffect(() => {
     if (isVoiceSectionOpen) return;
     if (isMicTesting) stopMicTest();

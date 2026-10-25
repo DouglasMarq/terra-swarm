@@ -8,32 +8,20 @@ export function isTerminalRunning(
   return !terminal.suspended && !(terminal.id in exited);
 }
 
-/** Context window use, in percent, from which an agent needs attention. */
 export const CONTEXT_ATTENTION_PERCENT = 85;
 
-/** Context window use, in percent, from which a pane shows the context as filling up. */
 export const CONTEXT_WARNING_PERCENT = 60;
 
-/** What the UI shows for an agent, everywhere: dots, chips, Fleet, panes. */
 export type AgentRunStatus = "working" | "idle" | "attention" | "suspended" | "exited";
 
 export interface AgentStatusSignals {
   isSuspended?: boolean;
   hasExited?: boolean;
-  /** Unread terminal notifications (BEL, OSC 9/777…). */
   notifications?: number;
-  /** Context window used, in percent. */
   contextUsed?: number;
-  /** What the agent itself reported through its hooks or `report_status`. */
   reported?: McpAgentState | null;
 }
 
-/**
- * One rule for every surface. A suspended or exited process wins; then
- * anything that needs a human (a reported question or permission prompt, an
- * unread notification, an almost full context); then what the agent
- * reported. Agents without hooks keep the old assumption: alive = working.
- */
 export function deriveAgentStatus(signals: AgentStatusSignals): AgentRunStatus {
   if (signals.isSuspended) return "suspended";
   if (signals.hasExited) return "exited";

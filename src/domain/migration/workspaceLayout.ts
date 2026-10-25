@@ -91,7 +91,6 @@ export function mergeLayout(layouts: LayoutPair, validIds: ReadonlySet<string>, 
   );
 }
 
-/** Shared layout merge primitive for the store's group projection. */
 export function mergeWorkspaceLayout(
   layouts: LayoutPair,
   validIds: ReadonlySet<string>,

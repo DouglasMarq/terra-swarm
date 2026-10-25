@@ -3,12 +3,6 @@ import type { Workspace } from "./workspace.model";
 
 const MAX_NAME_ROUNDS = 100;
 
-/**
- * Optional automatic agent names ("Vega", "Lyra"…). Off by default: agents
- * are identified by their task title and numbered kind. When on, every new
- * agent gets a name from the list that no open agent is using.
- */
-
 export type NamesExhaustedStrategy = "type-number" | "repeat";
 
 export const NAME_SETS = {
@@ -21,12 +15,10 @@ export type NameSetId = keyof typeof NAME_SETS | "custom";
 export const DEFAULT_NAME_LIST: readonly string[] = NAME_SETS.stars;
 
 export interface PickAgentNameOptions {
-  /** Skip names that start with the same letter as, or sound like, an open agent's name. */
   shouldAvoidSimilar?: boolean;
   exhausted?: NamesExhaustedStrategy;
 }
 
-/** Rough "sounds alike" check: same first letter and same consonant skeleton, or edit distance ≤ 1. */
 export function namesSimilar(first: string, second: string): boolean {
   const normalizedFirst = normalizeSearchText(first);
   const normalizedSecond = normalizeSearchText(second);
@@ -61,11 +53,6 @@ function editDistanceAtMostOne(first: string, second: string): boolean {
   return edits + (first.length - firstIndex) + (second.length - secondIndex) <= 1;
 }
 
-/**
- * Picks the next free name. Returns null when the list is exhausted and the
- * strategy is "type-number" (the caller then keeps the numbered kind, e.g.
- * "claude 4").
- */
 export function pickAgentName(
   inUse: readonly string[],
   list: readonly string[],
@@ -80,7 +67,6 @@ export function pickAgentName(
   if (distinct.length > 0) return distinct[0];
   if (free.length > 0) return free[0];
   if (exhausted === "type-number" || list.length === 0) return null;
-  // "repeat": reuse the list with a number, Vega 2, Lyra 2, …
   for (let round = 2; round < MAX_NAME_ROUNDS; round += 1) {
     const candidate = list.map((name) => `${name} ${round}`).find((name) => !taken.has(normalizeSearchText(name)));
     if (candidate) return candidate;

@@ -18,7 +18,6 @@ import styles from "./voice.module.css";
 
 export interface VoiceCapsuleProps {
   state: VoiceCapsuleState;
-  /** Final text takes precedence; `transcript` is a convenient host alias. */
   transcript?: string;
   partialTranscript?: string;
   finalTranscript?: string;
@@ -27,23 +26,19 @@ export interface VoiceCapsuleProps {
   level?: number;
   samples?: readonly number[];
   error?: string | null;
-  /** Keeps a successfully auto-sent dictation visible without allowing a duplicate send. */
   isSubmitted?: boolean;
   isExpanded?: boolean;
   isDisabled?: boolean;
   shortcut?: string;
   isPushToTalk?: boolean;
   className?: string;
-  /** Optional label rendered beside the target-agent value. */
   agentLabel?: string;
-  /** Additional content for a host-specific status row. */
   footer?: ReactNode;
   onStartListening?: () => void;
   onStopListening?: () => void;
   onCancel?: () => void;
   onRetry?: () => void;
   onSend?: (payload: VoiceSendPayload) => void;
-  /** Called only after an explicit confirmation click for destructive intents. */
   onConfirm?: (payload: VoiceSendPayload) => void;
   onToggleExpanded?: () => void;
 }

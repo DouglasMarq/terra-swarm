@@ -13,15 +13,12 @@ export interface SnapshotFeedback {
   kind: "success" | "error";
   message: string;
   backupPath?: string | null;
-  /** "backup" after an import (the pre-import copy), "file" after an export. */
   pathKind?: "backup" | "file";
 }
 
-/** Export and import of the whole workspace store (Settings → Data & backup). */
 export function useSnapshotTransfer(sessions: Pick<TerminalSessions, "forgetAll">, refresh: () => Promise<void>) {
   const [operation, setOperation] = useState<SnapshotOperation | null>(null);
   const [feedback, setFeedback] = useState<SnapshotFeedback | null>(null);
-  /** A file was picked and waits for the user to confirm the import. */
   const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
 
   const exportSnapshot = async () => {
@@ -33,7 +30,6 @@ export function useSnapshotTransfer(sessions: Pick<TerminalSessions, "forgetAll"
         defaultPath: "terra-swarm-snapshot.json",
         filters: [{ name: translateNow("app.snapshotFileType"), extensions: ["json"] }],
       });
-      // A cancelled picker is a true no-op: no IPC call, feedback kept.
       if (typeof path !== "string" || !path.trim()) return;
       setFeedback(null);
       const transfer = await api.exportWorkspaceSnapshot(path);
@@ -51,7 +47,6 @@ export function useSnapshotTransfer(sessions: Pick<TerminalSessions, "forgetAll"
     }
   };
 
-  /** Ask for a file; the import itself waits for confirmation. */
   const pickImport = async () => {
     if (operation || pendingImportPath) return;
     try {
@@ -76,9 +71,6 @@ export function useSnapshotTransfer(sessions: Pick<TerminalSessions, "forgetAll"
     try {
       setFeedback(null);
       const transfer = await api.importWorkspaceSnapshot(path);
-      // Import is metadata-only and the backend stopped every PTY before
-      // replacing the store. Drop stale runtime state without respawning the
-      // imported sessions; the user resumes them explicitly.
       const runtime = useTerminalRuntimeStore.getState();
       runtime.clearTerminals(sessions.forgetAll());
       runtime.clearAllNotifications();

@@ -36,8 +36,6 @@ function paneIdsForContainer(
   const declared = uniqueStrings(container.paneIds);
   if (declared.length > 0) return declared;
 
-  // Legacy snapshots can have a project-level pane list without copying it
-  // onto its sole container. This fallback keeps the projection lossless.
   if (project && project.containerIds.length <= 1) return uniqueStrings(project.paneIds);
   return [];
 }
@@ -69,13 +67,6 @@ function containerProjection(
   return { container, project, group, panes };
 }
 
-/**
- * Projects normalized domain data into the visual workbench hierarchy.
- *
- * The projection never mutates the source and deliberately keeps hidden and
- * collapsed containers in the result. React can therefore hide a surface
- * without unmounting its terminal render trees or terminating their PTYs.
- */
 export function projectWorkbench(source: WorkbenchSource): WorkbenchProjection {
   const snapshot = toWorkbenchSnapshot(source);
   const containers = snapshot.containers.map((container) =>

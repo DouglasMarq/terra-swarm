@@ -8,9 +8,7 @@ import styles from "./system.module.css";
 export type LoadingScreenPhase = "booting" | "hydrating" | "connecting" | "ready";
 
 export interface LoadingScreenProps {
-  /** Short label announced while the application is booting. */
   status?: ReactNode;
-  /** Optional deterministic progress from 0 through 100. */
   progress?: number;
   title?: ReactNode;
   subtitle?: ReactNode;
@@ -32,10 +30,6 @@ function clampProgress(progress: number) {
   return clamp(progress, MIN_PROGRESS, MAX_PROGRESS);
 }
 
-/**
- * Minimal boot surface for the Terra shell. The terrain is deliberately CSS
- * only so startup never waits on an image asset or a network request.
- */
 export function LoadingScreen({
   className,
   phase = "booting",

@@ -16,7 +16,6 @@ describe("versioned feature flags", () => {
       durableScrollback: true,
       voiceCommands: false,
     });
-    // Flags that were retired are dropped from stored settings.
     expect(normalizeFeatureFlags({ groups: true, fleetView: true })).toEqual({
       durableScrollback: false,
       voiceCommands: false,

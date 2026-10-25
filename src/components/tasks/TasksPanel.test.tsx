@@ -78,7 +78,6 @@ describe("TasksPanel", () => {
     expect(assignee).toHaveTextContent("Lyra");
     expect(assignee).toHaveTextContent("trabalhando");
     expect(within(screen.getByRole("region", { name: "A fazer" })).getByText("Task T-2")).toBeInTheDocument();
-    // Finished work starts collapsed.
     const done = screen.getByRole("region", { name: "Concluída" });
     expect(within(done).queryByText("Task T-3")).not.toBeInTheDocument();
     expect(api.mcpListTasks).toHaveBeenCalledWith("ws-1");

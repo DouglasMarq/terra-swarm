@@ -15,9 +15,7 @@ interface Props {
   onDismiss: (item: ResumeItem) => void | Promise<void>;
   onResumeAll: () => void | Promise<void>;
   onDismissAll: () => void | Promise<void>;
-  /** Hides this queue without mutating it. It can be reopened from ⌘K. */
   onDefer: () => void;
-  /** Resume every saved session on startup without asking. */
   shouldAutoResume?: boolean;
   onAutoResumeChange?: (isEnabled: boolean) => void;
 }
@@ -39,11 +37,6 @@ function groupByProject(items: readonly ResumeItem[]): ResumeGroup[] {
   return [...groups.values()];
 }
 
-/**
- * Opening screen: "Continue where you left off?". Sessions are grouped by
- * project with checkboxes; unchecked ones stay saved and can be resumed later
- * from ⌘K. Discarding the whole queue still needs an explicit confirmation.
- */
 export function ResumeDialog({
   items,
   onDefer,

@@ -5,16 +5,10 @@ import { profileForCommand } from "../../domain/agentProfiles";
 export type InspectorRuntimeState = "ativo" | "suspenso" | "encerrado";
 export type InspectorActionKind = "focus" | "restart" | "detach" | "reattach" | "kill";
 
-/** Lifecycle mutations must be routed through the explicit confirmation UI. */
 export function inspectorActionRequiresConfirmation(action: InspectorActionKind): boolean {
   return action === "restart" || action === "kill";
 }
 
-/**
- * The Inspector is deliberately a projection of existing workspace metadata.
- * It does not manufacture process metrics: the current PTY API exposes the
- * PTY id and lifecycle state, but not a PID/CPU/memory telemetry contract.
- */
 export interface InspectorTarget {
   terminalId: string;
   displayName: string;
@@ -45,7 +39,6 @@ export interface ResolveInspectorTargetOptions {
   detachedTerminalIds?: readonly string[];
 }
 
-/** Resolve the focused PTY to its project/group/container/pane/tab chain. */
 export function resolveInspectorTarget(
   options: ResolveInspectorTargetOptions,
 ): InspectorTarget | null {
@@ -114,7 +107,6 @@ export function resolveInspectorTarget(
   };
 }
 
-/** Every token the agent's session spent: input, output and both cache directions. */
 export function totalTokens(usage: AgentTokenUsage): number {
   return usage.input_tokens + usage.output_tokens + usage.cache_read_tokens + usage.cache_write_tokens;
 }

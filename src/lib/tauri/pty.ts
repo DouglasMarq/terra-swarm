@@ -4,7 +4,6 @@ import type { BacklogSnapshot, ContextPayload, ExitPayload, OutputChunk, Running
 import { invokeCommand } from "./commands";
 import { listenPayload, type UnlistenFn } from "./events";
 
-/** Size a PTY starts with until its pane is measured. */
 const DEFAULT_TERMINAL_COLUMNS = 80;
 const DEFAULT_TERMINAL_ROWS = 24;
 
@@ -28,7 +27,6 @@ export function spawnTerminal(
   });
 }
 
-/** Fails with a `busy` `IpcError` while the terminal's input queue is full; the write can be retried. */
 export function writeTerminal(id: string, data: string): Promise<void> {
   return invokeCommand("writeTerminal", { id, data });
 }

@@ -16,7 +16,6 @@ const api = vi.hoisted(() => ({
   mcpAgentStatuses: vi.fn(),
 }));
 
-/** The board's drop handler, captured so a test can drop without a pointer. */
 const dnd = vi.hoisted(() => ({ onDragEnd: null as ((event: DragEndEvent) => void) | null }));
 
 vi.mock("@dnd-kit/core", async (importOriginal) => ({

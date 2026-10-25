@@ -3,10 +3,6 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 const UI_STORAGE_KEY = "terra-ui-selection";
 
-/**
- * Lightweight selection continuity. Domain/layout data remains authoritative
- * in the API; these ids only restore the last visual focus after a restart.
- */
 type UiState = {
   activeId: string | null;
   expandedId: string | null;

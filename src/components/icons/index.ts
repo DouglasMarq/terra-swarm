@@ -1,4 +1,3 @@
-/* Keep icon imports in one place so views do not grow ad-hoc SVG/emoji sets. */
 export {
   Bot,
   ChevronDown,

@@ -26,6 +26,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 import { listen } from "@tauri-apps/api/event";
 import { groupTasksByStatus } from "../domain/tasks";
 import { startMcpEventBridge, useMcpStore } from "./mcpStore";
+import { defined } from "../test/defined";
 
 export function makeTask(id: string, extra: Partial<McpTask> = {}): McpTask {
   return {
@@ -83,13 +84,13 @@ describe("mcp store", () => {
 
     api.mcpUpdateTask.mockResolvedValue(makeTask("T-1", { status: "blocked", assignee: "t-2" }));
     await useMcpStore.getState().updateTask("ws-1", "T-1", { status: "blocked", assignee: "t-2" });
-    const tasks = useMcpStore.getState().tasks["ws-1"]!;
+    const tasks = defined(useMcpStore.getState().tasks["ws-1"]);
     expect(tasks.find((task) => task.id === "T-1")?.status).toBe("blocked");
     expect(tasks).toHaveLength(2);
 
     api.mcpDeleteTask.mockResolvedValue(undefined);
     await useMcpStore.getState().deleteTask("ws-1", "T-2");
-    expect(useMcpStore.getState().tasks["ws-1"]!.map((task) => task.id)).toEqual(["T-1"]);
+    expect(defined(useMcpStore.getState().tasks["ws-1"]).map((task) => task.id)).toEqual(["T-1"]);
   });
 
   it("given an update that succeeds, resolves to the updated task", async () => {

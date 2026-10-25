@@ -18,6 +18,7 @@ import {
   ORCHESTRATION_STORAGE_KEY,
   useOrchestrationStore,
 } from "./orchestrationStore";
+import { defined } from "../test/defined";
 
 const workspaces: Workspace[] = [
   {
@@ -71,14 +72,14 @@ describe("orchestration store", () => {
     useOrchestrationStore.getState().sync(workspaces);
     const containerId = useOrchestrationStore.getState().snapshot?.containers[0]?.id;
     expect(containerId).toBeTruthy();
-    useOrchestrationStore.getState().closeContainer(containerId!);
+    useOrchestrationStore.getState().closeContainer(defined(containerId));
 
     const state = useOrchestrationStore.getState();
-    expect(state.containerVisibility[containerId!]).toBe(false);
+    expect(state.containerVisibility[defined(containerId)]).toBe(false);
     expect(state.snapshot?.containers[0]?.closed).toBe(true);
     expect(state.snapshot?.tabs[0]?.ptyId).toBe("pty-a");
 
-    useOrchestrationStore.getState().openContainer(containerId!);
+    useOrchestrationStore.getState().openContainer(defined(containerId));
     expect(useOrchestrationStore.getState().snapshot?.containers[0]?.visible).toBe(true);
   });
 
@@ -129,16 +130,16 @@ describe("orchestration store", () => {
     const containerId = useOrchestrationStore.getState().snapshot?.containers[0]?.id;
     expect(containerId).toBe("container-workspace-layout");
 
-    useOrchestrationStore.getState().setContainerState(containerId!, {
+    useOrchestrationStore.getState().setContainerState(defined(containerId), {
       collapsed: true,
       activePaneId: "pane-two",
       internalLayout: "vertical",
       size: 42,
     });
-    useOrchestrationStore.getState().reorderPanes(containerId!, ["pane-two", "pane-one"]);
+    useOrchestrationStore.getState().reorderPanes(defined(containerId), ["pane-two", "pane-one"]);
     useOrchestrationStore.getState().setWorkspaceLayout("workspace-layout", {
       mode: "spotlight",
-      itemIds: [containerId!],
+      itemIds: [defined(containerId)],
       metadata: { surface: "workbench" },
     });
     useOrchestrationStore.getState().setWorkspaceCollapsed("workspace-layout", true);

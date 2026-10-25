@@ -10,6 +10,7 @@ import {
   type CommandPaletteCallbacks,
 } from "./commandModel";
 import { normalizeSearchText } from "../../../lib/text/normalizeSearchText";
+import { defined } from "../../../test/defined";
 
 const workspaces: Workspace[] = [
   {
@@ -85,7 +86,7 @@ describe("command palette model", () => {
     expect(generic?.label).toBe("Novo agente… (selecione um projeto)");
     expect(generic?.disabled).toBe(true);
     expect(codex?.disabled).toBe(true);
-    expect(executeCommand(generic!, { onCreateAgent: createAgent }).kind).toBe("unavailable");
+    expect(executeCommand(defined(generic), { onCreateAgent: createAgent }).kind).toBe("unavailable");
     expect(createAgent).not.toHaveBeenCalled();
   });
 
@@ -106,7 +107,7 @@ describe("command palette model", () => {
 
     const action = vi.fn();
     const callbacks: CommandPaletteCallbacks = { onFocusedAgentAction: action };
-    const result = executeCommand(stop!, callbacks);
+    const result = executeCommand(defined(stop), callbacks);
     expect(result.kind).toBe("requestConfirm");
     expect(result.kind === "requestConfirm" ? result.request.kind : null).toBe("stop-agent");
     expect(action).not.toHaveBeenCalled();
@@ -122,9 +123,9 @@ describe("command palette model", () => {
       onCreateGroup: createGroup,
       onOpenTerminal: openTerminal,
     };
-    expect(executeCommand(commands.find((command) => command.id === "navigate:fleet")!, callbacks).kind).toBe("executed");
-    expect(executeCommand(commands.find((command) => command.id === "create:group")!, callbacks).kind).toBe("executed");
-    expect(executeCommand(commands.find((command) => command.id === "open-terminal:ws-terra:pty-1")!, callbacks).kind).toBe("executed");
+    expect(executeCommand(defined(commands.find((command) => command.id === "navigate:fleet")), callbacks).kind).toBe("executed");
+    expect(executeCommand(defined(commands.find((command) => command.id === "create:group")), callbacks).kind).toBe("executed");
+    expect(executeCommand(defined(commands.find((command) => command.id === "open-terminal:ws-terra:pty-1")), callbacks).kind).toBe("executed");
     expect(navigate).toHaveBeenCalledWith("fleet");
     expect(createGroup).toHaveBeenCalledOnce();
     expect(openTerminal).toHaveBeenCalledWith("ws-terra", "pty-1");
@@ -138,19 +139,19 @@ describe("command palette model", () => {
     const disabled = buildCommandModel({ workspaces, voiceEnabled: false });
     const settingsCommand = disabled.find((command) => command.id === "settings:voice");
     expect(settingsCommand?.label).toBe("Configurar entrada por voz");
-    expect(executeCommand(settingsCommand!, { onOpenVoiceSettings: settings }).kind).toBe("executed");
+    expect(executeCommand(defined(settingsCommand), { onOpenVoiceSettings: settings }).kind).toBe("executed");
     expect(settings).toHaveBeenCalledOnce();
 
     const idle = buildCommandModel({ workspaces, voiceEnabled: true, voiceRecording: false });
     const startCommand = idle.find((command) => command.id === "voice:start");
     expect(startCommand?.label).toBe("Iniciar captura de voz");
-    expect(executeCommand(startCommand!, { onStartVoice: start }).kind).toBe("executed");
+    expect(executeCommand(defined(startCommand), { onStartVoice: start }).kind).toBe("executed");
     expect(start).toHaveBeenCalledOnce();
 
     const recording = buildCommandModel({ workspaces, voiceEnabled: true, voiceRecording: true });
     const stopCommand = recording.find((command) => command.id === "voice:stop");
     expect(stopCommand?.label).toBe("Parar captura de voz");
-    expect(executeCommand(stopCommand!, { onStopVoice: stop }).kind).toBe("executed");
+    expect(executeCommand(defined(stopCommand), { onStopVoice: stop }).kind).toBe("executed");
     expect(stop).toHaveBeenCalledOnce();
   });
 });

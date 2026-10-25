@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { planTeam, TEAM_TEMPLATES } from "./teamTemplates";
+import { defined } from "../test/defined";
 
-const feature = TEAM_TEMPLATES.find((template) => template.id === "feature")!;
+const feature = defined(TEAM_TEMPLATES.find((template) => template.id === "feature"));
 
 describe("planTeam", () => {
   it("uses the template's agents when they are installed", () => {

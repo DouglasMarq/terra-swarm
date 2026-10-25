@@ -1,11 +1,12 @@
 import type { Group, Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "./workspace.model";
 import { uniqueStrings } from "../lib/collections/uniqueStrings";
+import { asRecord } from "../lib/records/records";
 import { DEFAULT_WORKSPACE_LAYOUT, mergeWorkspaceLayout, normalizeLayout } from "./migration/workspaceLayout";
 import { mergeWorkspaceSnapshot } from "./migration/snapshotMerge";
 
 function sourceGroupLayout(source: WorkspaceGroup): ReturnType<typeof normalizeLayout> {
-  const candidate = source as unknown as Record<string, unknown>;
-  const mode = typeof candidate.layout === "object" ? candidate.layout : {
+  const layout = asRecord(source).layout;
+  const mode = typeof layout === "object" ? layout : {
     mode: source.layoutMode ?? DEFAULT_WORKSPACE_LAYOUT.mode,
   };
   return normalizeLayout(mode);

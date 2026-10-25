@@ -22,6 +22,7 @@ vi.mock("../../lib/tauri/mcp", async (importOriginal) => ({
 
 import { useMcpStore } from "../../stores/mcpStore";
 import { TasksPanel } from "./TasksPanel";
+import { defined } from "../../test/defined";
 
 function task(id: string, extra: Partial<McpTask> = {}): McpTask {
   return {
@@ -95,13 +96,13 @@ describe("TasksPanel", () => {
     expect(await screen.findByText("Write docs")).toBeInTheDocument();
 
     api.mcpUpdateTask.mockResolvedValue(task("T-1", { status: "blocked" }));
-    const card = screen.getByText("Task T-1").closest("article")!;
+    const card = defined(screen.getByText("Task T-1").closest("article"));
     await user.selectOptions(within(card).getByRole("combobox", { name: "Status" }), "blocked");
     expect(api.mcpUpdateTask).toHaveBeenCalledWith("ws-1", "T-1", { status: "blocked" });
     expect(await screen.findByRole("region", { name: "Bloqueada" })).toHaveTextContent("Task T-1");
 
     api.mcpUpdateTask.mockResolvedValue(task("T-1", { status: "blocked", assignee: "t-1" }));
-    const moved = screen.getByText("Task T-1").closest("article")!;
+    const moved = defined(screen.getByText("Task T-1").closest("article"));
     await user.selectOptions(within(moved).getByRole("combobox", { name: "Responsável" }), "t-1");
     expect(api.mcpUpdateTask).toHaveBeenLastCalledWith("ws-1", "T-1", { assignee: "t-1" });
 

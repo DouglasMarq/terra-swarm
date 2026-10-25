@@ -14,7 +14,7 @@ vi.mock("../api", () => ({ api }));
 
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useWorktreeClose } from "./useWorktreeClose";
-import type { TerminalSessions } from "./useTerminalSessions";
+import type { WorktreeCloseSessions } from "./useWorktreeClose";
 
 const worktree = { path: "/wt/t-1", cwd: "/wt/t-1", branch: "terra/t-1", base: "main", repo: "/repo" };
 const workspaces: Workspace[] = [
@@ -29,12 +29,12 @@ function status(extra: Partial<WorktreeStatus> = {}): WorktreeStatus {
 }
 
 describe("useWorktreeClose", () => {
-  let sessions: TerminalSessions;
+  let sessions: WorktreeCloseSessions;
   beforeEach(() => {
     for (const fn of Object.values(api)) fn.mockReset();
     api.stopTerminal.mockResolvedValue(undefined);
     api.worktreeRemove.mockResolvedValue(undefined);
-    sessions = { close: vi.fn(async () => {}) } as unknown as TerminalSessions;
+    sessions = { close: vi.fn(async () => {}) };
     useTerminalRuntimeStore.setState({ notifItems: [] });
   });
 

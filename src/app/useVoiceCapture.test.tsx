@@ -28,7 +28,6 @@ vi.mock("../api", () => ({ api: { voiceToggleRecording: vi.fn(async () => undefi
 
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useVoiceCapture } from "./useVoiceCapture";
-import type { TerminalSessions } from "./useTerminalSessions";
 
 const groups: WorkspaceGroup[] = [
   { id: "group-front", name: "Frontend", collapsed: false, projectIds: [], parentGroupId: null, suspended: false },
@@ -42,8 +41,7 @@ function renderVoiceCapture() {
     resumeGroup: vi.fn(async () => undefined),
   };
   const openVoiceSettings = vi.fn();
-  // The voice flows under test never reach the terminal sessions, so an empty fake is enough.
-  const sessions = {} as unknown as TerminalSessions;
+  const sessions = { spawnInto: vi.fn(), close: vi.fn(), restart: vi.fn() };
   const { result } = renderHook(() =>
     useVoiceCapture({
       workspaces: [],

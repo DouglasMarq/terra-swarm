@@ -2,6 +2,7 @@ import { DEFAULT_NAME_LIST, NAME_SETS, type NameSetId, type NamesExhaustedStrate
 import { create } from "zustand";
 import type { AgentLaunchSettings } from "../domain/agentLaunchEnv";
 import { t } from "../i18n";
+import { isRecord } from "../lib/records/records";
 import { storageGet, storageRemove, storageSet } from "../lib/storage/safeStorage";
 import { DEFAULT_VOICE_LANGUAGE, isVoiceLanguage, type VoiceLanguage } from "../domain/voiceLanguages";
 import {
@@ -191,37 +192,36 @@ function loadAgentNames(): Record<string, string> {
   return {};
 }
 
+const HOTKEY_MODIFIERS = ["meta", "shift", "ctrl", "alt"] as const;
+
+function isStoredHotkey(value: unknown): value is Hotkey {
+  if (!isRecord(value)) return false;
+  if (typeof value.key !== "string" || value.key.length === 0) return false;
+  return HOTKEY_MODIFIERS.every((modifier) => typeof value[modifier] === "boolean");
+}
+
+function parseHotkeys(raw: string): Record<HotkeyActionId, Hotkey> {
+  const parsed: unknown = JSON.parse(raw);
+  const stored = isRecord(parsed) ? parsed : {};
+  const clean: Record<HotkeyActionId, Hotkey> = { ...DEFAULT_HOTKEYS };
+  for (const { id: action } of HOTKEY_ACTIONS) {
+    const hotkey = stored[action];
+    if (!isStoredHotkey(hotkey)) continue;
+    clean[action] = normalizeHotkeyForPlatform({
+      key: hotkey.key,
+      meta: hotkey.meta,
+      shift: hotkey.shift,
+      ctrl: hotkey.ctrl,
+      alt: hotkey.alt,
+    });
+  }
+  return clean;
+}
+
 function loadHotkeys(): Record<HotkeyActionId, Hotkey> {
   try {
     const raw = storageGet("hotkeys");
-    if (raw) {
-      const parsed: unknown = JSON.parse(raw);
-      const clean: Record<HotkeyActionId, Hotkey> = { ...DEFAULT_HOTKEYS };
-      for (const { id: action } of HOTKEY_ACTIONS) {
-        const value = (parsed as Record<string, unknown>)?.[action];
-        if (
-          value &&
-          typeof value === "object" &&
-          typeof (value as Hotkey).key === "string" &&
-          (value as Hotkey).key.length > 0 &&
-          ["meta", "shift", "ctrl", "alt"].every(
-            (modifier) =>
-              typeof (value as unknown as Record<string, unknown>)[modifier] ===
-              "boolean",
-          )
-        ) {
-          const hotkey = value as Hotkey;
-          clean[action] = normalizeHotkeyForPlatform({
-            key: hotkey.key,
-            meta: hotkey.meta,
-            shift: hotkey.shift,
-            ctrl: hotkey.ctrl,
-            alt: hotkey.alt,
-          });
-        }
-      }
-      return clean;
-    }
+    if (raw) return parseHotkeys(raw);
   } catch {
     // Corrupted value; fall back to defaults.
   }

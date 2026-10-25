@@ -200,7 +200,7 @@ beforeEach(() => {
     },
   });
 
-  class TestResizeObserver {
+  class TestResizeObserver implements ResizeObserver {
     private readonly callback: ResizeObserverCallback;
     disconnect = vi.fn();
 
@@ -214,7 +214,7 @@ beforeEach(() => {
     unobserve(_target: Element) {}
 
     trigger() {
-      this.callback([], this as unknown as ResizeObserver);
+      this.callback([], this);
     }
   }
 

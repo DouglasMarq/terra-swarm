@@ -47,13 +47,14 @@ function isFontInstalled(name: string): boolean {
       probe = null;
     }
   }
-  if (!probe) return false;
+  const context = probe;
+  if (!context) return false;
   const sample = "mmmmmmmmmmlli10OWw@#{}";
   return ["monospace", "serif"].some((fallback) => {
-    probe!.font = `72px ${fallback}`;
-    const base = probe!.measureText(sample).width;
-    probe!.font = `72px ${quoteFontFamily(name)}, ${fallback}`;
-    return probe!.measureText(sample).width !== base;
+    context.font = `72px ${fallback}`;
+    const base = context.measureText(sample).width;
+    context.font = `72px ${quoteFontFamily(name)}, ${fallback}`;
+    return context.measureText(sample).width !== base;
   });
 }
 

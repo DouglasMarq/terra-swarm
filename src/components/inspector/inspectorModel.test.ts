@@ -5,6 +5,7 @@ import {
   resolveInspectorTarget,
   totalTokens,
 } from "./inspectorModel";
+import { defined } from "../../test/defined";
 
 const workspace: Workspace = {
   id: "project-one",
@@ -125,7 +126,7 @@ describe("resolveInspectorTarget", () => {
   it("prioritizes an observed exit over a stale suspended flag", () => {
     const suspended = {
       ...workspace,
-      terminals: [{ ...workspace.terminals[0]!, suspended: true }],
+      terminals: [{ ...defined(workspace.terminals[0]), suspended: true }],
     };
     expect(resolveInspectorTarget({
       focusedId: "pty-codex",

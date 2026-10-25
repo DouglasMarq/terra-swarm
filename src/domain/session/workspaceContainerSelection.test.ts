@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Workspace, WorkspaceSnapshotV2 } from "../workspace.model";
 import { selectWorkspaceContainerId } from "./workspaceContainerSelection";
+import { defined } from "../../test/defined";
 
 const workspace: Workspace = {
   id: "workspace-a",
@@ -109,7 +110,7 @@ describe("selectWorkspaceContainerId", () => {
         },
         [{
           ...workspace,
-          terminals: [{ ...workspace.terminals[0]!, paneId: null }],
+          terminals: [{ ...defined(workspace.terminals[0]), paneId: null }],
         }],
         "workspace-a",
         { focusedTerminalId: "pty-b" },

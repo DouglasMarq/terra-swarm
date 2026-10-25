@@ -13,7 +13,9 @@ import type { TerminalSessions } from "./useTerminalSessions";
  * opening screen (or resumed right away when the user chose that), resumed
  * or discarded one at a time or all together.
  */
-export function useResumeQueue(sessions: TerminalSessions, refresh: () => Promise<void>) {
+export type ResumeSessions = Pick<TerminalSessions, "resumeItem" | "forget" | "resumeItems" | "notifyResumeFailures">;
+
+export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<void>) {
   const items = useTerminalRuntimeStore((state) => state.resumeItems);
   const [visible, setVisible] = useState(false);
   const [autoPending, setAutoPending] = useState(false);

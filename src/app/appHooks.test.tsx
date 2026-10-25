@@ -15,7 +15,6 @@ vi.mock("../api", () => ({ api }));
 
 import { useResumeQueue } from "./useResumeQueue";
 import { useWorkspaces } from "./useWorkspaces";
-import type { TerminalSessions } from "./useTerminalSessions";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useOrchestrationStore } from "../stores/orchestrationStore";
@@ -36,10 +35,12 @@ function fakeSessions(failing: string[] = []) {
         id: resume.terminalId,
         status: failing.includes(resume.terminalId) ? ("failed" as const) : ("succeeded" as const),
         error: failing.includes(resume.terminalId) ? new Error("boom") : undefined,
+        startedAt: 0,
+        finishedAt: 0,
       })),
     ),
     notifyResumeFailures: vi.fn(),
-  } as unknown as TerminalSessions;
+  };
 }
 
 describe("useResumeQueue", () => {

@@ -51,7 +51,7 @@ interface VoiceCaptureInput {
   voiceEnabled: boolean;
   /** Parse spoken commands ("foca no claude 2") instead of only dictating. */
   voiceCommandsEnabled: boolean;
-  sessions: TerminalSessions;
+  sessions: Pick<TerminalSessions, "spawnInto" | "close" | "restart">;
   openVoiceSettings: () => void;
   actions: {
     quickNewTerminal: (workspaceId: string) => Promise<void>;

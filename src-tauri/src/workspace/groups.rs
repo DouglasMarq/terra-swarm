@@ -47,7 +47,6 @@ impl WorkspaceStore {
         for terminal in &mut workspace.terminals {
             terminal.group_id = group_id.clone();
         }
-        self.save();
         Ok(())
     }
 
@@ -81,7 +80,6 @@ impl WorkspaceStore {
             created_at: Some(crate::clock::now_epoch_millis()),
         };
         self.groups.push(group.clone());
-        self.save();
         group
     }
 
@@ -92,7 +90,6 @@ impl WorkspaceStore {
         }
         let group = self.group_mut(id)?;
         group.name = name.to_string();
-        self.save();
         Ok(())
     }
 
@@ -112,7 +109,6 @@ impl WorkspaceStore {
                 }
             }
         }
-        self.save();
         Ok(())
     }
 
@@ -144,14 +140,12 @@ impl WorkspaceStore {
         {
             suspend_workspace_sessions(workspace, &suspended_ids);
         }
-        self.save();
         Ok(())
     }
 
     pub fn resume_group(&mut self, id: &str) -> Result<(), String> {
         let group = self.group_mut(id)?;
         group.suspended = false;
-        self.save();
         Ok(())
     }
 }

@@ -5,9 +5,9 @@ use crate::mcp::McpHub;
 use crate::pty::{bump_next_terminal_id, kill_all, kill_terminal_inner, PtyManager};
 use crate::sync::LockExt;
 use crate::workspace::{
-    bump_next_group_id, bump_next_id, emit_workspaces_changed, mark_imported_sessions_suspended,
-    parse_import_snapshot, replace_store_file, transfer_counts, validate_explicit_path,
-    WorkspaceSnapshotTransfer, WorkspaceStore, WORKSPACE_FILE_VERSION,
+    bump_next_group_id, bump_next_id, change_and_save, emit_workspaces_changed,
+    mark_imported_sessions_suspended, parse_import_snapshot, replace_store_file, transfer_counts,
+    validate_explicit_path, WorkspaceSnapshotTransfer, WorkspaceStore, WORKSPACE_FILE_VERSION,
 };
 
 /// Called by `close_workspace`: workspaces live in `workspaces.json`, so
@@ -24,12 +24,11 @@ fn purge_workspace(app: &AppHandle, workspace_id: &str) {
 #[tauri::command(async)]
 pub fn suspend_group(app: AppHandle, id: String) -> Result<(), String> {
     let store = app.state::<Mutex<WorkspaceStore>>();
-    let terminal_ids = {
-        let mut store = store.lock_or_recover();
+    let terminal_ids = change_and_save(&store, |store| {
         let terminal_ids = store.group_terminal_ids(&id)?;
         store.suspend_group(&id)?;
-        terminal_ids
-    };
+        Ok(terminal_ids)
+    })?;
     let manager = app.state::<Mutex<PtyManager>>();
     for terminal_id in terminal_ids {
         kill_terminal_inner(&manager, &terminal_id);
@@ -43,7 +42,11 @@ pub fn close_workspace(app: AppHandle, id: String) -> Result<(), String> {
     let store = app.state::<Mutex<WorkspaceStore>>();
     let terminals = {
         let mut store = store.lock_or_recover();
-        store.remove(&id).map(|ws| ws.terminals)
+        let removed = store.remove(&id);
+        if removed.is_some() {
+            store.save();
+        }
+        removed.map(|ws| ws.terminals)
     };
     purge_workspace(&app, &id);
     if let Some(terminals) = terminals {

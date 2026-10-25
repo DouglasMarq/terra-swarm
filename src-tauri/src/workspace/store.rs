@@ -51,7 +51,6 @@ impl WorkspaceStore {
             layout: Some(WorkspaceLayout::default()),
         };
         self.workspaces.push(ws.clone());
-        self.save();
         ws
     }
 
@@ -61,7 +60,6 @@ impl WorkspaceStore {
         for group in &mut self.groups {
             group.project_ids.retain(|project_id| project_id != id);
         }
-        self.save();
         Some(ws)
     }
 
@@ -82,16 +80,6 @@ impl WorkspaceStore {
         })
     }
 
-    /// Returns false when the workspace no longer exists (e.g. it was closed
-    /// while a terminal was being spawned), so the caller can roll back.
-    pub fn add_terminal(&mut self, ws_id: &str, meta: TerminalMeta) -> bool {
-        if !self.can_add_terminal(ws_id, &meta.id) {
-            return false;
-        }
-        self.record_terminal(ws_id, meta);
-        true
-    }
-
     pub fn can_add_terminal(&self, ws_id: &str, terminal_id: &str) -> bool {
         self.get(ws_id).is_some()
             && self
@@ -107,10 +95,9 @@ impl WorkspaceStore {
             Some(existing) => refresh_terminal(existing, meta),
             None => ws.terminals.push(meta),
         }
-        self.save();
     }
 
-    pub fn remove_terminal(&mut self, terminal_id: &str) {
+    pub fn forget_terminal(&mut self, terminal_id: &str) {
         for ws in self.workspaces.iter_mut() {
             ws.terminals.retain(|t| t.id != terminal_id);
             for pane in &mut ws.panes {
@@ -126,7 +113,6 @@ impl WorkspaceStore {
                 }
             }
         }
-        self.save();
     }
 
     /// A blank name leaves the workspace as it is.
@@ -137,14 +123,12 @@ impl WorkspaceStore {
             return Ok(());
         }
         ws.name = name;
-        self.save();
         Ok(())
     }
 
     pub fn reorder_workspaces(&mut self, order: &[String]) {
         let workspaces = std::mem::take(&mut self.workspaces);
         self.workspaces = reorder_by_ids(workspaces, order, |workspace| &workspace.id);
-        self.save();
     }
 
     pub fn set_width(&mut self, ws_id: &str, terminal_id: &str, width: f64) -> Result<(), String> {
@@ -157,7 +141,6 @@ impl WorkspaceStore {
         t.width = width
             .is_finite()
             .then_some(width.clamp(MIN_TERMINAL_WIDTH, MAX_TERMINAL_WIDTH));
-        self.save();
         Ok(())
     }
 }

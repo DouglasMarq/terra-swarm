@@ -10,7 +10,7 @@ fn update_and_notify<R: Runtime, T>(
     store: &Mutex<WorkspaceStore>,
     change: impl FnOnce(&mut WorkspaceStore) -> Result<T, String>,
 ) -> Result<T, String> {
-    let result = change(&mut store.lock_or_recover());
+    let result = change_and_save(store, change);
     if result.is_ok() {
         emit_workspaces_changed(app);
     }

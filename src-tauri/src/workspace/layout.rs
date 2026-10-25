@@ -199,7 +199,6 @@ impl WorkspaceStore {
             });
         }
         pane.active_tab_id = Some(tab_id);
-        self.save();
         Ok(())
     }
 
@@ -242,7 +241,6 @@ impl WorkspaceStore {
                 container.active_pane_id = workspace.active_pane_id.clone();
             }
         }
-        self.save();
         Ok(())
     }
 
@@ -257,7 +255,6 @@ impl WorkspaceStore {
         let workspace = self.workspace_mut(workspace_id)?;
         let containers = std::mem::take(&mut workspace.containers);
         workspace.containers = reorder_by_ids(containers, order, |container| &container.id);
-        self.save();
         Ok(())
     }
 
@@ -288,7 +285,6 @@ impl WorkspaceStore {
         if let Some(layout) = &mut container.layout {
             layout.item_ids = container.pane_ids.clone();
         }
-        self.save();
         Ok(())
     }
 
@@ -336,7 +332,6 @@ impl WorkspaceStore {
         if let Some(pane) = workspace.panes.iter_mut().find(|pane| pane.id == pane_id) {
             pane.container_id = Some(to_container_id.to_string());
         }
-        self.save();
         Ok(())
     }
 
@@ -413,7 +408,6 @@ impl WorkspaceStore {
             layout.item_ids.retain(|id| valid_panes.contains(id));
             container.layout = Some(layout);
         }
-        self.save();
         Ok(())
     }
 
@@ -426,14 +420,12 @@ impl WorkspaceStore {
         normalize_layout_state(&mut layout);
         workspace.layout_mode = Some(layout.mode.clone());
         workspace.layout = Some(layout);
-        self.save();
         Ok(())
     }
 
     pub fn set_collapsed(&mut self, workspace_id: &str, collapsed: bool) -> Result<(), String> {
         let workspace = self.workspace_mut(workspace_id)?;
         workspace.collapsed = collapsed;
-        self.save();
         Ok(())
     }
 }

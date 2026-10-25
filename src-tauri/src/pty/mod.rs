@@ -507,14 +507,18 @@ pub fn spawn_terminal_inner<R: Runtime>(
 
     output::spawn_output_pump(
         app,
-        &id,
-        &workspace_id,
-        reader,
-        Arc::clone(&backlog),
-        output::DurableScrollback {
-            store: Arc::clone(&scrollback),
-            is_terminal_enabled: Arc::clone(&scrollback_enabled),
-            is_app_enabled: Arc::clone(&durable_scrollback_enabled),
+        output::TerminalIds {
+            id: &id,
+            workspace_id: &workspace_id,
+        },
+        output::OutputPipe {
+            reader,
+            backlog: Arc::clone(&backlog),
+            scrollback: output::DurableScrollback {
+                store: Arc::clone(&scrollback),
+                is_terminal_enabled: Arc::clone(&scrollback_enabled),
+                is_app_enabled: Arc::clone(&durable_scrollback_enabled),
+            },
         },
     );
 

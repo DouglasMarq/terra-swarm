@@ -38,13 +38,13 @@ describe("board model", () => {
   it("plans a drop: move, reorder, hand off or nothing", () => {
     const tasks = [task("T-1", "todo", 1), task("T-2", "todo", 2), task("T-3", "review", 1)];
     const running = new Set(["t-1"]);
-    expect(planDrop(tasks[0], "column:review", tasks, running)).toEqual({ kind: "update", patch: { status: "review", position: 2 } });
-    expect(planDrop(tasks[1], "card:T-1", tasks, running)).toEqual({ kind: "update", patch: { position: 0.5 } });
-    expect(planDrop(tasks[0], "card:T-1", tasks, running)).toBeNull();
-    expect(planDrop(tasks[1], "column:todo", tasks, running)).toBeNull();
-    expect(planDrop(tasks[0], "agent:t-1", tasks, running)).toEqual({ kind: "handoff", terminalId: "t-1" });
-    expect(planDrop(tasks[0], "agent:t-9", tasks, running)).toBeNull();
-    expect(planDrop(tasks[0], null, tasks, running)).toBeNull();
+    expect(planDrop(tasks[0], "column:review", { tasks, runningAgents: running })).toEqual({ kind: "update", patch: { status: "review", position: 2 } });
+    expect(planDrop(tasks[1], "card:T-1", { tasks, runningAgents: running })).toEqual({ kind: "update", patch: { position: 0.5 } });
+    expect(planDrop(tasks[0], "card:T-1", { tasks, runningAgents: running })).toBeNull();
+    expect(planDrop(tasks[1], "column:todo", { tasks, runningAgents: running })).toBeNull();
+    expect(planDrop(tasks[0], "agent:t-1", { tasks, runningAgents: running })).toEqual({ kind: "handoff", terminalId: "t-1" });
+    expect(planDrop(tasks[0], "agent:t-9", { tasks, runningAgents: running })).toBeNull();
+    expect(planDrop(tasks[0], null, { tasks, runningAgents: running })).toBeNull();
   });
 });
 

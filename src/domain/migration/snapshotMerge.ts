@@ -130,8 +130,7 @@ function ensureMergedPane(merge: SnapshotMerge, placement: PanePlacement): Pane 
     tabIds: [],
     activeTabId: null,
     layout: mergeLayout(
-      placement.oldPane?.layout,
-      placement.incomingPane.layout,
+      { previous: placement.oldPane?.layout, incoming: placement.incomingPane.layout },
       new Set<string>(),
       merge.incoming.layout,
     ),
@@ -252,8 +251,7 @@ function finalizeMergedPane(merge: SnapshotMerge, paneId: string, pane: Pane): v
     pane.tabIds[0] ||
     null;
   pane.layout = mergeLayout(
-    oldPane?.layout,
-    incomingPane?.layout ?? pane.layout,
+    { previous: oldPane?.layout, incoming: incomingPane?.layout ?? pane.layout },
     validTabIds,
     merge.incoming.layout,
   );
@@ -333,8 +331,7 @@ function mergedContainer(
         ? base.activePaneId
         : (paneIds[0] ?? null),
     layout: mergeLayout(
-      oldContainer?.layout,
-      incomingContainer?.layout,
+      { previous: oldContainer?.layout, incoming: incomingContainer?.layout },
       new Set(paneIds),
       merge.incoming.layout,
     ),
@@ -394,8 +391,7 @@ function mergedProject(
     activePaneId,
     activeContainerId,
     layout: mergeLayout(
-      oldProject?.layout,
-      incomingProject.layout,
+      { previous: oldProject?.layout, incoming: incomingProject.layout },
       new Set([...paneIds, ...containerIds]),
       merge.incoming.layout,
     ),
@@ -514,6 +510,6 @@ export function mergeWorkspaceSnapshot(
     activeContainerId: activeSelection.activeContainerId,
     activePaneId: activeSelection.activePaneId,
     activeTabId: activeSelection.activeTabId,
-    layout: mergeLayout(old.layout, incoming.layout, allContainerIds, incoming.layout),
+    layout: mergeLayout({ previous: old.layout, incoming: incoming.layout }, allContainerIds, incoming.layout),
   });
 }

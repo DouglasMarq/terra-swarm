@@ -226,24 +226,28 @@ function agentLabelOf(data: CommandPaletteData, terminalId: string): string | nu
   return label ? agentLabelText(label) : null;
 }
 
-function destructiveRequest(
-  commandId: string,
-  kind: DestructiveActionKind,
-  title: string,
-  description: string,
-  context: FocusedAgentContext,
-  action: FocusedAgentAction,
-): CommandConfirmRequest {
+interface DestructiveFocusedCommand {
+  id: string;
+  label: string;
+  description: string;
+  keywords: string[];
+  icon: CommandIconName;
+  kind: DestructiveActionKind;
+  action: FocusedAgentAction;
+  title: string;
+}
+
+function destructiveRequest(candidate: DestructiveFocusedCommand, context: FocusedAgentContext): CommandConfirmRequest {
   return {
-    kind,
-    commandId,
-    title,
-    description,
+    kind: candidate.kind,
+    commandId: candidate.id,
+    title: candidate.title,
+    description: t("palette.descriptionNeedsConfirm", { description: candidate.description }),
     resourceId: context.terminalId,
     resourceLabel: `${context.label ?? context.command} · ${context.workspaceName}`,
     workspaceId: context.workspaceId,
     terminalId: context.terminalId,
-    action,
+    action: candidate.action,
   };
 }
 
@@ -488,16 +492,7 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       }),
     );
 
-    const destructiveFocusedCommands: readonly {
-      id: string;
-      label: string;
-      description: string;
-      keywords: string[];
-      icon: CommandIconName;
-      kind: DestructiveActionKind;
-      action: FocusedAgentAction;
-      title: string;
-    }[] = [
+    const destructiveFocusedCommands: readonly DestructiveFocusedCommand[] = [
       {
         id: "agent:interrupt-focused",
         label: t("palette.interrupt", { name: contextLabel }),
@@ -549,14 +544,7 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
           keywords: candidate.keywords,
           icon: candidate.icon,
           intent: { kind: "focused-agent-action", action: candidate.action, context },
-          confirmation: destructiveRequest(
-            candidate.id,
-            candidate.kind,
-            candidate.title,
-            t("palette.descriptionNeedsConfirm", { description: candidate.description }),
-            context,
-            candidate.action,
-          ),
+          confirmation: destructiveRequest(candidate, context),
         }),
       );
     }

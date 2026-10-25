@@ -9,6 +9,10 @@ export interface WorkspaceContainerSelectionOptions {
   visibleOnly?: boolean;
 }
 
+export interface WorkspaceContainerQuery extends WorkspaceContainerSelectionOptions {
+  workspaceId: string;
+}
+
 /**
  * Resolve a workspace to its exact visual container.
  *
@@ -21,9 +25,9 @@ export interface WorkspaceContainerSelectionOptions {
 export function selectWorkspaceContainerId(
   snapshot: WorkspaceSnapshotV2 | null,
   workspaces: readonly Workspace[],
-  workspaceId: string,
-  options: WorkspaceContainerSelectionOptions = {},
+  query: WorkspaceContainerQuery,
 ): string | null {
+  const { workspaceId, ...options } = query;
   const containers = (snapshot?.containers ?? []).filter(
     (container) => container.projectId === workspaceId,
   );

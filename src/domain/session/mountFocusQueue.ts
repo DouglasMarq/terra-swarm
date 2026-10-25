@@ -29,6 +29,8 @@ export type MountFocusResult = {
   finishedAt: number;
 };
 
+type MountFocusOutcome = Pick<MountFocusResult, "status" | "phase" | "error">;
+
 export type MountFocusQueue = {
   enqueue: (effect: MountFocusEffect) => Promise<MountFocusResult>;
   add: (effect: MountFocusEffect) => Promise<MountFocusResult>;
@@ -80,12 +82,8 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
     for (const waiter of waiters) waiter.resolve(all.filter((result) => waiter.ids.has(result.id)));
   };
 
-  const finish = (
-    effect: InternalEffect,
-    status: MountFocusStatus,
-    phase?: MountFocusPhase,
-    error?: unknown,
-  ): void => {
+  const finish = (effect: InternalEffect, outcome: MountFocusOutcome): void => {
+    const { status, phase, error } = outcome;
     const result: MountFocusResult = {
       id: effect.id,
       status,
@@ -103,7 +101,7 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
 
   const process = async (effect: InternalEffect): Promise<void> => {
     if (effect.cancelRequested) {
-      finish(effect, "cancelled", undefined, effect.cancelReason);
+      finish(effect, { status: "cancelled", error: effect.cancelReason });
       return;
     }
 
@@ -117,12 +115,12 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
       try {
         await effect.mount(context);
       } catch (error) {
-        if (effect.cancelRequested) finish(effect, "cancelled", "mount", effect.cancelReason ?? error);
-        else finish(effect, "failed", "mount", error);
+        if (effect.cancelRequested) finish(effect, { status: "cancelled", phase: "mount", error: effect.cancelReason ?? error });
+        else finish(effect, { status: "failed", phase: "mount", error });
         return;
       }
       if (effect.cancelRequested) {
-        finish(effect, "cancelled", "mount", effect.cancelReason);
+        finish(effect, { status: "cancelled", phase: "mount", error: effect.cancelReason });
         return;
       }
     }
@@ -131,17 +129,17 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
       try {
         await effect.focus(context);
       } catch (error) {
-        if (effect.cancelRequested) finish(effect, "cancelled", "focus", effect.cancelReason ?? error);
-        else finish(effect, "failed", "focus", error);
+        if (effect.cancelRequested) finish(effect, { status: "cancelled", phase: "focus", error: effect.cancelReason ?? error });
+        else finish(effect, { status: "failed", phase: "focus", error });
         return;
       }
       if (effect.cancelRequested) {
-        finish(effect, "cancelled", "focus", effect.cancelReason);
+        finish(effect, { status: "cancelled", phase: "focus", error: effect.cancelReason });
         return;
       }
     }
 
-    finish(effect, "completed");
+    finish(effect, { status: "completed" });
   };
 
   const startNext = (): void => {
@@ -156,7 +154,7 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
     void process(effect).then(startNext, (error: unknown) => {
       // Effect functions are already guarded, but keep a final safety net so
       // one malformed thenable cannot leave the serial queue blocked.
-      finish(effect, effect.cancelRequested ? "cancelled" : "failed", undefined, error);
+      finish(effect, { status: effect.cancelRequested ? "cancelled" : "failed", error });
       startNext();
     });
   };
@@ -171,7 +169,7 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
           current.cancelRequested = true;
           current.cancelReason = new Error("replaced by a newer mount/focus effect");
           current.controller.abort(current.cancelReason);
-          finish(current, "cancelled", undefined, current.cancelReason);
+          finish(current, { status: "cancelled", error: current.cancelReason });
         }
       }
     }
@@ -200,7 +198,7 @@ export function createMountFocusQueue(now: () => number): MountFocusQueue {
     effect.cancelReason = reasonFor(reason);
     effect.controller.abort(effect.cancelReason);
     if (effect.status === "pending") {
-      finish(effect, "cancelled", undefined, effect.cancelReason);
+      finish(effect, { status: "cancelled", error: effect.cancelReason });
       startNext();
     }
     return true;

@@ -595,7 +595,7 @@ function App() {
             void sessions.spawnInto(
               workspaceId,
               agentId,
-              paneId ? { paneId } : undefined,
+              { placement: paneId ? { paneId } : undefined },
             ).catch(sessions.reportSpawnError);
             return;
           }
@@ -735,7 +735,7 @@ function App() {
         canIsolate={Boolean(active && branches[active.id])}
         onSpawn={async (agent, options) => {
           if (!active) return;
-          await sessions.spawnInto(active.id, agent, undefined, options);
+          await sessions.spawnInto(active.id, agent, options);
         }}
       />
 

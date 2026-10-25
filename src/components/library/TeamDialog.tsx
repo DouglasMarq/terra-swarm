@@ -28,7 +28,7 @@ export function TeamDialog({ projectName, agents, defaultAgent, canIsolate, onSp
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const template = TEAM_TEMPLATES.find((candidate) => candidate.id === chosen) ?? TEAM_TEMPLATES[0];
-  const plan = useMemo(() => planTeam(template, agents, defaultAgent, canIsolate), [template, agents, defaultAgent, canIsolate]);
+  const plan = useMemo(() => planTeam(template, { agents, defaultAgent, canIsolate }), [template, agents, defaultAgent, canIsolate]);
 
   const start = async () => {
     setStarting(true);

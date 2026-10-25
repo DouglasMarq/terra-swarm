@@ -64,14 +64,14 @@ export function normalizeLayout(
   };
 }
 
-export function mergeLayout(
-  previous: WorkspaceLayout | undefined,
-  incoming: WorkspaceLayout | undefined,
-  validIds: ReadonlySet<string>,
-  fallback: WorkspaceLayout,
-): WorkspaceLayout {
-  const previousLayout = normalizeLayout(previous, fallback);
-  const incomingLayout = normalizeLayout(incoming, fallback);
+export interface LayoutPair {
+  previous: WorkspaceLayout | undefined;
+  incoming: WorkspaceLayout | undefined;
+}
+
+export function mergeLayout(layouts: LayoutPair, validIds: ReadonlySet<string>, fallback: WorkspaceLayout): WorkspaceLayout {
+  const previousLayout = normalizeLayout(layouts.previous, fallback);
+  const incomingLayout = normalizeLayout(layouts.incoming, fallback);
   const itemIds = uniqueStrings([
     ...(previousLayout.itemIds ?? []),
     ...(incomingLayout.itemIds ?? []),
@@ -93,10 +93,9 @@ export function mergeLayout(
 
 /** Shared layout merge primitive for the store's group projection. */
 export function mergeWorkspaceLayout(
-  previous: WorkspaceLayout | undefined,
-  incoming: WorkspaceLayout | undefined,
+  layouts: LayoutPair,
   validIds: ReadonlySet<string>,
   fallback: WorkspaceLayout = DEFAULT_WORKSPACE_LAYOUT,
 ): WorkspaceLayout {
-  return mergeLayout(previous, incoming, validIds, fallback);
+  return mergeLayout(layouts, validIds, fallback);
 }

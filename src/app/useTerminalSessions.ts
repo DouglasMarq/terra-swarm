@@ -34,6 +34,12 @@ interface TerminalSessionsInput {
   refresh: () => Promise<void>;
 }
 
+export interface SpawnIntoOptions {
+  placement?: { paneId: string; tabId?: string };
+  worktree?: boolean;
+  role?: AgentRole | null;
+}
+
 /**
  * Terminal lifecycle as the UI sees it: which ids are live and at which
  * process generation, spawning, closing, restarting and resuming, and the
@@ -151,12 +157,8 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
   };
 
   /** Open a new agent in a project, optionally in a given pane. */
-  const spawnInto = async (
-    workspaceId: string,
-    command: string,
-    placement?: { paneId: string; tabId?: string },
-    options: { worktree?: boolean; role?: AgentRole | null } = {},
-  ) => {
+  const spawnInto = async (workspaceId: string, command: string, options: SpawnIntoOptions = {}) => {
+    const { placement } = options;
     // Spawn at an existing pane's size when possible: otherwise the PTY starts
     // at 80x24 and the child draws its first frame at the wrong size (worst
     // on Windows/ConPTY).

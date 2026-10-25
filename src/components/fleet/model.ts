@@ -179,13 +179,14 @@ function groupForId(groups: readonly WorkspaceGroup[], id: string): WorkspaceGro
   );
 }
 
-function makeAgent(
-  workspace: Workspace,
-  terminal: TerminalMeta,
-  group: WorkspaceGroup,
-  input: FleetDerivationInput,
-  t: Translate,
-): FleetAgentModel {
+interface AgentPlacement {
+  workspace: Workspace;
+  terminal: TerminalMeta;
+  group: WorkspaceGroup;
+}
+
+function makeAgent(placement: AgentPlacement, input: FleetDerivationInput, t: Translate): FleetAgentModel {
+  const { workspace, terminal, group } = placement;
   const exited = input.exited ?? EMPTY_RECORD as Readonly<Record<string, number | null>>;
   const notifications = input.notifications ?? EMPTY_RECORD as Readonly<Record<string, number>>;
   const contextUsage = input.contextUsage ?? EMPTY_RECORD as Readonly<Record<string, number>>;
@@ -279,7 +280,7 @@ export function deriveFleetModel(input: FleetDerivationInput, t: Translate): Fle
   const ungrouped = groupForId(groups, UNGROUPED_ID);
   const agents = workspaces.flatMap((workspace) => {
     const group = membership.get(workspace.id) ?? ungrouped;
-    return workspace.terminals.map((terminal) => makeAgent(workspace, terminal, group, input, t));
+    return workspace.terminals.map((terminal) => makeAgent({ workspace, terminal, group }, input, t));
   });
 
   const groupModels = [

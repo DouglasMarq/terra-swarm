@@ -12,12 +12,17 @@ function sourceGroupLayout(source: WorkspaceGroup): ReturnType<typeof normalizeL
   return normalizeLayout(mode);
 }
 
+export interface BackendWorkspaces {
+  workspaces: readonly Workspace[];
+  groups: readonly WorkspaceGroup[];
+}
+
 function toDomainGroups(
-  sourceGroups: readonly WorkspaceGroup[],
+  source: BackendWorkspaces,
   snapshot: WorkspaceSnapshotV2,
-  workspaces: readonly Workspace[],
   previousGroups: readonly Group[] = [],
 ): Group[] {
+  const { workspaces, groups: sourceGroups } = source;
   const projectIds = new Set(snapshot.projects.map((project) => project.id));
   const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
   const projectsByGroup = new Map<string, string[]>();
@@ -58,8 +63,7 @@ function toDomainGroups(
         collapsed: Boolean(source.collapsed),
         suspended: Boolean(source.suspended),
         layout: mergeWorkspaceLayout(
-          previous?.layout,
-          { ...layout, itemIds: projectIdsForGroup },
+          { previous: previous?.layout, incoming: { ...layout, itemIds: projectIdsForGroup } },
           new Set(projectIdsForGroup),
           DEFAULT_WORKSPACE_LAYOUT,
         ),
@@ -69,11 +73,11 @@ function toDomainGroups(
 }
 
 export function deriveSnapshot(
-  workspaces: readonly Workspace[],
-  sourceGroups: readonly WorkspaceGroup[],
+  source: BackendWorkspaces,
   visibility: Record<string, boolean>,
   previous: WorkspaceSnapshotV2 | null,
 ): { snapshot: WorkspaceSnapshotV2; groups: Group[] } {
+  const { workspaces } = source;
   const snapshot = mergeWorkspaceSnapshot(workspaces, previous, {
     containerVisibility: visibility,
   });
@@ -95,7 +99,7 @@ export function deriveSnapshot(
     container.closed = !visible;
   }
 
-  const groups = toDomainGroups(sourceGroups, snapshot, workspaces, previous?.groups ?? snapshot.groups);
+  const groups = toDomainGroups(source, snapshot, previous?.groups ?? snapshot.groups);
   snapshot.groups = groups;
   snapshot.activeGroupId = groups.some((group) => group.id === snapshot.activeGroupId)
     ? snapshot.activeGroupId

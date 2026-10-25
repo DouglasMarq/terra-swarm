@@ -6,6 +6,7 @@ import {
   layoutForPanelIds,
   orderedIds,
   resolveLayoutMode,
+  type PaneArrangement,
 } from "./layout";
 import type {
   ContainerLayoutChange,
@@ -73,11 +74,10 @@ function panelSizes(
 
 function persistedLayout(
   containerId: string,
-  mode: WorkbenchLayoutMode,
-  paneIds: readonly string[],
-  sizes: Record<string, number>,
+  arrangement: Required<PaneArrangement>,
   baseLayout: WorkspaceLayout,
 ): ContainerLayoutChange {
+  const { mode, paneIds, sizes } = arrangement;
   const normalizedSizes = layoutForPanelIds(
     { ...baseLayout, itemIds: [...paneIds], sizes },
     paneIds,
@@ -196,9 +196,7 @@ export function PaneGrid({
           onLayoutChange?.(
             persistedLayout(
               projection.container.id,
-              mode,
-              panes.map(({ pane }) => pane.id),
-              nextSizes,
+              { mode, paneIds: panes.map(({ pane }) => pane.id), sizes: nextSizes },
               projection.container.layout,
             ),
           );

@@ -92,7 +92,7 @@ const snapshot: WorkspaceSnapshotV2 = {
 
 describe("selectWorkspaceContainerId", () => {
   it("uses the persisted active container instead of the first split", () => {
-    expect(selectWorkspaceContainerId(snapshot, [workspace], "workspace-a")).toBe(
+    expect(selectWorkspaceContainerId(snapshot, [workspace], { workspaceId: "workspace-a" })).toBe(
       "container-b",
     );
   });
@@ -112,8 +112,7 @@ describe("selectWorkspaceContainerId", () => {
           ...workspace,
           terminals: [{ ...defined(workspace.terminals[0]), paneId: null }],
         }],
-        "workspace-a",
-        { focusedTerminalId: "pty-b" },
+        { workspaceId: "workspace-a", focusedTerminalId: "pty-b" },
       ),
     ).toBe("container-b");
   });

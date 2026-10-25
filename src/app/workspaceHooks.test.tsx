@@ -127,7 +127,7 @@ describe("useAgentPicker", () => {
 
     await act(() => result.current.quickNewTerminal("ws-alpha", "pane-1"));
 
-    expect(sessions.spawnInto).toHaveBeenCalledWith("ws-alpha", "claude", { paneId: "pane-1" });
+    expect(sessions.spawnInto).toHaveBeenCalledWith("ws-alpha", "claude", { placement: { paneId: "pane-1" } });
     expect(result.current.open).toBe(false);
     expect(useUiStore.getState().activeId).toBe("ws-alpha");
     expect(useUiStore.getState().expandedId).toBeNull();
@@ -156,7 +156,7 @@ describe("useAgentPicker", () => {
     await act(() => result.current.choose("codex"));
 
     expect(usePreferencesStore.getState().defaultAgent).toBe("codex");
-    expect(sessions.spawnInto).toHaveBeenCalledWith("ws-alpha", "codex", { paneId: "pane-2" }, { worktree: true, role: "executor" });
+    expect(sessions.spawnInto).toHaveBeenCalledWith("ws-alpha", "codex", { placement: { paneId: "pane-2" }, worktree: true, role: "executor" });
     expect(result.current.open).toBe(false);
     expect(result.current.target).toBeNull();
     expect(result.current.isolate).toBe(false);

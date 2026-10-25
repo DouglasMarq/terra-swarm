@@ -39,7 +39,7 @@ describe("workbench layout projection", () => {
       mode: "auto",
       metadata: { workbenchMode: "sidebar" },
     });
-    expect(nextLayout("container-a", "auto", ["pane-a"], { "pane-a": 100 })).toEqual({
+    expect(nextLayout("container-a", { mode: "auto", paneIds: ["pane-a"], sizes: { "pane-a": 100 } })).toEqual({
       containerId: "container-a",
       layout: { mode: "auto", itemIds: ["pane-a"], sizes: { "pane-a": 100 } },
     });

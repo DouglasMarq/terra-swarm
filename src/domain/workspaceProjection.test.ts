@@ -21,7 +21,7 @@ const group: WorkspaceGroup = {
 
 describe("deriveSnapshot", () => {
   it("Given a workspace in a group, when deriving the snapshot, then the group lists the project and falls back to its id as name", () => {
-    const { snapshot, groups } = deriveSnapshot([workspace], [group], {}, null);
+    const { snapshot, groups } = deriveSnapshot({ workspaces: [workspace], groups: [group] }, {}, null);
 
     expect(snapshot.projects[0]?.groupId).toBe("group-a");
     expect(groups).toHaveLength(1);
@@ -31,19 +31,19 @@ describe("deriveSnapshot", () => {
   });
 
   it("Given a hidden container, when deriving the snapshot, then the container is closed", () => {
-    const first = deriveSnapshot([workspace], [], {}, null);
+    const first = deriveSnapshot({ workspaces: [workspace], groups: [] }, {}, null);
     const containerId = first.snapshot.containers[0]?.id ?? "";
 
-    const { snapshot } = deriveSnapshot([workspace], [], { [containerId]: false }, first.snapshot);
+    const { snapshot } = deriveSnapshot({ workspaces: [workspace], groups: [] }, { [containerId]: false }, first.snapshot);
 
     expect(snapshot.containers[0]).toMatchObject({ visible: false, closed: true });
   });
 
   it("Given an active group that no longer exists, when deriving the snapshot, then no group is active", () => {
-    const first = deriveSnapshot([workspace], [group], {}, null);
+    const first = deriveSnapshot({ workspaces: [workspace], groups: [group] }, {}, null);
     const previous = { ...first.snapshot, activeGroupId: "group-gone" };
 
-    const { snapshot } = deriveSnapshot([{ ...workspace, groupId: null }], [], {}, previous);
+    const { snapshot } = deriveSnapshot({ workspaces: [{ ...workspace, groupId: null }], groups: [] }, {}, previous);
 
     expect(snapshot.activeGroupId).toBeNull();
   });

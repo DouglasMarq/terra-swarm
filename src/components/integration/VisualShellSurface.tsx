@@ -192,7 +192,7 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     [props.focusedId, props.snapshot, props.workspaces],
   );
   const source = useMemo(
-    () => workbenchSnapshot(props.snapshot, props.detachedTerminalIds, props.focusedId, props.activeId),
+    () => workbenchSnapshot(props.snapshot, { detachedTerminalIds: props.detachedTerminalIds, focusedId: props.focusedId, activeProjectId: props.activeId }),
     [props.activeId, props.detachedTerminalIds, props.focusedId, props.snapshot],
   );
 

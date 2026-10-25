@@ -409,8 +409,7 @@ function applySourceContainerOrder(workspace: WorkspaceMigration): void {
     if (paneOrder.length > 0) {
       target.paneIds = uniqueStrings([...paneOrder, ...target.paneIds]);
       target.layout = mergeWorkspaceLayout(
-        target.layout,
-        { ...target.layout, itemIds: target.paneIds },
+        { previous: target.layout, incoming: { ...target.layout, itemIds: target.paneIds } },
         new Set(target.paneIds),
         workspace.layout,
       );

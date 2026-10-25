@@ -256,6 +256,13 @@ function indexTree(roots: readonly NavigatorNode[]): NavigatorTree {
   return { roots: [...roots], byId, ungrouped };
 }
 
+interface AgentSlot {
+  parentId: string;
+  tabId?: string;
+  paneId?: string;
+  containerId?: string;
+}
+
 /**
  * Converts the legacy workspace/group wire model into one deterministic tree.
  * The model deliberately keeps projects and agents separate from visual containers;
@@ -297,32 +304,29 @@ export function buildNavigatorTree(
     const hierarchy = hierarchyForWorkspace(workspace, options);
     const terminalById = new Map(workspace.terminals.map((terminal) => [terminal.id, terminal]));
     const usedTerminalIds = new Set<string>();
-    const makeAgent = (
-      terminal: TerminalMeta,
-      parentId: string,
-      tabId?: string,
-      paneId?: string,
-      containerId?: string,
-    ): NavigatorAgentNode => ({
-      id: tabId ?? terminal.id,
-      kind: "agent",
-      name: options.agentLabels?.[terminal.id]?.primary ?? (terminal.command || terminal.id),
-      tag: options.agentLabels?.[terminal.id]?.tag,
-      parentId,
-      depth: 2,
-      children: [],
-      status: agentNodeStatus(terminal.id, terminal, options),
-      count: 0,
-      source: terminal,
-      workspaceId: workspace.id,
-      terminalId: terminal.id,
-      ...(tabId ? { tabId } : {}),
-      ...(paneId ? { paneId } : {}),
-      ...(containerId ? { containerId } : {}),
-      branchIds: branches.filter((branch) => branchMatches(branch, workspace.id, terminal.id)).map((branch) => branch.id),
-      contextUsage: options.contextUsage?.[terminal.id] ?? null,
-      notifications: notificationCount(options.notifications ?? {}, terminal.id),
-    });
+    const makeAgent = (terminal: TerminalMeta, slot: AgentSlot): NavigatorAgentNode => {
+      const { parentId, tabId, paneId, containerId } = slot;
+      return {
+        id: tabId ?? terminal.id,
+        kind: "agent",
+        name: options.agentLabels?.[terminal.id]?.primary ?? (terminal.command || terminal.id),
+        tag: options.agentLabels?.[terminal.id]?.tag,
+        parentId,
+        depth: 2,
+        children: [],
+        status: agentNodeStatus(terminal.id, terminal, options),
+        count: 0,
+        source: terminal,
+        workspaceId: workspace.id,
+        terminalId: terminal.id,
+        ...(tabId ? { tabId } : {}),
+        ...(paneId ? { paneId } : {}),
+        ...(containerId ? { containerId } : {}),
+        branchIds: branches.filter((branch) => branchMatches(branch, workspace.id, terminal.id)).map((branch) => branch.id),
+        contextUsage: options.contextUsage?.[terminal.id] ?? null,
+        notifications: notificationCount(options.notifications ?? {}, terminal.id),
+      };
+    };
 
     const terminalForTab = (tab: TerminalTab, paneId: string): TerminalMeta => {
       const terminal = (tab.ptyId ? terminalById.get(tab.ptyId) : undefined)
@@ -353,11 +357,11 @@ export function buildNavigatorTree(
       const tabChildren: NavigatorAgentNode[] = pane.tabIds
         .map((tabId) => hierarchy.tabs.get(tabId))
         .filter((tab): tab is TerminalTab => Boolean(tab))
-        .map((tab) => makeAgent(terminalForTab(tab, pane.id), pane.id, tab.id, pane.id, container.id));
+        .map((tab) => makeAgent(terminalForTab(tab, pane.id), { parentId: pane.id, tabId: tab.id, paneId: pane.id, containerId: container.id }));
       const fallbackChildren = tabChildren.length === 0
         ? fallbackTerminals.map((terminal) => {
           usedTerminalIds.add(terminal.id);
-          return makeAgent({ ...terminal, paneId: pane.id }, pane.id, terminal.tabId ?? undefined, pane.id, container.id);
+          return makeAgent({ ...terminal, paneId: pane.id }, { parentId: pane.id, tabId: terminal.tabId ?? undefined, paneId: pane.id, containerId: container.id });
         })
         : [];
       const children = [...tabChildren, ...fallbackChildren];
@@ -426,7 +430,7 @@ export function buildNavigatorTree(
     const agents: NavigatorAgentNode[] = structuralChildren.length === 0
       ? workspace.terminals.map((terminal) => {
         usedTerminalIds.add(terminal.id);
-        return makeAgent(terminal, projectId);
+        return makeAgent(terminal, { parentId: projectId });
       })
       : structuralChildren.flatMap((container) => container.children.flatMap((pane) => pane.children.filter((child): child is NavigatorAgentNode => child.kind === "agent")));
     const projectChildren: NavigatorNode[] = options.flatten

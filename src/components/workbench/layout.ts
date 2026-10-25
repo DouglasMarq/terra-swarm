@@ -195,12 +195,14 @@ export function layoutForPanelIds(
   return sizes;
 }
 
-export function nextLayout(
-  containerId: string,
-  mode: WorkbenchLayoutMode,
-  paneIds: readonly string[],
-  sizes?: Record<string, number>,
-): { containerId: string; layout: WorkspaceLayout } {
+export interface PaneArrangement {
+  mode: WorkbenchLayoutMode;
+  paneIds: readonly string[];
+  sizes?: Record<string, number>;
+}
+
+export function nextLayout(containerId: string, arrangement: PaneArrangement): { containerId: string; layout: WorkspaceLayout } {
+  const { mode, paneIds, sizes } = arrangement;
   return {
     containerId,
     layout: {

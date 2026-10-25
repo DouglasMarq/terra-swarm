@@ -4,13 +4,14 @@ import type { NotificationItem } from "./notification.model";
 const PER_AGENT_COOLDOWN_MS = 30_000;
 
 /** Whether a native notification should be shown for this agent now. */
-export function shouldNotify(
-  lastShown: Map<string, number>,
-  terminalId: string,
-  now: number,
-  appFocused: boolean,
-): boolean {
-  if (appFocused) return false;
+export interface NotifyMoment {
+  now: number;
+  isAppFocused: boolean;
+}
+
+export function shouldNotify(lastShown: Map<string, number>, terminalId: string, moment: NotifyMoment): boolean {
+  if (moment.isAppFocused) return false;
+  const { now } = moment;
   const last = lastShown.get(terminalId);
   if (last !== undefined && now - last < PER_AGENT_COOLDOWN_MS) return false;
   lastShown.set(terminalId, now);

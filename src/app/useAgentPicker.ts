@@ -50,7 +50,7 @@ export function useAgentPicker(agentCatalog: AgentCatalog, sessions: PickerSessi
     await agentCatalog.whenReady();
     const isDefaultAvailable = defaultAgent && agentCatalog.isAvailable(defaultAgent);
     if (isDefaultAvailable) {
-      sessions.spawnInto(workspaceId, defaultAgent, paneId ? { paneId } : undefined).catch(sessions.reportSpawnError);
+      sessions.spawnInto(workspaceId, defaultAgent, { placement: paneId ? { paneId } : undefined }).catch(sessions.reportSpawnError);
       return;
     }
     showPicker({ workspaceId, paneId, shouldSaveDefault: false });
@@ -66,11 +66,10 @@ export function useAgentPicker(agentCatalog: AgentCatalog, sessions: PickerSessi
     if (saveDefault) usePreferencesStore.getState().setDefaultAgent(agentId);
     setOpenState(false);
     const chosenTarget = target;
-    const chosenPane = targetPane;
-    const options = { worktree: isolate, role };
+    const options = { worktree: isolate, role, placement: targetPane ? { paneId: targetPane } : undefined };
     resetChoice();
     if (!chosenTarget) return;
-    await sessions.spawnInto(chosenTarget, agentId, chosenPane ? { paneId: chosenPane } : undefined, options)
+    await sessions.spawnInto(chosenTarget, agentId, options)
       .catch(sessions.reportSpawnError);
   };
 

@@ -44,13 +44,15 @@ export function visibleSnapshot(
 }
 
 /** What the Workbench shows: one project at a time, the sidebar switches between them. */
-export function workbenchSnapshot(
-  snapshot: WorkspaceSnapshotV2 | null,
-  detachedTerminalIds: readonly string[],
-  focusedId: string | null,
-  activeProjectId: string | null,
-): WorkspaceSnapshotV2 | null {
-  const visible = visibleSnapshot(snapshot, detachedTerminalIds, focusedId);
+export interface WorkbenchView {
+  detachedTerminalIds: readonly string[];
+  focusedId: string | null;
+  activeProjectId: string | null;
+}
+
+export function workbenchSnapshot(snapshot: WorkspaceSnapshotV2 | null, view: WorkbenchView): WorkspaceSnapshotV2 | null {
+  const visible = visibleSnapshot(snapshot, view.detachedTerminalIds, view.focusedId);
+  const { activeProjectId } = view;
   if (!visible || !activeProjectId) return visible;
   return { ...visible, containers: visible.containers.filter((container) => container.projectId === activeProjectId) };
 }
@@ -144,7 +146,8 @@ export function containerVisibilityByWorkspace(
   focusedId: string | null,
 ): Record<string, boolean> {
   return Object.fromEntries(workspaces.map((workspace) => {
-    const containerId = selectWorkspaceContainerId(snapshot, workspaces, workspace.id, {
+    const containerId = selectWorkspaceContainerId(snapshot, workspaces, {
+      workspaceId: workspace.id,
       focusedTerminalId: focusedId,
     });
     return [workspace.id, containerId ? snapshot?.containers.find((container) => container.id === containerId)?.visible !== false : true];

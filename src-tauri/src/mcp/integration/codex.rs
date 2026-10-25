@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use super::{text_field, AgentIntegration, LaunchContext};
 use crate::mcp::launch::{quote, Quoting, ENV_TOKEN, SERVER_NAME};
-use crate::mcp::repo::AgentState;
+use crate::mcp::model::AgentState;
 use crate::usage::{number, SessionLog, TokenUsage};
 
 const ID: &str = "codex";
@@ -128,12 +128,7 @@ pub fn rewrite(command: &str, registration: &Overrides<'_>, quoting: Quoting) ->
 /// Whether the user's own Codex config already sets `notify`; Terra's hook
 /// would replace it, so it is left out then.
 pub fn user_has_codex_notify() -> bool {
-    let Some(home) = std::env::var_os("CODEX_HOME")
-        .map(std::path::PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".codex"))
-        })
-    else {
+    let Some(home) = codex_home() else {
         return false;
     };
     std::fs::read_to_string(home.join("config.toml"))
@@ -221,10 +216,13 @@ pub fn find_codex_log(sessions: &Path, thread_id: &str) -> Option<PathBuf> {
 }
 
 fn codex_sessions_dir() -> Option<PathBuf> {
-    let base = std::env::var_os("CODEX_HOME")
+    Some(codex_home()?.join("sessions"))
+}
+
+fn codex_home() -> Option<PathBuf> {
+    std::env::var_os("CODEX_HOME")
         .map(PathBuf::from)
-        .or_else(|| crate::paths::home_dir().map(|home| home.join(".codex")))?;
-    Some(base.join("sessions"))
+        .or_else(|| crate::paths::home_dir().map(|home| home.join(".codex")))
 }
 
 #[cfg(test)]

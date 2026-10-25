@@ -22,11 +22,12 @@ use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, Stream
 use rmcp::{ErrorData, RoleServer, ServerHandler};
 use tauri::Runtime;
 
-use super::tools::{self, ToolError};
+use super::tools::{self, ToolCall, ToolError};
 use super::{AgentIdentity, McpHub};
 
 pub const MCP_PATH: &str = "/mcp";
 const MAX_BODY_BYTES: usize = 256 * 1024;
+const TOOL_CALL_FAILED: &str = "the tool call failed";
 /// Tokio workers of the server's own runtime; requests are short and the
 /// blocking work runs on `spawn_blocking` threads.
 const SERVER_WORKER_THREADS: usize = 2;
@@ -109,24 +110,34 @@ impl<R: Runtime> ServerHandler for TerraServer<R> {
         let hub = Arc::clone(&self.hub);
         let name = request.name.to_string();
         // Tool handlers take blocking locks and run SQLite queries.
-        let outcome =
-            tokio::task::spawn_blocking(move || tools::call(&hub, &identity, &name, args))
-                .await
-                .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
+        let outcome = tokio::task::spawn_blocking(move || {
+            tools::call(&hub, &identity, ToolCall { name: &name, args })
+        })
+        .await
+        .map_err(|error| {
+            eprintln!("an MCP tool call did not finish: {}", error);
+            ErrorData::internal_error(TOOL_CALL_FAILED, None)
+        })?;
         Ok(match outcome {
-            Ok(value) => CallToolResult::success(vec![ContentBlock::text(
-                serde_json::to_string_pretty(&value).unwrap_or_else(|error| {
+            Ok(value) => match serde_json::to_string_pretty(&value) {
+                Ok(text) => CallToolResult::success(vec![ContentBlock::text(text)]),
+                Err(error) => {
                     eprintln!("cannot serialize an MCP tool result: {}", error);
-                    String::new()
-                }),
-            )]),
+                    CallToolResult::error(vec![ContentBlock::text(TOOL_CALL_FAILED)])
+                }
+            },
             Err(ToolError::UnknownTool(name)) => {
                 return Err(ErrorData::invalid_params(
                     format!("unknown tool `{}`", name),
                     None,
                 ))
             }
-            Err(error) => CallToolResult::error(vec![ContentBlock::text(error.to_string())]),
+            Err(error) => {
+                if let ToolError::Store(store) = &error {
+                    store.log_internal("MCP tool call failed");
+                }
+                CallToolResult::error(vec![ContentBlock::text(error.to_string())])
+            }
         }
         .into())
     }
@@ -188,8 +199,8 @@ pub fn router<R: Runtime>(hub: Arc<McpHub<R>>) -> axum::Router {
             axum::routing::post(super::hooks::handle::<R>),
         )
         .route(
-            super::hooks::CLAUDE_HOOKS_PATH,
-            axum::routing::post(super::hooks::handle_claude::<R>),
+            super::hooks::INTEGRATION_HOOKS_PATH,
+            axum::routing::post(super::hooks::handle_integration::<R>),
         )
         .with_state(Arc::clone(&hub))
         .layer(middleware::from_fn_with_state(hub, authenticate::<R>))
@@ -336,7 +347,7 @@ mod tests {
     #[test]
     fn initialize_list_and_call_over_http() {
         let (hub, _) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
 
         let init = initialize(&server, &token);
@@ -392,7 +403,7 @@ mod tests {
     #[test]
     fn requests_without_a_valid_token_get_401() {
         let (hub, _) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
         let ping = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {} });
 
@@ -403,7 +414,7 @@ mod tests {
         assert_eq!(server.post(Some(&token), ping.clone()).0, 401);
 
         // A killed terminal drops its PTY entry, and with it the lease.
-        let lease_token = hub.issue(identity("t-2", "ws-1", "claude"));
+        let lease_token = hub.issue(identity("t-2", "ws-1", "claude")).unwrap();
         let lease = crate::mcp::McpLease::new(&hub, lease_token.clone());
         assert_eq!(server.post(Some(&lease_token), ping.clone()).0, 200);
         drop(lease);
@@ -413,8 +424,8 @@ mod tests {
     #[test]
     fn a_token_only_sees_its_own_workspace() {
         let (hub, _) = hub();
-        let mine = hub.issue(identity("t-1", "ws-1", "claude"));
-        let theirs = hub.issue(identity("t-7", "ws-2", "codex"));
+        let mine = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
+        let theirs = hub.issue(identity("t-7", "ws-2", "codex")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
         initialize(&server, &mine);
         server.rpc(
@@ -435,7 +446,7 @@ mod tests {
     #[test]
     fn browser_origins_are_rejected() {
         let (hub, _) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
         let (status, _) = server.post_with(
             Some(&token),
@@ -443,5 +454,43 @@ mod tests {
             &[("origin", "https://evil.example")],
         );
         assert_eq!(status, 403);
+    }
+
+    impl TestServer {
+        fn post_hook(&self, token: &str, integration: &str, body: Value) -> u16 {
+            let url = self
+                .url
+                .replace(MCP_PATH, &format!("/hooks/{}", integration));
+            self.runtime.block_on(async {
+                self.client
+                    .post(url)
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(body.to_string())
+                    .send()
+                    .await
+                    .unwrap()
+                    .status()
+                    .as_u16()
+            })
+        }
+    }
+
+    #[test]
+    fn given_integration_hook_routes_when_posting_events_then_only_integrations_with_http_hooks_accept_them(
+    ) {
+        let (hub, _) = hub();
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
+        let server = TestServer::start(Arc::clone(&hub));
+        let event = json!({ "hook_event_name": "Notification", "message": "Approve?" });
+
+        assert_eq!(server.post_hook(&token, "claude", event.clone()), 200);
+        assert_eq!(server.post_hook(&token, "codex", event.clone()), 404);
+        assert_eq!(server.post_hook(&token, "unknown", event), 404);
+        assert_eq!(
+            server.post_hook(&token, "claude", json!({ "message": "no event" })),
+            400
+        );
+        let status = hub.statuses().unwrap().status_of("t-1").cloned().unwrap();
+        assert_eq!(status.state, crate::mcp::model::AgentState::NeedsInput);
     }
 }

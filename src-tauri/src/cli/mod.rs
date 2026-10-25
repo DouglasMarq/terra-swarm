@@ -8,10 +8,10 @@
 //! - `terra-swarm mcp-stdio`: the Terra MCP server as a stdio server, for
 //!   agents that only start MCP servers as subprocesses (see `stdio`).
 
+mod http;
 mod stdio;
 
-use std::io::{IsTerminal, Read, Write};
-use std::net::TcpStream;
+use std::io::{IsTerminal, Read};
 use std::time::Duration;
 
 const MAX_PAYLOAD_BYTES: u64 = 256 * 1024;
@@ -83,37 +83,25 @@ pub fn loopback_authority(url: &str) -> Option<String> {
 
 fn post_hook(url: &str, token: &str, body: &str) -> Result<(), String> {
     let authority = loopback_authority(url).ok_or("TERRA_MCP_URL is not a loopback address")?;
-    let address = authority
-        .parse()
-        .map_err(|error| format!("bad address {}: {}", authority, error))?;
-    let mut stream =
-        TcpStream::connect_timeout(&address, TIMEOUT).map_err(|error| error.to_string())?;
-    stream
-        .set_read_timeout(Some(TIMEOUT))
-        .map_err(|error| error.to_string())?;
-    stream
-        .set_write_timeout(Some(TIMEOUT))
-        .map_err(|error| error.to_string())?;
-    let request = format!(
-        "POST {path} HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n{body}",
-        path = crate::mcp::hooks::HOOKS_PATH,
-        host = authority,
-        token = token,
-        length = body.len(),
-        body = body,
-    );
-    stream
-        .write_all(request.as_bytes())
-        .map_err(|error| error.to_string())?;
-    let mut response = String::new();
-    let read = stream
-        .take(MAX_HOOK_RESPONSE_BYTES)
-        .read_to_string(&mut response);
+    let post = http::Post {
+        authority: &authority,
+        path: crate::mcp::hooks::HOOKS_PATH,
+        token,
+        headers: &[],
+        body,
+    };
+    let limits = http::Limits {
+        connect_timeout: TIMEOUT,
+        io_timeout: TIMEOUT,
+        max_response_bytes: MAX_HOOK_RESPONSE_BYTES,
+    };
+    let raw = http::post(&post, &limits)?;
+    let response = String::from_utf8_lossy(&raw.bytes);
     let status = response.split_whitespace().nth(1).unwrap_or("");
-    match (status, read) {
-        ("200", _) => Ok(()),
+    match (status, raw.read) {
+        (status, _) if status.parse() == Ok(http::HTTP_OK) => Ok(()),
         ("", Err(error)) => Err(format!("could not read the server's answer: {}", error)),
-        ("", Ok(_)) => Err("server answered nothing".to_string()),
+        ("", Ok(())) => Err("server answered nothing".to_string()),
         (status, _) => Err(format!("server answered {}", status)),
     }
 }
@@ -121,7 +109,7 @@ fn post_hook(url: &str, token: &str, body: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::repo::AgentState;
+    use crate::mcp::model::AgentState;
     use crate::mcp::test_support::{hub, identity};
     use std::sync::Arc;
 
@@ -152,7 +140,7 @@ mod tests {
     #[test]
     fn a_hook_post_reaches_the_server_and_sets_the_state() {
         let (hub, _) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .enable_all()
@@ -164,7 +152,7 @@ mod tests {
         let url = format!("http://127.0.0.1:{}/mcp", port);
         let body = serde_json::json!({ "agent": "claude", "event": "Notification", "payload": { "message": "Allow Bash?" } }).to_string();
         post_hook(&url, &token, &body).expect("hook accepted");
-        let status = hub.repo().unwrap().status_of("t-1").cloned().unwrap();
+        let status = hub.statuses().unwrap().status_of("t-1").cloned().unwrap();
         assert_eq!(status.state, AgentState::NeedsInput);
         assert_eq!(status.summary, "Allow Bash?");
         // A wrong token is refused.

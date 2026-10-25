@@ -6,7 +6,7 @@ use std::ffi::OsStr;
 use std::path::Path;
 
 use super::launch::Quoting;
-use super::repo::AgentState;
+use super::model::AgentState;
 use crate::usage::{SessionLog, TokenUsage};
 
 pub(super) const MAX_SUMMARY_CHARS: usize = 200;
@@ -26,6 +26,14 @@ pub trait AgentIntegration: Sync {
     fn interpret(&self, event: &str, payload: &Value) -> Option<(AgentState, String)>;
     fn session_log(&self, payload: &Value) -> Option<SessionLog>;
     fn usage(&self, locator: &OsStr) -> Option<std::io::Result<TokenUsage>>;
+
+    fn has_http_hooks(&self) -> bool {
+        false
+    }
+
+    fn http_hook_event(&self, _payload: &Value) -> Option<String> {
+        None
+    }
 }
 
 const INTEGRATIONS: [&dyn AgentIntegration; 2] = [&claude::Claude, &codex::Codex];

@@ -16,8 +16,13 @@ pub mod db;
 pub mod hooks;
 pub mod integration;
 pub mod launch;
+pub mod messages;
+pub mod model;
+pub mod notes;
 pub mod repo;
 pub mod server;
+pub mod statuses;
+pub mod tasks;
 pub mod tools;
 
 use serde::Serialize;
@@ -29,7 +34,9 @@ use crate::sync::LockExt;
 use crate::workspace::{Workspace, WorkspaceStore};
 use auth::TokenRegistry;
 pub use auth::{AgentIdentity, McpLease};
-use repo::{AgentStatus, Message, Repo, StoreError, StoreResult};
+use model::{AgentStatus, Message, StoreError, StoreResult};
+use repo::Repo;
+use statuses::StatusRegistry;
 
 pub const EVENT_TASKS_CHANGED: &str = "mcp-tasks-changed";
 pub const EVENT_MESSAGE: &str = "mcp-message";
@@ -58,6 +65,7 @@ pub struct ServerInfo {
 
 pub struct McpHub<R: Runtime = Wry> {
     repo: Option<Mutex<Repo>>,
+    statuses: Mutex<StatusRegistry>,
     error: Option<String>,
     db_path: Option<PathBuf>,
     tokens: Mutex<TokenRegistry>,
@@ -84,6 +92,7 @@ impl<R: Runtime> McpHub<R> {
         };
         Self {
             repo,
+            statuses: Mutex::new(StatusRegistry::default()),
             error,
             db_path: Some(db_path),
             tokens: Mutex::new(TokenRegistry::default()),
@@ -99,6 +108,7 @@ impl<R: Runtime> McpHub<R> {
     pub fn with_repo(repo: Repo, config_dir: Option<PathBuf>, app: AppHandle<R>) -> Self {
         Self {
             repo: Some(Mutex::new(repo)),
+            statuses: Mutex::new(StatusRegistry::default()),
             error: None,
             db_path: None,
             tokens: Mutex::new(TokenRegistry::default()),
@@ -117,12 +127,23 @@ impl<R: Runtime> McpHub<R> {
     pub fn repo(&self) -> StoreResult<MutexGuard<'_, Repo>> {
         match &self.repo {
             Some(repo) => Ok(repo.lock_or_recover()),
-            None => Err(StoreError::Unavailable(
-                self.error
-                    .clone()
-                    .unwrap_or_else(|| "not initialized".into()),
-            )),
+            None => Err(self.unavailable()),
         }
+    }
+
+    pub fn statuses(&self) -> StoreResult<MutexGuard<'_, StatusRegistry>> {
+        if self.repo.is_none() {
+            return Err(self.unavailable());
+        }
+        Ok(self.statuses.lock_or_recover())
+    }
+
+    fn unavailable(&self) -> StoreError {
+        StoreError::Unavailable(
+            self.error
+                .clone()
+                .unwrap_or_else(|| "not initialized".into()),
+        )
     }
 
     pub fn set_port(&self, port: u16) {
@@ -201,7 +222,7 @@ impl<R: Runtime> McpHub<R> {
 
     // ----- tokens ---------------------------------------------------------
 
-    pub fn issue(&self, identity: AgentIdentity) -> String {
+    pub fn issue(&self, identity: AgentIdentity) -> Result<String, getrandom::Error> {
         self.tokens.lock_or_recover().issue(identity)
     }
 
@@ -230,8 +251,8 @@ impl<R: Runtime> McpHub<R> {
     }
 
     fn forget_agent(&self, identity: &AgentIdentity) {
-        if let Ok(mut repo) = self.repo() {
-            repo.forget_status(&identity.terminal_id);
+        if let Ok(mut statuses) = self.statuses() {
+            statuses.forget_status(&identity.terminal_id);
         }
         self.emit(
             EVENT_AGENT_STATUS,
@@ -251,11 +272,14 @@ impl<R: Runtime> McpHub<R> {
         match self.repo() {
             Ok(mut repo) => {
                 if let Err(error) = repo.purge_workspace(workspace_id) {
-                    eprintln!("failed to purge MCP data of {}: {}", workspace_id, error);
+                    eprintln!("failed to purge MCP data of {}: {:?}", workspace_id, error);
                 }
             }
             Err(_) => return,
         }
+        self.statuses
+            .lock_or_recover()
+            .forget_workspace(workspace_id);
         self.emit_tasks_changed(workspace_id);
     }
 
@@ -382,6 +406,10 @@ pub mod test_support {
         )
     }
 
+    pub fn actor<'a>(workspace_id: &'a str, name: &'a str) -> model::Actor<'a> {
+        model::Actor { workspace_id, name }
+    }
+
     pub fn identity(terminal_id: &str, workspace_id: &str, agent: &str) -> AgentIdentity {
         AgentIdentity {
             terminal_id: terminal_id.into(),
@@ -401,9 +429,9 @@ mod tests {
     #[test]
     fn dropping_a_lease_revokes_its_token_only() {
         let (hub, events) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let lease = McpLease::new(&hub, token.clone());
-        let newer = hub.issue(identity("t-1", "ws-1", "claude"));
+        let newer = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         // The stale lease belongs to a replaced token: dropping it must not
         // log the restarted terminal out.
         drop(lease);
@@ -420,24 +448,34 @@ mod tests {
     #[test]
     fn purge_revokes_tokens_and_clears_data() {
         let (hub, events) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
-        hub.repo()
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
+        tasks::create(
+            &mut hub.repo().unwrap(),
+            &actor("ws-1", "t-1"),
+            model::NewTask {
+                title: "x".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        hub.statuses()
             .unwrap()
-            .create_task(
-                "ws-1",
-                "t-1",
-                repo::NewTask {
-                    title: "x".into(),
-                    ..Default::default()
+            .report_status(
+                &actor("ws-1", "t-1"),
+                &statuses::StatusReport {
+                    state: model::AgentState::Working,
+                    summary: "",
                 },
             )
             .unwrap();
         hub.purge_workspace("ws-1");
         assert!(hub.identify(&token).is_none());
+        assert!(hub.statuses().unwrap().statuses("ws-1").is_empty());
         assert!(hub
             .repo()
             .unwrap()
-            .list_tasks("ws-1", None, None, None)
+            .queries()
+            .list_tasks(&repo::TaskQuery::all("ws-1"))
             .unwrap()
             .is_empty());
         assert!(events

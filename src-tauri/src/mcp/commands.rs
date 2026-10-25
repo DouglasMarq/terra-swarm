@@ -6,14 +6,25 @@ use serde::{Deserialize, Deserializer};
 use std::sync::Arc;
 use tauri::State;
 
-use super::repo::{AgentStatus, NewTask, Task, TaskPatch, TaskPriority, TaskStatus};
+use super::model::{Actor, AgentStatus, NewTask, Task, TaskPatch, TaskPriority, TaskStatus};
+use super::repo::TaskQuery;
+use super::tasks::{self, TaskUpdate};
 use super::{McpHub, ServerInfo};
 
 pub const USER_ACTOR: &str = "user";
 /// History shown on each card of the Tasks panel.
 const PANEL_EVENTS: usize = 20;
+const COMMAND_FAILED: &str = "MCP command failed";
+const MAX_BOARD_TASKS: usize = 500;
 
 type Hub<'a> = State<'a, Arc<McpHub>>;
+
+fn user(workspace_id: &str) -> Actor<'_> {
+    Actor {
+        workspace_id,
+        name: USER_ACTOR,
+    }
+}
 
 /// Tells "field absent" (`None`) apart from "field is null" (`Some(None)`).
 fn double_option<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
@@ -47,6 +58,7 @@ pub fn mcp_server_info(hub: Hub<'_>) -> ServerInfo {
 pub fn mcp_set_enabled(hub: Hub<'_>, enabled: bool) -> Result<ServerInfo, String> {
     hub.repo()
         .and_then(|repo| repo.set_enabled(enabled))
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
         .map_err(|e| e.to_string())?;
     Ok(hub.info())
 }
@@ -54,7 +66,14 @@ pub fn mcp_set_enabled(hub: Hub<'_>, enabled: bool) -> Result<ServerInfo, String
 #[tauri::command(async)]
 pub fn mcp_list_tasks(hub: Hub<'_>, workspace_id: String) -> Result<Vec<Task>, String> {
     hub.repo()
-        .and_then(|repo| repo.list_tasks(&workspace_id, None, None, Some(PANEL_EVENTS)))
+        .and_then(|repo| {
+            repo.queries().list_tasks(&TaskQuery {
+                events: Some(PANEL_EVENTS),
+                limit: MAX_BOARD_TASKS,
+                ..TaskQuery::all(&workspace_id)
+            })
+        })
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
         .map_err(|e| e.to_string())
 }
 
@@ -70,9 +89,9 @@ pub fn mcp_create_task(
     let task = hub
         .repo()
         .and_then(|mut repo| {
-            repo.create_task(
-                &workspace_id,
-                USER_ACTOR,
+            tasks::create(
+                &mut repo,
+                &user(&workspace_id),
                 NewTask {
                     title,
                     description,
@@ -82,6 +101,7 @@ pub fn mcp_create_task(
                 },
             )
         })
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
         .map_err(|e| e.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(task)
@@ -97,21 +117,24 @@ pub fn mcp_update_task(
     let task = hub
         .repo()
         .and_then(|mut repo| {
-            repo.update_task(
-                &workspace_id,
-                &id,
-                USER_ACTOR,
-                TaskPatch {
-                    title: patch.title,
-                    description: patch.description,
-                    status: patch.status,
-                    priority: patch.priority,
-                    assignee: patch.assignee,
-                    position: patch.position,
-                    note: patch.note,
+            tasks::update(
+                &mut repo,
+                &user(&workspace_id),
+                TaskUpdate {
+                    id: &id,
+                    patch: TaskPatch {
+                        title: patch.title,
+                        description: patch.description,
+                        status: patch.status,
+                        priority: patch.priority,
+                        assignee: patch.assignee,
+                        position: patch.position,
+                        note: patch.note,
+                    },
                 },
             )
         })
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
         .map_err(|e| e.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(task)
@@ -120,7 +143,8 @@ pub fn mcp_update_task(
 #[tauri::command(async)]
 pub fn mcp_delete_task(hub: Hub<'_>, workspace_id: String, id: String) -> Result<(), String> {
     hub.repo()
-        .and_then(|mut repo| repo.delete_task(&workspace_id, &id))
+        .and_then(|repo| tasks::delete(&repo, &workspace_id, &id))
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
         .map_err(|e| e.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(())
@@ -128,10 +152,10 @@ pub fn mcp_delete_task(hub: Hub<'_>, workspace_id: String, id: String) -> Result
 
 #[tauri::command(async)]
 pub fn mcp_agent_statuses(hub: Hub<'_>, workspace_id: String) -> Vec<AgentStatus> {
-    hub.repo()
-        .map(|repo| repo.statuses(&workspace_id))
+    hub.statuses()
+        .map(|statuses| statuses.statuses(&workspace_id))
         .unwrap_or_else(|error| {
-            eprintln!("cannot list agent statuses: {}", error);
+            eprintln!("cannot list agent statuses: {:?}", error);
             Vec::new()
         })
 }

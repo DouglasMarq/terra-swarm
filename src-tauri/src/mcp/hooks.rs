@@ -5,21 +5,24 @@
 
 use std::sync::Arc;
 
-use axum::extract::{Request, State};
+use axum::body::Body;
+use axum::extract::{Path, Request, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::Runtime;
 
 use super::integration;
-use super::repo::AgentState;
+use super::model::AgentState;
+use super::statuses::StatusReport;
 use super::{AgentIdentity, McpHub};
 use crate::usage::SessionLog;
 
 pub const HOOKS_PATH: &str = "/hooks";
-/// Where a Claude Code HTTP hook posts its raw event JSON.
-pub const CLAUDE_HOOKS_PATH: &str = "/hooks/claude";
+/// Where an agent CLI's HTTP hook posts its raw event JSON.
+pub const INTEGRATION_HOOKS_PATH: &str = "/hooks/{integration}";
 pub const EVENT_AGENT_ATTENTION: &str = "agent-attention";
 const MAX_HOOK_BODY: usize = 256 * 1024;
 
@@ -45,34 +48,37 @@ pub fn session_log(call: &HookCall) -> Option<SessionLog> {
     integration::by_id(&call.agent)?.session_log(&call.payload)
 }
 
-/// Apply a hook call for `who`. Returns the state it set, if any.
-pub fn apply<R: Runtime>(
-    hub: &McpHub<R>,
-    who: &AgentIdentity,
-    call: &HookCall,
-) -> Option<AgentState> {
+/// Apply a hook call for `who`.
+pub fn apply<R: Runtime>(hub: &McpHub<R>, who: &AgentIdentity, call: &HookCall) {
     if let Some(log) = session_log(call) {
         hub.set_session_log(&who.terminal_id, log);
     }
-    let (state, summary) = interpret(call)?;
-    let reported = hub.repo().and_then(|mut repo| {
-        repo.report_status(&who.workspace_id, &who.terminal_id, state, &summary)
+    let Some((state, summary)) = interpret(call) else {
+        return;
+    };
+    let reported = hub.statuses().and_then(|mut statuses| {
+        statuses.report_status(
+            &who.actor(),
+            &StatusReport {
+                state,
+                summary: &summary,
+            },
+        )
     });
     let status = match reported {
         Ok(status) => status,
         Err(error) => {
             eprintln!(
-                "cannot record the state hook of {}: {}",
+                "cannot record the state hook of {}: {:?}",
                 who.terminal_id, error
             );
-            return None;
+            return;
         }
     };
     hub.emit_agent_status(&status);
     if state == AgentState::NeedsInput {
         hub.emit_attention(&status);
     }
-    Some(state)
 }
 
 /// `POST /hooks`: `terra-swarm hook` sends `{ agent, event, payload }`.
@@ -83,16 +89,23 @@ pub async fn handle<R: Runtime>(State(hub): State<Arc<McpHub<R>>>, request: Requ
     .await
 }
 
-/// `POST /hooks/claude`: a Claude Code HTTP hook posts its event JSON as is.
-pub async fn handle_claude<R: Runtime>(
+/// `POST /hooks/{integration}`: an agent CLI's HTTP hook posts its event JSON as is.
+pub async fn handle_integration<R: Runtime>(
     State(hub): State<Arc<McpHub<R>>>,
+    Path(id): Path<String>,
     request: Request,
 ) -> Response {
+    let Some(integration) = integration::by_id(&id) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    if !integration.has_http_hooks() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
     receive(hub, request, |body| {
         let payload: Value = serde_json::from_slice(body).ok()?;
-        let event = payload.get("hook_event_name")?.as_str()?.to_string();
+        let event = integration.http_hook_event(&payload)?;
         Some(HookCall {
-            agent: "claude".into(),
+            agent: integration.id().into(),
             event,
             payload,
         })
@@ -113,8 +126,9 @@ async fn receive<R: Runtime>(
     let Some(who) = request.extensions().get::<AgentIdentity>().cloned() else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    let Ok(body) = axum::body::to_bytes(request.into_body(), MAX_HOOK_BODY).await else {
-        return StatusCode::PAYLOAD_TOO_LARGE.into_response();
+    let body = match read_body(request.into_body()).await {
+        Ok(body) => body,
+        Err(status) => return status.into_response(),
     };
     let Some(call) = parse(&body) else {
         return StatusCode::BAD_REQUEST.into_response();
@@ -132,12 +146,29 @@ async fn receive<R: Runtime>(
     StatusCode::OK.into_response()
 }
 
+async fn read_body(body: Body) -> Result<Vec<u8>, StatusCode> {
+    let mut chunks = body.into_data_stream();
+    let mut bytes = Vec::new();
+    while let Some(chunk) = chunks.next().await {
+        let chunk = chunk.map_err(|error| {
+            eprintln!("cannot read a hook body: {}", error);
+            StatusCode::BAD_REQUEST
+        })?;
+        if bytes.len() + chunk.len() > MAX_HOOK_BODY {
+            return Err(StatusCode::PAYLOAD_TOO_LARGE);
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::integration::MAX_SUMMARY_CHARS;
     use super::super::test_support::{app, hub, identity};
     use super::super::EVENT_AGENT_STATUS;
     use super::*;
+    use crate::sync::LockExt;
     use serde_json::json;
 
     fn call(agent: &str, event: &str, payload: Value) -> HookCall {
@@ -267,13 +298,13 @@ mod tests {
     fn applying_a_hook_updates_status_and_raises_attention() {
         let (hub, events) = hub();
         let who = identity("t-1", "ws-1", "claude");
-        let state = apply(
+        apply(
             &hub,
             &who,
             &call("claude", "Notification", json!({ "message": "Approve?" })),
         );
-        assert_eq!(state, Some(AgentState::NeedsInput));
-        let status = hub.repo().unwrap().status_of("t-1").cloned().unwrap();
+        let status = hub.statuses().unwrap().status_of("t-1").cloned().unwrap();
+        assert_eq!(status.state, AgentState::NeedsInput);
         assert_eq!(status.summary, "Approve?");
         let events = events.lock().unwrap();
         assert!(events.iter().any(|(event, _)| event == EVENT_AGENT_STATUS));
@@ -291,12 +322,53 @@ mod tests {
         let path = dir.join(super::super::db::DB_FILE);
         std::fs::write(&path, b"not a sqlite database").unwrap();
         let hub = McpHub::open(path, None, app());
-        let state = apply(
+        apply(
             &hub,
             &identity("t-1", "ws-1", "claude"),
             &call("claude", "Stop", json!({})),
         );
-        assert_eq!(state, None);
+        assert!(hub.statuses.lock_or_recover().status_of("t-1").is_none());
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn hook_request(body: axum::body::Body) -> Request {
+        let mut request = Request::new(body);
+        request
+            .extensions_mut()
+            .insert(identity("t-1", "ws-1", "claude"));
+        request
+    }
+
+    fn receive_status(request: Request) -> StatusCode {
+        let (hub, _) = hub();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let response = runtime.block_on(receive(hub, request, |body| {
+            serde_json::from_slice::<HookCall>(body).ok()
+        }));
+        response.status()
+    }
+
+    #[test]
+    fn given_a_body_that_breaks_off_when_receiving_a_hook_then_it_answers_400() {
+        let chunks: Vec<Result<&'static str, std::io::Error>> = vec![
+            Ok("{\"agent\":"),
+            Err(std::io::Error::other("connection reset")),
+        ];
+        let body = axum::body::Body::from_stream(futures_util::stream::iter(chunks));
+
+        assert_eq!(receive_status(hook_request(body)), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn given_a_body_over_the_limit_when_receiving_a_hook_then_it_answers_413() {
+        let body = axum::body::Body::from(vec![b' '; MAX_HOOK_BODY + 1]);
+
+        assert_eq!(
+            receive_status(hook_request(body)),
+            StatusCode::PAYLOAD_TOO_LARGE
+        );
     }
 }

@@ -11,6 +11,7 @@ use std::time::Duration;
 pub const DB_FILE: &str = "mcp.db";
 /// How long a connection waits for another one's write lock.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
+const OPTIMIZE_ALL_TABLES: &str = "PRAGMA optimize = 0x10002";
 
 const MIGRATION_1: &str = r#"
 CREATE TABLE settings (
@@ -107,9 +108,15 @@ const MIGRATION_2: &str = r#"
 CREATE INDEX idx_task_deps_depends_on ON task_deps(depends_on);
 "#;
 
-const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2];
+const MIGRATION_3: &str = r#"
+CREATE INDEX idx_tasks_ws_assignee ON tasks(workspace_id, assignee);
+DROP INDEX idx_tasks_assignee;
+"#;
+
+const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3];
 
 pub fn schema_version() -> u32 {
+    // MIGRATIONS is a short compile-time list, so its length always fits in a u32.
     MIGRATIONS.len() as u32
 }
 
@@ -138,8 +145,9 @@ pub fn migrate(conn: &mut Connection) -> Result<u32, String> {
     if current == target {
         return Ok(current);
     }
+    let applied = usize::try_from(current).map_err(|error| error.to_string())?;
     let tx = conn.transaction().map_err(|error| error.to_string())?;
-    for (index, sql) in MIGRATIONS.iter().enumerate().skip(current as usize) {
+    for (index, sql) in MIGRATIONS.iter().enumerate().skip(applied) {
         tx.execute_batch(sql)
             .map_err(|error| format!("migration {} failed: {}", index + 1, error))?;
     }
@@ -158,7 +166,14 @@ pub fn open(path: &Path) -> Result<Connection, String> {
     let mut conn = Connection::open(path).map_err(|error| error.to_string())?;
     configure(&conn, true).map_err(|error| error.to_string())?;
     migrate(&mut conn)?;
+    optimize(&conn);
     Ok(conn)
+}
+
+fn optimize(conn: &Connection) {
+    if let Err(error) = conn.execute_batch(OPTIMIZE_ALL_TABLES) {
+        eprintln!("cannot optimize mcp.db: {}", error);
+    }
 }
 
 #[cfg(test)]
@@ -258,6 +273,27 @@ mod tests {
     }
 
     #[test]
+    fn given_a_version_2_database_when_migrating_then_the_assignee_index_is_scoped_to_the_workspace(
+    ) {
+        let mut conn = Connection::open_in_memory().unwrap();
+        configure(&conn, false).unwrap();
+        conn.execute_batch(MIGRATION_1).unwrap();
+        conn.execute_batch(MIGRATION_2).unwrap();
+        conn.pragma_update(None, "user_version", 2).unwrap();
+
+        assert_eq!(migrate(&mut conn).unwrap(), schema_version());
+
+        let indexes: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'tasks' AND name LIKE 'idx_%' ORDER BY name")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(indexes, ["idx_tasks_ws_assignee", "idx_tasks_ws_status"]);
+    }
+
+    #[test]
     fn given_a_migrated_database_when_finding_the_tasks_that_depend_on_one_then_the_plan_uses_the_index(
     ) {
         let conn = open_in_memory();
@@ -271,6 +307,33 @@ mod tests {
             .unwrap();
 
         assert!(plan.contains("idx_task_deps_depends_on"), "{}", plan);
+    }
+
+    #[test]
+    fn given_a_board_with_tasks_when_reopening_the_database_then_the_tasks_have_planner_statistics()
+    {
+        let path = temp_path("optimize");
+        {
+            let conn = open(&path).unwrap();
+            conn.execute_batch(
+                "WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers WHERE n < 1000)
+                 INSERT INTO tasks(id, workspace_id, title, created_by, created_at, updated_at)
+                 SELECT 'T-' || n, 'ws-' || (n % 10), 'task', 'user', n, n FROM numbers",
+            )
+            .unwrap();
+        }
+
+        let conn = open(&path).unwrap();
+
+        let analyzed: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_stat1 WHERE tbl = 'tasks'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(analyzed > 0);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
     #[test]

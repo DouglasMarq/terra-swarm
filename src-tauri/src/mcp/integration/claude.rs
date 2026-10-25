@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use super::{text_field, AgentIntegration, LaunchContext};
 use crate::mcp::launch::{quote, Quoting, ENV_TOKEN, ENV_URL, SERVER_NAME};
-use crate::mcp::repo::AgentState;
+use crate::mcp::model::AgentState;
 use crate::usage::{number, SessionLog, TokenUsage};
 
 const ID: &str = "claude";
@@ -28,6 +28,14 @@ pub struct Flags<'a> {
 impl AgentIntegration for Claude {
     fn id(&self) -> &'static str {
         ID
+    }
+
+    fn has_http_hooks(&self) -> bool {
+        true
+    }
+
+    fn http_hook_event(&self, payload: &Value) -> Option<String> {
+        Some(payload.get("hook_event_name")?.as_str()?.to_string())
     }
 
     fn launch_command(&self, command: &str, context: &LaunchContext<'_>) -> String {

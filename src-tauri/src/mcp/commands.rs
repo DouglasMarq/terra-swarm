@@ -15,6 +15,7 @@ pub const USER_ACTOR: &str = "user";
 /// History shown on each card of the Tasks panel.
 const PANEL_EVENTS: usize = 20;
 const COMMAND_FAILED: &str = "MCP command failed";
+const MAX_BOARD_TASKS: usize = 500;
 
 type Hub<'a> = State<'a, Arc<McpHub>>;
 
@@ -68,6 +69,7 @@ pub fn mcp_list_tasks(hub: Hub<'_>, workspace_id: String) -> Result<Vec<Task>, S
         .and_then(|repo| {
             repo.queries().list_tasks(&TaskQuery {
                 events: Some(PANEL_EVENTS),
+                limit: MAX_BOARD_TASKS,
                 ..TaskQuery::all(&workspace_id)
             })
         })

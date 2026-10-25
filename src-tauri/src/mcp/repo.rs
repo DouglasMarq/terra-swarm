@@ -13,7 +13,7 @@ use std::sync::LazyLock;
 
 use super::model::{
     task_not_found, Message, Note, StoreError, StoreResult, Task, TaskEvent, TaskPriority,
-    TaskStatus,
+    TaskStatus, MAX_LIMIT,
 };
 
 /// The tables a workspace's rows live in; fixed at compile time, so they
@@ -30,8 +30,13 @@ const STATUS_ORDER: [TaskStatus; 4] = [
 ];
 const TASK_COLUMNS: &str = "id, workspace_id, title, description, status, priority, assignee,
      created_by, labels, position, created_at, updated_at";
-static TASK_ORDER_SQL: LazyLock<String> =
-    LazyLock::new(|| format!("{}, priority, position, created_at", status_rank_sql()));
+static TASK_ORDER_SQL: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "{}, CASE status WHEN '{}' THEN updated_at END DESC, priority, position, created_at",
+        status_rank_sql(),
+        TaskStatus::Done.as_str()
+    )
+});
 
 fn sql_limit(limit: usize) -> i64 {
     i64::try_from(limit).unwrap_or(i64::MAX)
@@ -64,6 +69,7 @@ impl TaskFilter {
         if let Some(assignee) = query.assignee {
             filter.add("assignee =", Value::Text(assignee.into()));
         }
+        filter.values.push(Value::Integer(sql_limit(query.limit)));
         filter
     }
 
@@ -75,10 +81,11 @@ impl TaskFilter {
 
     fn sql(&self) -> String {
         format!(
-            "SELECT {} FROM tasks WHERE {} ORDER BY {}",
+            "SELECT {} FROM tasks WHERE {} ORDER BY {} LIMIT ?{}",
             TASK_COLUMNS,
             self.conditions.join(" AND "),
-            *TASK_ORDER_SQL
+            *TASK_ORDER_SQL,
+            self.values.len()
         )
     }
 }
@@ -88,6 +95,7 @@ pub struct TaskQuery<'a> {
     pub status: Option<TaskStatus>,
     pub assignee: Option<&'a str>,
     pub events: Option<usize>,
+    pub limit: usize,
 }
 
 impl<'a> TaskQuery<'a> {
@@ -97,6 +105,7 @@ impl<'a> TaskQuery<'a> {
             status: None,
             assignee: None,
             events: None,
+            limit: MAX_LIMIT,
         }
     }
 }
@@ -846,6 +855,36 @@ mod tests {
             tasks::get(&repo, "ws-1", &id),
             Err(StoreError::Database(_))
         ));
+    }
+
+    #[test]
+    fn given_a_limit_when_listing_tasks_then_open_tasks_come_first_and_then_the_latest_done() {
+        let mut repo = Repo::in_memory();
+        let ids: Vec<String> = ["open", "done long ago", "done lately"]
+            .into_iter()
+            .map(|title| {
+                tasks::create(&mut repo, &actor("ws-1", "t-1"), task(title))
+                    .unwrap()
+                    .id
+            })
+            .collect();
+        for (id, updated_at) in [(&ids[1], 10), (&ids[2], 20)] {
+            repo.execute(
+                "UPDATE tasks SET status = 'done', updated_at = ?2 WHERE id = ?1",
+                params![id, updated_at],
+            );
+        }
+
+        let listed = repo
+            .queries()
+            .list_tasks(&TaskQuery {
+                limit: 2,
+                ..TaskQuery::all("ws-1")
+            })
+            .unwrap();
+
+        let listed: Vec<&str> = listed.iter().map(|task| task.id.as_str()).collect();
+        assert_eq!(listed, [ids[0].as_str(), ids[2].as_str()]);
     }
 
     fn list_tasks_plan(repo: &Repo, query: &TaskQuery<'_>) -> String {

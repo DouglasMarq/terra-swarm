@@ -1527,6 +1527,40 @@ mod tests {
         assert!(nudge.1["prompt"].as_str().unwrap().contains("get_task"));
     }
 
+    fn create_tasks(hub: &McpHub<tauri::test::MockRuntime>, count: usize) {
+        let mut repo = hub.repo().unwrap();
+        for number in 0..count {
+            tasks::create(
+                &mut repo,
+                &super::super::test_support::actor("ws-1", "t-1"),
+                NewTask {
+                    title: format!("task {}", number),
+                    assignee: Some("t-1".into()),
+                    ..NewTask::default()
+                },
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn given_more_tasks_than_the_limit_when_listing_tasks_then_at_most_the_limit_is_returned() {
+        let (hub, _) = hub();
+        create_tasks(&hub, MAX_LIMIT + 1);
+
+        let listed = call(
+            &hub,
+            &identity("t-1", "ws-1", "claude"),
+            ToolCall {
+                name: "list_tasks",
+                args: json!({}),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(listed["tasks"].as_array().unwrap().len(), MAX_LIMIT);
+    }
+
     #[test]
     fn given_a_failing_query_when_calling_a_tool_then_the_error_hides_the_sqlite_detail() {
         let (hub, _) = hub();

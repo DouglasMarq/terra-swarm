@@ -522,41 +522,48 @@ fn i32_to_f32(sample: &i32) -> f32 {
     *sample as f32 / i32::MAX as f32
 }
 
+// A float-to-int `as` saturates, clipping out-of-range samples.
+#[allow(clippy::cast_possible_truncation)]
 fn f32_to_i8(sample: f32) -> i8 {
-    // A float-to-int `as` saturates, clipping out-of-range samples.
     (sample * f32::from(i8::MAX)) as i8
 }
 
+// .round() so digital silence lands exactly on the format's equilibrium
+// instead of 1 LSB below it (a tiny DC offset).
+// A float-to-int `as` saturates, clipping out-of-range samples.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn f32_to_u8(sample: f32) -> u8 {
-    // .round() so digital silence lands exactly on the format's equilibrium
-    // instead of 1 LSB below it (a tiny DC offset).
-    // A float-to-int `as` saturates, clipping out-of-range samples.
     (sample * (f32::from(u8::MAX) / 2.0) + f32::from(u8::MAX) / 2.0).round() as u8
 }
 
+// A float-to-int `as` saturates, clipping out-of-range samples.
+#[allow(clippy::cast_possible_truncation)]
 fn f32_to_i16(sample: f32) -> i16 {
-    // A float-to-int `as` saturates, clipping out-of-range samples.
     (sample * f32::from(i16::MAX)) as i16
 }
 
+// A float-to-int `as` saturates, clipping out-of-range samples.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn f32_to_u16(sample: f32) -> u16 {
-    // A float-to-int `as` saturates, clipping out-of-range samples.
     (sample * (f32::from(u16::MAX) / 2.0) + f32::from(u16::MAX) / 2.0).round() as u16
 }
 
+// A float-to-int `as` saturates, clipping out-of-range samples.
+#[allow(clippy::cast_possible_truncation)]
 fn f32_to_i24(sample: f32) -> cpal::I24 {
-    // A float-to-int `as` saturates, clipping out-of-range samples.
     cpal::I24::new_unchecked((sample * I24_FULL_SCALE) as i32)
 }
 
+// A float-to-int `as` saturates, clipping out-of-range samples.
+#[allow(clippy::cast_possible_truncation)]
 fn f32_to_u24(sample: f32) -> cpal::U24 {
-    // A float-to-int `as` saturates, clipping out-of-range samples.
     cpal::U24::new_unchecked((sample * U24_MIDPOINT + U24_MIDPOINT).round() as i32)
 }
 
+// Rounding i32::MAX to f32 and the saturating float-to-int `as` clip
+// out-of-range samples, which is the intended behaviour.
+#[allow(clippy::cast_possible_truncation)]
 fn f32_to_i32(sample: f32) -> i32 {
-    // Rounding i32::MAX to f32 and the saturating float-to-int `as` clip
-    // out-of-range samples, which is the intended behaviour.
     (sample * i32::MAX as f32) as i32
 }
 

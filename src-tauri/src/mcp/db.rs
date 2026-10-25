@@ -108,8 +108,9 @@ DROP INDEX idx_tasks_assignee;
 
 const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3];
 
+// MIGRATIONS is a short compile-time list, so its length always fits in a u32.
+#[allow(clippy::cast_possible_truncation)]
 pub fn schema_version() -> u32 {
-    // MIGRATIONS is a short compile-time list, so its length always fits in a u32.
     MIGRATIONS.len() as u32
 }
 

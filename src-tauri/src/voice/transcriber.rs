@@ -129,9 +129,10 @@ fn segments_text(state: &WhisperState) -> String {
     text
 }
 
+// The frame count is clamped below, so f32 precision and the saturating
+// float-to-int `as` are exact enough for it.
+#[allow(clippy::cast_possible_truncation)]
 fn compute_audio_ctx(num_samples: usize) -> i32 {
-    // The frame count is clamped below, so f32 precision and the saturating
-    // float-to-int `as` are exact enough for it.
     let duration_secs = num_samples as f32 / TARGET_SAMPLE_RATE as f32;
     let raw_ctx =
         (duration_secs / WINDOW_SECONDS * MAX_AUDIO_CTX as f32 + AUDIO_CTX_PADDING).ceil() as i32;

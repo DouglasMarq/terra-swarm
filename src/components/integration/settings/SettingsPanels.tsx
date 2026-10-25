@@ -107,53 +107,6 @@ const PROFILE_BY_ID = new Map(DEFAULT_AGENT_PROFILES.map((profile) => [profile.i
 /** Speech levels are low; the meter scales them up so normal speech fills it. */
 const MIC_LEVEL_GAIN = 10;
 
-export interface SettingsPanelsProps {
-  section: SettingsSectionDefinition;
-  agents: readonly AgentInfo[];
-  defaultAgent: string | null;
-  onDefaultAgentChange: (agent: string | null) => void;
-  availableShells: readonly string[];
-  defaultShell: string;
-  onDefaultShellChange: (shell: string) => void;
-  fontSize: number;
-  onFontSizeChange: (delta: number) => void;
-  onFontSizeReset: () => void;
-  gridCols: number;
-  onGridLayoutChange: (columns: number) => void | Promise<void>;
-  reduceMotion: boolean;
-  onReduceMotionChange: (enabled: boolean) => void;
-  flags: FeatureFlags;
-  onFeatureFlagChange: (id: FeatureFlagId, enabled: boolean) => void;
-  voiceEnabled: boolean;
-  onVoiceEnabledChange: (enabled: boolean) => void;
-  voiceLang: VoiceLanguage;
-  onVoiceLangChange: (lang: VoiceLanguage) => void;
-  voiceInputDevice: string | null;
-  voiceInputDevices: readonly string[];
-  onVoiceInputDeviceChange: (device: string) => void;
-  micAvailable: boolean | null;
-  micTesting: boolean;
-  onMicTestToggle: () => void;
-  voiceModels: readonly VoiceModelInfo[];
-  voiceDownload: VoiceDownloadState | null;
-  onVoiceModelSelect: (id: string) => void;
-  onVoiceModelDownload: (id: string) => void;
-  hotkeys: Readonly<Record<HotkeyActionId, Hotkey>>;
-  capturing: HotkeyActionId | null;
-  onCaptureHotkey: (id: HotkeyActionId) => void;
-  onResetHotkeys: () => void;
-  snapshotOperation: SnapshotOperation | null;
-  snapshotFeedback: SnapshotFeedback | null;
-  onExportSnapshot: () => void;
-  onImportSnapshot: () => void;
-  appVersion: string;
-  updateVersion: string | null;
-  updateInstalling: boolean;
-  updateCheckState: UpdateCheckState;
-  onManualUpdateCheck: () => void;
-  onInstallUpdate: () => void;
-}
-
 function PanelLead({ section }: { section: SettingsSectionDefinition }) {
   useT();
   return (

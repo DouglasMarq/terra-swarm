@@ -11,3 +11,9 @@ export function isRecord(value: unknown): value is UnknownRecord {
 export function asRecord(value: unknown): UnknownRecord {
   return isObject(value) ? value : {};
 }
+
+export function omitKey<T>(record: Readonly<Record<string, T>>, key: string): Record<string, T> {
+  const next = { ...record };
+  delete next[key];
+  return next;
+}

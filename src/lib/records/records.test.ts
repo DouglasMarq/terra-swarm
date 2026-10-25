@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asRecord, isRecord } from "./records";
+import { asRecord, isRecord, omitKey } from "./records";
 
 describe("records", () => {
   it("Given a plain object, when checking and reading it, then it is a record read as itself", () => {
@@ -19,5 +19,14 @@ describe("records", () => {
       expect(isRecord(value)).toBe(false);
       expect(asRecord(value)).toEqual({});
     }
+  });
+});
+
+describe("omitKey", () => {
+  it("Given a record, when omitting one key, then a copy without it is returned and the original is unchanged", () => {
+    const original = { kept: 1, dropped: 2 };
+
+    expect(omitKey(original, "dropped")).toEqual({ kept: 1 });
+    expect(original).toEqual({ kept: 1, dropped: 2 });
   });
 });

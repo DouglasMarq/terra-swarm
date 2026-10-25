@@ -44,3 +44,11 @@ export function workspaceIdForTerminal(
   );
   return project?.id ?? null;
 }
+
+export function neighborTerminalId(workspaces: readonly Workspace[], terminalId: string): string | null {
+  const workspace = workspaces.find((candidate) => candidate.terminals.some((terminal) => terminal.id === terminalId));
+  if (!workspace) return null;
+  const index = workspace.terminals.findIndex((terminal) => terminal.id === terminalId);
+  const neighbor = workspace.terminals[index - 1] ?? workspace.terminals[index + 1];
+  return neighbor?.id ?? null;
+}

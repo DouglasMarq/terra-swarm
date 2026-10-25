@@ -1,5 +1,6 @@
 import { DEFAULT_NAME_LIST, NAME_SETS, type NameSetId, type NamesExhaustedStrategy } from "../domain/agentNames";
 import { create } from "zustand";
+import type { AgentLaunchSettings } from "../domain/agentLaunchEnv";
 import { t } from "../i18n";
 import { storageGet, storageRemove, storageSet } from "../lib/storage/safeStorage";
 import { DEFAULT_VOICE_LANGUAGE, isVoiceLanguage, type VoiceLanguage } from "../domain/voiceLanguages";
@@ -158,10 +159,6 @@ function nameListFor(set: NameSetId): string[] {
 }
 
 /** User launch settings of one agent: extra arguments and `KEY=VALUE` lines. */
-export interface AgentLaunchSettings {
-  args: string;
-  env: string;
-}
 
 function loadAgentLaunch(): Record<string, AgentLaunchSettings> {
   try {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Workspace, WorkspaceSnapshotV2 } from "../workspace.model";
-import { workspaceIdForTerminal } from "./terminalOwnership";
+import { neighborTerminalId, workspaceIdForTerminal } from "./terminalOwnership";
 
 const workspace = (id: string, terminalId: string): Workspace => ({
   id,
@@ -74,5 +74,29 @@ describe("workspaceIdForTerminal", () => {
     };
 
     expect(workspaceIdForTerminal([], snapshot, "terminal-b")).toBe("project-b");
+  });
+});
+
+describe("neighborTerminalId", () => {
+  const project: Workspace = {
+    id: "ws-n",
+    name: "ws-n",
+    cwd: "/tmp/ws-n",
+    terminals: [
+      { id: "first", command: "claude", width: null },
+      { id: "second", command: "codex", width: null },
+    ],
+  };
+
+  it("Given a terminal with a previous sibling, when finding its neighbor, then the previous one is chosen", () => {
+    expect(neighborTerminalId([project], "second")).toBe("first");
+  });
+
+  it("Given the first terminal, when finding its neighbor, then the next one is chosen", () => {
+    expect(neighborTerminalId([project], "first")).toBe("second");
+  });
+
+  it("Given a terminal that no project owns, when finding its neighbor, then there is none", () => {
+    expect(neighborTerminalId([project], "unknown")).toBeNull();
   });
 });

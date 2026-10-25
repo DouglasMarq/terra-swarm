@@ -1,3 +1,10 @@
+import type { AgentLaunchExtras } from "./agent.model";
+
+export interface AgentLaunchSettings {
+  args: string;
+  env: string;
+}
+
 /** Parse `KEY=VALUE` lines; blank lines and `#` comments are skipped. */
 export function parseEnvLines(text: string): { env: Record<string, string>; invalid: string[] } {
   const env: Record<string, string> = {};
@@ -14,4 +21,9 @@ export function parseEnvLines(text: string): { env: Record<string, string>; inva
     env[key] = line.slice(separator + 1).trim();
   }
   return { env, invalid };
+}
+
+export function launchExtrasFrom(settings: AgentLaunchSettings | undefined): AgentLaunchExtras | undefined {
+  if (!settings) return undefined;
+  return { args: settings.args.trim() || undefined, env: parseEnvLines(settings.env).env };
 }

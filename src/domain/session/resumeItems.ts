@@ -18,3 +18,17 @@ export function resumeItemFor(workspace: Workspace, terminal: Workspace["termina
     resumeCommand: resumeCommandFor(terminal.command),
   };
 }
+
+export function resumableItems(
+  workspaces: readonly Workspace[],
+  ids: readonly string[],
+  exited: Readonly<Record<string, number | null>>,
+): ResumeItem[] {
+  return ids.flatMap((id) => {
+    for (const workspace of workspaces) {
+      const terminal = workspace.terminals.find((candidate) => candidate.id === id);
+      if (terminal && (terminal.id in exited || terminal.suspended)) return [resumeItemFor(workspace, terminal)];
+    }
+    return [];
+  });
+}

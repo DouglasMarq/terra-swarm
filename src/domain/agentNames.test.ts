@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { namesSimilar, pickAgentName } from "./agentNames";
+import { agentNamesInUse, namesSimilar, pickAgentName } from "./agentNames";
 
 const list = ["Vega", "Lyra", "Lara", "Orion", "Rigel"];
 
@@ -33,5 +33,13 @@ describe("namesSimilar", () => {
     expect(namesSimilar("Lyra", "Lara")).toBe(true);
     expect(namesSimilar("Vega", "Orion")).toBe(false);
     expect(namesSimilar("Tapajós", "tapajos")).toBe(true);
+  });
+});
+
+describe("agentNamesInUse", () => {
+  it("Given names for open and closed agents, when listing names in use, then only open agents' names count", () => {
+    const workspaces = [{ id: "ws", name: "ws", cwd: "/ws", terminals: [{ id: "open", command: "claude", width: null }] }];
+
+    expect(agentNamesInUse(workspaces, { open: "Vega", closed: "Lyra" })).toEqual(["Vega"]);
   });
 });

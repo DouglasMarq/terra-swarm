@@ -65,3 +65,37 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - Commits follow Conventional Commits, written in English.
 - Refactoring and behavior changes go in separate commits.
 - Never put credentials, tokens or real customer data in code, tests or examples — use fictitious values.
+
+## 6. Project Map
+
+Terra Swarm is a Tauri 2 desktop app: mission control for AI coding agents. Each project is a workspace holding a grid of real PTY terminals (Claude, Codex, OpenCode, Kimi, shells), coordinated through a built-in MCP server.
+
+Layout (directory level — files move often):
+
+- `src/` — React 19 + TypeScript + zustand frontend.
+  - `components/` — UI, grouped by surface (shell, workbench, navigation, inspector, settings, tasks, voice…).
+  - `app/` — app hooks wiring stores, IPC and components (`use*.ts`).
+  - `stores/` — zustand stores.
+  - `domain/` — domain model and pure domain logic.
+  - `lib/` — generic helpers; `lib/tauri/` is the IPC layer (every `invoke` goes through it).
+  - `i18n/` — translations and `useT()`.
+  - `dev/` — mock backend for the browser preview (`vite` + `?mock`); `test/` — test setup.
+- `src-tauri/src/` — Rust backend, one module per concern: `mcp` (MCP server, task board, hooks HTTP, SQLite), `cli` (`terra-swarm hook`/stdio entry points), `pty` (terminals, agents, output scanning), `workspace` (workspaces, layout, files, git, persistence), `worktree` (isolated worktrees and review), `voice` (Whisper dictation), `scrollback`, `usage` (token usage), `sync`, `ipc_error`, `fonts`.
+
+Commands:
+
+- `npm run dev` — Vite only (browser preview; add `?mock` for sample data).
+- `npm run tauri dev` — the full app.
+- `npm run build` — type-check and build the frontend (`src-tauri` needs `dist/` to compile).
+- `npm test` / `npm run test:coverage` — Vitest, with v8 coverage and the 80/70 thresholds.
+- `npm run lint` — ESLint mirroring `.claude/rules`.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
+- `cargo test --manifest-path src-tauri/Cargo.toml`
+
+How the rule vocabulary maps here:
+
+- "Controllers/resolvers" — Tauri `#[tauri::command]` handlers, the MCP and hook HTTP handlers, React components and app hooks.
+- "Repository layer" — `mcp/repo.rs` + `mcp/db.rs`, `workspace/persistence.rs`, `scrollback.rs` (Rust); `src/lib/tauri` (frontend IPC access).
+- "Model files" — `src/domain` (TS) and the model modules of each Rust feature.
+- "Shared folder" — `src/lib` (TS); shared modules such as `src-tauri/src/sync.rs` (Rust).

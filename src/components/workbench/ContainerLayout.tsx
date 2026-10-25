@@ -2,11 +2,6 @@ import { EmptyPaneCell } from "./EmptyPaneCell";
 import { PaneGrid } from "./PaneGrid";
 import type { ContainerLayoutProps } from "./types";
 
-/**
- * Container-level layout boundary. Keeping this component separate gives the
- * workbench a stable place to add a persisted custom-grid editor later while
- * the three useful modes share the same mounted pane surface today.
- */
 export function ContainerLayout({
   projection,
   renderTab,
@@ -41,7 +36,7 @@ export function ContainerLayout({
           projection={projection}
           paneProjection={paneProjection}
           renderTab={renderTab}
-          active={paneProjection.pane.id === activePaneId}
+          isActive={paneProjection.pane.id === activePaneId}
           {...actions}
         />
       )}

@@ -9,7 +9,7 @@ export type ButtonSize = "sm" | "md" | "lg";
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
-  loading?: boolean;
+  isLoading?: boolean;
   leadingIcon?: ReactNode;
   trailingIcon?: ReactNode;
 }
@@ -20,7 +20,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     className,
     disabled,
     leadingIcon,
-    loading = false,
+    isLoading = false,
     size = "md",
     trailingIcon,
     variant = "default",
@@ -37,13 +37,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       className={classes}
       data-size={size}
       data-variant={variant}
-      data-loading={loading || undefined}
-      aria-busy={loading || undefined}
-      disabled={disabled || loading}
+      data-loading={isLoading || undefined}
+      aria-busy={isLoading || undefined}
+      disabled={disabled || isLoading}
     >
-      {loading ? <LoaderCircle aria-hidden="true" className={styles.spinner} size={14} /> : leadingIcon}
+      {isLoading ? <LoaderCircle aria-hidden="true" className={styles.spinner} size={14} /> : leadingIcon}
       <span className={styles.buttonContent}>{children}</span>
-      {!loading && trailingIcon}
+      {!isLoading && trailingIcon}
     </button>
   );
 });

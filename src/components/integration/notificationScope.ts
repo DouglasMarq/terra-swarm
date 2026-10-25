@@ -1,22 +1,12 @@
-import type { NotificationItem, WorkspaceSnapshotV2 } from "../../types";
+import type { NotificationItem } from "../../domain/notification.model";
+import type { WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 
 export interface NotificationTarget {
-  /** Project/workspace currently selected in the shell. */
   workspaceId?: string | null;
-  /** Runtime PTY currently focused by the user. */
   terminalId?: string | null;
-  /** Visual target state, when the shell has a normalized workspace snapshot. */
   snapshot?: WorkspaceSnapshotV2 | null;
 }
 
-/**
- * Scope notification history to the most precise target the shell knows.
- *
- * NotificationItem intentionally carries terminal/workspace identity rather
- * than duplicating visual container/pane/tab ids. The snapshot lets us project
- * an active tab, pane, or container back to the PTYs they contain, while the
- * direct terminal id always wins when a runtime focus exists.
- */
 export function filterNotificationItemsForTarget(
   items: readonly NotificationItem[],
   target: NotificationTarget,
@@ -56,7 +46,6 @@ function terminalIdsForTarget(target: NotificationTarget): Set<string> | null {
     pane.tabIds.forEach(addTab);
   };
 
-  // Prefer the deepest active visual target: tab → pane → container.
   addTab(snapshot.activeTabId);
   if (ptyIds.size > 0) return ptyIds;
 

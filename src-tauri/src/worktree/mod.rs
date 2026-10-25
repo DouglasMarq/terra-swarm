@@ -1,38 +1,28 @@
-//! Git worktrees that isolate one agent from the others. Each isolated agent
-//! works on its own branch (`terra/<terminal-id>`) in a checkout kept under
-//! the app data directory, so several agents in one repository never edit
-//! the same files.
-
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::scrollback::is_plain_path_component;
-use crate::sync::LockExt;
+use crate::paths::is_plain_path_component;
 
 pub mod review;
 
 pub const BRANCH_PREFIX: &str = "terra/";
 
-/// Stored with the terminal record, so a resumed agent returns to it.
+const FIRST_BRANCH_SUFFIX: u32 = 2;
+
+const PORCELAIN_PATH_OFFSET: usize = 3;
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeInfo {
-    /// The checkout the agent works in.
     pub path: String,
-    /// Where the agent's shell starts: `path` plus the project's subfolder.
     pub cwd: String,
     pub branch: String,
-    /// The branch (or commit) the worktree was created from.
     pub base: String,
-    /// The main repository's root.
     pub repo: String,
 }
 
 impl WorktreeInfo {
-    /// Refuses values that git could read as an option or that do not name
-    /// an agent branch. Stored worktrees come from `workspaces.json` and
-    /// imported snapshots, and every field ends up on a git command line.
     pub(crate) fn check(&self) -> Result<(), String> {
         let is_agent_branch = self
             .branch
@@ -53,48 +43,59 @@ impl WorktreeInfo {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct NewWorktree<'a> {
+    pub project_cwd: &'a Path,
+    pub root: &'a Path,
+    pub workspace_id: &'a str,
+    pub terminal_id: &'a str,
+}
+
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeStatus {
     pub branch: String,
     pub base: String,
     pub path: String,
-    /// Files with uncommitted changes (porcelain paths).
     pub dirty: Vec<String>,
-    /// Commits on the branch that the base does not have.
     pub ahead: u32,
-    /// Commits on the base that the branch does not have.
     pub behind: u32,
-    pub exists: bool,
+    pub is_present: bool,
 }
 
-/// A git command run in `dir` that never stops to prompt for credentials.
 pub(crate) fn git_command(dir: &Path) -> Command {
     let mut command = Command::new("git");
     command.arg("-C").arg(dir).env("GIT_TERMINAL_PROMPT", "0");
     command
 }
 
-pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
-    let output = git_command(dir)
-        .args(args)
+pub(crate) fn run_command(
+    mut command: Command,
+    program: &str,
+    failure: &str,
+) -> Result<String, String> {
+    let output = command
         .output()
-        .map_err(|error| format!("could not run git: {}", error))?;
+        .map_err(|error| format!("could not run {}: {}", program, error))?;
     if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout)
+        return Ok(String::from_utf8_lossy(&output.stdout)
             .trim_end()
-            .to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(if stderr.is_empty() {
-            format!("git {} failed", args.join(" "))
-        } else {
-            stderr
-        })
+            .to_string());
     }
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    Err(if stderr.is_empty() {
+        failure.to_string()
+    } else {
+        stderr
+    })
 }
 
-/// The repository root containing `dir`, if it is inside a git work tree.
+pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
+    let mut command = git_command(dir);
+    command.args(args);
+    run_command(command, "git", &format!("git {} failed", args.join(" ")))
+}
+
 pub fn repo_root(dir: &Path) -> Option<PathBuf> {
     git(dir, &["rev-parse", "--show-toplevel"])
         .ok()
@@ -102,7 +103,7 @@ pub fn repo_root(dir: &Path) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-fn branch_exists(repo: &Path, branch: &str) -> bool {
+fn has_branch(repo: &Path, branch: &str) -> bool {
     git(
         repo,
         &[
@@ -115,49 +116,20 @@ fn branch_exists(repo: &Path, branch: &str) -> bool {
     .is_ok()
 }
 
-/// Create a worktree for `terminal_id` of the project at `project_cwd`,
-/// under `<root>/<workspace_id>/<terminal_id>`. The agent starts in the
-/// same subfolder of the checkout that the project points at.
-pub fn create(
-    project_cwd: &Path,
-    root: &Path,
-    workspace_id: &str,
-    terminal_id: &str,
-) -> Result<WorktreeInfo, String> {
-    for id in [workspace_id, terminal_id] {
-        if !is_plain_path_component(id) {
-            return Err(format!("invalid id for a worktree folder: {:?}", id));
-        }
-    }
+pub fn create(new: NewWorktree<'_>) -> Result<WorktreeInfo, String> {
+    let NewWorktree {
+        project_cwd,
+        root,
+        workspace_id,
+        terminal_id,
+    } = new;
+    check_folder_ids(workspace_id, terminal_id)?;
     let repo = repo_root(project_cwd).ok_or("this project is not inside a git repository")?;
-    let canonical_cwd =
-        std::fs::canonicalize(project_cwd).unwrap_or_else(|_| project_cwd.to_path_buf());
-    let canonical_repo = std::fs::canonicalize(&repo).unwrap_or_else(|_| repo.clone());
-    let relative = canonical_cwd
-        .strip_prefix(&canonical_repo)
-        .map(Path::to_path_buf)
-        .unwrap_or_default();
-    let base = match git(&repo, &["symbolic-ref", "--quiet", "--short", "HEAD"]) {
-        Ok(branch) if !branch.is_empty() => branch,
-        _ => git(&repo, &["rev-parse", "--short", "HEAD"])
-            .map_err(|error| format!("the repository has no commits yet: {}", error))?,
-    };
-    let mut branch = format!("{}{}", BRANCH_PREFIX, terminal_id);
-    let mut suffix = 2;
-    while branch_exists(&repo, &branch) {
-        branch = format!("{}{}-{}", BRANCH_PREFIX, terminal_id, suffix);
-        suffix += 1;
-    }
+    let relative = subfolder_in_repo(project_cwd, &repo);
+    let base = base_ref(&repo)?;
+    let branch = free_branch(&repo, terminal_id);
     let path = root.join(workspace_id).join(terminal_id);
-    if !path.starts_with(root) {
-        return Err(format!("{} is outside the worktree folder", path.display()));
-    }
-    if path.exists() {
-        return Err(format!("{} already exists", path.display()));
-    }
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
+    prepare_worktree_folder(&path, root)?;
     let path_text = path.to_string_lossy().to_string();
     git(
         &repo,
@@ -173,22 +145,69 @@ pub fn create(
     })
 }
 
+fn check_folder_ids(workspace_id: &str, terminal_id: &str) -> Result<(), String> {
+    for id in [workspace_id, terminal_id] {
+        if !is_plain_path_component(id) {
+            return Err(format!("invalid id for a worktree folder: {:?}", id));
+        }
+    }
+    Ok(())
+}
+
+fn subfolder_in_repo(project_cwd: &Path, repo: &Path) -> PathBuf {
+    let canonical_cwd =
+        std::fs::canonicalize(project_cwd).unwrap_or_else(|_| project_cwd.to_path_buf());
+    let canonical_repo = std::fs::canonicalize(repo).unwrap_or_else(|_| repo.to_path_buf());
+    canonical_cwd
+        .strip_prefix(&canonical_repo)
+        .map(Path::to_path_buf)
+        .unwrap_or_default()
+}
+
+fn base_ref(repo: &Path) -> Result<String, String> {
+    match git(repo, &["symbolic-ref", "--quiet", "--short", "HEAD"]) {
+        Ok(branch) if !branch.is_empty() => Ok(branch),
+        _ => git(repo, &["rev-parse", "--short", "HEAD"])
+            .map_err(|error| format!("the repository has no commits yet: {}", error)),
+    }
+}
+
+fn free_branch(repo: &Path, terminal_id: &str) -> String {
+    let mut branch = format!("{}{}", BRANCH_PREFIX, terminal_id);
+    let mut suffix = FIRST_BRANCH_SUFFIX;
+    while has_branch(repo, &branch) {
+        branch = format!("{}{}-{}", BRANCH_PREFIX, terminal_id, suffix);
+        suffix += 1;
+    }
+    branch
+}
+
+fn prepare_worktree_folder(path: &Path, root: &Path) -> Result<(), String> {
+    if !path.starts_with(root) {
+        return Err(format!("{} is outside the worktree folder", path.display()));
+    }
+    if path.exists() {
+        return Err(format!("{} already exists", path.display()));
+    }
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    std::fs::create_dir_all(parent).map_err(|error| error.to_string())
+}
+
 fn count(text: &str) -> u32 {
     text.trim().parse().unwrap_or(0)
 }
 
-/// The checkout's uncommitted files and how far the branch and its base
-/// diverged. Fails when git cannot answer, so a failure is never mistaken
-/// for a clean worktree with nothing to lose.
 pub fn status(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
     info.check()?;
     let path = Path::new(&info.path);
-    let exists = path.is_dir();
-    let dirty = if exists {
+    let is_present = path.is_dir();
+    let dirty = if is_present {
         git(path, &["status", "--porcelain"])
             .map_err(|error| format!("could not read the worktree status: {}", error))?
             .lines()
-            .filter_map(|line| line.get(3..))
+            .filter_map(|line| line.get(PORCELAIN_PATH_OFFSET..))
             .map(str::to_string)
             .collect()
     } else {
@@ -202,12 +221,10 @@ pub fn status(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
         dirty,
         ahead,
         behind,
-        exists,
+        is_present,
     })
 }
 
-/// Commits only the base has and commits only the branch has; none once
-/// the branch itself is gone.
 fn divergence(info: &WorktreeInfo) -> Result<(u32, u32), String> {
     let repo = Path::new(&info.repo);
     let range = format!("{}...{}", info.base, info.branch);
@@ -219,7 +236,7 @@ fn divergence(info: &WorktreeInfo) -> Result<(u32, u32), String> {
             };
             Ok((count(behind), count(ahead)))
         }
-        Err(_) if !branch_exists(repo, &info.branch) => Ok((0, 0)),
+        Err(_) if !has_branch(repo, &info.branch) => Ok((0, 0)),
         Err(error) => Err(format!(
             "could not compare {} with {}: {}",
             info.branch, info.base, error
@@ -227,10 +244,7 @@ fn divergence(info: &WorktreeInfo) -> Result<(u32, u32), String> {
     }
 }
 
-/// Remove the checkout (discarding uncommitted changes) and, when asked,
-/// the branch with its commits. A checkout already gone from disk only
-/// has git's record of it pruned.
-pub fn remove(info: &WorktreeInfo, delete_branch: bool) -> Result<(), String> {
+pub fn remove(info: &WorktreeInfo, should_delete_branch: bool) -> Result<(), String> {
     info.check()?;
     let repo = Path::new(&info.repo);
     if Path::new(&info.path).exists() {
@@ -238,100 +252,10 @@ pub fn remove(info: &WorktreeInfo, delete_branch: bool) -> Result<(), String> {
     } else if let Err(error) = git(repo, &["worktree", "prune"]) {
         eprintln!("failed to prune worktrees of {}: {}", info.repo, error);
     }
-    if delete_branch && branch_exists(repo, &info.branch) {
+    if should_delete_branch && has_branch(repo, &info.branch) {
         git(repo, &["branch", "-D", "--", &info.branch])?;
     }
     Ok(())
-}
-
-/// The worktree recorded for a terminal of a workspace.
-fn recorded(
-    store: &std::sync::Mutex<crate::workspace::WorkspaceStore>,
-    workspace_id: &str,
-    terminal_id: &str,
-) -> Result<WorktreeInfo, String> {
-    let store = store.lock_or_recover();
-    store
-        .workspace(workspace_id)?
-        .terminals
-        .iter()
-        .find(|terminal| terminal.id == terminal_id)
-        .and_then(|terminal| terminal.worktree.clone())
-        .ok_or_else(|| format!("terminal {} has no worktree", terminal_id))
-}
-
-#[tauri::command(async)]
-pub fn worktree_status(
-    store: tauri::State<'_, std::sync::Mutex<crate::workspace::WorkspaceStore>>,
-    workspace_id: String,
-    terminal_id: String,
-) -> Result<Option<WorktreeStatus>, String> {
-    match recorded(&store, &workspace_id, &terminal_id) {
-        Ok(info) => status(&info).map(Some),
-        Err(error) => {
-            eprintln!("no worktree status for terminal {}: {}", terminal_id, error);
-            Ok(None)
-        }
-    }
-}
-
-/// Delete an agent's worktree, discarding uncommitted changes; the branch
-/// (with its commits) goes too when `delete_branch` is set. Stop the agent
-/// first: its shell must not be running inside the folder.
-#[tauri::command(async)]
-pub fn worktree_remove(
-    store: tauri::State<'_, std::sync::Mutex<crate::workspace::WorkspaceStore>>,
-    workspace_id: String,
-    terminal_id: String,
-    delete_branch: bool,
-) -> Result<(), String> {
-    let info = recorded(&store, &workspace_id, &terminal_id)?;
-    remove(&info, delete_branch)
-}
-
-#[tauri::command(async)]
-pub fn worktree_diff(
-    store: tauri::State<'_, std::sync::Mutex<crate::workspace::WorkspaceStore>>,
-    workspace_id: String,
-    terminal_id: String,
-) -> Result<review::WorktreeDiff, String> {
-    review::diff(&recorded(&store, &workspace_id, &terminal_id)?)
-}
-
-#[tauri::command(async)]
-pub fn worktree_commit(
-    store: tauri::State<'_, std::sync::Mutex<crate::workspace::WorkspaceStore>>,
-    workspace_id: String,
-    terminal_id: String,
-    message: String,
-) -> Result<WorktreeStatus, String> {
-    review::commit(&recorded(&store, &workspace_id, &terminal_id)?, &message)
-}
-
-#[tauri::command(async)]
-pub fn worktree_merge(
-    store: tauri::State<'_, std::sync::Mutex<crate::workspace::WorkspaceStore>>,
-    workspace_id: String,
-    terminal_id: String,
-) -> Result<WorktreeStatus, String> {
-    review::merge(&recorded(&store, &workspace_id, &terminal_id)?)
-}
-
-/// Pushes the agent's branch and opens a pull request; the user asks for
-/// this explicitly from the review dialog.
-#[tauri::command(async)]
-pub fn worktree_open_pr(
-    store: tauri::State<'_, std::sync::Mutex<crate::workspace::WorkspaceStore>>,
-    workspace_id: String,
-    terminal_id: String,
-    title: String,
-    body: String,
-) -> Result<String, String> {
-    review::open_pull_request(
-        &recorded(&store, &workspace_id, &terminal_id)?,
-        &title,
-        &body,
-    )
 }
 
 #[cfg(test)]
@@ -339,13 +263,12 @@ pub(crate) mod test_repo {
     use super::git;
     use std::path::{Path, PathBuf};
 
-    /// A fresh repository with one commit on `main`.
     pub fn init(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
             "terra-wt-{}-{}-{}",
             name,
             std::process::id(),
-            crate::mcp::repo::now_millis()
+            crate::clock::now_millis()
         ));
         std::fs::create_dir_all(dir.join("app")).unwrap();
         let run = |args: &[&str]| git(&dir, args).unwrap();
@@ -370,17 +293,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn creates_an_isolated_branch_and_reports_its_state() {
+    fn given_a_repository_when_creating_a_worktree_then_it_gets_an_isolated_branch_and_reports_its_state(
+    ) {
         let repo = init("create");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo.join("app"), &root, "ws-1", "t-3").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo.join("app"),
+            root: &root,
+            workspace_id: "ws-1",
+            terminal_id: "t-3",
+        })
+        .unwrap();
         assert_eq!(info.branch, "terra/t-3");
         assert_eq!(info.base, "main");
         assert!(Path::new(&info.cwd).ends_with("t-3/app"));
         assert!(Path::new(&info.cwd).join("readme.txt").exists());
 
         let clean = status(&info).unwrap();
-        assert!(clean.exists);
+        assert!(clean.is_present);
         assert!(clean.dirty.is_empty());
         assert_eq!((clean.ahead, clean.behind), (0, 0));
 
@@ -395,41 +325,57 @@ mod tests {
         assert!(committed.dirty.is_empty());
         assert_eq!(committed.ahead, 1);
 
-        // A second agent with the same id gets a fresh branch name.
-        let again = create(&repo.join("app"), &root, "ws-1", "t-3b").unwrap();
+        let again = create(NewWorktree {
+            project_cwd: &repo.join("app"),
+            root: &root,
+            workspace_id: "ws-1",
+            terminal_id: "t-3b",
+        })
+        .unwrap();
         assert_eq!(again.branch, "terra/t-3b");
 
         remove(&info, true).unwrap();
         assert!(!Path::new(&info.path).exists());
-        assert!(!branch_exists(&repo, "terra/t-3"));
+        assert!(!has_branch(&repo, "terra/t-3"));
         remove(&again, false).unwrap();
-        assert!(branch_exists(&repo, "terra/t-3b"));
+        assert!(has_branch(&repo, "terra/t-3b"));
         cleanup(&repo, &root);
     }
 
     #[test]
-    fn refuses_a_folder_outside_git() {
+    fn given_a_folder_outside_git_when_creating_a_worktree_then_it_is_refused() {
         let dir = std::env::temp_dir().join(format!("terra-wt-plain-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        assert!(create(&dir, &dir.join("wt"), "ws", "t-1")
-            .unwrap_err()
-            .contains("not inside a git repository"));
+        assert!(create(NewWorktree {
+            project_cwd: &dir,
+            root: &dir.join("wt"),
+            workspace_id: "ws",
+            terminal_id: "t-1"
+        })
+        .unwrap_err()
+        .contains("not inside a git repository"));
         let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
-    fn a_taken_branch_name_gets_a_suffix() {
+    fn given_a_taken_branch_name_when_creating_a_worktree_then_the_branch_gets_a_suffix() {
         let repo = init("suffix");
         let root = repo.with_extension("worktrees");
         git(&repo, &["branch", "terra/t-9"]).unwrap();
-        let info = create(&repo, &root, "ws", "t-9").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-9",
+        })
+        .unwrap();
         assert_eq!(info.branch, "terra/t-9-2");
         remove(&info, true).unwrap();
         cleanup(&repo, &root);
     }
 
     #[test]
-    fn given_ids_that_are_not_plain_folder_names_refuses_to_create_a_worktree() {
+    fn given_ids_that_are_not_plain_folder_names_when_creating_a_worktree_then_it_is_refused() {
         let repo = init("ids");
         let root = repo.with_extension("worktrees");
         let absolute = std::env::temp_dir().join("terra-wt-escape");
@@ -444,9 +390,14 @@ mod tests {
             ("ws-1", "--receive-pack=x/y"),
         ] {
             assert!(
-                create(&repo, &root, workspace_id, terminal_id)
-                    .unwrap_err()
-                    .contains("invalid id"),
+                create(NewWorktree {
+                    project_cwd: &repo,
+                    root: &root,
+                    workspace_id,
+                    terminal_id,
+                })
+                .unwrap_err()
+                .contains("invalid id"),
                 "{workspace_id} / {terminal_id}"
             );
         }
@@ -458,10 +409,16 @@ mod tests {
     }
 
     #[test]
-    fn given_a_broken_checkout_status_reports_an_error_instead_of_clean() {
+    fn given_a_broken_checkout_when_reading_status_then_it_reports_an_error_instead_of_clean() {
         let repo = init("broken");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("draft.txt"), "x").unwrap();
         std::fs::write(Path::new(&info.path).join(".git"), "gitdir: /missing\n").unwrap();
 
@@ -472,17 +429,23 @@ mod tests {
     }
 
     #[test]
-    fn given_a_deleted_checkout_status_still_counts_the_branch_commits() {
+    fn given_a_deleted_checkout_when_reading_status_then_it_still_counts_the_branch_commits() {
         let repo = init("deleted");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("feature.txt"), "x").unwrap();
         git(Path::new(&info.path), &["add", "."]).unwrap();
         git(Path::new(&info.path), &["commit", "-q", "-m", "work"]).unwrap();
         std::fs::remove_dir_all(&info.path).unwrap();
 
         let kept_branch = status(&info).unwrap();
-        assert!(!kept_branch.exists);
+        assert!(!kept_branch.is_present);
         assert_eq!((kept_branch.ahead, kept_branch.behind), (1, 0));
 
         git(&repo, &["worktree", "prune"]).unwrap();
@@ -493,10 +456,16 @@ mod tests {
     }
 
     #[test]
-    fn given_a_base_git_cannot_compare_status_reports_an_error() {
+    fn given_a_base_git_cannot_compare_when_reading_status_then_it_reports_an_error() {
         let repo = init("no-base");
         let root = repo.with_extension("worktrees");
-        let mut info = create(&repo, &root, "ws", "t-1").unwrap();
+        let mut info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         info.base = "vanished".to_string();
 
         assert!(status(&info).unwrap_err().contains("could not compare"));
@@ -504,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn given_any_git_command_disables_terminal_prompts() {
+    fn given_any_git_command_when_running_it_then_terminal_prompts_are_disabled() {
         let command = git_command(Path::new("/Users/me/project"));
         assert!(command
             .get_envs()
@@ -524,7 +493,7 @@ mod tests {
     }
 
     #[test]
-    fn given_worktree_values_git_could_read_as_options_refuses_them() {
+    fn given_worktree_values_git_could_read_as_options_when_using_them_then_they_are_refused() {
         assert!(stored_info("terra/t-1", "main").check().is_ok());
         assert!(stored_info("terra/t-1-2", "feature/login").check().is_ok());
         for (branch, base) in [
@@ -547,14 +516,20 @@ mod tests {
     }
 
     #[test]
-    fn given_an_option_like_branch_remove_runs_no_git() {
+    fn given_an_option_like_branch_when_removing_then_no_git_runs() {
         let repo = init("remove-option");
         let root = repo.with_extension("worktrees");
-        let mut info = create(&repo, &root, "ws", "t-1").unwrap();
+        let mut info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         info.branch = "--receive-pack=x".to_string();
         assert!(remove(&info, true).unwrap_err().contains("invalid"));
         assert!(Path::new(&info.path).exists());
-        assert!(branch_exists(&repo, "terra/t-1"));
+        assert!(has_branch(&repo, "terra/t-1"));
         cleanup(&repo, &root);
     }
 }

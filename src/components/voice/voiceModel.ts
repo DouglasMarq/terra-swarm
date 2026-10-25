@@ -1,11 +1,6 @@
 import type { Translate } from "../../i18n";
-import type { VoiceIntent } from "../../lib/voiceCommands";
+import type { VoiceIntent } from "../../domain/voiceCommands";
 
-/**
- * Visual states intentionally describe the lifecycle of a voice capture, not
- * its semantic outcome.  The host owns this value so the capsule stays a
- * controlled view component.
- */
 export type VoiceCapsuleState =
   | "idle"
   | "listening"
@@ -13,11 +8,6 @@ export type VoiceCapsuleState =
   | "preview"
   | "error";
 
-/**
- * `stop` is kept here as a forward-compatible intent.  The current parser
- * does not emit it yet, but the capsule must still protect it if a host adds
- * the command or receives it from a remote agent.
- */
 export type VoiceCapsuleIntent = VoiceIntent | { type: "stop"; target?: string };
 
 export interface VoiceSendPayload {
@@ -32,7 +22,7 @@ export interface VoiceCapsuleModel {
   finalTranscript: string;
   intent: VoiceCapsuleIntent | null;
   error: string | null;
-  awaitingConfirmation: boolean;
+  isAwaitingConfirmation: boolean;
 }
 
 export type VoiceCapsuleEvent =
@@ -59,16 +49,11 @@ export function isDestructiveVoiceIntent(
 
 export const requiresVoiceConfirmation = isDestructiveVoiceIntent;
 
-/**
- * Hosts must call this gate immediately before mutating application state.
- * A destructive intent is never executable merely because it was parsed; it
- * needs the explicit confirmation action emitted by the capsule.
- */
 export function canExecuteVoiceIntent(
   intent: VoiceCapsuleIntent | null | undefined,
-  confirmed = false,
+  isConfirmed = false,
 ): boolean {
-  return Boolean(intent) && (!isDestructiveVoiceIntent(intent) || confirmed);
+  return Boolean(intent) && (!isDestructiveVoiceIntent(intent) || isConfirmed);
 }
 
 export function createInitialVoiceCapsuleModel(
@@ -80,17 +65,12 @@ export function createInitialVoiceCapsuleModel(
     finalTranscript: "",
     intent: null,
     error: null,
-    awaitingConfirmation: false,
+    isAwaitingConfirmation: false,
   };
 
   return { ...model, ...overrides };
 }
 
-/**
- * A small pure lifecycle model for hosts that need to coordinate recording,
- * transcription and confirmation.  VoiceCapsule itself remains controlled;
- * this reducer is an optional, testable contract rather than hidden state.
- */
 export function reduceVoiceCapsuleModel(
   model: VoiceCapsuleModel,
   event: VoiceCapsuleEvent,
@@ -104,7 +84,7 @@ export function reduceVoiceCapsuleModel(
         intent: null,
         partialTranscript: "",
         finalTranscript: "",
-        awaitingConfirmation: false,
+        isAwaitingConfirmation: false,
       };
     case "stop-listening":
       return model.state === "listening"
@@ -127,7 +107,7 @@ export function reduceVoiceCapsuleModel(
         partialTranscript: event.transcript,
         intent,
         error: null,
-        awaitingConfirmation: isDestructiveVoiceIntent(intent),
+        isAwaitingConfirmation: isDestructiveVoiceIntent(intent),
       };
     }
     case "fail":
@@ -135,13 +115,13 @@ export function reduceVoiceCapsuleModel(
         ...model,
         state: "error",
         error: event.message,
-        awaitingConfirmation: false,
+        isAwaitingConfirmation: false,
       };
     case "cancel":
       return createInitialVoiceCapsuleModel();
     case "send":
-      return isDestructiveVoiceIntent(model.intent) || model.awaitingConfirmation
-        ? { ...model, awaitingConfirmation: true }
+      return isDestructiveVoiceIntent(model.intent) || model.isAwaitingConfirmation
+        ? { ...model, isAwaitingConfirmation: true }
         : createInitialVoiceCapsuleModel();
     case "confirm":
       return isDestructiveVoiceIntent(model.intent)
@@ -154,34 +134,34 @@ export function reduceVoiceCapsuleModel(
   }
 }
 
-export function voiceIntentLabel(intent: VoiceCapsuleIntent, t: Translate): string {
+export function voiceIntentLabel(intent: VoiceCapsuleIntent, translate: Translate): string {
   switch (intent.type) {
     case "focus":
-      return t("voiceIntent.focus", { name: intent.target });
+      return translate("voiceIntent.focus", { name: intent.target });
     case "open-fleet":
-      return t("palette.openFleet");
+      return translate("palette.openFleet");
     case "suspend-group":
-      return t("voiceIntent.suspendGroup", { name: intent.group });
+      return translate("voiceIntent.suspendGroup", { name: intent.group });
     case "resume-group":
-      return t("voiceIntent.resumeGroup", { name: intent.group });
+      return translate("voiceIntent.resumeGroup", { name: intent.group });
     case "new-agent":
-      return intent.agent ? t("voiceIntent.newAgentNamed", { name: intent.agent }) : t("voiceIntent.newAgent");
+      return intent.agent ? translate("voiceIntent.newAgentNamed", { name: intent.agent }) : translate("voiceIntent.newAgent");
     case "stop":
-      return intent.target ? t("voiceIntent.stopNamed", { name: intent.target }) : t("voiceIntent.stop");
+      return intent.target ? translate("voiceIntent.stopNamed", { name: intent.target }) : translate("voiceIntent.stop");
   }
 }
 
-export function voiceStateLabel(state: VoiceCapsuleState, t: Translate): string {
+export function voiceStateLabel(state: VoiceCapsuleState, translate: Translate): string {
   switch (state) {
     case "idle":
-      return t("voiceState.idle");
+      return translate("voiceState.idle");
     case "listening":
-      return t("shell.voiceListening");
+      return translate("shell.voiceListening");
     case "transcribing":
-      return t("shell.voiceTranscribing");
+      return translate("shell.voiceTranscribing");
     case "preview":
-      return t("voiceState.preview");
+      return translate("voiceState.preview");
     case "error":
-      return t("voiceState.error");
+      return translate("voiceState.error");
   }
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Workspace } from "../types";
+import type { Workspace } from "../domain/workspace.model";
 
 const workspaceApiMock = vi.hoisted(() => ({
   listWorkspaces: vi.fn(() => Promise.resolve([] as Workspace[])),
@@ -18,6 +18,7 @@ import {
   ORCHESTRATION_STORAGE_KEY,
   useOrchestrationStore,
 } from "./orchestrationStore";
+import { defined } from "../test/defined";
 
 const workspaces: Workspace[] = [
   {
@@ -40,21 +41,19 @@ afterEach(() => {
   useOrchestrationStore.getState().reset();
   try {
     localStorage.removeItem(ORCHESTRATION_STORAGE_KEY);
-  } catch {
-    // Vitest's default environment has no localStorage.
-  }
+  } catch {}
 });
 
 describe("orchestration store", () => {
-  it("derives a v2 snapshot from legacy workspaces and preserves group membership", () => {
+  it("Given legacy workspaces, when hydrating, then a v2 snapshot is derived and group membership is kept", () => {
     useOrchestrationStore.getState().sync(workspaces, [
       {
         id: "group-a",
         name: "Agents",
         projectIds: [],
         parentGroupId: null,
-        collapsed: false,
-        suspended: false,
+        isCollapsed: false,
+        isSuspended: false,
       },
     ]);
 
@@ -67,30 +66,30 @@ describe("orchestration store", () => {
     });
   });
 
-  it("closes a container without removing its PTY tab", () => {
+  it("Given a container, when closing it, then its PTY tab is not removed", () => {
     useOrchestrationStore.getState().sync(workspaces);
     const containerId = useOrchestrationStore.getState().snapshot?.containers[0]?.id;
     expect(containerId).toBeTruthy();
-    useOrchestrationStore.getState().closeContainer(containerId!);
+    useOrchestrationStore.getState().closeContainer(defined(containerId));
 
     const state = useOrchestrationStore.getState();
-    expect(state.containerVisibility[containerId!]).toBe(false);
-    expect(state.snapshot?.containers[0]?.closed).toBe(true);
+    expect(state.containerVisibility[defined(containerId)]).toBe(false);
+    expect(state.snapshot?.containers[0]?.isClosed).toBe(true);
     expect(state.snapshot?.tabs[0]?.ptyId).toBe("pty-a");
 
-    useOrchestrationStore.getState().openContainer(containerId!);
-    expect(useOrchestrationStore.getState().snapshot?.containers[0]?.visible).toBe(true);
+    useOrchestrationStore.getState().openContainer(defined(containerId));
+    expect(useOrchestrationStore.getState().snapshot?.containers[0]?.isVisible).toBe(true);
   });
 
-  it("persists feature flags and group suspension metadata", () => {
+  it("Given feature flags and group suspension, when persisting, then both are kept", () => {
     useOrchestrationStore.getState().sync(workspaces, [
       {
         id: "group-a",
         name: "Agents",
         projectIds: ["workspace-a"],
         parentGroupId: null,
-        collapsed: false,
-        suspended: false,
+        isCollapsed: false,
+        isSuspended: false,
       },
     ]);
     useOrchestrationStore.getState().setFeatureFlag("voiceCommands", true);
@@ -98,11 +97,11 @@ describe("orchestration store", () => {
 
     const state = useOrchestrationStore.getState();
     expect(state.flags.voiceCommands).toBe(true);
-    expect(state.groups[0]?.suspended).toBe(true);
-    expect(state.snapshot?.groups[0]?.suspended).toBe(true);
+    expect(state.groups[0]?.isSuspended).toBe(true);
+    expect(state.snapshot?.groups[0]?.isSuspended).toBe(true);
   });
 
-  it("persists visual detachments without removing the terminal identity", () => {
+  it("Given a visual detachment, when persisting, then the terminal identity is not removed", () => {
     useOrchestrationStore.getState().sync(workspaces);
     useOrchestrationStore.getState().detachTerminal("pty-a");
 
@@ -113,7 +112,7 @@ describe("orchestration store", () => {
     expect(useOrchestrationStore.getState().detachedTerminalIds).toEqual([]);
   });
 
-  it("persists visual layout mutations through the backend contract", () => {
+  it("Given visual layout mutations, when persisting, then they go through the backend contract", () => {
     const source: Workspace[] = [
       {
         id: "workspace-layout",
@@ -129,16 +128,16 @@ describe("orchestration store", () => {
     const containerId = useOrchestrationStore.getState().snapshot?.containers[0]?.id;
     expect(containerId).toBe("container-workspace-layout");
 
-    useOrchestrationStore.getState().setContainerState(containerId!, {
-      collapsed: true,
+    useOrchestrationStore.getState().setContainerState(defined(containerId), {
+      isCollapsed: true,
       activePaneId: "pane-two",
       internalLayout: "vertical",
       size: 42,
     });
-    useOrchestrationStore.getState().reorderPanes(containerId!, ["pane-two", "pane-one"]);
+    useOrchestrationStore.getState().reorderPanes(defined(containerId), ["pane-two", "pane-one"]);
     useOrchestrationStore.getState().setWorkspaceLayout("workspace-layout", {
       mode: "spotlight",
-      itemIds: [containerId!],
+      itemIds: [defined(containerId)],
       metadata: { surface: "workbench" },
     });
     useOrchestrationStore.getState().setWorkspaceCollapsed("workspace-layout", true);
@@ -147,7 +146,7 @@ describe("orchestration store", () => {
     expect(state.snapshot?.containers[0]).toMatchObject({
       id: containerId,
       paneIds: ["pane-two", "pane-one"],
-      collapsed: true,
+      isCollapsed: true,
       activePaneId: "pane-two",
       internalLayout: "vertical",
       size: 42,
@@ -165,7 +164,7 @@ describe("orchestration store", () => {
     });
     expect(state.snapshot?.projects[0]).toMatchObject({
       id: "workspace-layout",
-      collapsed: true,
+      isCollapsed: true,
       layout: { mode: "spotlight", metadata: { surface: "workbench" } },
     });
     expect(workspaceApiMock.setWorkspaceContainerState).toHaveBeenCalled();
@@ -180,7 +179,7 @@ describe("orchestration store", () => {
     );
   });
 
-  it("rejects a pane move across projects before IPC or optimistic state", () => {
+  it("Given a pane move across projects, when moving, then it is rejected before IPC or optimistic state", () => {
     const source: Workspace[] = [
       {
         id: "workspace-a",
@@ -205,7 +204,7 @@ describe("orchestration store", () => {
     expect(workspaceApiMock.moveWorkspacePane).not.toHaveBeenCalled();
   });
 
-  it("persists tab order inside its pane and restores it on refresh", () => {
+  it("Given a tab order inside a pane, when refreshing, then it is persisted and restored", () => {
     const source: Workspace[] = [
       {
         id: "workspace-tab-order",
@@ -238,7 +237,7 @@ describe("orchestration store", () => {
     }
   });
 
-  it("reconciles a rejected persistence command with the authoritative backend state", async () => {
+  it("Given a rejected persistence command, when reconciling, then the authoritative backend state wins", async () => {
     const source: Workspace[] = [
       {
         id: "workspace-persist-error",
@@ -271,7 +270,7 @@ describe("orchestration store", () => {
     expect(useOrchestrationStore.getState().persistenceError).toBeNull();
   });
 
-  it("does not let a stale rejection reconcile over a newer successful mutation", async () => {
+  it("Given a stale rejection and a newer successful mutation, when reconciling, then the stale rejection does not win", async () => {
     const source: Workspace[] = [
       {
         id: "workspace-stale-persist",
@@ -283,7 +282,7 @@ describe("orchestration store", () => {
     useOrchestrationStore.getState().sync(source);
 
     let rejectFirst: (error: unknown) => void = () => undefined;
-    const firstCommand = new Promise<void>((_, reject) => {
+    const firstCommand = new Promise<void>((_resolve, reject) => {
       rejectFirst = reject;
     });
     workspaceApiMock.setWorkspaceLayout
@@ -312,7 +311,7 @@ describe("orchestration store", () => {
     });
   });
 
-  it("does not rebuild visual state on an idempotent refresh", () => {
+  it("Given an idempotent refresh, when it arrives, then visual state is not rebuilt", () => {
     const source: Workspace[] = [
       {
         id: "workspace-tabs",
@@ -352,7 +351,7 @@ describe("orchestration store", () => {
     expect(afterRefresh?.panes[0]?.layout.mode).toBe("horizontal");
   });
 
-  it("keeps group suspension metadata and drops only stale backend terminals", () => {
+  it("Given group suspension metadata and stale backend terminals, when refreshing, then the metadata is kept and only stale terminals are dropped", () => {
     const source: Workspace[] = [
       {
         id: "workspace-grouped",
@@ -360,7 +359,7 @@ describe("orchestration store", () => {
         cwd: "/grouped",
         groupId: "group-luna",
         terminals: [
-          { id: "pty-live", command: "luna", width: 80, groupId: "group-luna", suspended: true },
+          { id: "pty-live", command: "luna", width: 80, groupId: "group-luna", isSuspended: true },
           { id: "pty-stale", command: "luna", width: 80, groupId: "group-luna" },
         ],
       },
@@ -371,8 +370,8 @@ describe("orchestration store", () => {
         name: "Luna Max",
         projectIds: ["workspace-grouped"],
         parentGroupId: null,
-        collapsed: false,
-        suspended: true,
+        isCollapsed: false,
+        isSuspended: true,
         layoutMode: "grid",
       },
     ];
@@ -383,7 +382,7 @@ describe("orchestration store", () => {
     );
 
     const state = useOrchestrationStore.getState();
-    expect(state.groups[0]).toMatchObject({ id: "group-luna", suspended: true });
+    expect(state.groups[0]).toMatchObject({ id: "group-luna", isSuspended: true });
     expect(state.snapshot?.tabs.map((tab) => tab.ptyId)).toEqual(["pty-live"]);
     expect(state.snapshot?.projects[0]?.groupId).toBe("group-luna");
   });

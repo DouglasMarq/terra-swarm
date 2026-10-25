@@ -1,0 +1,352 @@
+use serde_json::Value;
+use std::ffi::OsStr;
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
+
+use super::{text_field, AgentIntegration, LaunchContext};
+use crate::mcp::launch::{quote, Quoting, ENV_TOKEN, SERVER_NAME};
+use crate::mcp::model::AgentState;
+use crate::usage::{number, SessionLog, TokenUsage};
+
+const ID: &str = "codex";
+
+const MAX_CODEX_LOG_DEPTH: usize = 4;
+
+pub struct Codex;
+
+pub struct Overrides<'a> {
+    pub url: &'a str,
+    pub notify: Option<&'a Path>,
+}
+
+impl AgentIntegration for Codex {
+    fn id(&self) -> &'static str {
+        ID
+    }
+
+    fn launch_command(&self, command: &str, context: &LaunchContext<'_>) -> String {
+        let notify = if has_user_codex_notify() {
+            None
+        } else {
+            context.hook_program
+        };
+        let overrides = Overrides {
+            url: context.url,
+            notify,
+        };
+        rewrite(command, &overrides, context.quoting)
+    }
+
+    fn interpret(&self, event: &str, payload: &Value) -> Option<(AgentState, String)> {
+        match payload.get("type").and_then(Value::as_str).unwrap_or(event) {
+            "agent-turn-complete" => Some((
+                AgentState::Idle,
+                text_field(
+                    payload,
+                    &["last-assistant-message", "last_assistant_message"],
+                )
+                .unwrap_or_default(),
+            )),
+            _ => None,
+        }
+    }
+
+    fn session_log(&self, payload: &Value) -> Option<SessionLog> {
+        payload
+            .get("thread-id")
+            .or_else(|| payload.get("thread_id"))
+            .and_then(Value::as_str)
+            .filter(|thread| !thread.is_empty())
+            .map(|thread| SessionLog {
+                integration: ID,
+                locator: thread.into(),
+            })
+    }
+
+    fn usage(&self, locator: &OsStr) -> Option<std::io::Result<TokenUsage>> {
+        let thread = locator.to_str()?;
+        Some(codex_usage(&find_codex_log(
+            &codex_sessions_dir()?,
+            thread,
+        )?))
+    }
+}
+
+pub fn rewrite(command: &str, registration: &Overrides<'_>, quoting: Quoting) -> String {
+    let rest = command
+        .split_once(char::is_whitespace)
+        .map(|(_, rest)| rest.trim_start())
+        .unwrap_or("");
+    let executable = command.split_whitespace().next().unwrap_or("codex");
+    let url = registration.url;
+    let mut overrides = match quoting {
+        Quoting::Posix => format!(
+            "-c {} -c {}",
+            quote(
+                &format!("mcp_servers.{}.url=\"{}\"", SERVER_NAME, url),
+                quoting
+            ),
+            quote(
+                &format!(
+                    "mcp_servers.{}.bearer_token_env_var=\"{}\"",
+                    SERVER_NAME, ENV_TOKEN
+                ),
+                quoting
+            ),
+        ),
+        Quoting::Windows => format!(
+            "-c mcp_servers.{name}.url={url} -c mcp_servers.{name}.bearer_token_env_var={env}",
+            name = SERVER_NAME,
+            url = url,
+            env = ENV_TOKEN
+        ),
+    };
+    let can_quote_toml_array = quoting == Quoting::Posix;
+    if let (Some(program), true) = (registration.notify, can_quote_toml_array) {
+        let program = serde_json::to_string(&program.to_string_lossy()).unwrap_or_default();
+        overrides.push_str(&format!(
+            " -c {}",
+            quote(
+                &format!("notify=[{},\"hook\",\"codex\",\"notify\"]", program),
+                quoting
+            )
+        ));
+    }
+    if rest.is_empty() {
+        format!("{} {}", executable, overrides)
+    } else {
+        format!("{} {} {}", executable, overrides, rest)
+    }
+}
+
+pub fn has_user_codex_notify() -> bool {
+    let Some(home) = codex_home() else {
+        return false;
+    };
+    std::fs::read_to_string(home.join("config.toml"))
+        .map(|text| has_codex_notify_setting(&text))
+        .unwrap_or(false)
+}
+
+pub fn has_codex_notify_setting(config: &str) -> bool {
+    for line in config.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            return false;
+        }
+        if let Some((key, _)) = line.split_once('=') {
+            if key.trim() == "notify" {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+pub fn codex_usage(path: &Path) -> std::io::Result<TokenUsage> {
+    let reader = BufReader::new(std::fs::File::open(path)?);
+    let mut total = TokenUsage::default();
+    for line in reader.lines() {
+        let Ok(line) = line else { continue };
+        let Ok(entry) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        let payload = entry.get("payload").unwrap_or(&Value::Null);
+        match payload.get("type").and_then(Value::as_str) {
+            Some("token_count") => {
+                if let Some(usage) = payload.pointer("/info/total_token_usage") {
+                    let cached = number(usage, "cached_input_tokens");
+                    total.input_tokens = number(usage, "input_tokens").saturating_sub(cached);
+                    total.cache_read_tokens = cached;
+                    total.output_tokens = number(usage, "output_tokens");
+                }
+            }
+            Some("agent_message") => total.turns += 1,
+            _ => {}
+        }
+        if let Some(model) = payload.get("model").and_then(Value::as_str) {
+            total.model = Some(model.to_string());
+        }
+    }
+    Ok(total)
+}
+
+pub fn find_codex_log(sessions: &Path, thread_id: &str) -> Option<PathBuf> {
+    if thread_id.is_empty()
+        || !thread_id
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    {
+        return None;
+    }
+    fn walk(dir: &Path, thread_id: &str, depth: usize) -> Option<PathBuf> {
+        let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
+            .ok()?
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .collect();
+        entries.sort();
+        entries.reverse();
+        for path in entries {
+            if path.is_dir() && depth < MAX_CODEX_LOG_DEPTH {
+                if let Some(found) = walk(&path, thread_id, depth + 1) {
+                    return Some(found);
+                }
+            } else if path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.ends_with(".jsonl") && name.contains(thread_id))
+            {
+                return Some(path);
+            }
+        }
+        None
+    }
+    walk(sessions, thread_id, 0)
+}
+
+fn codex_sessions_dir() -> Option<PathBuf> {
+    Some(codex_home()?.join("sessions"))
+}
+
+fn codex_home() -> Option<PathBuf> {
+    std::env::var_os("CODEX_HOME")
+        .map(PathBuf::from)
+        .or_else(|| crate::paths::home_dir().map(|home| home.join(".codex")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::test_support::temp;
+    use super::*;
+
+    const URL: &str = "http://127.0.0.1:4100/mcp";
+
+    #[test]
+    fn given_a_codex_command_when_rewriting_then_overrides_come_before_its_subcommand() {
+        let registration = Overrides {
+            url: URL,
+            notify: None,
+        };
+        assert_eq!(
+            rewrite("codex resume --last", &registration, Quoting::Posix),
+            "codex -c 'mcp_servers.terra.url=\"http://127.0.0.1:4100/mcp\"' \
+             -c 'mcp_servers.terra.bearer_token_env_var=\"TERRA_MCP_TOKEN\"' resume --last"
+        );
+        assert_eq!(
+            rewrite("codex", &registration, Quoting::Windows),
+            "codex -c mcp_servers.terra.url=http://127.0.0.1:4100/mcp \
+             -c mcp_servers.terra.bearer_token_env_var=TERRA_MCP_TOKEN"
+        );
+    }
+
+    #[test]
+    fn given_a_codex_launch_when_rewriting_then_notify_runs_this_app_as_a_hook_on_posix_only() {
+        let program = Path::new("/Applications/Terra Swarm.app/Contents/MacOS/terra-swarm");
+        let registration = Overrides {
+            url: URL,
+            notify: Some(program),
+        };
+        let posix = rewrite("codex", &registration, Quoting::Posix);
+        assert!(posix.ends_with(
+            "-c 'notify=[\"/Applications/Terra Swarm.app/Contents/MacOS/terra-swarm\",\"hook\",\"codex\",\"notify\"]'"
+        ), "{}", posix);
+        assert!(!rewrite("codex", &registration, Quoting::Windows).contains("notify"));
+    }
+
+    #[test]
+    fn given_a_codex_config_with_notify_when_checking_then_it_is_detected() {
+        assert!(has_codex_notify_setting(
+            "model = \"o3\"\nnotify = [\"say\", \"done\"]\n"
+        ));
+        assert!(!has_codex_notify_setting(
+            "model = \"o3\"\n[tui]\nnotify = true\n"
+        ));
+        assert!(!has_codex_notify_setting(""));
+    }
+
+    #[test]
+    fn given_codex_token_counts_when_reading_usage_then_the_last_running_total_is_taken() {
+        let sessions = temp("codex");
+        let day = sessions.join("2026/10/20");
+        std::fs::create_dir_all(&day).unwrap();
+        let log = day.join("rollout-2026-10-20T10-00-00-abc-123.jsonl");
+        let lines = [
+            r#"{"type":"turn_context","payload":{"model":"gpt-test"}}"#,
+            r#"{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":9}}}}"#,
+            r#"{"type":"event_msg","payload":{"type":"agent_message","message":"done"}}"#,
+            r#"{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":300,"cached_input_tokens":200,"output_tokens":30}}}}"#,
+        ];
+        std::fs::write(&log, lines.join("\n")).unwrap();
+        assert_eq!(find_codex_log(&sessions, "abc-123"), Some(log.clone()));
+        assert_eq!(find_codex_log(&sessions, "../etc"), None);
+        let usage = codex_usage(&log).unwrap();
+        assert_eq!(
+            (
+                usage.input_tokens,
+                usage.cache_read_tokens,
+                usage.output_tokens,
+                usage.turns
+            ),
+            (100, 200, 30, 1)
+        );
+        assert_eq!(usage.model.as_deref(), Some("gpt-test"));
+        let _ = std::fs::remove_dir_all(sessions);
+    }
+
+    #[test]
+    fn given_a_codex_launch_context_when_building_the_command_then_it_registers_the_server_and_keeps_the_arguments(
+    ) {
+        let program = Path::new("/opt/terra-swarm");
+        let context = LaunchContext {
+            url: URL,
+            hook_url: "http://127.0.0.1:4100/hooks",
+            hook_program: Some(program),
+            config_dir: None,
+            system_prompt: None,
+            quoting: Quoting::Posix,
+        };
+
+        let command = Codex.launch_command("codex --full-auto", &context);
+
+        assert_eq!(Codex.id(), "codex");
+        assert!(command.starts_with("codex -c 'mcp_servers.terra.url="));
+        assert!(command.ends_with(" --full-auto"));
+        assert_eq!(
+            command.contains("/opt/terra-swarm"),
+            !has_user_codex_notify()
+        );
+    }
+
+    #[test]
+    fn given_codex_notify_payloads_when_interpreting_then_only_finished_turns_set_the_agent_idle() {
+        let finished = serde_json::json!({
+            "type": "agent-turn-complete",
+            "last-assistant-message": "  All   tests pass ",
+            "thread-id": "abc-123",
+        });
+        let other = serde_json::json!({ "type": "approval-requested" });
+
+        assert_eq!(
+            Codex.interpret("notify", &finished),
+            Some((AgentState::Idle, "All tests pass".to_string()))
+        );
+        assert_eq!(
+            Codex.interpret("agent-turn-complete", &serde_json::json!({})),
+            Some((AgentState::Idle, String::new()))
+        );
+        assert_eq!(Codex.interpret("notify", &other), None);
+        let log = Codex.session_log(&finished).expect("session log");
+        assert_eq!(
+            (log.integration, log.locator.to_str()),
+            ("codex", Some("abc-123"))
+        );
+        assert!(Codex
+            .session_log(&serde_json::json!({ "thread_id": "" }))
+            .is_none());
+    }
+
+    #[test]
+    fn given_a_thread_id_that_is_not_a_plain_name_when_reading_usage_then_no_log_is_searched() {
+        assert!(Codex.usage(OsStr::new("../outside")).is_none());
+    }
+}

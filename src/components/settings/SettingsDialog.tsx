@@ -43,7 +43,7 @@ import { formatShortcut } from "../../lib/platform/shortcuts";
 import styles from "./SettingsDialog.module.css";
 
 const cx = (...classes: Array<string | undefined | false>) => classes.filter(Boolean).join(" ");
-const SEARCH_HOTKEY = { key: "k", meta: true, shift: false, ctrl: false, alt: false } as const;
+const SEARCH_HOTKEY = { key: "k", hasMeta: true, hasShift: false, hasCtrl: false, hasAlt: false } as const;
 
 const SECTION_ICONS: Record<SettingsSectionId, LucideIcon> = {
   general: SlidersHorizontal,
@@ -75,15 +75,13 @@ export type SettingsSectionSlot =
   | ((context: SettingsSectionRenderContext) => ReactNode);
 
 export interface SettingsDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
   activeSection?: SettingsSectionId;
   defaultSection?: SettingsSectionId;
   onActiveSectionChange?: (section: SettingsSectionId) => void;
   sections?: readonly SettingsSectionDefinition[];
-  /** A slot map is useful when forms already live in the host application. */
   slots?: Partial<Record<SettingsSectionId, SettingsSectionSlot>>;
-  /** Render prop takes precedence over the matching slot. */
   renderSection?: (context: SettingsSectionRenderContext) => ReactNode;
   headerSlot?: ReactNode | (() => ReactNode);
   footerSlot?: ReactNode | (() => ReactNode);
@@ -91,7 +89,6 @@ export interface SettingsDialogProps {
   description?: ReactNode;
   searchPlaceholder?: string;
   className?: string;
-  /** "page" renders inline as a surface instead of a modal dialog. */
   variant?: "dialog" | "page";
 }
 
@@ -103,25 +100,24 @@ function renderSlot(
 }
 
 function DefaultSectionContent({ section }: { section: SettingsSectionDefinition }) {
-  const t = useT();
+  const translate = useT();
   const locale = useLocale();
   return (
     <div className={styles.defaultSection}>
       <div className={styles.sectionKicker}>{section.label}</div>
-      <h3 className={styles.defaultTitle}>{t("settings.defaultSectionTitle", { section: section.label.toLocaleLowerCase(locale) })}</h3>
+      <h3 className={styles.defaultTitle}>{translate("settings.defaultSectionTitle", { section: section.label.toLocaleLowerCase(locale) })}</h3>
       <p className={styles.defaultDescription}>{section.description}</p>
       <div className={styles.placeholderCard}>
         <span className={styles.placeholderDot} aria-hidden="true" />
         <div>
-          <strong>{t("settings.defaultSectionReady")}</strong>
-          <span>{t("settings.defaultSectionHost")}</span>
+          <strong>{translate("settings.defaultSectionReady")}</strong>
+          <span>{translate("settings.defaultSectionHost")}</span>
         </div>
       </div>
     </div>
   );
 }
 
-/** Full Terra settings surface with independently scrolling navigation and content. */
 export function SettingsDialog({
   activeSection,
   className,
@@ -131,7 +127,7 @@ export function SettingsDialog({
   headerSlot,
   onActiveSectionChange,
   onOpenChange,
-  open,
+  isOpen,
   renderSection,
   searchPlaceholder,
   sections = SETTINGS_SECTIONS,
@@ -139,10 +135,10 @@ export function SettingsDialog({
   title,
   variant = "dialog",
 }: SettingsDialogProps) {
-  const t = useT();
+  const translate = useT();
   const isPage = variant === "page";
-  const resolvedTitle = title ?? t("settings.title");
-  const resolvedDescription = description ?? t("settings.description");
+  const resolvedTitle = title ?? translate("settings.title");
+  const resolvedDescription = description ?? translate("settings.description");
   const firstSection = useMemo(
     () => getInitialSettingsSection(sections, activeSection ?? defaultSection),
     [activeSection, defaultSection, sections],
@@ -160,14 +156,14 @@ export function SettingsDialog({
   }, [activeSection, firstSection, sections, uncontrolledSection]);
 
   useEffect(() => {
-    if (!open) {
+    if (!isOpen) {
       setQuery("");
       setConfirmation(null);
     }
-  }, [open]);
+  }, [isOpen]);
 
   useEffect(() => {
-    if (!open || isPage) return undefined;
+    if (!isOpen || isPage) return undefined;
 
     function focusSearch(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase("en-US") === "k") {
@@ -179,7 +175,7 @@ export function SettingsDialog({
 
     window.addEventListener("keydown", focusSearch);
     return () => window.removeEventListener("keydown", focusSearch);
-  }, [isPage, open]);
+  }, [isPage, isOpen]);
 
   const visibleSections = useMemo(() => filterSettingsSections(sections, query), [query, sections]);
   const selectedSection = activeSection ?? uncontrolledSection ?? firstSection;
@@ -237,12 +233,12 @@ export function SettingsDialog({
               value={activeTab}
               onValueChange={selectSection}
             >
-              <aside className={styles.sidebar} aria-label={t("settings.categories")}>
+              <aside className={styles.sidebar} aria-label={translate("settings.categories")}>
                 <label className={styles.searchBox}>
                   <Search aria-hidden="true" size={15} strokeWidth={1.8} />
                   <input
                     ref={searchRef}
-                    aria-label={t("settings.search")}
+                    aria-label={translate("settings.search")}
                     className={styles.searchInput}
                     onChange={(event) => setQuery(event.target.value)}
                     onKeyDown={(event) => {
@@ -258,17 +254,16 @@ export function SettingsDialog({
                         searchRef.current?.focus();
                       }
                     }}
-                    placeholder={searchPlaceholder ?? t("settings.searchPlaceholder")}
+                    placeholder={searchPlaceholder ?? translate("settings.searchPlaceholder")}
                     type="search"
                     value={query}
                   />
-                  {/* On the page ⌘K opens the command palette, not this search. */}
                   {isPage ? null : <kbd className={styles.searchShortcut}>{formatShortcut(SEARCH_HOTKEY)}</kbd>}
                 </label>
                 <div className={styles.resultCount} aria-live="polite">
-                  {query ? t("settings.results", { count: visibleSections.length }) : resolvedTitle}
+                  {query ? translate("settings.results", { count: visibleSections.length }) : resolvedTitle}
                 </div>
-                <TabsPrimitive.List className={styles.sectionList} aria-label={t("settings.sectionsLabel")}>
+                <TabsPrimitive.List className={styles.sectionList} aria-label={translate("settings.sectionsLabel")}>
                   {visibleSections.map((section) => {
                     const Icon = SECTION_ICONS[section.id];
                     return (
@@ -288,8 +283,8 @@ export function SettingsDialog({
                 </TabsPrimitive.List>
                 <div className={styles.sidebarHint}>
                   <span className={styles.sidebarHintKey}>↑↓</span>
-                  <span>{t("settings.navigate")}</span>
-                  {isPage ? null : <><span className={styles.sidebarHintKey}>Esc</span><span>{t("common.close")}</span></>}
+                  <span>{translate("settings.navigate")}</span>
+                  {isPage ? null : <><span className={styles.sidebarHintKey}>Esc</span><span>{translate("common.close")}</span></>}
                 </div>
               </aside>
 
@@ -297,8 +292,8 @@ export function SettingsDialog({
                 {visibleSections.length === 0 ? (
                   <div className={styles.emptyState} role="status">
                     <Search aria-hidden="true" size={20} strokeWidth={1.5} />
-                    <strong>{t("settings.emptyTitle")}</strong>
-                    <span>{t("settings.emptyBody")}</span>
+                    <strong>{translate("settings.emptyTitle")}</strong>
+                    <span>{translate("settings.emptyBody")}</span>
                   </div>
                 ) : (
                   visibleSections.map((section) => (
@@ -318,11 +313,11 @@ export function SettingsDialog({
 
   const confirmDialog = (
     <ConfirmActionDialog
-      open={confirmation !== null}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) setConfirmation(null);
+      isOpen={confirmation !== null}
+      onOpenChange={(isNextOpen) => {
+        if (!isNextOpen) setConfirmation(null);
       }}
-      title={confirmation?.title ?? t("common.confirm")}
+      title={confirmation?.title ?? translate("common.confirm")}
       description={confirmation?.description ?? ""}
       confirmLabel={confirmation?.confirmLabel}
       cancelLabel={confirmation?.cancelLabel}
@@ -347,7 +342,7 @@ export function SettingsDialog({
 
   return (
     <>
-      <DialogRoot open={open} onOpenChange={onOpenChange}>
+      <DialogRoot open={isOpen} onOpenChange={onOpenChange}>
         <DialogPortal>
           <DialogOverlay className={styles.overlay} />
           <DialogContent
@@ -363,7 +358,7 @@ export function SettingsDialog({
               </div>
               <div className={styles.headerActions}>
                 {renderedHeaderSlot}
-                <DialogClose className={styles.closeButton} aria-label={t("settings.close")}>
+                <DialogClose className={styles.closeButton} aria-label={translate("settings.close")}>
                   <X aria-hidden="true" size={17} strokeWidth={1.8} />
                 </DialogClose>
               </div>

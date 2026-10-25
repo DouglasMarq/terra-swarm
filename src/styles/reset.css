@@ -1,5 +1,3 @@
-/* Small, opt-in reset. Keep it low-specificity so existing shell styles can
- * be migrated component-by-component without an all-at-once rewrite. */
 :where(.terra-foundation, .terra-foundation *) {
   box-sizing: border-box;
 }

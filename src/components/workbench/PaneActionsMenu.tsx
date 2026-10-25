@@ -2,19 +2,19 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as Rea
 import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
 
+const MENU_TRIGGER_GAP_PX = 4;
+
 export interface PaneMenuItem {
   id: string;
   label: string;
   icon?: ReactNode;
-  /** Secondary line, e.g. the resume command that will be copied. */
   detail?: string;
   shortcut?: string;
-  danger?: boolean;
-  disabled?: boolean;
+  isDanger?: boolean;
+  isDisabled?: boolean;
   onSelect: () => void;
 }
 
-/** Items in a group render together; groups are separated by a rule. */
 export type PaneMenuGroups = readonly (readonly PaneMenuItem[])[];
 
 export interface PaneActionsMenuProps {
@@ -22,21 +22,14 @@ export interface PaneActionsMenuProps {
   groups: PaneMenuGroups;
 }
 
-/**
- * The pane's "…" menu. It is the single home for the agent's lifecycle
- * actions; the header itself only keeps Maximize visible.
- */
 export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
-  const [open, setOpen] = useState(false);
+  const [isOpen, setOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // The list lives in a portal with fixed coordinates: panes clip their
-  // overflow, so an in-pane dropdown was cut off in dense grids. Open below
-  // the trigger, flip above when there is no room, and stay on screen.
   useLayoutEffect(() => {
-    if (!open) {
+    if (!isOpen) {
       setPosition(null);
       return;
     }
@@ -48,17 +41,17 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
       const width = menu.offsetWidth;
       const height = menu.offsetHeight;
       const left = Math.min(Math.max(margin, trigger.right - width), window.innerWidth - width - margin);
-      let top = trigger.bottom + 4;
-      if (top + height > window.innerHeight - margin) top = Math.max(margin, trigger.top - 4 - height);
+      let top = trigger.bottom + MENU_TRIGGER_GAP_PX;
+      if (top + height > window.innerHeight - margin) top = Math.max(margin, trigger.top - MENU_TRIGGER_GAP_PX - height);
       setPosition({ top, left });
     };
     place();
     window.addEventListener("resize", place);
     return () => window.removeEventListener("resize", place);
-  }, [open]);
+  }, [isOpen]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!isOpen) return;
     const close = (event: PointerEvent) => {
       const target = event.target as Node;
       if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
@@ -67,7 +60,7 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
     document.addEventListener("pointerdown", close);
     menuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     return () => document.removeEventListener("pointerdown", close);
-  }, [open]);
+  }, [isOpen]);
 
   const onMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
@@ -93,13 +86,13 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
         aria-label={label}
         title={label}
         aria-haspopup="menu"
-        aria-expanded={open}
-        data-open={open}
-        onClick={() => setOpen((value) => !value)}
+        aria-expanded={isOpen}
+        data-open={isOpen}
+        onClick={() => setOpen((isCurrentlyOpen) => !isCurrentlyOpen)}
       >
         <MoreHorizontal size={14} aria-hidden="true" />
       </button>
-      {open ? createPortal(
+      {isOpen ? createPortal(
         <div
           className="pane-menu-list terra-anim-pop"
           role="menu"
@@ -110,7 +103,7 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
           onMouseDown={(event) => event.stopPropagation()}
           onBlur={(event) => {
             const next = event.relatedTarget as Node | null;
-            if (next && !menuRef.current?.contains(next)) setOpen(false);
+            if (next && !menuRef.current?.contains(next) && !rootRef.current?.contains(next)) setOpen(false);
           }}
         >
           {groups.filter((group) => group.length > 0).map((group, groupIndex) => (
@@ -121,8 +114,8 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
                   role="menuitem"
                   key={item.id}
                   className="pane-menu-item"
-                  data-danger={item.danger}
-                  disabled={item.disabled}
+                  data-danger={item.isDanger}
+                  disabled={item.isDisabled}
                   onClick={() => {
                     setOpen(false);
                     item.onSelect();

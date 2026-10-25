@@ -54,8 +54,6 @@
   transition: transform 140ms var(--terra-ease-out);
 }
 
-/* Keep the container and its project card as the height-bearing flex
- * boundaries so the terminal receives the available viewport. */
 .terra-workbench .terra-workbench__list > .terra-workbench__container {
   min-height: 0;
   flex: 1 1 0;
@@ -101,11 +99,8 @@
   transition: border-color 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
 }
 
-/* Full screen covers the sidebar and inspector but stays below the top bar,
- * so the macOS traffic lights and the chrome remain usable. */
 .terra-project-container[data-fullscreen="true"] {
   position: fixed;
-  /* Below the top bar (z 300) so its popovers still open over it. */
   z-index: 250;
   inset: 56px 8px 8px;
   width: auto;
@@ -315,9 +310,6 @@
   visibility: visible;
 }
 
-/* TerminalPane predates the workbench and carries a 200px standalone-grid
- * minimum.  In a mounted pane that minimum clips the host instead of letting
- * xterm consume the panel's actual height, so reset it at this boundary. */
 .terra-pane-tab-surface > .pane {
   min-width: 0;
   min-height: 0;
@@ -565,9 +557,6 @@
   }
 }
 
-/* ---------------------------------------------------------------------
- * v3 container header: Grade | Foco and the 8×8 grid size picker.
- * ------------------------------------------------------------------- */
 .terra-project-container__modes {
   flex: 0 0 auto;
 }
@@ -661,9 +650,6 @@
   opacity: 0.6;
 }
 
-/* Maximize (⌘Enter or the pane's ⤢): the expanded pane takes the whole
- * project area; its siblings stay mounted (PTYs keep running) but hidden.
- * Only an expanded pane in the visible sub-tab counts. */
 .terra-pane-grid--grid:has(.terra-pane-tab-surface[data-active="true"] .pane.expanded) {
   grid-template-columns: minmax(0, 1fr) !important;
   grid-template-rows: minmax(0, 1fr) !important;

@@ -5,7 +5,7 @@ describe("createDebouncedTask", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it("rearms on bursts and runs once after the quiet window", () => {
+  it("Given a burst of calls, when the quiet window passes, then the task runs once after rearming on each call", () => {
     const task = vi.fn();
     const debounced = createDebouncedTask(task, 75);
 
@@ -18,7 +18,7 @@ describe("createDebouncedTask", () => {
     expect(task).toHaveBeenCalledOnce();
   });
 
-  it("cancels pending work during cleanup", () => {
+  it("Given pending work, when cleaning up, then it is cancelled", () => {
     const task = vi.fn();
     const debounced = createDebouncedTask(task, 75);
 

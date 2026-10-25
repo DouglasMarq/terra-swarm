@@ -1,65 +1,29 @@
 import { useMemo } from "react";
 import { create } from "zustand";
-import { listen } from "@tauri-apps/api/event";
 import {
-  MCP_EVENTS,
   mcpApi,
+  onMcpAgentStatus,
+  onMcpNudge,
+  onMcpTasksChanged,
   type McpAgentStatusPayload,
   type McpNudgePayload,
-  type McpTasksChangedPayload,
 } from "../lib/tauri/mcp";
-import { taskNumber } from "../domain/tasks";
 import { errorMessage } from "../lib/errors/errorMessage";
-import type {
-  McpAgentState,
-  McpAgentStatus,
-  McpServerInfo,
-  McpTask,
-  McpTaskPatch,
-  McpTaskPriority,
-  McpTaskStatus,
-} from "../types";
-
-/** Column order of the board: what is moving first, finished work last. */
-export const TASK_STATUS_ORDER: readonly McpTaskStatus[] = ["in_progress", "todo", "blocked", "review", "done"];
-export const TASK_PRIORITIES: readonly McpTaskPriority[] = ["urgent", "high", "medium", "low"];
-
-const PRIORITY_RANK: Record<McpTaskPriority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
-
-/** Tasks bucketed by status, each bucket sorted by priority, then board position. */
-export function groupTasksByStatus(tasks: readonly McpTask[]): Record<McpTaskStatus, McpTask[]> {
-  const groups = Object.fromEntries(TASK_STATUS_ORDER.map((status) => [status, [] as McpTask[]])) as Record<
-    McpTaskStatus,
-    McpTask[]
-  >;
-  for (const task of tasks) (groups[task.status] ?? groups.todo).push(task);
-  for (const status of TASK_STATUS_ORDER) {
-    groups[status].sort(
-      (a, b) =>
-        PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
-        a.position - b.position ||
-        taskNumber(a.id) - taskNumber(b.id),
-    );
-  }
-  return groups;
-}
+import type { McpAgentState, McpAgentStatus, McpServerInfo, McpTask, McpTaskPatch, McpTaskPriority } from "../domain/mcp.model";
 
 export interface McpState {
   server: McpServerInfo | null;
-  /** Tasks by workspace id; a workspace appears once it has been loaded. */
   tasks: Record<string, McpTask[]>;
-  /** Reported agent states by terminal id. */
   statuses: Record<string, McpAgentStatus>;
   error: string | null;
   loadServer: () => Promise<void>;
-  setEnabled: (enabled: boolean) => Promise<void>;
+  setEnabled: (isEnabled: boolean) => Promise<void>;
   loadTasks: (workspaceId: string) => Promise<void>;
   loadStatuses: (workspaceId: string) => Promise<void>;
   createTask: (
     workspaceId: string,
     input: { title: string; description?: string; priority?: McpTaskPriority; assignee?: string | null },
   ) => Promise<McpTask | null>;
-  /** Resolves to the updated task, or null when the update failed (the reason is in `error`). */
   updateTask: (workspaceId: string, id: string, patch: McpTaskPatch) => Promise<McpTask | null>;
   deleteTask: (workspaceId: string, id: string) => Promise<void>;
   applyStatus: (payload: McpAgentStatusPayload) => void;
@@ -87,9 +51,9 @@ export const useMcpStore = create<McpState>((set, get) => ({
     }
   },
 
-  setEnabled: async (enabled) => {
+  setEnabled: async (isEnabled) => {
     try {
-      set({ server: await mcpApi.mcpSetEnabled(enabled) });
+      set({ server: await mcpApi.mcpSetEnabled(isEnabled) });
     } catch (error) {
       set({ error: errorMessage(error) });
     }
@@ -163,7 +127,6 @@ export const useMcpStore = create<McpState>((set, get) => ({
   reset: () => set({ server: null, tasks: {}, statuses: {}, error: null }),
 }));
 
-/** Reported agent states by terminal id, for the status dots everywhere. */
 export function useReportedStates(): Record<string, McpAgentState> {
   const statuses = useMcpStore((state) => state.statuses);
   return useMemo(
@@ -172,23 +135,19 @@ export function useReportedStates(): Record<string, McpAgentState> {
   );
 }
 
-/**
- * Keep the store in step with agent activity. A board is refetched only for
- * workspaces that have been opened, so idle projects cost nothing.
- */
 export function startMcpEventBridge(onNudge: (payload: McpNudgePayload) => void): () => void {
   const pending = [
-    listen<McpTasksChangedPayload>(MCP_EVENTS.tasksChanged, (event) => {
-      const workspaceId = event.payload?.workspace_id;
+    onMcpTasksChanged((payload) => {
+      const workspaceId = payload?.workspace_id;
       if (workspaceId && workspaceId in useMcpStore.getState().tasks) {
         void useMcpStore.getState().loadTasks(workspaceId);
       }
     }),
-    listen<McpAgentStatusPayload>(MCP_EVENTS.agentStatus, (event) => {
-      if (event.payload?.terminal_id) useMcpStore.getState().applyStatus(event.payload);
+    onMcpAgentStatus((payload) => {
+      if (payload?.terminal_id) useMcpStore.getState().applyStatus(payload);
     }),
-    listen<McpNudgePayload>(MCP_EVENTS.nudge, (event) => {
-      if (event.payload?.terminal_id && event.payload.prompt) onNudge(event.payload);
+    onMcpNudge((payload) => {
+      if (payload?.terminal_id && payload.prompt) onNudge(payload);
     }),
   ];
   return () => {

@@ -1,21 +1,8 @@
-import type {
-  Group,
-  LayoutMode,
-  Pane,
-  Project,
-  TerminalTab,
-  Workspace,
-  WorkspaceContainer,
-  WorkspaceLayout,
-  WorkspaceSnapshotV2,
-} from "../../types";
+import type { Group, LayoutMode, Pane, Project, TerminalTab, Workspace, WorkspaceContainer, WorkspaceLayout, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import type { ReactNode } from "react";
 
-/** A domain input accepted by the workbench boundary. */
 export type WorkbenchSource = WorkspaceSnapshotV2 | readonly Workspace[];
 
-/** `sidebar` is a visual workbench mode, even though legacy persistence did
- * not need to know about it. */
 export type WorkbenchLayoutMode = LayoutMode | "sidebar";
 
 export interface WorkbenchTabRenderContext {
@@ -24,9 +11,8 @@ export interface WorkbenchTabRenderContext {
   container: WorkspaceContainer;
   project: Project | null;
   group: Group | null;
-  active: boolean;
-  /** Inactive tabs remain mounted; consumers can use this for accessibility. */
-  hidden: boolean;
+  isActive: boolean;
+  isHidden: boolean;
 }
 
 export type WorkbenchTabRenderer = (context: WorkbenchTabRenderContext) => ReactNode;
@@ -50,7 +36,6 @@ export interface WorkbenchProjection {
 
 export interface WorkbenchLocation {
   containerId: string;
-  /** Null when creating the first pane in an otherwise empty container. */
   paneId: string | null;
   projectId: string | null;
 }
@@ -72,17 +57,13 @@ export interface PaneLayoutProps {
 export interface WorkbenchActionCallbacks {
   onFocusTab?: (tabId: string, location: WorkbenchLocation) => void;
   onNewTab?: (location: WorkbenchLocation) => void;
-  /** The header's "New agent ⌘T": starts the default agent like ⌘T does. */
   onQuickNewTab?: (location: WorkbenchLocation) => void;
   onDetachTab?: (tabId: string, location: WorkbenchLocation) => void;
-  /** Explicit destructive action. Hiding/closing a container never calls this. */
   onKillTab?: (tabId: string, location: WorkbenchLocation) => void;
-  onCollapseContainer?: (containerId: string, collapsed: boolean) => void;
-  onFullscreenContainer?: (containerId: string, fullscreen: boolean) => void;
-  /** Hides a visual container while preserving every mounted terminal surface. */
+  onCollapseContainer?: (containerId: string, isCollapsed: boolean) => void;
+  onFullscreenContainer?: (containerId: string, isFullscreen: boolean) => void;
   onHideContainer?: (containerId: string) => void;
   onLayoutChange?: (change: ContainerLayoutChange) => void;
-  /** Persists a workspace-level visual preset (Auto, Spotlight, Sidebar, Grid). */
   onWorkspaceLayoutChange?: (projectId: string, layout: WorkspaceLayout) => void;
 }
 
@@ -90,16 +71,14 @@ export interface WorkspaceWorkbenchProps extends WorkbenchActionCallbacks {
   source: WorkbenchSource;
   renderTab: WorkbenchTabRenderer;
   className?: string;
-  /** Called when the user presses the empty workbench action. */
   onNewContainer?: () => void;
-  /** Optional empty state for a source with no containers. */
   emptyState?: ReactNode;
 }
 
 export interface ProjectContainerProps extends WorkbenchActionCallbacks {
   projection: WorkbenchContainerProjection;
   renderTab: WorkbenchTabRenderer;
-  visible?: boolean;
+  isVisible?: boolean;
 }
 
 export interface PaneFrameProps extends WorkbenchActionCallbacks {
@@ -107,14 +86,14 @@ export interface PaneFrameProps extends WorkbenchActionCallbacks {
   container: WorkspaceContainer;
   project: Project | null;
   group: Group | null;
-  active?: boolean;
+  isActive?: boolean;
   renderTab: WorkbenchTabRenderer;
 }
 
 export interface SubTabLaneTab {
   tab: TerminalTab;
-  active: boolean;
-  unread?: boolean;
+  isActive: boolean;
+  isUnread?: boolean;
   status?: "running" | "idle" | "attention" | "error" | "suspended";
 }
 
@@ -140,6 +119,5 @@ export interface EmptyPaneCellProps {
 export interface ContainerLayoutProps extends WorkbenchActionCallbacks {
   projection: WorkbenchContainerProjection;
   renderTab: WorkbenchTabRenderer;
-  /** Explicitly controlled mode wins over the persisted container layout. */
   mode?: WorkbenchLayoutMode;
 }

@@ -1,17 +1,10 @@
-//! Finding a project's local dev server, for the preview panel: URLs that
-//! terminals print ("Local: http://localhost:5173/") and ports that answer
-//! on the loopback interface. Only loopback addresses are ever reported.
-
 use serde::Serialize;
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
 const HOSTS: [&str; 4] = ["localhost", "127.0.0.1", "0.0.0.0", "[::1]"];
-/// Paths that belong to Terra's own MCP server, never to a dev server.
 const OWN_PATHS: [&str; 2] = ["/mcp", "/hooks"];
-/// Most ports one `probe_dev_servers` call checks.
 const MAX_PROBED_PORTS: usize = 32;
-/// How long each probed port gets to accept the connection.
 const PROBE_TIMEOUT: Duration = Duration::from_millis(150);
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -21,8 +14,6 @@ pub struct DevServerPayload {
     pub url: String,
 }
 
-/// Loopback URLs in `text`, normalised to `http(s)://localhost:<port>/`, in
-/// the order they appear and without repeats.
 pub fn detect_dev_server_urls(text: &str) -> Vec<String> {
     let mut found: Vec<String> = Vec::new();
     for scheme in ["http://", "https://"] {
@@ -47,8 +38,9 @@ pub fn detect_dev_server_urls(text: &str) -> Vec<String> {
             }
             let path: String = after[digits.len()..]
                 .chars()
-                .take_while(|c| {
-                    !c.is_whitespace() && !matches!(c, '"' | '\'' | ')' | '>' | '\u{1b}')
+                .take_while(|character| {
+                    !character.is_whitespace()
+                        && !matches!(character, '"' | '\'' | ')' | '>' | '\u{1b}')
                 })
                 .collect();
             if OWN_PATHS.iter().any(|own| path.starts_with(own)) {
@@ -63,7 +55,6 @@ pub fn detect_dev_server_urls(text: &str) -> Vec<String> {
     found
 }
 
-/// Ports among `ports` that accept a TCP connection on 127.0.0.1.
 pub fn probe(ports: &[u16], timeout: Duration) -> Vec<u16> {
     ports
         .iter()
@@ -75,8 +66,6 @@ pub fn probe(ports: &[u16], timeout: Duration) -> Vec<u16> {
         .collect()
 }
 
-/// Which of the given ports have a server listening on 127.0.0.1. Capped,
-/// so the panel cannot be used to sweep the machine.
 #[tauri::command(async)]
 pub fn probe_dev_servers(ports: Vec<u16>) -> Vec<u16> {
     let mut ports = ports;
@@ -91,7 +80,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn finds_loopback_urls_in_dev_server_banners() {
+    fn given_a_dev_server_banner_when_scanning_then_its_loopback_url_is_found() {
         let vite = "  VITE v7.0.0  ready in 180 ms\n\n  ➜  Local:   http://localhost:5173/\n  ➜  Network: use --host to expose";
         assert_eq!(detect_dev_server_urls(vite), vec!["http://localhost:5173/"]);
         let next = "- Local:        http://127.0.0.1:3000\n- Network:      http://192.168.1.4:3000";
@@ -104,7 +93,7 @@ mod tests {
     }
 
     #[test]
-    fn ignores_remote_hosts_bad_ports_and_terra_itself() {
+    fn given_remote_hosts_bad_ports_or_terra_itself_when_scanning_then_they_are_ignored() {
         assert!(
             detect_dev_server_urls("see https://example.com:443/x and http://localhost:99999")
                 .is_empty()
@@ -114,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn probes_only_ports_that_answer() {
+    fn given_candidate_ports_when_probing_then_only_ports_that_answer_are_kept() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let open = listener.local_addr().unwrap().port();
         let closed = {

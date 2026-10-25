@@ -1,0 +1,119 @@
+import { describe, expect, it } from "vitest";
+import type { Workspace, WorkspaceSnapshotV2 } from "../workspace.model";
+import { selectWorkspaceContainerId } from "./workspaceContainerSelection";
+import { defined } from "../../test/defined";
+
+const workspace: Workspace = {
+  id: "workspace-a",
+  name: "A",
+  cwd: "/a",
+  activeContainerId: "container-b",
+  terminals: [{ id: "pty-b", command: "luna", width: 80, paneId: "pane-b" }],
+};
+
+const snapshot: WorkspaceSnapshotV2 = {
+  version: 2,
+  projects: [
+    {
+      id: "workspace-a",
+      name: "A",
+      cwd: "/a",
+      groupId: null,
+      paneIds: ["pane-a", "pane-b"],
+      containerIds: ["container-a", "container-b"],
+      activePaneId: "pane-b",
+      activeContainerId: "container-b",
+      layout: { mode: "grid", itemIds: ["container-a", "container-b"] },
+      isCollapsed: false,
+    },
+  ],
+  groups: [],
+  containers: [
+    {
+      id: "container-a",
+      projectId: "workspace-a",
+      paneIds: ["pane-a"],
+      layout: { mode: "grid", itemIds: ["pane-a"] },
+      isVisible: true,
+      isCollapsed: false,
+      isClosed: false,
+      isFullscreen: false,
+    },
+    {
+      id: "container-b",
+      projectId: "workspace-a",
+      paneIds: ["pane-b"],
+      activePaneId: "pane-b",
+      layout: { mode: "grid", itemIds: ["pane-b"] },
+      isVisible: true,
+      isCollapsed: false,
+      isClosed: false,
+      isFullscreen: false,
+    },
+  ],
+  panes: [
+    {
+      id: "pane-a",
+      projectId: "workspace-a",
+      containerId: "container-a",
+      tabIds: [],
+      activeTabId: null,
+      layout: { mode: "grid", itemIds: [] },
+    },
+    {
+      id: "pane-b",
+      projectId: "workspace-a",
+      containerId: "container-b",
+      tabIds: ["tab-b"],
+      activeTabId: "tab-b",
+      layout: { mode: "grid", itemIds: ["tab-b"] },
+    },
+  ],
+  tabs: [
+    {
+      id: "tab-b",
+      paneId: "pane-b",
+      ptyId: "pty-b",
+      command: "luna",
+      cwd: "/a",
+      width: 80,
+      title: "",
+      isOrphaned: false,
+    },
+  ],
+  orphanedTabIds: [],
+  activeProjectId: "workspace-a",
+  activeGroupId: null,
+  activeContainerId: "container-b",
+  activePaneId: "pane-b",
+  activeTabId: "tab-b",
+  layout: { mode: "grid", itemIds: ["container-a", "container-b"] },
+};
+
+describe("selectWorkspaceContainerId", () => {
+  it("Given a persisted active container, when selecting the container, then it is used instead of the first split", () => {
+    expect(selectWorkspaceContainerId(snapshot, [workspace], { workspaceId: "workspace-a" })).toBe(
+      "container-b",
+    );
+  });
+
+  it("Given stale workspace metadata, when selecting the container, then the focused terminal's pane is used", () => {
+    expect(
+      selectWorkspaceContainerId(
+        {
+          ...snapshot,
+          activeContainerId: "container-a",
+          projects: snapshot.projects.map((project) => ({
+            ...project,
+            activeContainerId: "container-a",
+          })),
+        },
+        [{
+          ...workspace,
+          terminals: [{ ...defined(workspace.terminals[0]), paneId: null }],
+        }],
+        { workspaceId: "workspace-a", focusedTerminalId: "pty-b" },
+      ),
+    ).toBe("container-b");
+  });
+});

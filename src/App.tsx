@@ -1,13 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { MotionConfig } from "motion/react";
 import { useShallow } from "zustand/react/shallow";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "./api";
 import { useBranchPolling } from "./app/useBranchPolling";
 import { useFocusTracking } from "./app/useFocusTracking";
 import { useAgentCatalog } from "./app/useAgentCatalog";
+import { useAgentPicker } from "./app/useAgentPicker";
 import { useAppInitialization } from "./app/useAppInitialization";
 import { useGlobalHotkeys } from "./app/useGlobalHotkeys";
+import { useGridLayout } from "./app/useGridLayout";
 import { useGroupActions } from "./app/useGroupActions";
 import { useResumeQueue } from "./app/useResumeQueue";
 import { useSnapshotTransfer } from "./app/useSnapshotTransfer";
@@ -15,6 +16,7 @@ import { useSystemNotifications } from "./app/useSystemNotifications";
 import { useVoiceCapture } from "./app/useVoiceCapture";
 import { useVoiceSettings } from "./app/useVoiceSettings";
 import { useWorkspaceNavigation } from "./app/useWorkspaceNavigation";
+import { useWorkspaceCreator } from "./app/useWorkspaceCreator";
 import { useWorkspaces } from "./app/useWorkspaces";
 import { useWorktreeClose } from "./app/useWorktreeClose";
 import { WorktreeReviewDialog } from "./components/review/WorktreeReviewDialog";
@@ -22,10 +24,12 @@ import { FileEditorDialog } from "./components/editor/FileEditorDialog";
 import { PromptLibraryDialog } from "./components/library/PromptLibraryDialog";
 import { TeamDialog } from "./components/library/TeamDialog";
 import { orchestratorOf } from "./domain/agentRoles";
+import { isTerminalRunning } from "./domain/agentStatus";
 import { agentLabelText, buildAgentLabels } from "./domain/agentLabels";
-import { resumeCommandFor, useTerminalSessions } from "./app/useTerminalSessions";
+import { resumeCommandFor } from "./domain/session/resumeItems";
+import { useTerminalSessions } from "./app/useTerminalSessions";
 import { useUpdater } from "./app/useUpdater";
-import type { AgentRole, NotificationItem } from "./types";
+import type { NotificationItem } from "./domain/notification.model";
 import {
   AgentPickerDialog,
   RenameDialog,
@@ -37,7 +41,6 @@ import { ConfirmActionDialog } from "./components/overlays/Dialog";
 import type { FocusedAgentAction } from "./components/overlays/CommandPalette";
 import { getTerminal } from "./terminalRegistry";
 import {
-  GRID_COL_OPTIONS,
   usePreferencesStore,
   type HotkeyActionId,
 } from "./stores/preferencesStore";
@@ -45,9 +48,11 @@ import { useTerminalRuntimeStore } from "./stores/terminalRuntimeStore";
 import { useUiStore } from "./stores/uiStore";
 import { useShellStore } from "./stores/shellStore";
 import { useOrchestrationStore } from "./stores/orchestrationStore";
-import { t, useLocale, useT } from "./i18n";
+import { translateNow, useLocale, useT } from "./i18n";
 import type { SettingsSectionId } from "./components/settings";
 import "./App.css";
+
+const CTRL_C = "\u0003";
 
 const LazyResumeDialog = lazy(async () => {
   const module = await import("./components/ResumeDialog");
@@ -70,47 +75,32 @@ const LazySettingsSectionPanel = lazy(async () => {
 });
 
 function AppLoadingSurface() {
-  const t = useT();
+  const translate = useT();
   return (
     <div className="terra-app-loading" role="status" aria-live="polite">
-      <span>{t("shell.loading")}</span>
+      <span>{translate("shell.loading")}</span>
     </div>
   );
 }
 
-type DurableScrollbackApi = {
-  setDurableScrollbackEnabled?: (enabled: boolean) => Promise<void>;
-};
-
 function App() {
-  // Re-render on a language switch so dialogs and labels built here follow it.
   useLocale();
   const workspaceData = useWorkspaces();
   const { workspaces, setWorkspaces, refresh } = workspaceData;
   const agentCatalog = useAgentCatalog();
   const { agents } = agentCatalog;
-  const [showNewWs, setShowNewWs] = useState(false);
-  const [newWsName, setNewWsName] = useState("");
-  const [newWsCwd, setNewWsCwd] = useState("");
-  const [newWsGroupId, setNewWsGroupId] = useState<string | null>(null);
-  const [showAgentPicker, setShowAgentPicker] = useState(false);
-  const [pickerTarget, setPickerTarget] = useState<string | null>(null);
-  const [pickerTargetPane, setPickerTargetPane] = useState<string | null>(null);
-  const [pickerSaveDefault, setPickerSaveDefault] = useState(false);
-  const [pickerIsolate, setPickerIsolate] = useState(false);
-  const [pickerRole, setPickerRole] = useState<AgentRole | null>(null);
   const [renameTarget, setRenameTarget] = useState<{
     kind: RenameTargetKind;
     id: string;
     value: string;
   } | null>(null);
   const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
-  const [showNewGroup, setShowNewGroup] = useState(false);
+  const [shouldShowNewGroup, setShowNewGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
-  const showSettings = useShellStore((state) => state.activeSurface === "settings");
-  const setShowSettings = (open: boolean) => {
+  const shouldShowSettings = useShellStore((state) => state.activeSurface === "settings");
+  const setShowSettings = (isOpen: boolean) => {
     const shell = useShellStore.getState();
-    if (open) shell.navigate("settings", shell.activeWorkspaceId);
+    if (isOpen) shell.navigate("settings", shell.activeWorkspaceId);
     else if (shell.activeSurface === "settings") shell.navigate("workbench", shell.activeWorkspaceId);
   };
   const [settingsSection, setSettingsSection] =
@@ -121,14 +111,13 @@ function App() {
   }, []);
   const [capturing, setCapturing] = useState<HotkeyActionId | null>(null);
   const voiceSettings = useVoiceSettings({
-    settingsOpen: showSettings,
-    voiceSectionOpen: showSettings && settingsSection === "voice",
+    isSettingsOpen: shouldShowSettings,
+    isVoiceSectionOpen: shouldShowSettings && settingsSection === "voice",
   });
   const {
     activeId,
     expandedId,
     focusedId,
-    setActiveId,
     setExpandedId,
     setFocusedId,
   } = useUiStore(
@@ -136,7 +125,6 @@ function App() {
       activeId: state.activeId,
       expandedId: state.expandedId,
       focusedId: state.focusedId,
-      setActiveId: state.setActiveId,
       setExpandedId: state.setExpandedId,
       setFocusedId: state.setFocusedId,
     })),
@@ -204,10 +192,10 @@ function App() {
     hotkeys,
     fontSize,
     defaultShell,
-    reduceMotion,
-    autoResume,
+    shouldReduceMotion,
+    shouldAutoResume,
     gridCols,
-    voiceEnabled,
+    isVoiceEnabled,
     voiceLang,
     voiceInputDevice,
     setDefaultAgent,
@@ -217,7 +205,6 @@ function App() {
     setDefaultShell,
     setReduceMotion,
     setAutoResume,
-    setGridCols,
     setAgentName,
   } = usePreferencesStore(
     useShallow((state) => ({
@@ -225,10 +212,10 @@ function App() {
       hotkeys: state.hotkeys,
       fontSize: state.fontSize,
       defaultShell: state.defaultShell,
-      reduceMotion: state.reduceMotion,
-      autoResume: state.autoResume,
+      shouldReduceMotion: state.shouldReduceMotion,
+      shouldAutoResume: state.shouldAutoResume,
       gridCols: state.gridCols,
-      voiceEnabled: state.voiceEnabled,
+      isVoiceEnabled: state.isVoiceEnabled,
       voiceLang: state.voiceLang,
       voiceInputDevice: state.voiceInputDevice,
       setDefaultAgent: state.setDefaultAgent,
@@ -238,27 +225,16 @@ function App() {
       setDefaultShell: state.setDefaultShell,
       setReduceMotion: state.setReduceMotion,
       setAutoResume: state.setAutoResume,
-      setGridCols: state.setGridCols,
       setAgentName: state.setAgentName,
     })),
   );
 
   useEffect(() => {
-    document.documentElement.classList.toggle("reduce-motion", reduceMotion);
-  }, [reduceMotion]);
+    document.documentElement.classList.toggle("reduce-motion", shouldReduceMotion);
+  }, [shouldReduceMotion]);
 
-  // Keep the backend's scrollback writer aligned with the opt-in flag. The
-  // optional lookup is a fail-closed bridge while older native binaries are
-  // upgraded; once the command is available, a disabled flag explicitly
-  // turns persistence off and failures stay contained to this feature.
   useEffect(() => {
-    const setter = (api as typeof api & DurableScrollbackApi)
-      .setDurableScrollbackEnabled;
-    if (typeof setter !== "function") {
-      console.warn("durable scrollback command is unavailable; keeping it disabled");
-      return;
-    }
-    setter(flags.durableScrollback).catch((error) => {
+    api.setDurableScrollbackEnabled(flags.durableScrollback).catch((error) => {
       console.warn("failed to sync durable scrollback setting:", error);
     });
   }, [flags.durableScrollback]);
@@ -266,7 +242,7 @@ function App() {
   useEffect(() => {
     if (!orchestrationPersistenceError) return;
     pushSystemNotification(
-      t("app.saveFailed", { what: orchestrationPersistenceError.operation, detail: orchestrationPersistenceError.message }),
+      translateNow("app.saveFailed", { what: orchestrationPersistenceError.operation, detail: orchestrationPersistenceError.message }),
     );
     clearPersistenceError();
   }, [
@@ -275,33 +251,36 @@ function App() {
     pushSystemNotification,
   ]);
 
-  const updateReduceMotion = (on: boolean) => {
-    setReduceMotion(on);
+  const updateReduceMotion = (isOn: boolean) => {
+    setReduceMotion(isOn);
   };
-  const { appVersion, updateVersion, updateInstalling, updateCheckState, manualUpdateCheck, installUpdate } = useUpdater();
+  const { appVersion, updateVersion, isUpdateInstalling, updateCheckState, manualUpdateCheck, installUpdate } = useUpdater();
   const sessions = useTerminalSessions({ workspaces, snapshot: orchestrationSnapshot, refresh });
   const resumeQueue = useResumeQueue(sessions, refresh);
   const worktreeClose = useWorktreeClose(workspaces, sessions);
   const snapshotTransfer = useSnapshotTransfer(sessions, refresh);
+  const workspaceCreator = useWorkspaceCreator(refresh);
+  const agentPicker = useAgentPicker(agentCatalog, sessions);
+  const applyGridLayout = useGridLayout({ workspaces, setWorkspaces, refresh });
   const initialization = useAppInitialization({ workspaces: workspaceData, sessions, resumeQueue, agentCatalog, voiceSettings });
 
-  const active = workspaces.find((w) => w.id === activeId) ?? null;
+  const active = workspaces.find((workspace) => workspace.id === activeId) ?? null;
   const agentNames = usePreferencesStore((state) => state.agentNames);
   const promptTargets = useMemo(() => {
     if (!active) return [];
     const labels = buildAgentLabels([active], { titles, names: agentNames });
     return active.terminals
-      .filter((terminal) => !terminal.suspended && !(terminal.id in exited))
+      .filter((terminal) => isTerminalRunning(terminal, exited))
       .map((terminal) => ({ id: terminal.id, label: labels[terminal.id] ? agentLabelText(labels[terminal.id]) : terminal.command }));
   }, [active, titles, agentNames, exited]);
-  const showResume = resumeQueue.open;
-  const modalOpen =
-    showNewWs ||
-    showAgentPicker ||
-    showResume ||
+  const shouldShowResume = resumeQueue.isOpen;
+  const isModalOpen =
+    workspaceCreator.isOpen ||
+    agentPicker.isOpen ||
+    shouldShowResume ||
     renameTarget !== null ||
     workspaceToDelete !== null ||
-    showNewGroup ||
+    shouldShowNewGroup ||
     snapshotTransfer.pendingImportPath !== null;
 
   useBranchPolling(workspaces);
@@ -312,65 +291,8 @@ function App() {
     activeId,
     focusedId,
     snapshot: orchestrationSnapshot,
-    modalOpen,
+    isModalOpen,
   });
-
-  const quickNewTerminal = async (wsId: string, paneId: string | null = null) => {
-    setActiveId(wsId);
-    setExpandedId(null);
-    // Wait for agent detection: at startup `agents` is still empty, and
-    // deciding on a stale list would open the picker despite a saved default.
-    await agentCatalog.whenReady();
-    const defAvailable = defaultAgent && agentCatalog.isAvailable(defaultAgent);
-    if (defAvailable) {
-      sessions.spawnInto(wsId, defaultAgent, paneId ? { paneId } : undefined).catch(sessions.reportSpawnError);
-    } else {
-      setPickerTarget(wsId);
-      setPickerTargetPane(paneId);
-      setPickerSaveDefault(false);
-      setShowAgentPicker(true);
-    }
-  };
-
-  /**
-   * The in-panel empty state is an explicit agent-creation affordance. Keep
-   * it chooser-first even when a default exists so the user can change the
-   * profile for this launch and optionally persist that choice as the new
-   * default.
-   */
-  const chooseAgentForPanel = async (wsId: string, paneId: string | null = null) => {
-    setActiveId(wsId);
-    setExpandedId(null);
-    await agentCatalog.whenReady();
-    setPickerTarget(wsId);
-    setPickerTargetPane(paneId);
-    setPickerSaveDefault(true);
-    setShowAgentPicker(true);
-  };
-
-  const chooseAgent = async (agentId: string) => {
-    if (pickerSaveDefault) {
-      setDefaultAgent(agentId);
-    }
-    setShowAgentPicker(false);
-    const target = pickerTarget;
-    const targetPane = pickerTargetPane;
-    const isolate = pickerIsolate;
-    const role = pickerRole;
-    setPickerTarget(null);
-    setPickerTargetPane(null);
-    setPickerSaveDefault(false);
-    setPickerIsolate(false);
-    setPickerRole(null);
-    if (target) {
-      await sessions.spawnInto(
-        target,
-        agentId,
-        targetPane ? { paneId: targetPane } : undefined,
-        { worktree: isolate, role },
-      ).catch(sessions.reportSpawnError);
-    }
-  };
 
   const clearNotifications = (id: string) => {
     clearNotificationCount(id);
@@ -378,8 +300,8 @@ function App() {
   };
 
   const jumpToNotification = (item: NotificationItem) => {
-    const ws = workspaces.find((w) => w.id === item.workspaceId);
-    if (ws?.terminals.some((t) => t.id === item.terminalId)) {
+    const ws = workspaces.find((workspace) => workspace.id === item.workspaceId);
+    if (ws?.terminals.some((terminal) => terminal.id === item.terminalId)) {
       selectWorkspace(item.workspaceId, item.terminalId);
       setFocusedId(item.terminalId);
     }
@@ -389,7 +311,7 @@ function App() {
   const renameWorkspace = async (id: string, name: string) => {
     await api.renameWorkspace(id, name).catch((error) => {
       console.error(`failed to rename workspace ${id}:`, error);
-      pushSystemNotification(t("app.renameFailed", { detail: String(error) }));
+      pushSystemNotification(translateNow("app.renameFailed", { detail: String(error) }));
     });
     await refresh();
   };
@@ -439,11 +361,11 @@ function App() {
     activeWorkspace: active,
     focusedId,
     titles,
-    voiceEnabled,
-    voiceCommandsEnabled: flags.voiceCommands,
+    isVoiceEnabled,
+    isVoiceCommandsEnabled: flags.voiceCommands,
     sessions,
     openVoiceSettings,
-    actions: { quickNewTerminal, selectWorkspace, suspendGroup, resumeGroup },
+    actions: { quickNewTerminal: agentPicker.quickNewTerminal, selectWorkspace, suspendGroup, resumeGroup },
   });
 
   const stopFleetTerminals = async (ids: string[]) => {
@@ -452,68 +374,24 @@ function App() {
       await refresh();
     } catch (err) {
       console.error("failed to stop fleet terminals:", err);
-      pushSystemNotification(t("app.stopSomeFailed"));
+      pushSystemNotification(translateNow("app.stopSomeFailed"));
       await refresh();
     }
   };
 
-  /** Detaching is visual-only and durable; the PTY remains alive for re-open. */
   const detachTab = (id: string) => {
     setTerminalDetached(id, true);
     setExpandedId((current) => (current === id ? null : current));
     setFocusedId((current) => (current === id ? null : current));
   };
 
-  const pickFolder = async () => {
-    try {
-      const dir = await openDialog({ directory: true, multiple: false });
-      if (typeof dir === "string") {
-        setNewWsCwd(dir);
-        if (!newWsName) {
-          const base = dir.split(/[\\/]/).filter(Boolean).pop();
-          if (base) setNewWsName(base);
-        }
-      }
-    } catch (err) {
-      console.error("folder picker failed:", err);
-    }
-  };
-
-  const createWorkspace = async () => {
-    try {
-      const ws = await api.createWorkspace(
-        newWsName.trim() || t("app.defaultWorkspaceName"),
-        newWsCwd,
-      );
-      if (newWsGroupId) {
-        await api.setWorkspaceGroup(ws.id, newWsGroupId).catch((error) => {
-          console.error(`failed to assign new workspace ${ws.id} to group:`, error);
-        });
-      }
-      setShowNewWs(false);
-      setNewWsName("");
-      setNewWsCwd("");
-      setNewWsGroupId(null);
-      await refresh();
-      setActiveId(ws.id);
-    } catch (err) {
-      console.error("failed to create workspace:", err);
-      pushSystemNotification(t("app.createWorkspaceFailed", { detail: String(err) }));
-    }
-  };
-
-  const openWorkspaceCreator = (groupId: string | null = null) => {
-    setNewWsGroupId(groupId);
-    setShowNewWs(true);
-  };
-
   const closeWorkspace = async (id: string): Promise<boolean> => {
-    const terms = workspaces.find((w) => w.id === id)?.terminals ?? [];
+    const terms = workspaces.find((workspace) => workspace.id === id)?.terminals ?? [];
     try {
       await api.closeWorkspace(id);
     } catch (err) {
       console.error(`failed to close workspace ${id}:`, err);
-      pushSystemNotification(t("app.deleteFailed", { detail: String(err) }));
+      pushSystemNotification(translateNow("app.deleteFailed", { detail: String(err) }));
       return false;
     }
     sessions.forget(terms.map((term) => term.id));
@@ -533,40 +411,19 @@ function App() {
     }
   };
 
-  const applyGridLayout = async (cols: number) => {
-    if (!(GRID_COL_OPTIONS as readonly number[]).includes(cols)) return;
-    setGridCols(cols);
-    const basis = Math.floor(100 / cols);
-    const targets = workspaces.flatMap((w) =>
-      w.terminals.map((t) => ({ wsId: w.id, id: t.id })),
-    );
-    setWorkspaces((prev) =>
-      prev.map((w) => ({
-        ...w,
-        terminals: w.terminals.map((t) => ({ ...t, width: basis })),
-      })),
-    );
-    await Promise.all(
-      targets.map(({ wsId, id }) =>
-        api.setTerminalWidth(wsId, id, basis).catch((error) => console.warn(`failed to resize terminal ${id}:`, error)),
-      ),
-    );
-    await refresh();
-  };
-
   useGlobalHotkeys({
-    modalOpen,
+    isModalOpen,
     capturing,
     setCapturing,
-    shortcutsSectionOpen: showSettings && settingsSection === "shortcuts",
+    isShortcutsSectionOpen: shouldShowSettings && settingsSection === "shortcuts",
     active,
     focusedId,
     workspaces,
     actions: {
-      openWorkspaceCreator: () => openWorkspaceCreator(),
+      openWorkspaceCreator: () => workspaceCreator.openCreator(),
       renameWorkspace: (workspace) => setRenameTarget({ kind: "workspace", id: workspace.id, value: workspace.name }),
       closeWorkspace,
-      quickNewTerminal,
+      quickNewTerminal: agentPicker.quickNewTerminal,
       closeTerminal: worktreeClose.request,
       toggleVoice: voice.toggle,
     },
@@ -581,7 +438,7 @@ function App() {
     if (!workspace || !terminal) return;
     switch (action) {
       case "interrupt":
-        await api.writeTerminal(terminal.id, "\u0003").catch((error) => console.warn(`failed to interrupt ${terminal.id}:`, error));
+        await api.writeTerminal(terminal.id, CTRL_C).catch((error) => console.warn(`failed to interrupt ${terminal.id}:`, error));
         return;
       case "restart":
         await sessions.restart(terminal.id, terminal.command);
@@ -592,7 +449,7 @@ function App() {
       case "clear-scrollback":
         getTerminal(terminal.id)?.clear();
         clearTerminal(terminal.id);
-        pushSystemNotification(t("app.historyCleared"));
+        pushSystemNotification(translateNow("app.historyCleared"));
         return;
       case "resume":
         await sessions.respawn(workspace.id, terminal.id, resumeCommandFor(terminal.command));
@@ -601,14 +458,14 @@ function App() {
     }
   };
 
-  const settingsPage = showSettings ? (
+  const settingsPage = shouldShowSettings ? (
         <Suspense fallback={<AppLoadingSurface />}>
           <LazySettingsDialog
             variant="page"
-            open
-            onOpenChange={(open) => {
-              setShowSettings(open);
-              if (!open) setCapturing(null);
+            isOpen
+            onOpenChange={(isOpen) => {
+              setShowSettings(isOpen);
+              if (!isOpen) setCapturing(null);
             }}
             activeSection={settingsSection}
             onActiveSectionChange={(section) => {
@@ -630,19 +487,19 @@ function App() {
                   onFontSizeReset={resetFontSize}
                   gridCols={gridCols}
                   onGridLayoutChange={applyGridLayout}
-                  reduceMotion={reduceMotion}
+                  shouldReduceMotion={shouldReduceMotion}
                   onReduceMotionChange={updateReduceMotion}
                   flags={flags}
                   onFeatureFlagChange={setFeatureFlag}
-                  voiceEnabled={voiceEnabled}
+                  isVoiceEnabled={isVoiceEnabled}
                   onVoiceEnabledChange={voiceSettings.setEnabled}
                   voiceLang={voiceLang}
                   onVoiceLangChange={voiceSettings.setLanguage}
                   voiceInputDevice={voiceInputDevice}
                   voiceInputDevices={voiceSettings.inputDevices}
                   onVoiceInputDeviceChange={voiceSettings.setInputDevice}
-                  micAvailable={voiceSettings.micAvailable}
-                  micTesting={voiceSettings.micTesting}
+                  isMicAvailable={voiceSettings.isMicAvailable}
+                  isMicTesting={voiceSettings.isMicTesting}
                   onMicTestToggle={voiceSettings.toggleMicTest}
                   voiceModels={voiceSettings.models}
                   voiceModelsStatus={voiceSettings.modelsStatus}
@@ -667,7 +524,7 @@ function App() {
                   }}
                   appVersion={appVersion}
                   updateVersion={updateVersion}
-                  updateInstalling={updateInstalling}
+                  isUpdateInstalling={isUpdateInstalling}
                   updateCheckState={updateCheckState}
                   onManualUpdateCheck={manualUpdateCheck}
                   onInstallUpdate={installUpdate}
@@ -679,15 +536,15 @@ function App() {
   ) : null;
 
   return (
-    <MotionConfig reducedMotion={reduceMotion ? "always" : "user"}>
+    <MotionConfig reducedMotion={shouldReduceMotion ? "always" : "user"}>
       {initialization.error ? (
         <div className="terra-initialization-error" role="alert" aria-live="assertive">
           <div>
-            <strong>{t("system.initFailed")}</strong>
+            <strong>{translateNow("system.initFailed")}</strong>
             <span>{initialization.error}</span>
           </div>
-          <button type="button" className="terra-button" onClick={initialization.retry} disabled={initialization.running}>
-            {initialization.running ? t("system.retrying") : t("nav.retry")}
+          <button type="button" className="terra-button" onClick={initialization.retry} disabled={initialization.isRunning}>
+            {initialization.isRunning ? translateNow("system.retrying") : translateNow("nav.retry")}
           </button>
         </div>
       ) : null}
@@ -711,7 +568,7 @@ function App() {
         onOpenResume={resumeQueue.show}
         detachedTerminalIds={detachedTerminalIds}
         fontSize={fontSize}
-        voiceEnabled={voiceEnabled}
+        isVoiceEnabled={isVoiceEnabled}
         voiceStatus={voice.status}
         voiceState={voice.capsule.state}
         voiceTranscript={voice.capsule.partialTranscript}
@@ -728,23 +585,23 @@ function App() {
         voiceLevel={voice.level}
         voiceSamples={voice.samples}
         voiceError={voice.capsule.error}
-        voiceSubmitted={voice.submitted}
+        isVoiceSubmitted={voice.isSubmitted}
         voiceFeedback={voice.feedback}
         onFocus={setFocusedId}
         onSelectWorkspace={selectWorkspace}
-        onNewWorkspace={() => openWorkspaceCreator()}
+        onNewWorkspace={() => workspaceCreator.openCreator()}
         onNewAgent={(workspaceId, paneId, agentId) => {
           if (agentId) {
             void sessions.spawnInto(
               workspaceId,
               agentId,
-              paneId ? { paneId } : undefined,
+              { placement: paneId ? { paneId } : undefined },
             ).catch(sessions.reportSpawnError);
             return;
           }
-          void chooseAgentForPanel(workspaceId, paneId ?? null);
+          void agentPicker.chooseForPanel(workspaceId, paneId ?? null);
         }}
-        onQuickNewAgent={(workspaceId) => void quickNewTerminal(workspaceId)}
+        onQuickNewAgent={(workspaceId) => void agentPicker.quickNewTerminal(workspaceId)}
         onClearNotifications={clearNotifications}
         onMarkAllRead={markAllRead}
         onClearAll={clearAllNotifications}
@@ -763,7 +620,7 @@ function App() {
         loadFiles={api.listWorkspaceFiles}
         loadGitStatus={api.gitStatus}
         onCreateGroup={createGroup}
-        onCreateProject={(groupId) => openWorkspaceCreator(groupId)}
+        onCreateProject={(groupId) => workspaceCreator.openCreator(groupId)}
         onRenameNode={(node) => {
           if (node.kind === "project") {
             const workspace = workspaces.find((candidate) => candidate.id === node.id);
@@ -820,7 +677,7 @@ function App() {
         />
       </Suspense>
 
-      {showResume ? (
+      {shouldShowResume ? (
         <Suspense fallback={<AppLoadingSurface />}>
           <LazyResumeDialog
             items={resumeItems ?? []}
@@ -830,46 +687,37 @@ function App() {
             onResumeAll={resumeQueue.resumeAll}
             onDismissAll={resumeQueue.dismissAll}
             onDefer={resumeQueue.defer}
-            autoResume={autoResume}
+            shouldAutoResume={shouldAutoResume}
             onAutoResumeChange={setAutoResume}
           />
         </Suspense>
       ) : null}
 
       <WorkspaceDialog
-        cwd={newWsCwd}
-        groupName={newWsGroupId ? groups.find((group) => group.id === newWsGroupId)?.name : null}
-        name={newWsName}
-        onBrowse={pickFolder}
-        onCwdChange={setNewWsCwd}
-        onNameChange={setNewWsName}
-        onOpenChange={setShowNewWs}
-        onSubmit={createWorkspace}
-        open={showNewWs}
+        cwd={workspaceCreator.cwd}
+        groupName={workspaceCreator.groupId ? groups.find((group) => group.id === workspaceCreator.groupId)?.name : null}
+        name={workspaceCreator.name}
+        onBrowse={workspaceCreator.pickFolder}
+        onCwdChange={workspaceCreator.setCwd}
+        onNameChange={workspaceCreator.setName}
+        onOpenChange={workspaceCreator.setOpen}
+        onSubmit={workspaceCreator.create}
+        isOpen={workspaceCreator.isOpen}
       />
 
       <AgentPickerDialog
         agents={agents}
         defaultAgent={defaultAgent}
-        onChoose={chooseAgent}
-        onOpenChange={(open) => {
-          setShowAgentPicker(open);
-          if (!open) {
-            setPickerTarget(null);
-            setPickerTargetPane(null);
-            setPickerSaveDefault(false);
-            setPickerIsolate(false);
-            setPickerRole(null);
-          }
-        }}
-        onSaveDefaultChange={setPickerSaveDefault}
-        open={showAgentPicker}
-        saveDefault={pickerSaveDefault}
-        canIsolate={Boolean(pickerTarget && branches[pickerTarget])}
-        isolate={pickerIsolate}
-        onIsolateChange={setPickerIsolate}
-        role={pickerRole}
-        onRoleChange={setPickerRole}
+        onChoose={agentPicker.choose}
+        onOpenChange={agentPicker.setOpen}
+        onSaveDefaultChange={agentPicker.setSaveDefault}
+        isOpen={agentPicker.isOpen}
+        shouldSaveDefault={agentPicker.shouldSaveDefault}
+        canIsolate={Boolean(agentPicker.target && branches[agentPicker.target])}
+        shouldIsolate={agentPicker.shouldIsolate}
+        onIsolateChange={agentPicker.setIsolate}
+        role={agentPicker.role}
+        onRoleChange={agentPicker.setRole}
       />
 
       <WorktreeCloseDialog {...worktreeClose.dialog} />
@@ -887,7 +735,7 @@ function App() {
         canIsolate={Boolean(active && branches[active.id])}
         onSpawn={async (agent, options) => {
           if (!active) return;
-          await sessions.spawnInto(active.id, agent, undefined, options);
+          await sessions.spawnInto(active.id, agent, options);
         }}
       />
 
@@ -896,11 +744,11 @@ function App() {
         onChange={(value) => {
           setRenameTarget((current) => current ? { ...current, value } : current);
         }}
-        onOpenChange={(open) => {
-          if (!open) setRenameTarget(null);
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setRenameTarget(null);
         }}
         onSubmit={submitRename}
-        open={renameTarget !== null}
+        isOpen={renameTarget !== null}
         value={renameTarget?.value ?? ""}
       />
 
@@ -908,24 +756,24 @@ function App() {
         kind="group"
         mode="create"
         onChange={setNewGroupName}
-        onOpenChange={(open) => {
-          setShowNewGroup(open);
-          if (!open) setNewGroupName("");
+        onOpenChange={(isOpen) => {
+          setShowNewGroup(isOpen);
+          if (!isOpen) setNewGroupName("");
         }}
         onSubmit={submitNewGroup}
-        open={showNewGroup}
+        isOpen={shouldShowNewGroup}
         value={newGroupName}
       />
 
       <ConfirmActionDialog
-        description={t("app.importDescription")}
+        description={translateNow("app.importDescription")}
         onConfirm={() => snapshotTransfer.confirmImport()}
-        onOpenChange={(open) => {
-          if (!open) snapshotTransfer.cancelImport();
+        onOpenChange={(isOpen) => {
+          if (!isOpen) snapshotTransfer.cancelImport();
         }}
-        open={snapshotTransfer.pendingImportPath !== null}
-        title={t("app.importTitle")}
-        confirmLabel={t("settingsPanels.importSnapshot")}
+        isOpen={snapshotTransfer.pendingImportPath !== null}
+        title={translateNow("app.importTitle")}
+        confirmLabel={translateNow("settingsPanels.importSnapshot")}
       />
 
       <ConfirmActionDialog
@@ -934,20 +782,20 @@ function App() {
             ? workspaces.find((workspace) => workspace.id === workspaceToDelete)
             : null;
           return project
-            ? t("app.deleteProjectNamed", { name: project.name })
-            : t("app.deleteProject");
+            ? translateNow("app.deleteProjectNamed", { name: project.name })
+            : translateNow("app.deleteProject");
         })()}
         onConfirm={async () => {
           if (!workspaceToDelete) return;
-          const deleted = await closeWorkspace(workspaceToDelete);
-          if (deleted) setWorkspaceToDelete(null);
+          const isDeleted = await closeWorkspace(workspaceToDelete);
+          if (isDeleted) setWorkspaceToDelete(null);
         }}
-        onOpenChange={(open) => {
-          if (!open) setWorkspaceToDelete(null);
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setWorkspaceToDelete(null);
         }}
-        open={workspaceToDelete !== null}
-        title={t("app.deleteTitle")}
-        confirmLabel={t("app.deleteConfirm")}
+        isOpen={workspaceToDelete !== null}
+        title={translateNow("app.deleteTitle")}
+        confirmLabel={translateNow("app.deleteConfirm")}
       />
 
     </MotionConfig>

@@ -29,21 +29,20 @@ function errorName(error: unknown) {
   return "UnknownError";
 }
 
-function safeErrorMessage(error: unknown, t: Translate) {
+function safeErrorMessage(error: unknown, translate: Translate) {
   const message = errorMessage(error, "");
-  return message ? sanitizeText(message, MAX_MESSAGE_LENGTH) : t("system.unexpectedError");
+  return message ? sanitizeText(message, MAX_MESSAGE_LENGTH) : translate("system.unexpectedError");
 }
 
-/** Convert React's error payload into a bounded, path/token-redacted report. */
-export function getSafeErrorDetails(error: unknown, info: ErrorInfo | null | undefined, t: Translate): SafeErrorDetails {
+export function getSafeErrorDetails(error: unknown, info: ErrorInfo | null | undefined, translate: Translate): SafeErrorDetails {
   const name = errorName(error);
-  const message = safeErrorMessage(error, t);
+  const message = safeErrorMessage(error, translate);
   const componentStack = sanitizeText(info?.componentStack?.trim() ?? "", MAX_STACK_LENGTH);
   const text = [
-    t("system.reportTitle"),
-    t("system.reportType", { name }),
-    t("system.reportMessage", { message }),
-    componentStack ? t("system.reportTree", { stack: componentStack }) : "",
+    translate("system.reportTitle"),
+    translate("system.reportType", { name }),
+    translate("system.reportMessage", { message }),
+    componentStack ? translate("system.reportTree", { stack: componentStack }) : "",
   ]
     .filter(Boolean)
     .join("\n");

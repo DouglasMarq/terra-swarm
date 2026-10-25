@@ -8,7 +8,7 @@ import {
 import { normalizeSearchText } from "../../lib/text/normalizeSearchText";
 
 describe("settings registry", () => {
-  it("keeps the seven settings categories in a stable order", () => {
+  it("Given the settings registry, when listing categories, then the seven categories keep a stable order", () => {
     expect(SETTINGS_SECTIONS.map((section) => section.id)).toEqual([
       "general",
       "terminal",
@@ -20,7 +20,7 @@ describe("settings registry", () => {
     ]);
   });
 
-  it("normalizes accents and case for Brazilian Portuguese search", () => {
+  it("Given a Brazilian Portuguese search, when searching settings, then accents and case are normalized", () => {
     expect(normalizeSearchText("  Orquestração  ")).toBe("orquestracao");
     expect(filterSettingsSections(SETTINGS_SECTIONS, "orquestracao").map((section) => section.id)).toEqual([
       "general",
@@ -30,7 +30,7 @@ describe("settings registry", () => {
     ]);
   });
 
-  it("matches descriptions and keywords, not only visible labels", () => {
+  it("Given a query, when searching settings, then descriptions and keywords match, not only visible labels", () => {
     expect(filterSettingsSections(SETTINGS_SECTIONS, "scrollback").map((section) => section.id)).toEqual([
       "terminal",
     ]);
@@ -39,7 +39,7 @@ describe("settings registry", () => {
     ]);
   });
 
-  it("falls back to the first registered section when selection is invalid", () => {
+  it("Given an invalid selection, when resolving the section, then it falls back to the first registered section", () => {
     expect(getInitialSettingsSection(SETTINGS_SECTIONS, "voice")).toBe("voice");
     expect(getInitialSettingsSection(SETTINGS_SECTIONS, "missing" as never)).toBe("general");
     expect(getInitialSettingsSection([])).toBeUndefined();

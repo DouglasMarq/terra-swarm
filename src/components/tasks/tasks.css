@@ -307,7 +307,6 @@
   color: var(--terra-text);
 }
 
-/* Kanban board surface */
 .terra-board {
   display: flex;
   flex-direction: column;
@@ -468,7 +467,6 @@
   background: var(--terra-bg-hover);
 }
 
-/* The state goes under the name so long agent names stay readable. */
 .terra-board-agent .terra-task-state {
   flex-basis: 100%;
   padding-left: 20px;

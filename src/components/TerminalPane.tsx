@@ -1,78 +1,69 @@
 import { agentKind } from "../domain/agentLabels";
 import { CONTEXT_ATTENTION_PERCENT, CONTEXT_WARNING_PERCENT, deriveAgentStatus } from "../domain/agentStatus";
 import { useMcpStore } from "../stores/mcpStore";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api } from "../api";
 import { isIpcError } from "../lib/tauri/errors";
-import type { OutputChunk } from "../types";
+import type { UnlistenFn } from "../lib/tauri/events";
+import { onPtyOutput } from "../lib/tauri/pty";
 import { registerTerminal, unregisterTerminal, getTerminal } from "../terminalRegistry";
 import {
   createFitScheduler,
   createTerminalResizeQueue,
+  hasVisibleBox,
+  isUsableDimensions,
 } from "../lib/terminalFitScheduler";
+import { createOutputBuffer } from "../lib/terminalOutputBuffer";
+import { attachOutputStream } from "../lib/terminalOutputStream";
+import { createRetryingWriter } from "../lib/terminalInputWriter";
+import { isPlainShiftEnter } from "../lib/terminalKeys";
+import { throttle } from "../lib/async/throttle";
 import { Maximize2, Minimize2, GitBranch } from "lucide-react";
-import { t as translateNow, useT } from "../i18n";
+import { translateNow, useT } from "../i18n";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { terminalFontStack } from "../lib/terminalFonts";
-import { detectDropPlatform, dropPointToClient, formatDroppedPaths } from "../lib/terminalDrop";
+import { detectDropPlatform, dropPointToClient, formatDroppedPaths } from "../domain/terminalDrop";
 import { onFileDrop } from "../lib/tauri/fileDrop";
 import { PaneActionsMenu, type PaneMenuGroups } from "./workbench/PaneActionsMenu";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal-pane.css";
+import { FULL_PERCENT } from "../lib/math/percent";
 
 const SCROLLBACK_LINES = 10_000;
-/** Minimum gap between console warnings for one terminal's failed IPC calls. */
 const WARN_THROTTLE_MS = 2000;
-/** Retries of a keystroke write while the backend input channel is busy. */
-const MAX_WRITE_RETRIES = 30;
-/** Delay between write retries: one step per attempt so far, capped at `MAX_WRITE_RETRY_STEPS` steps. */
-const WRITE_RETRY_STEP_MS = 25;
-const MAX_WRITE_RETRY_STEPS = 10;
 
 interface Props {
   id: string;
   command: string;
   fontSize: number;
-  exited: boolean;
-  expanded: boolean;
+  hasExited: boolean;
+  isExpanded: boolean;
   basis: number;
   height: string;
-  entering: boolean;
-  dragOver: boolean;
+  isEntering: boolean;
+  isDragOver: boolean;
   notifications: number;
   contextUsed?: number;
   title?: string;
   branch?: string;
-  /** Branch of the agent's own git worktree, when it is isolated. */
   worktreeBranch?: string;
-  /** The agent's team role, already translated. */
   roleLabel?: string;
-  /** Opens the review of the worktree's changes. */
   onOpenReview?: () => void;
-  /** Task title (or name) shown first; falls back to the command. */
   label?: string;
-  /** "claude 2" / "Lyra · claude" under or beside the label. */
   tag?: string;
-  /** Latest unread message from the agent, shown in the attention strip. */
   attentionMessage?: string | null;
-  /** Lifecycle actions for the "…" menu. */
   menu?: PaneMenuGroups;
   onClearNotifications: () => void;
-  focused: boolean;
+  isFocused: boolean;
   onFocus: () => void;
   onToggleExpand: () => void;
   onRestart: () => void;
-  /** Legacy close means the visual terminal close action. */
   onClose: () => void;
-  /** Detach a tab without ending its PTY, when the orchestration model is on. */
   onDetach?: () => void;
-  /** Explicitly destructive PTY action; intentionally separate from detach. */
   onKill?: () => void;
-  /** Hidden tabs remain mounted so switching tabs never kills a PTY. */
-  hidden?: boolean;
+  isHidden?: boolean;
 }
 
 export function TerminalPane(props: Props) {
@@ -80,23 +71,23 @@ export function TerminalPane(props: Props) {
     id,
     command,
     fontSize,
-    exited,
-    expanded,
+    hasExited,
+    isExpanded,
     basis,
     height,
-    entering,
-    dragOver,
+    isEntering,
+    isDragOver,
     notifications,
     contextUsed,
     title,
-    focused,
-    hidden = false,
+    isFocused,
+    isHidden = false,
     label,
     tag,
     attentionMessage,
     menu,
   } = props;
-  const t = useT();
+  const translate = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<(() => void) | null>(null);
@@ -104,21 +95,20 @@ export function TerminalPane(props: Props) {
   const appliedFontSize = useRef(fontSize);
   const fontFamily = terminalFontStack(usePreferencesStore((state) => state.terminalFontFamily));
   const appliedFontFamily = useRef(fontFamily);
-  // Keep the long-lived xterm effect aware of the latest backend lifecycle.
-  // The component intentionally survives a PTY exit so it can show scrollback
-  // and restart controls, but geometry observers must stop addressing a PTY
-  // that no longer exists.
-  const exitedRef = useRef(exited);
-  exitedRef.current = exited;
-  const hiddenRef = useRef(hidden);
-  hiddenRef.current = hidden;
+  const exitedRef = useRef(hasExited);
+  exitedRef.current = hasExited;
+  const hiddenRef = useRef(isHidden);
+  hiddenRef.current = isHidden;
   const onFocusRef = useRef(props.onFocus);
   onFocusRef.current = props.onFocus;
   const [isDropTarget, setIsDropTarget] = useState(false);
 
+  const currentFont = useEffectEvent(() => ({ fontFamily, fontSize }));
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    const { fontFamily, fontSize } = currentFont();
 
     const term = new Terminal({
       fontFamily,
@@ -138,77 +128,40 @@ export function TerminalPane(props: Props) {
     term.open(container);
     registerTerminal(id, term);
 
-    let disposed = false;
+    let isDisposed = false;
+    const isStopped = (): boolean => isDisposed || exitedRef.current;
+    const warnThrottled = throttle(
+      (what: string, err: unknown) => console.warn(`[terminal ${id}] ${what} failed:`, err),
+      WARN_THROTTLE_MS,
+    );
 
-    // Backend IPC failures (dead PTY, full input queue) must be visible
-    // somewhere; throttle so a dead terminal can't spam the console.
-    let lastWarnAt = 0;
-    const warnThrottled = (what: string, err: unknown) => {
-      const now = Date.now();
-      if (now - lastWarnAt < WARN_THROTTLE_MS) return;
-      lastWarnAt = now;
-      console.warn(`[terminal ${id}] ${what} failed:`, err);
-    };
-
-    term.attachCustomKeyEventHandler((e) => {
-      if (
-        (e.type === "keydown" || e.type === "keypress") &&
-        e.key === "Enter" &&
-        e.shiftKey &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey
-      ) {
-        if (e.type === "keydown") {
-          e.preventDefault();
-          if (!exitedRef.current) {
-            api.writeTerminal(id, "\n").catch((err) => warnThrottled("write", err));
-          }
+    term.attachCustomKeyEventHandler((event) => {
+      if (!isPlainShiftEnter(event)) return true;
+      if (event.type === "keydown") {
+        event.preventDefault();
+        if (!exitedRef.current) {
+          api.writeTerminal(id, "\n").catch((err) => warnThrottled("write", err));
         }
-        return false;
       }
-      return true;
+      return false;
     });
 
     const resizeQueue = createTerminalResizeQueue(({ cols, rows }) => {
-      // A skipped resize must reject rather than resolve: the queue only
-      // remembers dimensions after a successful send, and a PTY exit can be
-      // followed by a restart with the same geometry.
       if (exitedRef.current) return Promise.reject(new Error("terminal exited"));
       return api.resizeTerminal(id, cols, rows).catch((err) => {
-        // An exit event can race an in-flight resize. Once the UI knows the
-        // process is gone this is expected lifecycle, not an actionable error.
         if (!exitedRef.current) warnThrottled("resize", err);
         throw err;
       });
     });
 
-    // FitAddon intentionally returns a minimum 2x1 geometry even for a
-    // display:none parent. Check the real box first so a zero-sized mount
-    // never poisons the PTY with a tiny resize.
     const fitAndSend = (): void => {
       try {
-        if (exitedRef.current) return;
-        const box = container.getBoundingClientRect();
-        if (!(box.width > 0 && box.height > 0)) return;
-        const d = fit.proposeDimensions();
-        if (
-          !d ||
-          !Number.isFinite(d.cols) ||
-          !Number.isFinite(d.rows) ||
-          d.cols < 1 ||
-          d.rows < 1
-        ) {
-          return;
-        }
+        if (exitedRef.current || !hasVisibleBox(container)) return;
+        if (!isUsableDimensions(fit.proposeDimensions())) return;
         fit.fit();
         if (term.cols < 1 || term.rows < 1) return;
         resizeQueue.request({ cols: term.cols, rows: term.rows });
-      } catch {
-        // The renderer can still be measuring while the pane is entering the
-        // layout. The observer/focus/visibility signals will schedule a new
-        // coalesced fit once a real box exists.
-      }
+      } catch {}
     };
 
     const fitScheduler = createFitScheduler(fitAndSend);
@@ -216,103 +169,25 @@ export function TerminalPane(props: Props) {
     resizeQueueRef.current = resizeQueue;
     fitScheduler.schedule();
 
-    // Output pipeline with real backpressure: each chunk is handed to xterm
-    // with a completion callback, and the next chunk is only drained once
-    // xterm has parsed the previous one. If the producer outruns the parser
-    // (huge bursts, throttled timers in an occluded window), the buffer is
-    // capped and the oldest data is dropped instead of growing without bound.
-    const WRITE_BUDGET = 32768;
-    const MAX_BUFFERED = 8 * 1024 * 1024;
-    let writeBuf = "";
-    let writing = false;
-    const drain = () => {
-      if (disposed || writing || !writeBuf) return;
-      writing = true;
-      let n = Math.min(writeBuf.length, WRITE_BUDGET);
-      if (n < writeBuf.length) {
-        // never split a surrogate pair at the cut
-        const c = writeBuf.charCodeAt(n - 1);
-        if (c >= 0xd800 && c <= 0xdbff) n += 1;
-      }
-      const data = writeBuf.slice(0, n);
-      writeBuf = writeBuf.slice(n);
-      term.write(data, () => {
-        writing = false;
-        drain();
-      });
-    };
-    const enqueueOutput = (data: string) => {
-      if (disposed || !data) return;
-      if (writeBuf.length + data.length > MAX_BUFFERED) {
-        writeBuf =
-          writeBuf.slice(-Math.floor(MAX_BUFFERED / 4)) +
-          `\r\n\x1b[33m${translateNow("pane.outputDropped")}\x1b[0m\r\n`;
-      }
-      writeBuf += data;
-      drain();
-    };
-
-    // Exactly-once delivery across listener attach: events carry a cumulative
-    // byte total; the backlog snapshot covers everything up to its total, so
-    // buffered events already included in it are dropped.
-    let live = false;
-    let backlogTotal = 0;
-    const preLive: OutputChunk[] = [];
-    let unlisten: UnlistenFn | null = null;
-    (async () => {
-      const un = await listen<OutputChunk>(`pty-output-${id}`, (e) => {
-        if (disposed) return;
-        if (!live) {
-          preLive.push(e.payload);
-          return;
-        }
-        enqueueOutput(e.payload.data);
-      });
-      if (disposed) {
-        un();
-        return;
-      }
-      unlisten = un;
-      try {
-        const backlog = await api.terminalBacklog(id);
-        if (disposed) return;
-        if (backlog.data) enqueueOutput(backlog.data);
-        backlogTotal = backlog.total;
-      } catch {
-        // Terminal may already be gone backend-side; the live stream (if any)
-        // still works, and a dead process surfaces via terminal-exit.
-      }
-      live = true;
-      for (const c of preLive) {
-        if (c.total > backlogTotal) enqueueOutput(c.data);
-      }
-      preLive.length = 0;
-    })();
-
-    // Serialize writes and retry while the backend input channel is full
-    // (child not reading stdin): without this, keystrokes and pastes are
-    // silently dropped under backpressure.
-    let writeChain: Promise<void> = Promise.resolve();
-    const dataSub = term.onData((data) => {
-      if (disposed || exitedRef.current) return;
-      writeChain = writeChain.then(async () => {
-        for (let attempt = 0; ; attempt++) {
-          if (disposed || exitedRef.current) return;
-          try {
-            await api.writeTerminal(id, data);
-            return;
-          } catch (err) {
-            if (!isIpcError(err, "busy") || attempt >= MAX_WRITE_RETRIES) {
-              warnThrottled("write", err);
-              return;
-            }
-            await new Promise((r) =>
-              setTimeout(r, WRITE_RETRY_STEP_MS * Math.min(attempt + 1, MAX_WRITE_RETRY_STEPS)),
-            );
-          }
-        }
-      });
+    const output = createOutputBuffer({
+      write: (data, done) => term.write(data, done),
+      overflowNotice: () => translateNow("pane.outputDropped"),
     });
+    const detachOutput = attachOutputStream(
+      {
+        subscribe: (onChunk) => onPtyOutput(id, onChunk),
+        loadBacklog: () => api.terminalBacklog(id),
+      },
+      output.enqueue,
+    );
+
+    const writeInput = createRetryingWriter({
+      write: (data) => api.writeTerminal(id, data),
+      shouldStop: isStopped,
+      isRetryable: (err) => isIpcError(err, "busy"),
+      onError: (err) => warnThrottled("write", err),
+    });
+    const dataSub = term.onData(writeInput);
 
     const observer = new ResizeObserver(() => {
       fitScheduler.schedule();
@@ -326,8 +201,8 @@ export function TerminalPane(props: Props) {
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
-      disposed = true;
-      writeBuf = "";
+      isDisposed = true;
+      output.dispose();
       fitScheduler.dispose();
       resizeQueue.dispose();
       observer.disconnect();
@@ -335,7 +210,7 @@ export function TerminalPane(props: Props) {
       window.removeEventListener("focus", onWindowResize);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       dataSub.dispose();
-      unlisten?.();
+      detachOutput();
       unregisterTerminal(id, term);
       term.dispose();
       fitRef.current = null;
@@ -343,8 +218,6 @@ export function TerminalPane(props: Props) {
     };
   }, [id]);
 
-  // Every pane hears every drop; only the one under the cursor takes it, and
-  // the paths are pasted as a native terminal does so agents see the file.
   useEffect(() => {
     const platform = detectDropPlatform();
     const isUnderCursor = (position: { x: number; y: number }): boolean => {
@@ -353,10 +226,10 @@ export function TerminalPane(props: Props) {
       const target = document.elementFromPoint(point.x, point.y);
       return Boolean(target && rootRef.current?.contains(target));
     };
-    let disposed = false;
+    let isDisposed = false;
     let unlisten: UnlistenFn | null = null;
     onFileDrop((event) => {
-      if (disposed) return;
+      if (isDisposed) return;
       if (event.type === "leave") {
         setIsDropTarget(false);
         return;
@@ -375,18 +248,18 @@ export function TerminalPane(props: Props) {
       term.paste(text);
     })
       .then((un) => {
-        if (disposed) un();
+        if (isDisposed) un();
         else unlisten = un;
       })
       .catch((err) => console.warn(`[terminal ${id}] file drop unavailable:`, err));
     return () => {
-      disposed = true;
+      isDisposed = true;
       unlisten?.();
       setIsDropTarget(false);
     };
   }, [id]);
 
-  const previousExited = useRef(exited);
+  const previousExited = useRef(hasExited);
 
   useEffect(() => {
     if (appliedFontSize.current === fontSize) return;
@@ -406,47 +279,41 @@ export function TerminalPane(props: Props) {
     fitRef.current?.();
   }, [fontFamily, id]);
 
-  // A hidden workbench tab can keep the same box dimensions while its
-  // `display` state changes. ResizeObserver is not guaranteed to report that
-  // transition, so treat visibility/focus/preset changes as explicit fit
-  // signals as well.
   useEffect(() => {
-    const resumed = previousExited.current && !exited;
-    previousExited.current = exited;
-    if (resumed) resizeQueueRef.current?.reset();
+    const isResumed = previousExited.current && !hasExited;
+    previousExited.current = hasExited;
+    if (isResumed) resizeQueueRef.current?.reset();
     fitRef.current?.();
-  }, [basis, exited, expanded, focused, height, hidden, id]);
+  }, [basis, hasExited, isExpanded, isFocused, height, isHidden, id]);
 
   const reported = useMcpStore((state) => state.statuses[id]?.state);
   const kind = agentKind(command);
   const primary = label || kind;
   const secondary = tag && tag !== primary ? tag : null;
-  const attention = notifications > 0 && Boolean(attentionMessage);
-  const status = deriveAgentStatus({ exited, notifications, contextUsed: contextUsed ?? undefined, reported });
+  const hasAttention = notifications > 0 && Boolean(attentionMessage);
+  const status = deriveAgentStatus({ hasExited, notifications, contextUsed: contextUsed ?? undefined, reported });
 
   return (
     <div
       ref={rootRef}
       data-term-id={id}
-      className={`pane ${expanded ? "expanded" : ""} ${entering ? "pane-enter" : ""} ${
-        dragOver ? "drag-over" : ""
-      } ${focused ? "focused" : ""} ${isDropTarget ? "drop-target" : ""}`}
+      className={`pane ${isExpanded ? "expanded" : ""} ${isEntering ? "pane-enter" : ""} ${
+        isDragOver ? "drag-over" : ""
+      } ${isFocused ? "focused" : ""} ${isDropTarget ? "drop-target" : ""}`}
       data-status={status}
       style={{
         flex: `1 1 calc(${basis}% - 12px)`,
         height,
-        display: hidden ? "none" : undefined,
+        display: isHidden ? "none" : undefined,
       }}
-      aria-hidden={hidden}
+      aria-hidden={isHidden}
       onMouseDown={() => {
-        if (hidden) return;
+        if (isHidden) return;
         props.onFocus();
         if (notifications > 0) props.onClearNotifications();
       }}
-      // Tabbing into the terminal must move focus too, or ⌘Enter and the
-      // other focused-pane shortcuts act on the previously clicked pane.
       onFocusCapture={() => {
-        if (!hidden && !focused) props.onFocus();
+        if (!isHidden && !isFocused) props.onFocus();
       }}
     >
       <div className="pane-header">
@@ -458,7 +325,7 @@ export function TerminalPane(props: Props) {
           <button
             type="button"
             className="terra-tag pane-worktree"
-            title={t("pane.worktree", { branch: props.worktreeBranch })}
+            title={translate("pane.worktree", { branch: props.worktreeBranch })}
             disabled={!props.onOpenReview}
             onClick={(event) => {
               event.stopPropagation();
@@ -474,13 +341,13 @@ export function TerminalPane(props: Props) {
             {title}
           </span>
         ) : <span className="pane-title" />}
-        {contextUsed != null && !exited && (
+        {contextUsed != null && !hasExited && (
           <span
             className={`pane-ctx ${contextUsed >= CONTEXT_ATTENTION_PERCENT ? "high" : contextUsed >= CONTEXT_WARNING_PERCENT ? "mid" : ""}`}
-            title={t("pane.contextUsed", { count: contextUsed })}
+            title={translate("pane.contextUsed", { count: contextUsed })}
           >
             <span className="pane-ctx-bar">
-              <span style={{ transform: `scaleX(${contextUsed / 100})` }} />
+              <span style={{ transform: `scaleX(${contextUsed / FULL_PERCENT})` }} />
             </span>
             {contextUsed}%
           </span>
@@ -489,37 +356,37 @@ export function TerminalPane(props: Props) {
           <button
             type="button"
             className="pane-btn"
-            aria-label={expanded ? t("pane.restore") : t("pane.maximize")}
-            title={expanded ? t("pane.restore") : t("pane.maximize")}
-            onMouseDown={(e) => e.stopPropagation()}
+            aria-label={isExpanded ? translate("pane.restore") : translate("pane.maximize")}
+            title={isExpanded ? translate("pane.restore") : translate("pane.maximize")}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={props.onToggleExpand}
           >
-            {expanded ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
+            {isExpanded ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
           </button>
-          {menu ? <PaneActionsMenu label={t("pane.moreActions")} groups={menu} /> : null}
+          {menu ? <PaneActionsMenu label={translate("pane.moreActions")} groups={menu} /> : null}
         </div>
       </div>
       <div className="pane-body" ref={containerRef} />
-      {attention && !exited ? (
+      {hasAttention && !hasExited ? (
         <div className="pane-attention" role="status">
           <span className="pane-attention-message">{attentionMessage}</span>
           <button
             type="button"
             className="terra-button"
-            onMouseDown={(e) => e.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={props.onClearNotifications}
           >
-            {t("pane.markRead")}
+            {translate("pane.markRead")}
           </button>
         </div>
       ) : null}
-      {exited && (
+      {hasExited && (
         <div className="pane-overlay" role="status">
-          <strong>{t("pane.exited")}</strong>
-          <span>{t("pane.exitedDetail")}</span>
+          <strong>{translate("pane.exited")}</strong>
+          <span>{translate("pane.exitedDetail")}</span>
           <div className="pane-overlay-actions">
-            <button type="button" className="terra-button" onClick={props.onRestart}>{t("pane.restart")}</button>
-            <button type="button" className="terra-button" onClick={props.onClose}>{t("pane.closePane")}</button>
+            <button type="button" className="terra-button" onClick={props.onRestart}>{translate("pane.restart")}</button>
+            <button type="button" className="terra-button" onClick={props.onClose}>{translate("pane.closePane")}</button>
           </div>
         </div>
       )}

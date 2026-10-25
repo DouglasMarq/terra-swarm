@@ -1,7 +1,6 @@
-//! Coding-agent CLIs Terra Swarm knows and which of them are installed.
+use serde::Serialize;
 
-use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
+use crate::agent_catalog::catalog;
 
 #[cfg(windows)]
 use super::shell::find_on_path;
@@ -9,15 +8,14 @@ use super::shell::find_on_path;
 use super::shell::user_shell;
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentInfo {
     pub id: String,
     pub label: String,
-    pub available: bool,
+    pub is_available: bool,
 }
 
-/// Whether the catalog agent `id` resolves on the user's PATH. Ids outside
-/// the compiled-in catalog are refused without running anything.
-pub(super) fn command_available(id: &str) -> bool {
+pub(super) fn is_command_available(id: &str) -> bool {
     catalog().iter().any(|agent| agent.id == id) && is_on_path(id)
 }
 
@@ -28,7 +26,7 @@ fn is_on_path(id: &str) -> bool {
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
-        .map(|s| s.success())
+        .map(|status| status.success())
         .unwrap_or(false)
 }
 
@@ -37,56 +35,6 @@ fn is_on_path(id: &str) -> bool {
     find_on_path(id).is_some()
 }
 
-/// The shared agent catalog, also read by the frontend.
-const AGENT_CATALOG_JSON: &str = include_str!("../../../src/lib/features/agents.json");
-
-#[derive(Deserialize, Clone, Debug, PartialEq)]
-pub struct CatalogAgent {
-    pub id: String,
-    pub label: String,
-    #[serde(default)]
-    pub resume: Option<String>,
-    /// How Terra connects the agent to its MCP server and state hooks.
-    #[serde(default)]
-    pub integration: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct Catalog {
-    agents: Vec<CatalogAgent>,
-}
-
-/// Coding-agent CLIs Terra Swarm knows, in display order. The id doubles as
-/// the executable name and as the profile id used by the frontend.
-pub fn catalog() -> &'static [CatalogAgent] {
-    static CATALOG: OnceLock<Vec<CatalogAgent>> = OnceLock::new();
-    CATALOG.get_or_init(|| {
-        serde_json::from_str::<Catalog>(AGENT_CATALOG_JSON)
-            .map(|catalog| catalog.agents)
-            .expect("agents.json is compiled in and must parse")
-    })
-}
-
-/// The integration of a known agent ("claude", "codex"), if any.
-pub fn integration_of(agent: &str) -> Option<&'static str> {
-    catalog()
-        .iter()
-        .find(|entry| entry.id == agent)
-        .and_then(|entry| entry.integration.as_deref())
-}
-
-/// Whether `command` is a known agent's continuation command
-/// (`claude --continue`, `codex resume --last`, …).
-pub fn is_resume_command(command: &str) -> bool {
-    let command = command.split_whitespace().collect::<Vec<_>>().join(" ");
-    catalog()
-        .iter()
-        .any(|entry| entry.resume.as_deref() == Some(command.as_str()))
-}
-
-/// Which of `ids` resolve on the user's PATH. On Unix a single login shell
-/// answers for all of them, so detection costs one shell start, not one per
-/// agent, and sees the same PATH as the terminals the app spawns.
 #[cfg(not(windows))]
 fn available_commands(ids: &[&str]) -> std::collections::HashSet<String> {
     let script = ids
@@ -114,7 +62,7 @@ fn available_commands(ids: &[&str]) -> std::collections::HashSet<String> {
 #[cfg(windows)]
 fn available_commands(ids: &[&str]) -> std::collections::HashSet<String> {
     ids.iter()
-        .filter(|id| command_available(id))
+        .filter(|id| is_command_available(id))
         .map(|id| id.to_string())
         .collect()
 }
@@ -128,15 +76,14 @@ pub fn detect_agents() -> Vec<AgentInfo> {
         .map(|agent| AgentInfo {
             id: agent.id.clone(),
             label: agent.label.clone(),
-            available: found.contains(&agent.id),
+            is_available: found.contains(&agent.id),
         })
         .collect();
-    // Installed agents first, keeping the curated order inside each half.
-    agents.sort_by_key(|agent| !agent.available);
+    agents.sort_by_key(|agent| !agent.is_available);
     agents.push(AgentInfo {
         id: "shell".into(),
         label: "Shell".into(),
-        available: true,
+        is_available: true,
     });
     agents
 }
@@ -146,35 +93,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn continuation_commands_are_recognised() {
-        assert!(is_resume_command("claude --continue"));
-        assert!(is_resume_command("codex  resume --last"));
-        assert!(!is_resume_command("claude"));
-        assert!(!is_resume_command("claude --model opus"));
-    }
-
-    #[test]
-    fn the_catalog_parses_with_unique_ids() {
-        let ids: Vec<&str> = catalog().iter().map(|agent| agent.id.as_str()).collect();
-        let mut unique = ids.clone();
-        unique.sort_unstable();
-        unique.dedup();
-        assert_eq!(unique.len(), ids.len());
-        assert_eq!(ids[0], "claude");
-        assert_eq!(integration_of("claude"), Some("claude"));
-        assert_eq!(integration_of("codex"), Some("codex"));
-        assert_eq!(integration_of("opencode"), None);
-        assert_eq!(integration_of("unknown"), None);
-    }
-
-    #[test]
-    fn given_an_id_outside_the_catalog_reports_it_unavailable_without_looking_it_up() {
+    fn given_an_id_outside_the_catalog_when_checking_availability_then_it_is_unavailable_without_a_lookup(
+    ) {
         #[cfg(unix)]
         let installed = "sh";
         #[cfg(windows)]
         let installed = "cmd";
         assert!(is_on_path(installed));
-        assert!(!command_available(installed));
-        assert!(!command_available("claude; exit 0"));
+        assert!(!is_command_available(installed));
+        assert!(!is_command_available("claude; exit 0"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn given_installed_and_missing_commands_when_detecting_them_then_only_the_installed_ones_are_found(
+    ) {
+        let found = available_commands(&["sh", "terra-swarm-missing-command"]);
+
+        assert_eq!(found, std::collections::HashSet::from(["sh".to_string()]));
+    }
+
+    #[test]
+    fn given_the_agent_catalog_when_detecting_agents_then_every_agent_is_listed_and_the_shell_comes_last(
+    ) {
+        let agents = detect_agents();
+
+        assert_eq!(agents.len(), catalog().len() + 1);
+        let shell = agents.last().expect("shell entry");
+        assert_eq!((shell.id.as_str(), shell.is_available), ("shell", true));
+        let first_missing = agents[..catalog().len()]
+            .iter()
+            .position(|agent| !agent.is_available)
+            .unwrap_or(catalog().len());
+        assert!(agents[first_missing..catalog().len()]
+            .iter()
+            .all(|agent| !agent.is_available));
     }
 }

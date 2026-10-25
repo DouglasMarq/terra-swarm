@@ -3,14 +3,16 @@ import { errorMessage } from "../../lib/errors/errorMessage";
 import { DEFAULT_FILE_LIST_LIMIT } from "../../lib/tauri/workspace";
 import { AlertCircle, ChevronDown, ChevronRight, FileText, Folder, Link2, LoaderCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { Workspace, WorkspaceFileEntry, WorkspaceFileListing } from "../../types";
+import type { Workspace } from "../../domain/workspace.model";
+import type { WorkspaceFileEntry, WorkspaceFileListing } from "../../domain/workspaceFiles.model";
 import type { NavigatorFilesLoader } from "./types";
+import { indentFor, messageIndentFor } from "./indent";
 import styles from "./Navigator.module.css";
 
 
 interface DirectoryState {
   listing: WorkspaceFileListing | null;
-  loading: boolean;
+  isLoading: boolean;
   error: string | null;
 }
 
@@ -19,7 +21,6 @@ export interface NavigatorFilesViewProps {
   activeWorkspaceId?: string | null;
   loadFiles: NavigatorFilesLoader;
   onSelectWorkspace?: (workspaceId: string) => void;
-  /** Open a file in the editor; files stay static rows without it. */
   onOpenFile?: (workspaceId: string, path: string) => void;
 }
 
@@ -31,53 +32,53 @@ function FileIcon({ entry }: { entry: WorkspaceFileEntry }) {
 
 function FileRow({
   entry,
-  expanded,
-  loading,
+  isExpanded,
+  isLoading,
   depth,
   onToggle,
   onOpen,
 }: {
   entry: WorkspaceFileEntry;
-  expanded: boolean;
-  loading: boolean;
+  isExpanded: boolean;
+  isLoading: boolean;
   depth: number;
   onToggle: () => void;
   onOpen?: () => void;
 }) {
-  const t = useT();
-  const directory = entry.kind === "directory";
+  const translate = useT();
+  const isDirectory = entry.kind === "directory";
   const rowContent = (
     <>
       <span className={styles.integrationDisclosure}>
-        {directory ? (expanded ? <ChevronDown aria-hidden="true" size={12} /> : <ChevronRight aria-hidden="true" size={12} />) : null}
+        {isDirectory ? (isExpanded ? <ChevronDown aria-hidden="true" size={12} /> : <ChevronRight aria-hidden="true" size={12} />) : null}
       </span>
       <span className={styles.integrationIcon}><FileIcon entry={entry} /></span>
       <span className={styles.integrationName}>{entry.name}</span>
-      {loading ? <LoaderCircle aria-label={t("nav.filesView.loadingEntry")} className={styles.spin} size={12} /> : null}
-      {entry.kind === "file" && entry.size !== null ? <span className={styles.integrationMeta}>{t("nav.filesView.sizeBytes", { size: entry.size })}</span> : null}
+      {isLoading ? <LoaderCircle aria-label={translate("nav.filesView.loadingEntry")} className={styles.spin} size={12} /> : null}
+      {entry.kind === "file" && entry.size !== null ? <span className={styles.integrationMeta}>{translate("nav.filesView.sizeBytes", { size: entry.size })}</span> : null}
     </>
   );
-  if (!directory && entry.kind === "file" && onOpen) {
+  if (!isDirectory && entry.kind === "file" && onOpen) {
     return (
       <button
-        aria-label={t("editor.open", { name: entry.name })}
+        aria-label={translate("editor.open", { name: entry.name })}
         className={styles.integrationRow}
         onClick={onOpen}
-        style={{ paddingInlineStart: `${8 + depth * 16}px` }}
+        style={{ paddingInlineStart: indentFor(depth) }}
         type="button"
       >
         {rowContent}
       </button>
     );
   }
-  if (!directory) {
+  if (!isDirectory) {
     return (
       <div
-        aria-label={t("nav.filesView.fileRow", { name: entry.name })}
+        aria-label={translate("nav.filesView.fileRow", { name: entry.name })}
         className={styles.integrationRow}
         data-file-static="true"
         role="listitem"
-        style={{ paddingInlineStart: `${8 + depth * 16}px` }}
+        style={{ paddingInlineStart: indentFor(depth) }}
       >
         {rowContent}
       </div>
@@ -85,10 +86,10 @@ function FileRow({
   }
   return (
     <button
-      aria-expanded={expanded}
+      aria-expanded={isExpanded}
       className={styles.integrationRow}
       onClick={onToggle}
-      style={{ paddingInlineStart: `${8 + depth * 16}px` }}
+      style={{ paddingInlineStart: indentFor(depth) }}
       type="button"
     >
       {rowContent}
@@ -103,7 +104,7 @@ export function NavigatorFilesView({
   onSelectWorkspace,
   onOpenFile,
 }: NavigatorFilesViewProps) {
-  const t = useT();
+  const translate = useT();
   const workspace = workspaces.find((candidate) => candidate.id === activeWorkspaceId) ?? null;
   const [directories, setDirectories] = useState<Record<string, DirectoryState>>({});
   const directoriesRef = useRef<Record<string, DirectoryState>>({});
@@ -111,15 +112,15 @@ export function NavigatorFilesView({
   const generation = useRef(0);
   const workspaceId = workspace?.id ?? null;
 
-  const loadDirectory = useCallback(async (relativePath: string, force = false) => {
+  const loadDirectory = useCallback(async (relativePath: string, shouldForce = false) => {
     if (!workspaceId) return;
     const existing = directoriesRef.current[relativePath];
-    if (!force && (existing?.loading || existing?.listing)) return;
+    if (!shouldForce && (existing?.isLoading || existing?.listing)) return;
     const currentGeneration = generation.current;
     setDirectories((current) => {
       const next = {
         ...current,
-        [relativePath]: { listing: current[relativePath]?.listing ?? null, loading: true, error: null },
+        [relativePath]: { listing: current[relativePath]?.listing ?? null, isLoading: true, error: null },
       };
       directoriesRef.current = next;
       return next;
@@ -128,7 +129,7 @@ export function NavigatorFilesView({
       const listing = await loadFiles(workspaceId, relativePath, DEFAULT_FILE_LIST_LIMIT);
       if (currentGeneration !== generation.current) return;
       setDirectories((current) => {
-        const next = { ...current, [relativePath]: { listing, loading: false, error: null } };
+        const next = { ...current, [relativePath]: { listing, isLoading: false, error: null } };
         directoriesRef.current = next;
         return next;
       });
@@ -137,7 +138,7 @@ export function NavigatorFilesView({
       setDirectories((current) => {
         const next = {
           ...current,
-          [relativePath]: { listing: current[relativePath]?.listing ?? null, loading: false, error: errorMessage(error, "") },
+          [relativePath]: { listing: current[relativePath]?.listing ?? null, isLoading: false, error: errorMessage(error, "") },
         };
         directoriesRef.current = next;
         return next;
@@ -170,49 +171,49 @@ export function NavigatorFilesView({
     if (!state) return null;
     if (state.error !== null && !state.listing) {
       return (
-        <div className={styles.integrationError} style={{ paddingInlineStart: `${12 + depth * 16}px` }}>
+        <div className={styles.integrationError} style={{ paddingInlineStart: messageIndentFor(depth) }}>
           <AlertCircle aria-hidden="true" size={13} />
-          <span>{state.error || t("nav.filesView.error")}</span>
-          <button aria-label={t("nav.retry")} onClick={() => void loadDirectory(relativePath, true)} type="button"><RefreshCw size={12} /></button>
+          <span>{state.error || translate("nav.filesView.error")}</span>
+          <button aria-label={translate("nav.retry")} onClick={() => void loadDirectory(relativePath, true)} type="button"><RefreshCw size={12} /></button>
         </div>
       );
     }
-    if (state.loading && !state.listing) {
-      return <div className={styles.integrationLoading}><LoaderCircle className={styles.spin} size={14} /> {t("nav.filesView.loading")}</div>;
+    if (state.isLoading && !state.listing) {
+      return <div className={styles.integrationLoading}><LoaderCircle className={styles.spin} size={14} /> {translate("nav.filesView.loading")}</div>;
     }
     if (!state.listing || state.listing.entries.length === 0) {
-      return <div className={styles.integrationEmpty}>{t("nav.filesView.empty")}</div>;
+      return <div className={styles.integrationEmpty}>{translate("nav.filesView.empty")}</div>;
     }
     return (
       <>
         {state.listing.entries.map((entry) => {
-          const expanded = expandedPaths.has(entry.path);
+          const isExpanded = expandedPaths.has(entry.path);
           return (
             <div key={entry.path}>
-              <FileRow depth={depth} entry={entry} expanded={expanded} loading={Boolean(directories[entry.path]?.loading)} onToggle={() => toggleDirectory(entry)} onOpen={onOpenFile && workspaceId ? () => onOpenFile(workspaceId, entry.path) : undefined} />
-              {entry.kind === "directory" && expanded ? renderDirectory(entry.path, depth + 1) : null}
+              <FileRow depth={depth} entry={entry} isExpanded={isExpanded} isLoading={Boolean(directories[entry.path]?.isLoading)} onToggle={() => toggleDirectory(entry)} onOpen={onOpenFile && workspaceId ? () => onOpenFile(workspaceId, entry.path) : undefined} />
+              {entry.kind === "directory" && isExpanded ? renderDirectory(entry.path, depth + 1) : null}
             </div>
           );
         })}
-        {state.listing.truncated ? <div className={styles.integrationNotice}>{t("nav.filesView.truncated", { count: state.listing.limit })}</div> : null}
-        {state.error !== null ? <div className={styles.integrationNotice}>{state.error || t("nav.filesView.error")}</div> : null}
+        {state.listing.isTruncated ? <div className={styles.integrationNotice}>{translate("nav.filesView.truncated", { count: state.listing.limit })}</div> : null}
+        {state.error !== null ? <div className={styles.integrationNotice}>{state.error || translate("nav.filesView.error")}</div> : null}
       </>
     );
   };
 
   return (
-    <section aria-label={t("nav.files")} className={styles.integrationView}>
+    <section aria-label={translate("nav.files")} className={styles.integrationView}>
       <div className={styles.integrationToolbar}>
         <label className={styles.integrationSelectLabel}>
-          <span>{t("nav.project")}</span>
-          <select aria-label={t("nav.filesView.project")} className={styles.integrationSelect} onChange={(event) => onSelectWorkspace?.(event.target.value)} value={workspace?.id ?? ""}>
-            <option value="">{t("nav.pickProject")}</option>
+          <span>{translate("nav.project")}</span>
+          <select aria-label={translate("nav.filesView.project")} className={styles.integrationSelect} onChange={(event) => onSelectWorkspace?.(event.target.value)} value={workspace?.id ?? ""}>
+            <option value="">{translate("nav.pickProject")}</option>
             {workspaces.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
           </select>
         </label>
-        <button aria-label={t("nav.filesView.refresh")} className={styles.integrationRefresh} disabled={!workspace} onClick={() => void loadDirectory("", true)} type="button"><RefreshCw size={13} /></button>
+        <button aria-label={translate("nav.filesView.refresh")} className={styles.integrationRefresh} disabled={!workspace} onClick={() => void loadDirectory("", true)} type="button"><RefreshCw size={13} /></button>
       </div>
-      {!workspace ? <div className={styles.integrationEmpty}>{t("nav.filesView.pick")}</div> : <div className={styles.integrationList}>{renderDirectory("", 0)}</div>}
+      {!workspace ? <div className={styles.integrationEmpty}>{translate("nav.filesView.pick")}</div> : <div className={styles.integrationList}>{renderDirectory("", 0)}</div>}
     </section>
   );
 }

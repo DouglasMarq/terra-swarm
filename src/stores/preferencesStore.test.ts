@@ -5,17 +5,16 @@ import {
   hotkeyActionLabel,
   matchHotkey,
   normalizeHotkeyForPlatform,
-  parseEnvLines,
   usePreferencesStore,
 } from "./preferencesStore";
 
 describe("hotkeyActionLabel", () => {
-  it("given a numbered action, names it with its number", () => {
+  it("Given a numbered action, when labelling it, then it is named with its number", () => {
     expect(hotkeyActionLabel("selectWorkspace3")).toBe("Ir para o workspace 3");
     expect(hotkeyActionLabel("selectTerminal9")).toBe("Focar o agente 9");
   });
 
-  it("given a plain action, uses its own label", () => {
+  it("Given a plain action, when labelling it, then it uses its own label", () => {
     expect(hotkeyActionLabel("newTerminal")).toBe("Novo agente");
   });
 });
@@ -24,7 +23,7 @@ describe("preferences store", () => {
   afterEach(() => {
     usePreferencesStore.setState({
       fontSize: 13,
-      voiceEnabled: false,
+      isVoiceEnabled: false,
       voiceLang: "auto",
       voiceModel: null,
       voiceInputDevice: null,
@@ -32,7 +31,7 @@ describe("preferences store", () => {
     });
   });
 
-  it("clamps terminal font size through the store action", () => {
+  it("Given a terminal font size out of range, when setting it through the store action, then it is clamped", () => {
     usePreferencesStore.getState().setFontSize(999);
     expect(usePreferencesStore.getState().fontSize).toBe(32);
 
@@ -40,26 +39,26 @@ describe("preferences store", () => {
     expect(usePreferencesStore.getState().fontSize).toBe(8);
   });
 
-  it("formats shortcuts independently from App rendering", () => {
+  it("Given shortcuts, when formatting them, then it works independently from App rendering", () => {
     const hotkey = {
       key: "k",
-      meta: true,
-      shift: true,
-      ctrl: false,
-      alt: false,
+      hasMeta: true,
+      hasShift: true,
+      hasCtrl: false,
+      hasAlt: false,
     };
 
     expect(formatHotkey(hotkey, "mac")).toBe("⇧⌘K");
     expect(formatHotkey(hotkey, "other")).toBe("Ctrl+Shift+K");
   });
 
-  it("normalizes a macOS preference before executing it on Linux", () => {
+  it("Given a macOS preference, when executing it on Linux, then it is normalized first", () => {
     const linuxHotkey = normalizeHotkeyForPlatform(
-      { key: "n", meta: true, shift: true, ctrl: false, alt: false },
+      { key: "n", hasMeta: true, hasShift: true, hasCtrl: false, hasAlt: false },
       "other",
     );
 
-    expect(linuxHotkey).toEqual({ key: "n", meta: false, shift: true, ctrl: true, alt: false });
+    expect(linuxHotkey).toEqual({ key: "n", hasMeta: false, hasShift: true, hasCtrl: true, hasAlt: false });
     expect(matchHotkey({
       key: "n",
       metaKey: false,
@@ -71,13 +70,7 @@ describe("preferences store", () => {
 });
 
 describe("per-agent launch settings", () => {
-  it("parses KEY=VALUE lines and reports the rest", () => {
-    const { env, invalid } = parseEnvLines("# comment\nANTHROPIC_MODEL = opus\n\nFOO=a=b\nnot valid\nTERRA_PANE_ID=x\n1BAD=y");
-    expect(env).toEqual({ ANTHROPIC_MODEL: "opus", FOO: "a=b" });
-    expect(invalid).toEqual(["not valid", "TERRA_PANE_ID=x", "1BAD=y"]);
-  });
-
-  it("stores settings per agent and drops empty ones", () => {
+  it("Given per-agent launch settings, when storing them, then they are kept per agent and empty ones are dropped", () => {
     const store = usePreferencesStore.getState();
     store.setAgentLaunch("claude", { args: "--model opus", env: "FOO=1" });
     expect(usePreferencesStore.getState().agentLaunch.claude).toEqual({ args: "--model opus", env: "FOO=1" });

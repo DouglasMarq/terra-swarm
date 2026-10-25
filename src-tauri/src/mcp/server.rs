@@ -1,10 +1,3 @@
-//! Streamable HTTP transport: rmcp's tower service behind an axum router
-//! that only accepts requests carrying a valid terminal token.
-//!
-//! The server listens on 127.0.0.1 only, answers in plain JSON without
-//! sessions (stateless mode), rejects foreign `Host` headers (DNS rebinding)
-//! and any request that carries a browser `Origin`.
-
 use std::sync::Arc;
 
 use axum::extract::{Request, State};
@@ -20,19 +13,26 @@ use rmcp::service::RequestContext;
 use rmcp::transport::streamable_http_server::session::never::NeverSessionManager;
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
 use rmcp::{ErrorData, RoleServer, ServerHandler};
+use tauri::Runtime;
 
-use super::tools::{self, ToolError};
+use super::tools::{self, ToolCall, ToolError};
 use super::{AgentIdentity, McpHub};
 
 pub const MCP_PATH: &str = "/mcp";
 const MAX_BODY_BYTES: usize = 256 * 1024;
-/// Tokio workers of the server's own runtime; requests are short and the
-/// blocking work runs on `spawn_blocking` threads.
+const TOOL_CALL_FAILED: &str = "the tool call failed";
 const SERVER_WORKER_THREADS: usize = 2;
 
-#[derive(Clone)]
-struct TerraServer {
-    hub: Arc<McpHub>,
+struct TerraServer<R: Runtime> {
+    hub: Arc<McpHub<R>>,
+}
+
+impl<R: Runtime> Clone for TerraServer<R> {
+    fn clone(&self) -> Self {
+        Self {
+            hub: Arc::clone(&self.hub),
+        }
+    }
 }
 
 fn tool_list() -> Vec<Tool> {
@@ -47,7 +47,7 @@ fn tool_list() -> Vec<Tool> {
             tool.title = Some(def.title.to_string());
             tool.annotations = Some(ToolAnnotations::from_raw(
                 Some(def.title.to_string()),
-                Some(def.read_only),
+                Some(def.is_read_only),
                 Some(false),
                 None,
                 Some(false),
@@ -57,7 +57,7 @@ fn tool_list() -> Vec<Tool> {
         .collect()
 }
 
-impl ServerHandler for TerraServer {
+impl<R: Runtime> ServerHandler for TerraServer<R> {
     fn get_info(&self) -> ServerConfig {
         let mut implementation = Implementation::default();
         implementation.name = "terra-swarm".into();
@@ -100,25 +100,34 @@ impl ServerHandler for TerraServer {
             .unwrap_or(serde_json::Value::Null);
         let hub = Arc::clone(&self.hub);
         let name = request.name.to_string();
-        // Tool handlers take blocking locks and run SQLite queries.
-        let outcome =
-            tokio::task::spawn_blocking(move || tools::call(&hub, &identity, &name, args))
-                .await
-                .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
+        let outcome = tokio::task::spawn_blocking(move || {
+            tools::call(&hub, &identity, ToolCall { name: &name, args })
+        })
+        .await
+        .map_err(|error| {
+            eprintln!("an MCP tool call did not finish: {}", error);
+            ErrorData::internal_error(TOOL_CALL_FAILED, None)
+        })?;
         Ok(match outcome {
-            Ok(value) => CallToolResult::success(vec![ContentBlock::text(
-                serde_json::to_string_pretty(&value).unwrap_or_else(|error| {
+            Ok(value) => match serde_json::to_string_pretty(&value) {
+                Ok(text) => CallToolResult::success(vec![ContentBlock::text(text)]),
+                Err(error) => {
                     eprintln!("cannot serialize an MCP tool result: {}", error);
-                    String::new()
-                }),
-            )]),
+                    CallToolResult::error(vec![ContentBlock::text(TOOL_CALL_FAILED)])
+                }
+            },
             Err(ToolError::UnknownTool(name)) => {
                 return Err(ErrorData::invalid_params(
                     format!("unknown tool `{}`", name),
                     None,
                 ))
             }
-            Err(error) => CallToolResult::error(vec![ContentBlock::text(error.to_string())]),
+            Err(error) => {
+                if let ToolError::Store(store) = &error {
+                    store.log_internal("MCP tool call failed");
+                }
+                CallToolResult::error(vec![ContentBlock::text(error.to_string())])
+            }
         }
         .into())
     }
@@ -143,10 +152,8 @@ fn unauthorized() -> Response {
         .into_response()
 }
 
-/// Resolve the token to an identity and attach it to the request; rmcp
-/// hands the request parts (with this extension) to `call_tool`.
-async fn authenticate(
-    State(hub): State<Arc<McpHub>>,
+async fn authenticate<R: Runtime>(
+    State(hub): State<Arc<McpHub<R>>>,
     mut request: Request,
     next: Next,
 ) -> Response {
@@ -157,7 +164,7 @@ async fn authenticate(
     next.run(request).await
 }
 
-pub fn router(hub: Arc<McpHub>) -> axum::Router {
+pub fn router<R: Runtime>(hub: Arc<McpHub<R>>) -> axum::Router {
     let factory_hub = Arc::clone(&hub);
     let service = StreamableHttpService::new(
         move || {
@@ -177,27 +184,26 @@ pub fn router(hub: Arc<McpHub>) -> axum::Router {
         .nest_service(MCP_PATH, service)
         .route(
             super::hooks::HOOKS_PATH,
-            axum::routing::post(super::hooks::handle),
+            axum::routing::post(super::hooks::handle::<R>),
         )
         .route(
-            super::hooks::CLAUDE_HOOKS_PATH,
-            axum::routing::post(super::hooks::handle_claude),
+            super::hooks::INTEGRATION_HOOKS_PATH,
+            axum::routing::post(super::hooks::handle_integration::<R>),
         )
         .with_state(Arc::clone(&hub))
-        .layer(middleware::from_fn_with_state(hub, authenticate))
+        .layer(middleware::from_fn_with_state(hub, authenticate::<R>))
 }
 
-/// Serve on an already bound listener until the runtime shuts down.
-pub async fn serve(listener: std::net::TcpListener, hub: Arc<McpHub>) -> std::io::Result<()> {
+pub async fn serve<R: Runtime>(
+    listener: std::net::TcpListener,
+    hub: Arc<McpHub<R>>,
+) -> std::io::Result<()> {
     listener.set_nonblocking(true)?;
     let listener = tokio::net::TcpListener::from_std(listener)?;
     axum::serve(listener, router(hub)).await
 }
 
-/// Bind 127.0.0.1 on a free port and run the server on its own tokio
-/// runtime thread. The port is recorded on the hub before this returns, so
-/// terminals spawned right after startup already get the URL.
-pub fn start(hub: Arc<McpHub>) -> std::io::Result<u16> {
+pub fn start<R: Runtime>(hub: Arc<McpHub<R>>) -> std::io::Result<u16> {
     let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
     let port = listener.local_addr()?.port();
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -229,8 +235,25 @@ mod tests {
         runtime: tokio::runtime::Runtime,
     }
 
+    struct HttpPost<'a> {
+        token: Option<&'a str>,
+        body: Value,
+        headers: &'a [(&'a str, &'a str)],
+    }
+
+    struct RpcCall<'a> {
+        id: u64,
+        method: &'a str,
+        params: Value,
+    }
+
+    struct HookEvent<'a> {
+        integration: &'a str,
+        body: Value,
+    }
+
     impl TestServer {
-        fn start(hub: Arc<McpHub>) -> Self {
+        fn start(hub: Arc<McpHub<tauri::test::MockRuntime>>) -> Self {
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
                 .enable_all()
@@ -247,15 +270,14 @@ mod tests {
         }
 
         fn post(&self, token: Option<&str>, body: Value) -> (u16, String) {
-            self.post_with(token, body, &[])
+            self.post_with(HttpPost {
+                token,
+                body,
+                headers: &[],
+            })
         }
 
-        fn post_with(
-            &self,
-            token: Option<&str>,
-            body: Value,
-            extra: &[(&str, &str)],
-        ) -> (u16, String) {
+        fn post_with(&self, post: HttpPost<'_>) -> (u16, String) {
             self.runtime.block_on(async {
                 let mut request = self
                     .client
@@ -263,11 +285,11 @@ mod tests {
                     .header("content-type", "application/json")
                     .header("accept", "application/json, text/event-stream")
                     .header("mcp-protocol-version", "2025-06-18")
-                    .body(body.to_string());
-                if let Some(token) = token {
+                    .body(post.body.to_string());
+                if let Some(token) = post.token {
                     request = request.header("authorization", format!("Bearer {}", token));
                 }
-                for (name, value) in extra {
+                for (name, value) in post.headers {
                     request = request.header(*name, *value);
                 }
                 let response = request.send().await.unwrap();
@@ -276,13 +298,12 @@ mod tests {
             })
         }
 
-        /// Parse a JSON-RPC reply sent either as JSON or as one SSE event.
-        fn rpc(&self, token: &str, id: u64, method: &str, params: Value) -> Value {
+        fn rpc(&self, token: &str, call: RpcCall<'_>) -> Value {
             let (status, body) = self.post(
                 Some(token),
-                json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }),
+                json!({ "jsonrpc": "2.0", "id": call.id, "method": call.method, "params": call.params }),
             );
-            assert_eq!(status, 200, "{} -> {}", method, body);
+            assert_eq!(status, 200, "{} -> {}", call.method, body);
             parse_rpc(&body)
         }
     }
@@ -301,13 +322,15 @@ mod tests {
     fn initialize(server: &TestServer, token: &str) -> Value {
         let reply = server.rpc(
             token,
-            1,
-            "initialize",
-            json!({
-                "protocolVersion": "2025-06-18",
-                "capabilities": {},
-                "clientInfo": { "name": "terra-test", "version": "1.0" }
-            }),
+            RpcCall {
+                id: 1,
+                method: "initialize",
+                params: json!({
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": { "name": "terra-test", "version": "1.0" }
+                }),
+            },
         );
         let (status, _) = server.post(
             Some(token),
@@ -323,9 +346,9 @@ mod tests {
     }
 
     #[test]
-    fn initialize_list_and_call_over_http() {
+    fn given_a_running_server_when_initializing_listing_and_calling_over_http_then_each_succeeds() {
         let (hub, _) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
 
         let init = initialize(&server, &token);
@@ -336,7 +359,14 @@ mod tests {
             .unwrap()
             .contains("whoami"));
 
-        let list = server.rpc(&token, 2, "tools/list", json!({}));
+        let list = server.rpc(
+            &token,
+            RpcCall {
+                id: 2,
+                method: "tools/list",
+                params: json!({}),
+            },
+        );
         let names: Vec<&str> = list["result"]["tools"]
             .as_array()
             .unwrap()
@@ -349,27 +379,32 @@ mod tests {
 
         let created = server.rpc(
             &token,
-            3,
-            "tools/call",
-            json!({ "name": "create_task", "arguments": { "title": "Ship it" } }),
+            RpcCall {
+                id: 3,
+                method: "tools/call",
+                params: json!({ "name": "create_task", "arguments": { "title": "Ship it" } }),
+            },
         );
         assert_eq!(created["result"]["isError"], false);
         assert_eq!(tool_json(&created)["id"], "T-1");
 
         let me = server.rpc(
             &token,
-            4,
-            "tools/call",
-            json!({ "name": "whoami", "arguments": {} }),
+            RpcCall {
+                id: 4,
+                method: "tools/call",
+                params: json!({ "name": "whoami", "arguments": {} }),
+            },
         );
         assert_eq!(tool_json(&me)["terminal_id"], "t-1");
 
-        // A failing tool is a tool-level error the agent can read.
         let failed = server.rpc(
             &token,
-            5,
-            "tools/call",
-            json!({ "name": "get_task", "arguments": { "id": "T-99" } }),
+            RpcCall {
+                id: 5,
+                method: "tools/call",
+                params: json!({ "name": "get_task", "arguments": { "id": "T-99" } }),
+            },
         );
         assert_eq!(failed["result"]["isError"], true);
         assert!(failed["result"]["content"][0]["text"]
@@ -379,9 +414,9 @@ mod tests {
     }
 
     #[test]
-    fn requests_without_a_valid_token_get_401() {
+    fn given_a_request_without_a_valid_token_when_calling_then_it_gets_401() {
         let (hub, _) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
         let ping = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {} });
 
@@ -391,8 +426,7 @@ mod tests {
         hub.revoke_terminal("t-1");
         assert_eq!(server.post(Some(&token), ping.clone()).0, 401);
 
-        // A killed terminal drops its PTY entry, and with it the lease.
-        let lease_token = hub.issue(identity("t-2", "ws-1", "claude"));
+        let lease_token = hub.issue(identity("t-2", "ws-1", "claude")).unwrap();
         let lease = crate::mcp::McpLease::new(&hub, lease_token.clone());
         assert_eq!(server.post(Some(&lease_token), ping.clone()).0, 200);
         drop(lease);
@@ -400,37 +434,135 @@ mod tests {
     }
 
     #[test]
-    fn a_token_only_sees_its_own_workspace() {
+    fn given_a_token_when_calling_tools_then_it_only_sees_its_own_workspace() {
         let (hub, _) = hub();
-        let mine = hub.issue(identity("t-1", "ws-1", "claude"));
-        let theirs = hub.issue(identity("t-7", "ws-2", "codex"));
+        let mine = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
+        let theirs = hub.issue(identity("t-7", "ws-2", "codex")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
         initialize(&server, &mine);
         server.rpc(
             &mine,
-            2,
-            "tools/call",
-            json!({ "name": "create_task", "arguments": { "title": "ws-1 only" } }),
+            RpcCall {
+                id: 2,
+                method: "tools/call",
+                params: json!({ "name": "create_task", "arguments": { "title": "ws-1 only" } }),
+            },
         );
         let listed = server.rpc(
             &theirs,
-            3,
-            "tools/call",
-            json!({ "name": "list_tasks", "arguments": {} }),
+            RpcCall {
+                id: 3,
+                method: "tools/call",
+                params: json!({ "name": "list_tasks", "arguments": {} }),
+            },
         );
         assert_eq!(tool_json(&listed)["tasks"], json!([]));
     }
 
     #[test]
-    fn browser_origins_are_rejected() {
+    fn given_a_browser_origin_when_calling_then_it_is_rejected() {
         let (hub, _) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
-        let (status, _) = server.post_with(
-            Some(&token),
-            json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {} }),
-            &[("origin", "https://evil.example")],
-        );
+        let (status, _) = server.post_with(HttpPost {
+            token: Some(&token),
+            body: json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {} }),
+            headers: &[("origin", "https://evil.example")],
+        });
         assert_eq!(status, 403);
+    }
+
+    impl TestServer {
+        fn post_hook(&self, token: &str, event: HookEvent<'_>) -> u16 {
+            let url = self
+                .url
+                .replace(MCP_PATH, &format!("/hooks/{}", event.integration));
+            self.runtime.block_on(async {
+                self.client
+                    .post(url)
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(event.body.to_string())
+                    .send()
+                    .await
+                    .unwrap()
+                    .status()
+                    .as_u16()
+            })
+        }
+    }
+
+    #[test]
+    fn given_integration_hook_routes_when_posting_events_then_only_integrations_with_http_hooks_accept_them(
+    ) {
+        let (hub, _) = hub();
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
+        let server = TestServer::start(Arc::clone(&hub));
+        let event = json!({ "hook_event_name": "Notification", "message": "Approve?" });
+
+        let hook = |integration, body| HookEvent { integration, body };
+        assert_eq!(server.post_hook(&token, hook("claude", event.clone())), 200);
+        assert_eq!(server.post_hook(&token, hook("codex", event.clone())), 404);
+        assert_eq!(server.post_hook(&token, hook("unknown", event)), 404);
+        assert_eq!(
+            server.post_hook(&token, hook("claude", json!({ "message": "no event" }))),
+            400
+        );
+        let status = hub.statuses().unwrap().status_of("t-1").cloned().unwrap();
+        assert_eq!(status.state, crate::mcp::model::AgentState::NeedsInput);
+    }
+
+    #[test]
+    fn given_an_unknown_tool_when_calling_it_then_the_call_is_rejected_as_invalid_params() {
+        let (hub, _) = hub();
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
+        let server = TestServer::start(Arc::clone(&hub));
+        initialize(&server, &token);
+
+        let reply = server.rpc(
+            &token,
+            RpcCall {
+                id: 2,
+                method: "tools/call",
+                params: json!({ "name": "launch_rockets", "arguments": {} }),
+            },
+        );
+
+        assert_eq!(reply["error"]["code"], json!(-32602));
+        assert!(reply["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("unknown tool `launch_rockets`"));
+    }
+
+    #[test]
+    fn given_a_hub_when_starting_the_server_then_it_listens_on_the_port_it_records() {
+        let (hub, _) = hub();
+
+        let port = start(Arc::clone(&hub)).unwrap();
+
+        assert_eq!(hub.port(), Some(port));
+        assert_eq!(
+            hub.url(),
+            Some(format!("http://127.0.0.1:{}{}", port, MCP_PATH))
+        );
+        assert!(std::net::TcpStream::connect(("127.0.0.1", port)).is_ok());
+    }
+
+    #[test]
+    fn given_a_server_handler_when_looking_up_tools_then_known_names_resolve_and_clones_share_the_hub(
+    ) {
+        let (hub, _) = hub();
+        let server = TerraServer {
+            hub: Arc::clone(&hub),
+        };
+
+        let copy = server.clone();
+
+        assert!(Arc::ptr_eq(&copy.hub, &hub));
+        assert_eq!(
+            copy.get_tool("whoami").map(|tool| tool.name.to_string()),
+            Some("whoami".to_string())
+        );
+        assert!(copy.get_tool("launch_rockets").is_none());
     }
 }

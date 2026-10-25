@@ -4,13 +4,14 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { AgentInfo, ResumeItem } from "../../../types";
+import type { AgentInfo } from "../../../domain/agent.model";
+import type { ResumeItem } from "../../../domain/terminal.model";
 import { ResumeDialog } from "../../ResumeDialog";
 import { AgentPickerDialog, RenameDialog, WorkspaceDialog } from ".";
 
 const agents: AgentInfo[] = [
-  { id: "codex", label: "Codex", available: true },
-  { id: "claude", label: "Claude", available: false },
+  { id: "codex", label: "Codex", isAvailable: true },
+  { id: "claude", label: "Claude", isAvailable: false },
 ];
 
 const resumeItem: ResumeItem = {
@@ -24,7 +25,7 @@ const resumeItem: ResumeItem = {
 };
 
 describe("integration dialogs", () => {
-  it("validates and submits the workspace form with Enter", async () => {
+  it("Given the workspace form, when pressing Enter, then it is validated and submitted", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     render(
@@ -36,7 +37,7 @@ describe("integration dialogs", () => {
         onNameChange={vi.fn()}
         onOpenChange={vi.fn()}
         onSubmit={onSubmit}
-        open
+        isOpen
       />,
     );
 
@@ -47,7 +48,7 @@ describe("integration dialogs", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it("keeps agent defaults and does not allow unavailable profiles", async () => {
+  it("Given the agent picker, when it opens, then agent defaults are kept and unavailable profiles cannot be picked", async () => {
     const user = userEvent.setup();
     const onChoose = vi.fn();
     const onSaveDefaultChange = vi.fn();
@@ -57,8 +58,8 @@ describe("integration dialogs", () => {
         onChoose={onChoose}
         onOpenChange={vi.fn()}
         onSaveDefaultChange={onSaveDefaultChange}
-        open
-        saveDefault={false}
+        isOpen
+        shouldSaveDefault={false}
       />,
     );
 
@@ -69,7 +70,7 @@ describe("integration dialogs", () => {
     expect(onSaveDefaultChange).toHaveBeenCalledWith(true);
   });
 
-  it("makes the current default and update option explicit in the picker", () => {
+  it("Given the agent picker, when it opens, then the current default and the update option are explicit", () => {
     render(
       <AgentPickerDialog
         agents={agents}
@@ -77,8 +78,8 @@ describe("integration dialogs", () => {
         onChoose={vi.fn()}
         onOpenChange={vi.fn()}
         onSaveDefaultChange={vi.fn()}
-        open
-        saveDefault
+        isOpen
+        shouldSaveDefault
       />,
     );
 
@@ -87,7 +88,7 @@ describe("integration dialogs", () => {
     expect(screen.getByRole("checkbox")).toBeChecked();
   });
 
-  it("submits a controlled rename with the edited value", async () => {
+  it("Given a controlled rename, when submitting, then the edited value is submitted", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     render(
@@ -96,7 +97,7 @@ describe("integration dialogs", () => {
         onChange={vi.fn()}
         onOpenChange={vi.fn()}
         onSubmit={onSubmit}
-        open
+        isOpen
         value="Agents"
       />,
     );
@@ -108,7 +109,7 @@ describe("integration dialogs", () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
-  it("does not discard a resume item until explicit confirmation", async () => {
+  it("Given a resume item, when discarding it, then it is not discarded until explicit confirmation", async () => {
     const user = userEvent.setup();
     const onDismiss = vi.fn();
     const onDismissAll = vi.fn();
@@ -137,7 +138,7 @@ describe("integration dialogs", () => {
     expect(onDismiss).not.toHaveBeenCalled();
   });
 
-  it("resumes only the checked sessions, grouped by project", async () => {
+  it("Given saved sessions grouped by project, when resuming, then only the checked ones are resumed", async () => {
     const user = userEvent.setup();
     const onResume = vi.fn();
     const onResumeAll = vi.fn();

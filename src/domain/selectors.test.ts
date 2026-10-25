@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { migrateLegacyWorkspaces, normalizeSnapshotV2 } from "./migration";
+import { migrateLegacyWorkspaces } from "./migration/legacyMigration";
+import { normalizeSnapshotV2 } from "./migration/snapshotNormalize";
 import {
   getActiveContainer,
   getActivePane,
@@ -16,7 +17,7 @@ import {
 } from "./selectors";
 
 describe("orchestration selectors", () => {
-  it("resolves active pane and tab without requiring React state", () => {
+  it("Given a snapshot, when selecting the active pane and tab, then they resolve without React state", () => {
     const snapshot = migrateLegacyWorkspaces([
       {
         id: "project-a",
@@ -39,7 +40,7 @@ describe("orchestration selectors", () => {
     ]);
   });
 
-  it("collects all group PTYs, including descendant groups, regardless of visibility", () => {
+  it("Given nested groups, when collecting a group's PTYs, then descendant groups are included regardless of visibility", () => {
     const snapshot = normalizeSnapshotV2({
       version: 2,
       projects: [
@@ -71,7 +72,7 @@ describe("orchestration selectors", () => {
     expect(shouldTerminatePtyWhenContainerCloses()).toBe(false);
   });
 
-  it("exposes retained orphan tabs for recovery UI", () => {
+  it("Given retained orphan tabs, when selecting them, then they are exposed for a recovery UI", () => {
     const snapshot = normalizeSnapshotV2({
       version: 2,
       tabs: [

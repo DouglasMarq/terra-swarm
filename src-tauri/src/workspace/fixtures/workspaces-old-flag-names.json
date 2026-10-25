@@ -1,0 +1,89 @@
+{
+  "version": 2,
+  "workspaces": [
+    {
+      "id": "ws-old",
+      "name": "Old flags",
+      "cwd": "/tmp/old-flags",
+      "terminals": [
+        {
+          "id": "t-old",
+          "command": "claude",
+          "width": null,
+          "paneId": "pane-old",
+          "tabId": "tab-old",
+          "groupId": null,
+          "suspended": true
+        }
+      ],
+      "groupId": "group-old",
+      "panes": [
+        {
+          "id": "pane-old",
+          "name": "claude",
+          "cwd": "/tmp/old-flags",
+          "tabs": [
+            {
+              "id": "tab-old",
+              "type": "terminal",
+              "name": "claude",
+              "cwd": "/tmp/old-flags",
+              "ptyId": "t-old",
+              "sessionId": null,
+              "lastUsedAt": null,
+              "completionUnread": true,
+              "extraArgs": [],
+              "suspended": true
+            }
+          ],
+          "activeTabId": "tab-old",
+          "kind": "terminal",
+          "disabled": true,
+          "collapsed": true,
+          "width": null,
+          "height": null,
+          "containerId": "container-old",
+          "layout": null
+        }
+      ],
+      "containers": [
+        {
+          "id": "container-old",
+          "projectId": "ws-old",
+          "paneIds": ["pane-old"],
+          "lastUsedAt": null,
+          "size": 0.0,
+          "internalLayout": "auto",
+          "collapsed": true,
+          "activePaneId": "pane-old",
+          "visible": false,
+          "closed": true,
+          "fullscreen": true,
+          "layout": null
+        }
+      ],
+      "activePaneId": "pane-old",
+      "activeContainerId": "container-old",
+      "collapsed": true,
+      "archived": true,
+      "createdAt": null,
+      "layoutMode": null,
+      "layout": null
+    }
+  ],
+  "groups": [
+    {
+      "id": "group-old",
+      "name": "Old group",
+      "color": null,
+      "iconUrl": null,
+      "collapsed": true,
+      "projectIds": ["ws-old"],
+      "parentGroupId": null,
+      "layoutMode": null,
+      "suspended": true,
+      "archived": true,
+      "createdAt": null
+    }
+  ]
+}

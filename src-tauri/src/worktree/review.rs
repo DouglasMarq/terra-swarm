@@ -1,22 +1,18 @@
-//! Reviewing an isolated agent's work: what changed on its branch, then
-//! commit, merge into the base branch, or push and open a pull request.
-
 use serde::Serialize;
 use std::path::Path;
 use std::process::Command;
 
-use super::{git, git_command, status, WorktreeInfo, WorktreeStatus};
+use super::{git, git_command, run_command, status, WorktreeInfo, WorktreeStatus};
 
-/// The patch shown in the review is capped; the file list never is.
 const MAX_PATCH_BYTES: usize = 1024 * 1024;
+
+const MAX_UNTRACKED_FILES: usize = 200;
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangedFile {
     pub path: String,
-    /// `added`, `modified`, `deleted`, `renamed` or `untracked`.
     pub change: String,
-    /// `None` for binary files.
     pub additions: Option<u32>,
     pub deletions: Option<u32>,
 }
@@ -25,13 +21,11 @@ pub struct ChangedFile {
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeDiff {
     pub status: WorktreeStatus,
-    /// Everything the branch changed since it left the base, committed or not.
     pub files: Vec<ChangedFile>,
     pub patch: String,
-    pub truncated: bool,
+    pub is_truncated: bool,
 }
 
-/// The commit the branch forked from, so the diff ignores later base work.
 fn fork_point(info: &WorktreeInfo) -> Result<String, String> {
     git(
         Path::new(&info.path),
@@ -48,8 +42,6 @@ fn change_kind(code: &str) -> &'static str {
     }
 }
 
-/// `git diff --no-index` exits 1 when the files differ, which is the point.
-/// A file git cannot diff shows as empty.
 fn diff_new_file(dir: &Path, file: &str) -> String {
     match git_command(dir)
         .args(["diff", "--no-index", "--", "/dev/null", file])
@@ -60,6 +52,62 @@ fn diff_new_file(dir: &Path, file: &str) -> String {
             eprintln!("could not run git to diff {}: {}", file, error);
             String::new()
         }
+    }
+}
+
+fn untracked_change(file: &str, text: &str) -> ChangedFile {
+    let added_lines = text
+        .lines()
+        .filter(|line| line.starts_with('+') && !line.starts_with("+++"))
+        .count();
+    let additions = u32::try_from(added_lines).unwrap_or(u32::MAX);
+    let is_binary = text.contains("Binary files");
+    ChangedFile {
+        path: file.to_string(),
+        change: "untracked".into(),
+        additions: (!is_binary).then_some(additions),
+        deletions: (!is_binary).then_some(0),
+    }
+}
+
+struct PatchBuilder {
+    text: String,
+    has_dropped_text: bool,
+}
+
+impl PatchBuilder {
+    fn new(text: String) -> Self {
+        Self {
+            text,
+            has_dropped_text: false,
+        }
+    }
+
+    fn append(&mut self, file_patch: &str) {
+        if self.text.len() >= MAX_PATCH_BYTES {
+            self.has_dropped_text |= !file_patch.is_empty();
+            return;
+        }
+        if !self.text.is_empty() && !self.text.ends_with('\n') {
+            self.text.push('\n');
+        }
+        self.text.push_str(file_patch);
+    }
+
+    fn is_truncated(&self) -> bool {
+        self.has_dropped_text || self.text.len() > MAX_PATCH_BYTES
+    }
+
+    fn finish(mut self) -> String {
+        if self.text.len() <= MAX_PATCH_BYTES {
+            return self.text;
+        }
+        let mut cut = MAX_PATCH_BYTES;
+        while !self.text.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        self.text.truncate(cut);
+        self.text
     }
 }
 
@@ -75,59 +123,40 @@ pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
     let counts = git(dir, &["diff", "--numstat", "-M", &base])?;
     for (kind_line, count_line) in kinds.lines().zip(counts.lines()) {
         let code = kind_line.split('\t').next().unwrap_or("M");
-        // A rename lists the old and the new path; the new one is last.
-        let path = kind_line
+        let newest_path = kind_line
             .rsplit('\t')
             .next()
             .unwrap_or_default()
             .to_string();
         let mut numbers = count_line.split('\t');
-        let additions = numbers.next().and_then(|n| n.parse().ok());
-        let deletions = numbers.next().and_then(|n| n.parse().ok());
+        let additions = numbers.next().and_then(|count| count.parse().ok());
+        let deletions = numbers.next().and_then(|count| count.parse().ok());
         files.push(ChangedFile {
-            path,
+            path: newest_path,
             change: change_kind(code).into(),
             additions,
             deletions,
         });
     }
-    let mut patch = git(dir, &["diff", "-M", &base])?;
+    let mut patch = PatchBuilder::new(git(dir, &["diff", "-M", &base])?);
     let untracked = git(dir, &["ls-files", "--others", "--exclude-standard"])?;
-    for file in untracked.lines().filter(|line| !line.is_empty()) {
+    let untracked_paths: Vec<&str> = untracked.lines().filter(|line| !line.is_empty()).collect();
+    for file in untracked_paths.iter().take(MAX_UNTRACKED_FILES) {
         let text = diff_new_file(dir, file);
-        let additions = text
-            .lines()
-            .filter(|line| line.starts_with('+') && !line.starts_with("+++"))
-            .count() as u32;
-        let binary = text.contains("Binary files");
-        files.push(ChangedFile {
-            path: file.to_string(),
-            change: "untracked".into(),
-            additions: (!binary).then_some(additions),
-            deletions: (!binary).then_some(0),
-        });
-        if !patch.is_empty() && !patch.ends_with('\n') {
-            patch.push('\n');
-        }
-        patch.push_str(&text);
+        files.push(untracked_change(file, &text));
+        patch.append(&text);
     }
-    let truncated = patch.len() > MAX_PATCH_BYTES;
-    if truncated {
-        let mut cut = MAX_PATCH_BYTES;
-        while !patch.is_char_boundary(cut) {
-            cut -= 1;
-        }
-        patch.truncate(cut);
-    }
+    let is_file_list_cut = untracked_paths.len() > MAX_UNTRACKED_FILES;
+    let is_truncated = is_file_list_cut || patch.is_truncated();
+    let patch = patch.finish();
     Ok(WorktreeDiff {
         status: status(info)?,
         files,
         patch,
-        truncated,
+        is_truncated,
     })
 }
 
-/// Commit everything in the worktree (new files included) on its branch.
 pub fn commit(info: &WorktreeInfo, message: &str) -> Result<WorktreeStatus, String> {
     let message = message.trim();
     if message.is_empty() {
@@ -143,8 +172,6 @@ pub fn commit(info: &WorktreeInfo, message: &str) -> Result<WorktreeStatus, Stri
     status(info)
 }
 
-/// Merge the branch into its base, in the main checkout. The main checkout
-/// must have the base checked out, and the worktree must be committed.
 pub fn merge(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
     let current = status(info)?;
     if !current.dirty.is_empty() {
@@ -171,8 +198,9 @@ pub fn merge(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
             info.base
         ));
     }
-    // Never touch a merge the user has in progress there.
-    if git(repo, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok() {
+    let is_user_merge_in_progress =
+        git(repo, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok();
+    if is_user_merge_in_progress {
         return Err(
             "the main checkout is in the middle of a merge; finish or abort it first".into(),
         );
@@ -200,28 +228,16 @@ pub fn merge(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
     status(info)
 }
 
-fn run(program: &str, dir: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new(program)
+fn gh(dir: &Path, args: &[&str]) -> Result<String, String> {
+    let mut command = Command::new("gh");
+    command
         .current_dir(dir)
         .args(args)
         .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GH_PROMPT_DISABLED", "1")
-        .output()
-        .map_err(|error| format!("could not run {}: {}", program, error))?;
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(if stderr.is_empty() {
-            format!("{} failed", program)
-        } else {
-            stderr
-        })
-    }
+        .env("GH_PROMPT_DISABLED", "1");
+    run_command(command, "gh", "gh failed")
 }
 
-/// Push the branch to `origin` and open a pull request against the base
-/// with the GitHub CLI. Returns the pull request's URL.
 pub fn open_pull_request(info: &WorktreeInfo, title: &str, body: &str) -> Result<String, String> {
     let title = title.trim();
     if title.is_empty() {
@@ -237,8 +253,7 @@ pub fn open_pull_request(info: &WorktreeInfo, title: &str, body: &str) -> Result
     let dir = Path::new(&info.path);
     let branch_ref = format!("refs/heads/{}", info.branch);
     git(dir, &["push", "-u", "origin", &branch_ref])?;
-    run(
-        "gh",
+    gh(
         dir,
         &[
             "pr",
@@ -259,19 +274,24 @@ pub fn open_pull_request(info: &WorktreeInfo, title: &str, body: &str) -> Result
 #[cfg(test)]
 mod tests {
     use super::super::test_repo::{cleanup, init};
-    use super::super::{create, git};
+    use super::super::{create, git, NewWorktree};
     use super::*;
 
     #[test]
-    fn diff_covers_commits_edits_and_new_files() {
+    fn given_commits_edits_and_new_files_when_diffing_then_the_diff_covers_them_all() {
         let repo = init("diff");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         let dir = Path::new(&info.path);
         std::fs::write(dir.join("app/readme.txt"), "hello\nworld\n").unwrap();
         git(dir, &["commit", "-qam", "edit"]).unwrap();
         std::fs::write(dir.join("app/notes.md"), "a\nb\n").unwrap();
-        // Work landing on the base later must not show up in the branch diff.
         std::fs::write(repo.join("other.txt"), "x").unwrap();
         git(&repo, &["add", "."]).unwrap();
         git(&repo, &["commit", "-qm", "base moves"]).unwrap();
@@ -302,10 +322,40 @@ mod tests {
     }
 
     #[test]
-    fn commit_then_merge_into_the_base() {
+    fn given_more_untracked_files_than_the_cap_when_diffing_then_it_lists_the_cap_and_reports_truncation(
+    ) {
+        let repo = init("untracked-cap");
+        let root = repo.with_extension("worktrees");
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
+        let dir = Path::new(&info.path);
+        for file_number in 0..=MAX_UNTRACKED_FILES {
+            std::fs::write(dir.join(format!("new-{file_number:04}.txt")), "x\n").unwrap();
+        }
+
+        let diff = diff(&info).unwrap();
+
+        assert_eq!(diff.files.len(), MAX_UNTRACKED_FILES);
+        assert!(diff.is_truncated);
+        cleanup(&repo, &root);
+    }
+
+    #[test]
+    fn given_changes_in_a_worktree_when_committing_and_merging_then_they_land_in_the_base() {
         let repo = init("merge");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-2").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-2",
+        })
+        .unwrap();
         assert!(commit(&info, "nothing")
             .unwrap_err()
             .contains("nothing to commit"));
@@ -315,7 +365,6 @@ mod tests {
         assert_eq!(after.ahead, 1);
         assert!(after.dirty.is_empty());
 
-        // The main checkout must be on the base branch.
         git(&repo, &["checkout", "-q", "-b", "elsewhere"]).unwrap();
         assert!(merge(&info).unwrap_err().contains("switch it to main"));
         git(&repo, &["checkout", "-q", "main"]).unwrap();
@@ -328,10 +377,16 @@ mod tests {
     }
 
     #[test]
-    fn a_conflicting_merge_leaves_the_base_untouched() {
+    fn given_a_conflicting_merge_when_merging_then_the_base_is_left_untouched() {
         let repo = init("conflict");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-3").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-3",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("app/readme.txt"), "agent\n").unwrap();
         commit(&info, "agent edit").unwrap();
         std::fs::write(repo.join("app/readme.txt"), "human\n").unwrap();
@@ -345,10 +400,17 @@ mod tests {
     }
 
     #[test]
-    fn given_a_worktree_whose_status_fails_refuses_to_merge_or_open_a_pull_request() {
+    fn given_a_worktree_whose_status_fails_when_merging_or_opening_a_pull_request_then_it_is_refused(
+    ) {
         let repo = init("guard");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("feature.txt"), "done\n").unwrap();
         commit(&info, "Add the feature").unwrap();
         std::fs::write(Path::new(&info.path).join("draft.txt"), "unsaved\n").unwrap();
@@ -364,10 +426,16 @@ mod tests {
     }
 
     #[test]
-    fn given_a_main_checkout_on_a_detached_head_refuses_to_merge() {
+    fn given_a_main_checkout_on_a_detached_head_when_merging_then_it_is_refused() {
         let repo = init("detached");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("feature.txt"), "done\n").unwrap();
         commit(&info, "Add the feature").unwrap();
         git(&repo, &["checkout", "-q", "--detach"]).unwrap();
@@ -378,10 +446,16 @@ mod tests {
     }
 
     #[test]
-    fn given_a_merge_that_cannot_start_reports_that_nothing_changed() {
+    fn given_a_merge_that_cannot_start_when_merging_then_it_reports_that_nothing_changed() {
         let repo = init("blocked");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("feature.txt"), "agent\n").unwrap();
         commit(&info, "Add the feature").unwrap();
         std::fs::write(repo.join("feature.txt"), "human, untracked\n").unwrap();
@@ -394,11 +468,18 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn given_a_merge_that_cannot_be_aborted_reports_the_checkout_is_mid_merge() {
+    fn given_a_merge_that_cannot_be_aborted_when_merging_then_it_reports_the_checkout_is_mid_merge()
+    {
         use std::os::unix::fs::PermissionsExt;
         let repo = init("abort");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("feature.txt"), "done\n").unwrap();
         commit(&info, "Add the feature").unwrap();
         let hook = repo.join(".git/hooks/commit-msg");
@@ -412,10 +493,16 @@ mod tests {
     }
 
     #[test]
-    fn given_an_option_like_branch_or_base_refuses_to_review_it() {
+    fn given_an_option_like_branch_or_base_when_reviewing_then_it_is_refused() {
         let repo = init("option");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("feature.txt"), "done\n").unwrap();
         commit(&info, "Add the feature").unwrap();
         let before = git(&repo, &["rev-parse", "HEAD"]).unwrap();

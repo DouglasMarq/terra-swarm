@@ -20,42 +20,42 @@ async function loaded() {
 
 describe("useFileEditor", () => {
   beforeEach(() => {
-    api.readWorkspaceFile.mockReset().mockResolvedValue({ path: "src/a.ts", content: "one", binary: false, size: 3, modified: 10 });
+    api.readWorkspaceFile.mockReset().mockResolvedValue({ path: "src/a.ts", content: "one", isBinary: false, size: 3, modified: 10 });
     api.writeWorkspaceFile.mockReset();
   });
 
-  it("given a target, reads the file into the editor text", async () => {
+  it("Given a target, when the hook runs, then it reads the file into the editor text", async () => {
     const { result } = await loaded();
     expect(api.readWorkspaceFile).toHaveBeenCalledWith("ws-1", "src/a.ts");
     expect(result.current.text).toBe("one");
     expect(result.current.isDirty).toBe(false);
   });
 
-  it("given the file can't be read, reports the error", async () => {
+  it("Given the file can't be read, when the hook runs, then it reports the error", async () => {
     api.readWorkspaceFile.mockRejectedValue("file is unavailable");
     const { result } = renderHook(() => useFileEditor(target));
     await waitFor(() => expect(result.current.loadError).toBe("file is unavailable"));
     expect(result.current.file).toBeNull();
   });
 
-  it("given an edit that saves, keeps the new text as the file's content", async () => {
+  it("Given an edit that saves, when saving, then the new text becomes the file's content", async () => {
     api.writeWorkspaceFile.mockResolvedValue({ size: 3, modified: 20 });
     const { result } = await loaded();
     act(() => result.current.setText("two"));
     expect(result.current.isDirty).toBe(true);
 
-    let saved = false;
+    let isSaved = false;
     await act(async () => {
-      saved = await result.current.save();
+      isSaved = await result.current.save();
     });
 
-    expect(saved).toBe(true);
-    expect(api.writeWorkspaceFile).toHaveBeenCalledWith("ws-1", "src/a.ts", "two", 10);
+    expect(isSaved).toBe(true);
+    expect(api.writeWorkspaceFile).toHaveBeenCalledWith({ workspaceId: "ws-1", relativePath: "src/a.ts", content: "two", expectedModified: 10 });
     expect(result.current.isDirty).toBe(false);
     expect(result.current.file?.modified).toBe(20);
   });
 
-  it("given the file changed on disk, reports a conflict that an overwrite clears", async () => {
+  it("Given the file changed on disk, when saving, then it reports a conflict that an overwrite clears", async () => {
     api.writeWorkspaceFile
       .mockRejectedValueOnce(new IpcError({ code: "changedOnDisk", message: "the file changed on disk" }))
       .mockResolvedValueOnce({ size: 3, modified: 30 });
@@ -71,21 +71,21 @@ describe("useFileEditor", () => {
     await act(async () => {
       await result.current.save(true);
     });
-    expect(api.writeWorkspaceFile).toHaveBeenLastCalledWith("ws-1", "src/a.ts", "two", null);
+    expect(api.writeWorkspaceFile).toHaveBeenLastCalledWith({ workspaceId: "ws-1", relativePath: "src/a.ts", content: "two", expectedModified: null });
     expect(result.current.hasConflict).toBe(false);
   });
 
-  it("given a save that fails for another reason, reports it without a conflict", async () => {
+  it("Given a save that fails for another reason, when saving, then it reports it without a conflict", async () => {
     api.writeWorkspaceFile.mockRejectedValue(new IpcError({ code: "other", message: "the text is too large to save here" }));
     const { result } = await loaded();
     act(() => result.current.setText("two"));
 
-    let saved = true;
+    let isSaved = true;
     await act(async () => {
-      saved = await result.current.save();
+      isSaved = await result.current.save();
     });
 
-    expect(saved).toBe(false);
+    expect(isSaved).toBe(false);
     expect(result.current.hasConflict).toBe(false);
     expect(result.current.saveError).toBe("the text is too large to save here");
   });

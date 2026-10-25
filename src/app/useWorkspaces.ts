@@ -1,14 +1,13 @@
 import { useCallback, useState } from "react";
 import { api } from "../api";
-import type { Workspace, WorkspaceGroup } from "../types";
+import type { Workspace, WorkspaceGroup } from "../domain/workspace.model";
 import { useOrchestrationStore } from "../stores/orchestrationStore";
 import { useUiStore } from "../stores/uiStore";
 
-/** Keep the active project when it is still visible, else pick a visible one. */
 function chooseActiveWorkspace(list: readonly Workspace[]) {
   const visible = new Set(
     (useOrchestrationStore.getState().snapshot?.containers ?? [])
-      .filter((container) => container.visible)
+      .filter((container) => container.isVisible)
       .map((container) => container.projectId)
       .filter((id): id is string => Boolean(id)),
   );
@@ -19,11 +18,9 @@ function chooseActiveWorkspace(list: readonly Workspace[]) {
   );
 }
 
-/** The projects (workspaces) as the backend stores them. */
 export function useWorkspaces() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
 
-  /** Apply a freshly loaded list everywhere that mirrors it. */
   const apply = useCallback((list: Workspace[], groups: WorkspaceGroup[]) => {
     useOrchestrationStore.getState().sync(list, groups);
     setWorkspaces(list);

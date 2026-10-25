@@ -1,4 +1,4 @@
-import type { TerminalRuntimeInfo } from "../../types";
+import type { TerminalRuntimeInfo } from "../../domain/terminal.model";
 
 export type InspectorRuntimeStatus = "idle" | "loading" | "ready" | "unavailable" | "error";
 
@@ -24,7 +24,6 @@ export const INITIAL_INSPECTOR_RUNTIME_STATE: InspectorRuntimeState = {
   error: null,
 };
 
-/** Ignore late responses from a previous focused terminal or poll generation. */
 function isCurrent(
   state: InspectorRuntimeState,
   terminalId: string,

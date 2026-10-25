@@ -1,0 +1,34 @@
+import type { ResumeItem } from "../terminal.model";
+import type { Workspace } from "../workspace.model";
+import { agentKind } from "../agentLabels";
+import { profileForCommand, resolveResumeCommand } from "../agentProfiles";
+
+export function resumeCommandFor(command: string): string {
+  return resolveResumeCommand(profileForCommand(command), command);
+}
+
+export function resumeItemFor(workspace: Workspace, terminal: Workspace["terminals"][number]): ResumeItem {
+  return {
+    terminalId: terminal.id,
+    wsId: workspace.id,
+    wsName: workspace.name,
+    cwd: workspace.cwd,
+    command: terminal.command,
+    agentId: agentKind(terminal.command),
+    resumeCommand: resumeCommandFor(terminal.command),
+  };
+}
+
+export function resumableItems(
+  workspaces: readonly Workspace[],
+  ids: readonly string[],
+  exited: Readonly<Record<string, number | null>>,
+): ResumeItem[] {
+  return ids.flatMap((id) => {
+    for (const workspace of workspaces) {
+      const terminal = workspace.terminals.find((candidate) => candidate.id === id);
+      if (terminal && (terminal.id in exited || terminal.isSuspended)) return [resumeItemFor(workspace, terminal)];
+    }
+    return [];
+  });
+}

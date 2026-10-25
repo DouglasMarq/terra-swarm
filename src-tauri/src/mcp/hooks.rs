@@ -1,163 +1,96 @@
-//! Agent lifecycle hooks. Agent CLIs call `terra-swarm hook <agent> <event>`
-//! (see `crate::cli`), which posts here with the terminal's token, so the
-//! board knows whether an agent is working, idle or waiting for a human
-//! without the agent having to call `report_status` itself.
-
 use std::sync::Arc;
 
-use axum::extract::{Request, State};
+use axum::body::Body;
+use axum::extract::{Path, Request, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tauri::Runtime;
 
-use super::repo::AgentState;
+use super::integration;
+use super::model::AgentState;
+use super::statuses::StatusReport;
 use super::{AgentIdentity, McpHub};
 use crate::usage::SessionLog;
 
 pub const HOOKS_PATH: &str = "/hooks";
-/// Where a Claude Code HTTP hook posts its raw event JSON.
-pub const CLAUDE_HOOKS_PATH: &str = "/hooks/claude";
+pub const INTEGRATION_HOOKS_PATH: &str = "/hooks/{integration}";
 pub const EVENT_AGENT_ATTENTION: &str = "agent-attention";
 const MAX_HOOK_BODY: usize = 256 * 1024;
-const MAX_SUMMARY_CHARS: usize = 200;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct HookCall {
-    /// Which CLI sent it ("claude", "codex").
     pub agent: String,
-    /// The CLI's event name ("Stop", "Notification", "agent-turn-complete"…).
     pub event: String,
-    /// Whatever the CLI passed along, as JSON.
     #[serde(default)]
     pub payload: Value,
 }
 
-fn text_field(payload: &Value, keys: &[&str]) -> Option<String> {
-    keys.iter()
-        .find_map(|key| payload.get(*key).and_then(Value::as_str))
-        .map(|text| text.split_whitespace().collect::<Vec<_>>().join(" "))
-        .filter(|text| !text.is_empty())
-        .map(|text| {
-            if text.chars().count() > MAX_SUMMARY_CHARS {
-                let mut cut: String = text.chars().take(MAX_SUMMARY_CHARS - 1).collect();
-                cut.push('…');
-                cut
-            } else {
-                text
-            }
-        })
-}
-
-/// What a hook event says about the agent: its new state and a one-line
-/// summary. `None` for events that carry no state change.
 pub fn interpret(call: &HookCall) -> Option<(AgentState, String)> {
-    let payload = &call.payload;
-    match (call.agent.as_str(), call.event.as_str()) {
-        ("claude", "UserPromptSubmit") => Some((
-            AgentState::Working,
-            text_field(payload, &["prompt"]).unwrap_or_default(),
-        )),
-        ("claude", "PreToolUse") => Some((
-            AgentState::Working,
-            text_field(payload, &["tool_name"]).unwrap_or_default(),
-        )),
-        ("claude", "Notification") => {
-            let message = text_field(payload, &["message"]).unwrap_or_default();
-            // `idle_prompt` only means the turn ended a minute ago; it is not
-            // a question, and treating it as one would keep the orchestrator
-            // from waking an agent that finished. Older versions send no type.
-            match payload.get("notification_type").and_then(Value::as_str) {
-                None
-                | Some("permission_prompt")
-                | Some("elicitation_dialog")
-                | Some("elicitation_url_dialog")
-                | Some("agent_needs_input") => Some((AgentState::NeedsInput, message)),
-                Some("idle_prompt") => Some((AgentState::Idle, String::new())),
-                Some(_) => None,
-            }
-        }
-        ("claude", "Stop") | ("claude", "SessionStart") => Some((AgentState::Idle, String::new())),
-        ("codex", _) => match payload
-            .get("type")
-            .and_then(Value::as_str)
-            .unwrap_or(call.event.as_str())
-        {
-            "agent-turn-complete" => Some((
-                AgentState::Idle,
-                text_field(
-                    payload,
-                    &["last-assistant-message", "last_assistant_message"],
-                )
-                .unwrap_or_default(),
-            )),
-            _ => None,
-        },
-        _ => None,
-    }
+    integration::by_id(&call.agent)?.interpret(&call.event, &call.payload)
 }
 
-/// The session log a hook event points at, for token usage.
 pub fn session_log(call: &HookCall) -> Option<SessionLog> {
-    match call.agent.as_str() {
-        "claude" => call
-            .payload
-            .get("transcript_path")
-            .and_then(Value::as_str)
-            .and_then(crate::usage::claude_transcript_from_hook)
-            .map(SessionLog::Claude),
-        "codex" => call
-            .payload
-            .get("thread-id")
-            .or_else(|| call.payload.get("thread_id"))
-            .and_then(Value::as_str)
-            .filter(|thread| !thread.is_empty())
-            .map(|thread| SessionLog::Codex(thread.to_string())),
-        _ => None,
-    }
+    integration::by_id(&call.agent)?.session_log(&call.payload)
 }
 
-/// Apply a hook call for `who`. Returns the state it set, if any.
-pub fn apply(hub: &McpHub, who: &AgentIdentity, call: &HookCall) -> Option<AgentState> {
+pub fn apply<R: Runtime>(hub: &McpHub<R>, who: &AgentIdentity, call: &HookCall) {
     if let Some(log) = session_log(call) {
         hub.set_session_log(&who.terminal_id, log);
     }
-    let (state, summary) = interpret(call)?;
-    let reported = hub.repo().and_then(|mut repo| {
-        repo.report_status(&who.workspace_id, &who.terminal_id, state, &summary)
+    let Some((state, summary)) = interpret(call) else {
+        return;
+    };
+    let reported = hub.statuses().and_then(|mut statuses| {
+        statuses.report_status(
+            &who.actor(),
+            &StatusReport {
+                state,
+                summary: &summary,
+            },
+        )
     });
     let status = match reported {
         Ok(status) => status,
         Err(error) => {
             eprintln!(
-                "cannot record the state hook of {}: {}",
+                "cannot record the state hook of {}: {:?}",
                 who.terminal_id, error
             );
-            return None;
+            return;
         }
     };
     hub.emit_agent_status(&status);
     if state == AgentState::NeedsInput {
         hub.emit_attention(&status);
     }
-    Some(state)
 }
 
-/// `POST /hooks`: `terra-swarm hook` sends `{ agent, event, payload }`.
-pub async fn handle(State(hub): State<Arc<McpHub>>, request: Request) -> Response {
+pub async fn handle<R: Runtime>(State(hub): State<Arc<McpHub<R>>>, request: Request) -> Response {
     receive(hub, request, |body| {
         serde_json::from_slice::<HookCall>(body).ok()
     })
     .await
 }
 
-/// `POST /hooks/claude`: a Claude Code HTTP hook posts its event JSON as is.
-pub async fn handle_claude(State(hub): State<Arc<McpHub>>, request: Request) -> Response {
+pub async fn handle_integration<R: Runtime>(
+    State(hub): State<Arc<McpHub<R>>>,
+    Path(id): Path<String>,
+    request: Request,
+) -> Response {
+    let Some(integration) = integration::by_id(&id) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    if !integration.has_http_hooks() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
     receive(hub, request, |body| {
         let payload: Value = serde_json::from_slice(body).ok()?;
-        let event = payload.get("hook_event_name")?.as_str()?.to_string();
+        let event = integration.http_hook_event(&payload)?;
         Some(HookCall {
-            agent: "claude".into(),
+            agent: integration.id().into(),
             event,
             payload,
         })
@@ -165,21 +98,21 @@ pub async fn handle_claude(State(hub): State<Arc<McpHub>>, request: Request) -> 
     .await
 }
 
-/// Both routes sit behind the same token check as the MCP endpoint.
-async fn receive(
-    hub: Arc<McpHub>,
+async fn receive<R: Runtime>(
+    hub: Arc<McpHub<R>>,
     request: Request,
     parse: impl FnOnce(&[u8]) -> Option<HookCall>,
 ) -> Response {
-    // Hooks come from CLIs, never from a browser page.
-    if request.headers().contains_key(header::ORIGIN) {
+    let is_from_browser_page = request.headers().contains_key(header::ORIGIN);
+    if is_from_browser_page {
         return StatusCode::FORBIDDEN.into_response();
     }
     let Some(who) = request.extensions().get::<AgentIdentity>().cloned() else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    let Ok(body) = axum::body::to_bytes(request.into_body(), MAX_HOOK_BODY).await else {
-        return StatusCode::PAYLOAD_TOO_LARGE.into_response();
+    let body = match read_body(request.into_body()).await {
+        Ok(body) => body,
+        Err(status) => return status.into_response(),
     };
     let Some(call) = parse(&body) else {
         return StatusCode::BAD_REQUEST.into_response();
@@ -192,16 +125,32 @@ async fn receive(
         };
         eprintln!("a hook handler {}", reason);
     }
-    // An empty body: a Claude hook reads its response as hook output, and an
-    // empty one changes nothing about what the agent does.
     StatusCode::OK.into_response()
+}
+
+async fn read_body(body: Body) -> Result<Vec<u8>, StatusCode> {
+    let mut chunks = body.into_data_stream();
+    let mut bytes = Vec::new();
+    while let Some(chunk) = chunks.next().await {
+        let chunk = chunk.map_err(|error| {
+            eprintln!("cannot read a hook body: {}", error);
+            StatusCode::BAD_REQUEST
+        })?;
+        if bytes.len() + chunk.len() > MAX_HOOK_BODY {
+            return Err(StatusCode::PAYLOAD_TOO_LARGE);
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{hub, identity, RecordingHost};
+    use super::super::integration::MAX_SUMMARY_CHARS;
+    use super::super::test_support::{app, hub, identity};
     use super::super::EVENT_AGENT_STATUS;
     use super::*;
+    use crate::sync::LockExt;
     use serde_json::json;
 
     fn call(agent: &str, event: &str, payload: Value) -> HookCall {
@@ -213,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_events_map_to_states() {
+    fn given_claude_hook_events_when_interpreting_then_they_map_to_states() {
         assert_eq!(
             interpret(&call(
                 "claude",
@@ -249,7 +198,6 @@ mod tests {
             )),
             Some((AgentState::NeedsInput, "Allow Bash?".into()))
         );
-        // Finishing a turn and sitting quietly is not "needs you".
         assert_eq!(
             interpret(&call(
                 "claude",
@@ -275,7 +223,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_turn_complete_means_idle() {
+    fn given_a_codex_turn_complete_when_interpreting_then_the_agent_is_idle() {
         let (state, summary) = interpret(&call(
             "codex",
             "notify",
@@ -291,14 +239,19 @@ mod tests {
     }
 
     #[test]
-    fn codex_hooks_name_their_session() {
+    fn given_a_codex_hook_when_reading_its_session_log_then_it_names_its_session() {
         let log = session_log(&call(
             "codex",
             "notify",
             json!({ "type": "agent-turn-complete", "thread-id": "0199-abc" }),
         ));
-        assert_eq!(log, Some(SessionLog::Codex("0199-abc".into())));
-        // A Claude transcript outside Claude's own folder is ignored.
+        assert_eq!(
+            log,
+            Some(SessionLog {
+                integration: "codex",
+                locator: "0199-abc".into()
+            })
+        );
         assert_eq!(
             session_log(&call(
                 "claude",
@@ -310,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn long_summaries_are_cut() {
+    fn given_a_long_message_when_interpreting_then_the_summary_is_cut() {
         let (_, summary) = interpret(&call(
             "claude",
             "Notification",
@@ -322,16 +275,16 @@ mod tests {
     }
 
     #[test]
-    fn applying_a_hook_updates_status_and_raises_attention() {
+    fn given_a_hook_when_applying_it_then_the_status_is_updated_and_attention_raised() {
         let (hub, events) = hub();
         let who = identity("t-1", "ws-1", "claude");
-        let state = apply(
+        apply(
             &hub,
             &who,
             &call("claude", "Notification", json!({ "message": "Approve?" })),
         );
-        assert_eq!(state, Some(AgentState::NeedsInput));
-        let status = hub.repo().unwrap().status_of("t-1").cloned().unwrap();
+        let status = hub.statuses().unwrap().status_of("t-1").cloned().unwrap();
+        assert_eq!(status.state, AgentState::NeedsInput);
         assert_eq!(status.summary, "Approve?");
         let events = events.lock().unwrap();
         assert!(events.iter().any(|(event, _)| event == EVENT_AGENT_STATUS));
@@ -342,21 +295,60 @@ mod tests {
     }
 
     #[test]
-    fn given_an_unavailable_database_a_hook_records_no_state() {
-        let dir = std::env::temp_dir().join(format!(
-            "terra-mcp-hook-{}",
-            super::super::repo::now_millis()
-        ));
+    fn given_an_unavailable_database_when_applying_a_hook_then_no_state_is_recorded() {
+        let dir =
+            std::env::temp_dir().join(format!("terra-mcp-hook-{}", crate::clock::now_millis()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(super::super::db::DB_FILE);
         std::fs::write(&path, b"not a sqlite database").unwrap();
-        let hub = McpHub::open(path, None, Box::new(RecordingHost::default()));
-        let state = apply(
+        let hub = McpHub::open(path, None, app());
+        apply(
             &hub,
             &identity("t-1", "ws-1", "claude"),
             &call("claude", "Stop", json!({})),
         );
-        assert_eq!(state, None);
+        assert!(hub.statuses.lock_or_recover().status_of("t-1").is_none());
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn hook_request(body: axum::body::Body) -> Request {
+        let mut request = Request::new(body);
+        request
+            .extensions_mut()
+            .insert(identity("t-1", "ws-1", "claude"));
+        request
+    }
+
+    fn receive_status(request: Request) -> StatusCode {
+        let (hub, _) = hub();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let response = runtime.block_on(receive(hub, request, |body| {
+            serde_json::from_slice::<HookCall>(body).ok()
+        }));
+        response.status()
+    }
+
+    #[test]
+    fn given_a_body_that_breaks_off_when_receiving_a_hook_then_it_answers_400() {
+        let chunks: Vec<Result<&'static str, std::io::Error>> = vec![
+            Ok("{\"agent\":"),
+            Err(std::io::Error::other("connection reset")),
+        ];
+        let body = axum::body::Body::from_stream(futures_util::stream::iter(chunks));
+
+        assert_eq!(receive_status(hook_request(body)), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn given_a_body_over_the_limit_when_receiving_a_hook_then_it_answers_413() {
+        let body = axum::body::Body::from(vec![b' '; MAX_HOOK_BODY + 1]);
+
+        assert_eq!(
+            receive_status(hook_request(body)),
+            StatusCode::PAYLOAD_TOO_LARGE
+        );
     }
 }

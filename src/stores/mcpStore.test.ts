@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { McpTask } from "../types";
+import type { McpTask } from "../domain/mcp.model";
 
 const api = vi.hoisted(() => ({
   mcpServerInfo: vi.fn(),
@@ -24,7 +24,9 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { listen } from "@tauri-apps/api/event";
-import { groupTasksByStatus, startMcpEventBridge, useMcpStore } from "./mcpStore";
+import { groupTasksByStatus } from "../domain/tasks";
+import { startMcpEventBridge, useMcpStore } from "./mcpStore";
+import { defined } from "../test/defined";
 
 export function makeTask(id: string, extra: Partial<McpTask> = {}): McpTask {
   return {
@@ -47,7 +49,7 @@ export function makeTask(id: string, extra: Partial<McpTask> = {}): McpTask {
 }
 
 describe("groupTasksByStatus", () => {
-  it("buckets by status and sorts by priority, then position", () => {
+  it("Given tasks, when grouping them by status, then each bucket is sorted by priority, then position", () => {
     const groups = groupTasksByStatus([
       makeTask("T-10", { position: 1 }),
       makeTask("T-2", { position: 2 }),
@@ -70,7 +72,7 @@ describe("mcp store", () => {
   });
   afterEach(() => useMcpStore.getState().reset());
 
-  it("loads, creates, updates and deletes tasks per workspace", async () => {
+  it("Given a workspace, when loading, creating, updating and deleting tasks, then each change is kept per workspace", async () => {
     api.mcpListTasks.mockResolvedValue([makeTask("T-1")]);
     await useMcpStore.getState().loadTasks("ws-1");
     expect(useMcpStore.getState().tasks["ws-1"]).toHaveLength(1);
@@ -82,29 +84,29 @@ describe("mcp store", () => {
 
     api.mcpUpdateTask.mockResolvedValue(makeTask("T-1", { status: "blocked", assignee: "t-2" }));
     await useMcpStore.getState().updateTask("ws-1", "T-1", { status: "blocked", assignee: "t-2" });
-    const tasks = useMcpStore.getState().tasks["ws-1"]!;
+    const tasks = defined(useMcpStore.getState().tasks["ws-1"]);
     expect(tasks.find((task) => task.id === "T-1")?.status).toBe("blocked");
     expect(tasks).toHaveLength(2);
 
     api.mcpDeleteTask.mockResolvedValue(undefined);
     await useMcpStore.getState().deleteTask("ws-1", "T-2");
-    expect(useMcpStore.getState().tasks["ws-1"]!.map((task) => task.id)).toEqual(["T-1"]);
+    expect(defined(useMcpStore.getState().tasks["ws-1"]).map((task) => task.id)).toEqual(["T-1"]);
   });
 
-  it("given an update that succeeds, resolves to the updated task", async () => {
+  it("Given an update that succeeds, when updating a task, then it resolves to the updated task", async () => {
     const updated = makeTask("T-1", { status: "review" });
     api.mcpUpdateTask.mockResolvedValue(updated);
     expect(await useMcpStore.getState().updateTask("ws-1", "T-1", { status: "review" })).toEqual(updated);
     expect(useMcpStore.getState().error).toBeNull();
   });
 
-  it("given an update that fails, resolves to null and keeps the error", async () => {
+  it("Given an update that fails, when updating a task, then it resolves to null and keeps the error", async () => {
     api.mcpUpdateTask.mockRejectedValue("task T-9 not found");
     expect(await useMcpStore.getState().updateTask("ws-1", "T-9", { status: "review" })).toBeNull();
     expect(useMcpStore.getState().error).toBe("task T-9 not found");
   });
 
-  it("keeps errors instead of throwing", async () => {
+  it("Given failing calls, when the store runs them, then errors are kept instead of thrown", async () => {
     api.mcpCreateTask.mockRejectedValue("title cannot be empty");
     expect(await useMcpStore.getState().createTask("ws-1", { title: " " })).toBeNull();
     expect(useMcpStore.getState().error).toBe("title cannot be empty");
@@ -112,7 +114,7 @@ describe("mcp store", () => {
     expect(useMcpStore.getState().error).toBeNull();
   });
 
-  it("refetches open boards and tracks agent statuses from events", async () => {
+  it("Given backend events, when they arrive, then open boards are refetched and agent statuses are tracked", async () => {
     api.mcpListTasks.mockResolvedValue([]);
     await useMcpStore.getState().loadTasks("ws-1");
     const stop = startMcpEventBridge(vi.fn());
@@ -132,7 +134,7 @@ describe("mcp store", () => {
     stop();
   });
 
-  it("hands nudges from the orchestrator to the terminal writer", async () => {
+  it("Given a nudge from the orchestrator, when it arrives, then it is handed to the terminal writer", async () => {
     const onNudge = vi.fn();
     const stop = startMcpEventBridge(onNudge);
     await Promise.resolve();
@@ -143,18 +145,18 @@ describe("mcp store", () => {
     stop();
   });
 
-  it("toggles the server setting", async () => {
+  it("Given the server is on, when turning it off, then the backend is told and the store follows", async () => {
     api.mcpSetEnabled.mockResolvedValue({
-      enabled: false, available: true, running: true, url: "http://127.0.0.1:1/mcp", port: 1, db_path: "/tmp/mcp.db", error: null,
+      isEnabled: false, isAvailable: true, isRunning: true, url: "http://127.0.0.1:1/mcp", port: 1, dbPath: "/tmp/mcp.db", error: null,
     });
     await useMcpStore.getState().setEnabled(false);
     expect(api.mcpSetEnabled).toHaveBeenCalledWith(false);
-    expect(useMcpStore.getState().server?.enabled).toBe(false);
+    expect(useMcpStore.getState().server?.isEnabled).toBe(false);
   });
 });
 
 describe("startMcpEventBridge", () => {
-  it("given a listener fails to register, warns when stopped instead of swallowing it", async () => {
+  it("Given a listener fails to register, when the bridge is stopped, then it warns instead of swallowing the failure", async () => {
     vi.mocked(listen).mockRejectedValueOnce(new Error("no event bus"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const stop = startMcpEventBridge(vi.fn());

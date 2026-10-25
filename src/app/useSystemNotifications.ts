@@ -1,63 +1,24 @@
 import { useEffect, useMemo, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
-import type { NotificationPayload, Workspace } from "../types";
-import { t } from "../i18n";
+import { ensureNotificationPermission, setAppBadgeCount, showNotification } from "../lib/tauri/notifications";
+import { onAgentAttention, onTerminalNotification } from "../lib/tauri/pty";
+import type { Workspace } from "../domain/workspace.model";
+import { translateNow } from "../i18n";
 import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { deriveAgentStatus } from "../domain/agentStatus";
+import { shouldNotify } from "../domain/notifications";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useReportedStates } from "../stores/mcpStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 
-/** One native notification per agent at most this often. */
-const PER_AGENT_COOLDOWN_MS = 30_000;
-
-interface AttentionPayload {
-  terminal_id: string;
-  workspace_id: string;
-  workspace_name?: string | null;
-  message?: string;
-}
-
-/** Whether a native notification should be shown for this agent now. */
-export function shouldNotify(
-  lastShown: Map<string, number>,
-  terminalId: string,
-  now: number,
-  appFocused: boolean,
-): boolean {
-  if (appFocused) return false;
-  const last = lastShown.get(terminalId);
-  if (last !== undefined && now - last < PER_AGENT_COOLDOWN_MS) return false;
-  lastShown.set(terminalId, now);
-  return true;
-}
-
-let permission: Promise<boolean> | null = null;
-function ensurePermission(): Promise<boolean> {
-  permission ??= isPermissionGranted()
-    .then((granted) => granted || requestPermission().then((answer) => answer === "granted"))
-    .catch((error) => {
-      console.warn("notification permission check failed:", error);
-      return false;
-    });
-  return permission;
-}
-
-/**
- * Native notifications when an agent needs a human while the app is in the
- * background, and the number of such agents on the app icon.
- */
 export function useSystemNotifications(workspaces: readonly Workspace[]) {
-  const enabled = usePreferencesStore((state) => state.systemNotifications);
+  const isEnabled = usePreferencesStore((state) => state.isSystemNotificationsEnabled);
   const exited = useTerminalRuntimeStore((state) => state.exited);
   const notifications = useTerminalRuntimeStore((state) => state.notifications);
   const contextUsage = useTerminalRuntimeStore((state) => state.contextUsage);
   const reported = useReportedStates();
   const lastShown = useRef(new Map<string, number>());
-  const latest = useRef({ workspaces, enabled });
-  latest.current = { workspaces, enabled };
+  const latest = useRef({ workspaces, isEnabled });
+  latest.current = { workspaces, isEnabled };
 
   const waiting = useMemo(
     () =>
@@ -66,8 +27,8 @@ export function useSystemNotifications(workspaces: readonly Workspace[]) {
         .filter(
           (terminal) =>
             deriveAgentStatus({
-              suspended: terminal.suspended,
-              exited: terminal.id in exited,
+              isSuspended: terminal.isSuspended,
+              hasExited: terminal.id in exited,
               notifications: notifications[terminal.id],
               contextUsed: contextUsage[terminal.id],
               reported: reported[terminal.id],
@@ -77,33 +38,32 @@ export function useSystemNotifications(workspaces: readonly Workspace[]) {
   );
 
   useEffect(() => {
-    const count = enabled && waiting > 0 ? waiting : undefined;
-    getCurrentWindow()
-      .setBadgeCount(count)
+    const count = isEnabled && waiting > 0 ? waiting : undefined;
+    setAppBadgeCount(count)
       .catch((error) => console.warn("could not set the app badge:", error));
-  }, [enabled, waiting]);
+  }, [isEnabled, waiting]);
 
   useEffect(() => {
     const show = async (terminalId: string, body: string) => {
-      const { workspaces: current, enabled: on } = latest.current;
-      if (!on || !shouldNotify(lastShown.current, terminalId, Date.now(), document.hasFocus())) return;
-      if (!(await ensurePermission())) return;
+      const { workspaces: current, isEnabled: isEnabledNow } = latest.current;
+      if (!isEnabledNow || !shouldNotify(lastShown.current, terminalId, { now: Date.now(), isAppFocused: document.hasFocus() })) return;
+      if (!(await ensureNotificationPermission())) return;
       const labels = buildAgentLabels(current as Workspace[], {
         titles: useTerminalRuntimeStore.getState().titles,
         names: usePreferencesStore.getState().agentNames,
       });
       const label = labels[terminalId];
-      sendNotification({
-        title: t("notifications.needsYouTitle", { name: label ? agentLabelText(label) : terminalId }),
-        body: body || t("notifications.needsYouBody"),
+      showNotification({
+        title: translateNow("notifications.needsYouTitle", { name: label ? agentLabelText(label) : terminalId }),
+        body: body || translateNow("notifications.needsYouBody"),
       });
     };
     const pending = [
-      listen<AttentionPayload>("agent-attention", (event) => {
-        void show(event.payload.terminal_id, event.payload.message ?? "");
+      onAgentAttention((payload) => {
+        void show(payload.terminal_id, payload.message ?? "");
       }),
-      listen<NotificationPayload>("terminal-notification", (event) => {
-        void show(event.payload.id, event.payload.messages[0] ?? "");
+      onTerminalNotification((payload) => {
+        void show(payload.id, payload.messages[0] ?? "");
       }),
     ];
     return () => {

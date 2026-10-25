@@ -10,7 +10,7 @@ import { WindowChrome } from "./WindowChrome";
 import shellStyles from "./shell.css?raw";
 
 describe("ApplicationShell", () => {
-  it("reserves the native traffic-light area on macOS", () => {
+  it("Given macOS, when the shell renders, then the native traffic-light area is reserved", () => {
     render(
       <ApplicationShell sidebar={<div>Sidebar</div>}>
         <div>Content</div>
@@ -23,13 +23,13 @@ describe("ApplicationShell", () => {
     );
   });
 
-  it("renders the sidebar, content and the inspector when it is open", async () => {
+  it("Given an open inspector, when the shell renders, then the sidebar, content and inspector are rendered", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     render(
       <ApplicationShell
         sidebar={<div>Sidebar slot</div>}
-        rightDock={{ open: true, onClose, content: <p>Inspector content</p> }}
+        rightDock={{ isOpen: true, onClose, content: <p>Inspector content</p> }}
       >
         <div>Content slot</div>
       </ApplicationShell>,
@@ -43,9 +43,9 @@ describe("ApplicationShell", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("swaps the sidebar for the rail when collapsed", () => {
+  it("Given a collapsed sidebar, when the shell renders, then the rail replaces the sidebar", () => {
     render(
-      <ApplicationShell sidebar={<div>Full sidebar</div>} collapsedSidebar={<div>Rail</div>} sidebarCollapsed>
+      <ApplicationShell sidebar={<div>Full sidebar</div>} collapsedSidebar={<div>Rail</div>} isSidebarCollapsed>
         <div>Content</div>
       </ApplicationShell>,
     );
@@ -54,7 +54,7 @@ describe("ApplicationShell", () => {
     expect(document.querySelector(".terra-shell")).toHaveAttribute("data-sidebar", "collapsed");
   });
 
-  it("renders floating overlays inside the body", () => {
+  it("Given floating overlays, when the shell renders, then they are rendered inside the body", () => {
     render(
       <ApplicationShell sidebar={<div />} overlay={<div>Voice capsule</div>}>
         <div>Content</div>
@@ -65,7 +65,7 @@ describe("ApplicationShell", () => {
 });
 
 describe("WindowChrome", () => {
-  it("shows where you are, search, attention, voice and inspector", async () => {
+  it("Given the window chrome, when it renders, then it shows where you are, search, attention, voice and inspector", async () => {
     const user = userEvent.setup();
     const onOpenLauncher = vi.fn();
     const onToggleVoice = vi.fn();
@@ -104,21 +104,21 @@ describe("WindowChrome", () => {
     expect(onToggleSidebar).toHaveBeenCalledOnce();
   });
 
-  it("uses a plain bell when nothing needs the user", () => {
+  it("Given nothing needs the user, when the chrome renders, then it uses a plain bell", () => {
     render(<WindowChrome attentionCount={0} />);
     expect(screen.getByRole("button", { name: "Notificações" })).toHaveAttribute("data-attention", "false");
   });
 
-  it("keeps the chrome itself draggable on Tauri and text pass-through", () => {
+  it("Given Tauri, when the chrome renders, then the chrome itself stays draggable and its text passes drags through", () => {
     render(<WindowChrome breadcrumb={{ project: "terra-swarm" }} />);
     expect(screen.getByRole("banner")).toHaveAttribute("data-tauri-drag-region", "true");
     expect(shellStyles).toMatch(/\.terra-window-breadcrumb\s*>\s*\*,[\s\S]*?pointer-events:\s*none/);
   });
 
-  it("closes the notification popover on Escape", async () => {
+  it("Given an open notification popover, when pressing Escape, then it closes", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<WindowChrome notificationsOpen onNotificationsOpenChange={onChange} notificationsPanel={<div>Panel</div>} />);
+    render(<WindowChrome isNotificationsOpen onNotificationsOpenChange={onChange} notificationsPanel={<div>Panel</div>} />);
     expect(screen.getByText("Panel")).toBeInTheDocument();
     await user.keyboard("{Escape}");
     expect(onChange).toHaveBeenCalledWith(false);
@@ -126,7 +126,7 @@ describe("WindowChrome", () => {
 });
 
 describe("Sidebar", () => {
-  it("switches between Workbench and Frota and shows the attention count", async () => {
+  it("Given the sidebar, when switching between Workbench and Frota, then the attention count is shown", async () => {
     const user = userEvent.setup();
     const onNavigate = vi.fn();
     render(<SurfaceSwitch surface="workbench" attentionCount={3} onNavigate={onNavigate} />);
@@ -136,7 +136,7 @@ describe("Sidebar", () => {
     expect(screen.getByLabelText("3 precisam de você")).toBeInTheDocument();
   });
 
-  it("puts settings and the active agent count in the footer", async () => {
+  it("Given the sidebar, when it renders, then settings and the active agent count sit in the footer", async () => {
     const user = userEvent.setup();
     const onOpenSettings = vi.fn();
     render(
@@ -149,7 +149,7 @@ describe("Sidebar", () => {
     expect(onOpenSettings).toHaveBeenCalledOnce();
   });
 
-  it("collapses to project initials and one dot per agent of the active project", async () => {
+  it("Given a collapsed sidebar, when it renders, then it shows project initials and one dot per agent of the active project", async () => {
     const user = userEvent.setup();
     const onFocusAgent = vi.fn();
     const onExpand = vi.fn();
@@ -158,11 +158,11 @@ describe("Sidebar", () => {
         surface="workbench"
         attentionCount={1}
         projects={[
-          { id: "ws-1", name: "terra-swarm", status: "attention", suspended: false, agents: [
+          { id: "ws-1", name: "terra-swarm", status: "attention", isSuspended: false, agents: [
             { id: "pty-1", label: "Planejador", status: "attention", detail: "precisa de você" },
             { id: "pty-2", label: "codex", status: "working", detail: "trabalhando" },
           ] },
-          { id: "ws-2", name: "site-docs", status: "idle", suspended: false, agents: [] },
+          { id: "ws-2", name: "site-docs", status: "idle", isSuspended: false, agents: [] },
         ]}
         activeWorkspaceId="ws-1"
         focusedAgentId="pty-1"
@@ -180,5 +180,60 @@ describe("Sidebar", () => {
     expect(onFocusAgent).toHaveBeenCalledWith("ws-1", "pty-2");
     await user.click(screen.getByRole("button", { name: "Expandir barra lateral (⌘B)" }));
     expect(onExpand).toHaveBeenCalledOnce();
+  });
+
+  it("Given the surface switch, when picking Workbench and Board, then each surface is navigated to", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    render(<SurfaceSwitch surface="fleet" attentionCount={0} onNavigate={onNavigate} />);
+
+    await user.click(screen.getByRole("button", { name: "Workbench" }));
+    await user.click(screen.getByRole("button", { name: "Quadro" }));
+
+    expect(onNavigate).toHaveBeenNthCalledWith(1, "workbench");
+    expect(onNavigate).toHaveBeenNthCalledWith(2, "board");
+  });
+
+  it("Given a sidebar without a version, when it renders, then only the agent count is shown", () => {
+    render(
+      <Sidebar surface="settings" attentionCount={0} onNavigate={vi.fn()} activeAgents={1} onOpenSettings={vi.fn()}>
+        <div>Tree</div>
+      </Sidebar>,
+    );
+
+    expect(screen.getByText("1 agente ativo")).toBeInTheDocument();
+  });
+
+  it("Given a collapsed sidebar with nothing waiting, when using the rail, then surfaces, projects and settings are reached", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    const onOpenWorkspace = vi.fn();
+    const onOpenSettings = vi.fn();
+    render(
+      <CollapsedSidebar
+        surface="board"
+        attentionCount={0}
+        projects={[{ id: "ws-2", name: "site-docs", status: "idle", isSuspended: true, agents: [] }]}
+        activeWorkspaceId={null}
+        focusedAgentId={null}
+        onNavigate={onNavigate}
+        onOpenWorkspace={onOpenWorkspace}
+        onFocusAgent={vi.fn()}
+        onOpenSettings={onOpenSettings}
+        onExpand={vi.fn()}
+      />,
+    );
+
+    const rail = screen.getByRole("navigation", { name: "Barra lateral recolhida" });
+    await user.click(screen.getByRole("button", { name: "Workbench" }));
+    await user.click(screen.getByRole("button", { name: "Frota" }));
+    await user.click(screen.getByRole("button", { name: "Quadro" }));
+    await user.click(screen.getByRole("button", { name: "site-docs, 0 agentes" }));
+    await user.click(screen.getByRole("button", { name: "Configurações" }));
+
+    expect(onNavigate.mock.calls).toEqual([["workbench"], ["fleet"], ["board"]]);
+    expect(onOpenWorkspace).toHaveBeenCalledWith("ws-2");
+    expect(onOpenSettings).toHaveBeenCalledOnce();
+    expect(rail).toContainElement(screen.getByRole("button", { name: "Expandir barra lateral" }));
   });
 });

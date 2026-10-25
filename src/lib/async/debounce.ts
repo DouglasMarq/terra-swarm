@@ -3,7 +3,6 @@ export interface DebouncedTask {
   cancel: () => void;
 }
 
-/** A small timer-backed debounce with explicit lifecycle cleanup. */
 export function createDebouncedTask(task: () => void, delayMs: number): DebouncedTask {
   let timer: ReturnType<typeof setTimeout> | null = null;
 

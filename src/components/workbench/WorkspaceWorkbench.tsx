@@ -22,9 +22,9 @@ function ContainerItem({
   return (
     <div
       className="terra-workbench__container"
-      data-visible={projection.container.visible && !projection.container.closed}
-      data-collapsed={projection.container.collapsed}
-      data-fullscreen={projection.container.fullscreen}
+      data-visible={projection.container.isVisible && !projection.container.isClosed}
+      data-collapsed={projection.container.isCollapsed}
+      data-fullscreen={projection.container.isFullscreen}
     >
       <ProjectContainer
         projection={projection}
@@ -35,13 +35,6 @@ function ContainerItem({
   );
 }
 
-/**
- * Multi-container Terra workbench.
- *
- * Agent panels are intentionally static. Layout presets and resize separators
- * remain available, but containers, panes and agent tabs cannot be dragged or
- * reordered from this surface.
- */
 export function WorkspaceWorkbench({
   source,
   renderTab,
@@ -50,7 +43,7 @@ export function WorkspaceWorkbench({
   onNewContainer,
   ...actions
 }: WorkspaceWorkbenchProps) {
-  const t = useT();
+  const translate = useT();
   const projection = useMemo(() => projectWorkbench(source), [source]);
   const rootClassName = className ? `terra-workbench ${className}` : "terra-workbench";
 
@@ -74,9 +67,9 @@ export function WorkspaceWorkbench({
         <div className="terra-workbench__list">
           {emptyState ?? (
             <EmptyPaneCell
-              label={t("workbench.noProject")}
-              description={t("workbench.noProjectHint")}
-              actionLabel={t("workbench.createProject")}
+              label={translate("workbench.noProject")}
+              description={translate("workbench.noProjectHint")}
+              actionLabel={translate("workbench.createProject")}
               onNewTab={onNewContainer}
             />
           )}

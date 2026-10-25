@@ -20,9 +20,7 @@ import "./fleet.css";
 export type FleetBatchAction = "focus" | "voice" | "resume" | "stop";
 
 export interface FleetCommandCenterProps extends Omit<FleetDerivationInput, "agentLabels"> {
-  /** Task title / numbered kind per terminal, see domain/agentLabels. */
   labels?: Readonly<Record<string, AgentLabel | undefined>>;
-  /** Latest unread message per terminal, for the "Needs you" cards. */
   attentionMessages?: Readonly<Record<string, string | undefined>>;
   now?: number;
   onFocus?: (terminalId: string, workspaceId?: string) => void;
@@ -35,10 +33,6 @@ function statusRank(status: FleetStatus): number {
   return FLEET_STATUS_PRIORITY.indexOf(status);
 }
 
-/**
- * Triage for the whole fleet: what needs you first, then every agent in one
- * table with batch actions. Replaces the old Home and Events surfaces.
- */
 export function FleetCommandCenter({
   labels = {},
   attentionMessages = {},
@@ -49,23 +43,23 @@ export function FleetCommandCenter({
   className,
   ...input
 }: FleetCommandCenterProps) {
-  const t = useT();
+  const translate = useT();
   const [filters, setFilters] = useState<FleetFilters>(DEFAULT_FLEET_FILTERS);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const agentLabels = useMemo(
     () => Object.fromEntries(Object.entries(labels).map(([id, label]) => [id, label?.primary ?? id])),
     [labels],
   );
-  const model = useMemo(() => deriveFleetModel({ ...input, agentLabels }, t), [agentLabels, input, t]);
+  const model = useMemo(() => deriveFleetModel({ ...input, agentLabels }, translate), [agentLabels, input, translate]);
   const visible = useMemo(() => filterFleetModel(model, filters), [filters, model]);
   const rows = useMemo(
-    () => [...visible.agents].sort((a, b) => statusRank(a.status) - statusRank(b.status)),
+    () => [...visible.agents].sort((left, right) => statusRank(left.status) - statusRank(right.status)),
     [visible.agents],
   );
   const needsYou = model.agents.filter((agent) => agent.status === "attention");
   const projectCount = new Set(model.agents.map((agent) => agent.projectId)).size;
   const selectedIds = rows.filter((agent) => selected.has(agent.terminalId)).map((agent) => agent.terminalId);
-  const allSelected = rows.length > 0 && selectedIds.length === rows.length;
+  const isAllSelected = rows.length > 0 && selectedIds.length === rows.length;
 
   const toggle = (id: string) => setSelected((current) => {
     const next = new Set(current);
@@ -83,13 +77,13 @@ export function FleetCommandCenter({
   const label = (agent: FleetAgentModel) => labels[agent.terminalId];
 
   return (
-    <section className={["terra-fleet", className].filter(Boolean).join(" ")} aria-label={t("common.fleet")}>
+    <section className={["terra-fleet", className].filter(Boolean).join(" ")} aria-label={translate("common.fleet")}>
       <header className="terra-fleet-head">
         <div className="terra-fleet-title">
-          <h1>{t("common.fleet")}</h1>
-          <span>{t("fleet.summary", { count: model.agents.length, projects: t("fleet.projectCount", { count: projectCount }) })}</span>
+          <h1>{translate("common.fleet")}</h1>
+          <span>{translate("fleet.summary", { count: model.agents.length, projects: translate("fleet.projectCount", { count: projectCount }) })}</span>
         </div>
-        <div className="terra-fleet-chips" role="group" aria-label={t("fleet.filterByState")}>
+        <div className="terra-fleet-chips" role="group" aria-label={translate("fleet.filterByState")}>
           {FLEET_STATUS_PRIORITY.map((status) => (
             <button
               type="button"
@@ -100,7 +94,7 @@ export function FleetCommandCenter({
               onClick={() => setStatus(status)}
             >
               <span className="terra-dot" data-status={status} aria-hidden="true" />
-              {t("fleet.statusCount", { status: t(`status.${status}` as const), count: model.summary[status] })}
+              {translate("fleet.statusCount", { status: translate(`status.${status}` as const), count: model.summary[status] })}
             </button>
           ))}
         </div>
@@ -108,11 +102,11 @@ export function FleetCommandCenter({
 
       {needsYou.length > 0 ? (
         <section className="terra-fleet-section" aria-labelledby="terra-fleet-attention">
-          <h2 id="terra-fleet-attention">{t("fleet.needsYou")}</h2>
+          <h2 id="terra-fleet-attention">{translate("fleet.needsYou")}</h2>
           <div className="terra-fleet-cards terra-stagger">
             {needsYou.map((agent) => {
               const message = attentionMessages[agent.terminalId];
-              const contextHigh = (agent.contextUsage ?? 0) >= CONTEXT_ATTENTION_PERCENT;
+              const isContextHigh = (agent.contextUsage ?? 0) >= CONTEXT_ATTENTION_PERCENT;
               return (
                 <article className="terra-fleet-card" key={agent.terminalId}>
                   <div className="terra-fleet-card-meta">
@@ -120,14 +114,14 @@ export function FleetCommandCenter({
                     <b>{label(agent)?.primary ?? agent.label}</b>
                     <span className="terra-tag">{label(agent)?.tag ?? agent.command} · {agent.projectName}</span>
                   </div>
-                  <p>{message ?? (contextHigh ? t("fleet.contextHigh", { count: agent.contextUsage ?? 0 }) : t("fleet.waiting"))}</p>
+                  <p>{message ?? (isContextHigh ? translate("fleet.contextHigh", { count: agent.contextUsage ?? 0 }) : translate("fleet.waiting"))}</p>
                   <div className="terra-fleet-card-actions">
                     <button type="button" className="terra-button terra-button-attention" onClick={() => onFocus?.(agent.terminalId, agent.workspaceId)}>
-                      {t("fleet.open")}
+                      {translate("fleet.open")}
                     </button>
                     {message && onMarkRead ? (
                       <button type="button" className="terra-button" onClick={() => onMarkRead(agent.terminalId)}>
-                        {t("notifications.markRead")}
+                        {translate("notifications.markRead")}
                       </button>
                     ) : null}
                   </div>
@@ -140,31 +134,31 @@ export function FleetCommandCenter({
 
       <section className="terra-fleet-section" aria-labelledby="terra-fleet-all">
         <div className="terra-fleet-toolbar">
-          <h2 id="terra-fleet-all">{t("fleet.allAgents")}</h2>
+          <h2 id="terra-fleet-all">{translate("fleet.allAgents")}</h2>
           <label className="terra-fleet-search">
             <Search size={13} aria-hidden="true" />
             <input
               type="search"
-              aria-label={t("fleet.search")}
-              placeholder={t("fleet.searchPlaceholder")}
+              aria-label={translate("fleet.search")}
+              placeholder={translate("fleet.searchPlaceholder")}
               value={filters.query}
               onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
             />
           </label>
           {selectedIds.length > 0 ? (
-            <div className="terra-fleet-batch" role="toolbar" aria-label={t("fleet.batch")}>
-              <span>{t("fleet.selected", { count: selectedIds.length })}</span>
+            <div className="terra-fleet-batch" role="toolbar" aria-label={translate("fleet.batch")}>
+              <span>{translate("fleet.selected", { count: selectedIds.length })}</span>
               <button type="button" className="terra-button" onClick={() => runBatch("stop")}>
                 <Pause size={13} aria-hidden="true" />
-                {t("fleet.pause")}
+                {translate("fleet.pause")}
               </button>
               <button type="button" className="terra-button" onClick={() => runBatch("resume")}>
                 <Play size={13} aria-hidden="true" />
-                {t("fleet.resume")}
+                {translate("fleet.resume")}
               </button>
               <button type="button" className="terra-button" onClick={() => runBatch("voice")}>
                 <Mic size={13} aria-hidden="true" />
-                {t("fleet.talk")}
+                {translate("fleet.talk")}
               </button>
             </div>
           ) : null}
@@ -173,9 +167,9 @@ export function FleetCommandCenter({
         <div className="terra-fleet-table-wrap">
           {rows.length === 0 ? (
             <div className="terra-fleet-empty">
-              <span>{model.agents.length === 0 ? t("fleet.empty") : t("fleet.noMatch")}</span>
+              <span>{model.agents.length === 0 ? translate("fleet.empty") : translate("fleet.noMatch")}</span>
               {model.agents.length > 0 ? (
-                <button type="button" className="terra-link-button" onClick={() => setFilters(DEFAULT_FLEET_FILTERS)}>{t("fleet.clearFilters")}</button>
+                <button type="button" className="terra-link-button" onClick={() => setFilters(DEFAULT_FLEET_FILTERS)}>{translate("fleet.clearFilters")}</button>
               ) : null}
             </div>
           ) : (
@@ -185,15 +179,15 @@ export function FleetCommandCenter({
                   <th scope="col" className="terra-fleet-check">
                     <input
                       type="checkbox"
-                      aria-label={t("fleet.selectAll")}
-                      checked={allSelected}
-                      onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map((agent) => agent.terminalId)))}
+                      aria-label={translate("fleet.selectAll")}
+                      checked={isAllSelected}
+                      onChange={() => setSelected(isAllSelected ? new Set() : new Set(rows.map((agent) => agent.terminalId)))}
                     />
                   </th>
-                  <th scope="col">{t("fleet.col.agent")}</th>
-                  <th scope="col">{t("fleet.col.state")}</th>
-                  <th scope="col">{t("fleet.col.context")}</th>
-                  <th scope="col">{t("fleet.col.activity")}</th>
+                  <th scope="col">{translate("fleet.col.agent")}</th>
+                  <th scope="col">{translate("fleet.col.state")}</th>
+                  <th scope="col">{translate("fleet.col.context")}</th>
+                  <th scope="col">{translate("fleet.col.activity")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -205,7 +199,7 @@ export function FleetCommandCenter({
                       <td className="terra-fleet-check">
                         <input
                           type="checkbox"
-                          aria-label={t("fleet.select", { name })}
+                          aria-label={translate("fleet.select", { name })}
                           checked={selected.has(agent.terminalId)}
                           onChange={() => toggle(agent.terminalId)}
                         />
@@ -214,7 +208,7 @@ export function FleetCommandCenter({
                         <button
                           type="button"
                           className="terra-fleet-agent"
-                          aria-label={t("fleet.focusIn", { name, project: agent.projectName })}
+                          aria-label={translate("fleet.focusIn", { name, project: agent.projectName })}
                           onClick={() => onFocus?.(agent.terminalId, agent.workspaceId)}
                         >
                           <b>{name}</b>
@@ -225,14 +219,14 @@ export function FleetCommandCenter({
                         <span className="terra-fleet-state" data-status={agent.status}>
                           <span className="terra-dot" data-status={agent.status} aria-hidden="true" />
                           {agent.status === "exited" && agent.exitCode !== null && agent.exitCode !== undefined
-                            ? t("fleet.exitedCode", { code: agent.exitCode })
-                            : t(`status.${agent.status}` as const)}
+                            ? translate("fleet.exitedCode", { code: agent.exitCode })
+                            : translate(`status.${agent.status}` as const)}
                         </span>
                       </td>
                       <td className="terra-fleet-number" data-high={(agent.contextUsage ?? 0) >= CONTEXT_ATTENTION_PERCENT}>
                         {agent.contextUsage === null ? "—" : `${agent.contextUsage}%`}
                       </td>
-                      <td className="terra-fleet-muted">{formatFleetRelativeTime(agent.lastActivity, now, t) ?? "—"}</td>
+                      <td className="terra-fleet-muted">{formatFleetRelativeTime(agent.lastActivity, now, translate) ?? "—"}</td>
                     </tr>
                   );
                 })}

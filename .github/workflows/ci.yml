@@ -28,11 +28,14 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Lint
+        run: npm run lint
+
       - name: Type-check and build
         run: npm run build
 
-      - name: Test
-        run: npm test
+      - name: Test with coverage
+        run: npm run test:coverage
 
   backend:
     runs-on: ubuntu-latest
@@ -71,3 +74,37 @@ jobs:
 
       - name: Test
         run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  backend-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev
+
+      # tauri::generate_context! needs frontendDist (../dist) to exist.
+      - name: Build frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Coverage
+        run: cargo llvm-cov --manifest-path src-tauri/Cargo.toml --fail-under-lines 80

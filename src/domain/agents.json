@@ -1,0 +1,22 @@
+{
+  "$comment": "The single list of agent CLIs Terra Swarm knows. Read by the frontend (agentProfiles.ts) and compiled into the backend (src-tauri/src/agent_catalog.rs). Order is the order shown to the user. `resume` is the command that continues the last session (omit when the CLI has no stable flag for it); `integration` names how Terra connects the agent to its MCP server and state hooks.",
+  "agents": [
+    { "id": "claude", "label": "Claude Code", "resume": "claude --continue", "integration": "claude" },
+    { "id": "codex", "label": "Codex", "resume": "codex resume --last", "integration": "codex" },
+    { "id": "opencode", "label": "OpenCode", "resume": "opencode --continue" },
+    { "id": "copilot", "label": "GitHub Copilot", "resume": "copilot --continue" },
+    { "id": "gemini", "label": "Gemini" },
+    { "id": "grok", "label": "Grok" },
+    { "id": "kimi", "label": "Kimi", "resume": "kimi --continue" },
+    { "id": "qwen", "label": "Qwen Code" },
+    { "id": "deepseek", "label": "DeepSeek" },
+    { "id": "aider", "label": "Aider", "resume": "aider --restore-chat-history" },
+    { "id": "cursor-agent", "label": "Cursor" },
+    { "id": "amp", "label": "Amp" },
+    { "id": "goose", "label": "Goose" },
+    { "id": "crush", "label": "Crush" },
+    { "id": "droid", "label": "Droid" },
+    { "id": "cline", "label": "Cline" },
+    { "id": "auggie", "label": "Auggie" }
+  ]
+}

@@ -1,20 +1,15 @@
-//! `terra-swarm mcp-stdio`: a stdio MCP server that forwards every message to
-//! Terra's HTTP endpoint with the terminal's token. For agent CLIs that can
-//! only launch MCP servers as subprocesses; inside a Terra terminal they run
-//! this command and see the same tools as everyone else.
-
 use serde_json::{json, Value};
-use std::io::{BufRead, Read, Write};
-use std::net::TcpStream;
+use std::io::{BufRead, Write};
 use std::time::Duration;
 
-use super::{loopback_authority, TIMEOUT as CONNECT_TIMEOUT};
+use super::{http, loopback_authority, TIMEOUT as CONNECT_TIMEOUT};
 
-/// Tool calls can wait on the database; give them room.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_RESPONSE_BYTES: u64 = 16 * 1024 * 1024;
+const HEADER_END: &[u8] = b"\r\n\r\n";
+const CRLF: &[u8] = b"\r\n";
+const HEX_RADIX: u32 = 16;
 
-/// JSON-RPC 2.0 error codes.
 const JSONRPC_PARSE_ERROR: i64 = -32700;
 const JSONRPC_INTERNAL_ERROR: i64 = -32603;
 
@@ -22,7 +17,6 @@ pub struct Endpoint {
     authority: String,
     path: String,
     token: String,
-    /// The version the server agreed to; later requests carry it.
     protocol_version: Option<String>,
 }
 
@@ -41,56 +35,43 @@ impl Endpoint {
         })
     }
 
-    /// POST one JSON-RPC message; returns the messages the server answered.
-    pub fn send(&mut self, message: &Value) -> Result<Vec<Value>, String> {
+    pub fn send(&self, message: &Value) -> Result<Vec<Value>, String> {
         let body = message.to_string();
-        let address = self
-            .authority
-            .parse()
-            .map_err(|error| format!("bad address: {}", error))?;
-        let mut stream = TcpStream::connect_timeout(&address, CONNECT_TIMEOUT)
-            .map_err(|error| error.to_string())?;
-        stream
-            .set_read_timeout(Some(REQUEST_TIMEOUT))
-            .map_err(|error| error.to_string())?;
-        stream
-            .set_write_timeout(Some(REQUEST_TIMEOUT))
-            .map_err(|error| error.to_string())?;
-        let version = self
-            .protocol_version
-            .as_deref()
-            .map(|version| format!("MCP-Protocol-Version: {}\r\n", version))
-            .unwrap_or_default();
-        let request = format!(
-            "POST {path} HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\n{version}Content-Length: {length}\r\nConnection: close\r\n\r\n{body}",
-            path = self.path,
-            host = self.authority,
-            token = self.token,
-            version = version,
-            length = body.len(),
-            body = body,
-        );
-        stream
-            .write_all(request.as_bytes())
-            .map_err(|error| error.to_string())?;
-        let mut raw = Vec::new();
-        stream
-            .take(MAX_RESPONSE_BYTES)
-            .read_to_end(&mut raw)
-            .map_err(|error| error.to_string())?;
+        let mut headers = vec![("Accept", "application/json, text/event-stream")];
+        if let Some(version) = self.protocol_version.as_deref() {
+            headers.push(("MCP-Protocol-Version", version));
+        }
+        let post = http::Post {
+            authority: &self.authority,
+            path: &self.path,
+            token: &self.token,
+            headers: &headers,
+            body: &body,
+        };
+        let limits = http::Limits {
+            connect_timeout: CONNECT_TIMEOUT,
+            io_timeout: REQUEST_TIMEOUT,
+            max_response_bytes: MAX_RESPONSE_BYTES,
+        };
+        let response = http::post(&post, &limits)?;
+        response.read?;
+        let raw = response.bytes;
         let (status, headers, body) = split_response(&raw)?;
-        if status == 202 || (status == 200 && body.trim().is_empty()) {
+        if status == http::HTTP_ACCEPTED || (status == http::HTTP_OK && body.trim().is_empty()) {
             return Ok(Vec::new());
         }
-        if status != 200 {
+        if status != http::HTTP_OK {
             return Err(format!(
                 "the Terra MCP server answered {}: {}",
                 status,
                 body.trim()
             ));
         }
-        let messages = parse_messages(&body, headers.contains("text/event-stream"))?;
-        for reply in &messages {
+        parse_messages(&body, headers.contains("text/event-stream"))
+    }
+
+    pub fn remember_protocol_version(&mut self, replies: &[Value]) {
+        for reply in replies {
             if let Some(version) = reply
                 .pointer("/result/protocolVersion")
                 .and_then(Value::as_str)
@@ -98,15 +79,13 @@ impl Endpoint {
                 self.protocol_version = Some(version.to_string());
             }
         }
-        Ok(messages)
     }
 }
 
-/// Status code, lower-cased headers and decoded body of an HTTP/1.1 response.
 fn split_response(raw: &[u8]) -> Result<(u16, String, String), String> {
     let end = raw
-        .windows(4)
-        .position(|window| window == b"\r\n\r\n")
+        .windows(HEADER_END.len())
+        .position(|window| window == HEADER_END)
         .ok_or("incomplete HTTP response")?;
     let head = String::from_utf8_lossy(&raw[..end]).to_string();
     let status = head
@@ -115,7 +94,7 @@ fn split_response(raw: &[u8]) -> Result<(u16, String, String), String> {
         .and_then(|code| code.parse().ok())
         .ok_or("no HTTP status")?;
     let headers = head.to_lowercase();
-    let mut body = raw[end + 4..].to_vec();
+    let mut body = raw[end + HEADER_END.len()..].to_vec();
     if headers.contains("transfer-encoding: chunked") {
         body = dechunk(&body);
     }
@@ -124,30 +103,28 @@ fn split_response(raw: &[u8]) -> Result<(u16, String, String), String> {
 
 fn dechunk(mut data: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
-    while let Some(line_end) = data.windows(2).position(|window| window == b"\r\n") {
+    while let Some(line_end) = data.windows(CRLF.len()).position(|window| window == CRLF) {
         let size = usize::from_str_radix(
             String::from_utf8_lossy(&data[..line_end])
                 .trim()
                 .split(';')
                 .next()
                 .unwrap_or("0"),
-            16,
+            HEX_RADIX,
         )
         .unwrap_or(0);
-        data = &data[line_end + 2..];
+        data = &data[line_end + CRLF.len()..];
         if size == 0 || data.len() < size {
             break;
         }
         out.extend_from_slice(&data[..size]);
-        data = data.get(size + 2..).unwrap_or(&[]);
+        data = data.get(size + CRLF.len()..).unwrap_or(&[]);
     }
     out
 }
 
-/// The JSON-RPC messages of a reply body. A body that is not JSON is an
-/// error, so the request still gets an answer instead of none.
-fn parse_messages(body: &str, event_stream: bool) -> Result<Vec<Value>, String> {
-    if !event_stream {
+fn parse_messages(body: &str, is_event_stream: bool) -> Result<Vec<Value>, String> {
+    if !is_event_stream {
         return match serde_json::from_str::<Value>(body) {
             Ok(Value::Array(items)) => Ok(items),
             Ok(value) => Ok(vec![value]),
@@ -165,9 +142,6 @@ fn parse_messages(body: &str, event_stream: bool) -> Result<Vec<Value>, String> 
         .collect()
 }
 
-/// Forward each line of `input` (one JSON-RPC message per line) and write the
-/// answers to `output`, one per line. A failed request still gets an error
-/// reply, so the client never waits forever.
 pub fn bridge(
     endpoint: &mut Endpoint,
     input: impl BufRead,
@@ -191,7 +165,10 @@ pub fn bridge(
             }
         };
         let replies = match endpoint.send(&message) {
-            Ok(replies) => replies,
+            Ok(replies) => {
+                endpoint.remember_protocol_version(&replies);
+                replies
+            }
             Err(error) => match message.get("id") {
                 Some(id) if !id.is_null() => vec![
                     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": JSONRPC_INTERNAL_ERROR, "message": error } }),
@@ -239,10 +216,11 @@ pub fn run() -> i32 {
 mod tests {
     use super::*;
     use crate::mcp::test_support::{hub, identity};
+    use std::io::Read;
     use std::sync::Arc;
 
     #[test]
-    fn decodes_chunked_and_event_stream_bodies() {
+    fn given_chunked_or_event_stream_bodies_when_decoding_then_the_messages_are_read() {
         let raw = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n5\r\ndata:\r\n12\r\n {\"id\":1,\"a\":true}\r\n0\r\n\r\n";
         let (status, headers, body) = split_response(raw).unwrap();
         assert_eq!(status, 200);
@@ -252,8 +230,6 @@ mod tests {
         );
     }
 
-    /// A one-shot HTTP server on loopback that answers every request with
-    /// `response`, for replies the real MCP server never sends.
     fn serve_once(response: &'static str) -> String {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -278,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    fn given_a_reply_that_is_not_json_answers_the_request_with_an_error() {
+    fn given_a_reply_that_is_not_json_when_relaying_then_the_request_is_answered_with_an_error() {
         let url = serve_once(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 8\r\nConnection: close\r\n\r\nnot json",
         );
@@ -302,7 +278,7 @@ mod tests {
     }
 
     #[test]
-    fn given_an_event_stream_with_invalid_data_reports_an_error() {
+    fn given_an_event_stream_with_invalid_data_when_decoding_then_it_reports_an_error() {
         assert!(parse_messages("data: {\"id\":1}\n\ndata: oops\n", true).is_err());
         assert_eq!(
             parse_messages("data:\n\ndata: {\"id\":1}\n", true).unwrap(),
@@ -311,9 +287,9 @@ mod tests {
     }
 
     #[test]
-    fn a_stdio_client_talks_to_the_real_server() {
+    fn given_a_stdio_client_when_relaying_then_it_talks_to_the_real_server() {
         let (hub, _) = hub();
-        let token = hub.issue(identity("t-4", "ws-1", "opencode"));
+        let token = hub.issue(identity("t-4", "ws-1", "opencode")).unwrap();
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .enable_all()
@@ -358,7 +334,6 @@ mod tests {
         );
         assert_eq!(replies[2]["error"]["code"], JSONRPC_PARSE_ERROR);
 
-        // A bad token still answers the request, with an error.
         let mut output = Vec::new();
         let ask = json!({ "jsonrpc": "2.0", "id": 7, "method": "tools/list" }).to_string();
         bridge(

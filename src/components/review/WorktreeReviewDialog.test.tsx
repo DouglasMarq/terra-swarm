@@ -3,7 +3,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorktreeDiff } from "../../types";
+import type { WorktreeDiff } from "../../domain/worktree.model";
 
 const api = vi.hoisted(() => ({
   worktreeDiff: vi.fn(),
@@ -19,10 +19,10 @@ import { WorktreeReviewDialog } from "./WorktreeReviewDialog";
 
 function diff(extra: Partial<WorktreeDiff["status"]> = {}): WorktreeDiff {
   return {
-    status: { branch: "terra/t-1", base: "main", path: "/wt", dirty: [], ahead: 2, behind: 0, exists: true, ...extra },
+    status: { branch: "terra/t-1", base: "main", path: "/wt", dirty: [], ahead: 2, behind: 0, isPresent: true, ...extra },
     files: [{ path: "src/a.ts", change: "modified", additions: 1, deletions: 1 }],
     patch: "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new\n",
-    truncated: false,
+    isTruncated: false,
   };
 }
 
@@ -33,7 +33,7 @@ describe("WorktreeReviewDialog", () => {
 
   afterEach(() => act(() => useReviewStore.getState().close()));
 
-  it("shows the diff and merges only after a second click", async () => {
+  it("Given a diff, when merging, then the merge runs only after a second click", async () => {
     api.worktreeDiff.mockResolvedValue(diff());
     api.worktreeMerge.mockResolvedValue(diff({ ahead: 0 }).status);
     render(<WorktreeReviewDialog />);
@@ -49,7 +49,7 @@ describe("WorktreeReviewDialog", () => {
     expect(await screen.findByRole("status")).toBeTruthy();
   });
 
-  it("asks for a commit before merging uncommitted work", async () => {
+  it("Given uncommitted work, when merging, then a commit is asked for first", async () => {
     api.worktreeDiff.mockResolvedValue(diff({ dirty: ["src/a.ts"] }));
     api.worktreeCommit.mockResolvedValue(diff().status);
     render(<WorktreeReviewDialog />);
@@ -61,7 +61,7 @@ describe("WorktreeReviewDialog", () => {
     expect(api.worktreeCommit).toHaveBeenCalledWith("ws", "t-1", "Changes from Vega");
   });
 
-  it("given the clipboard refuses the pull request link, warns instead of failing silently", async () => {
+  it("Given the clipboard refuses the pull request link, when copying it, then it warns instead of failing silently", async () => {
     api.worktreeDiff.mockResolvedValue(diff());
     api.worktreeOpenPr.mockResolvedValue("https://example.test/pr/1");
     render(<WorktreeReviewDialog />);

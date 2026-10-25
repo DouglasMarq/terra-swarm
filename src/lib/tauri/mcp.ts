@@ -1,14 +1,8 @@
-import type {
-  AgentTokenUsage,
-  McpAgentStatus,
-  McpServerInfo,
-  McpTask,
-  McpTaskPatch,
-  McpTaskPriority,
-} from "../../types";
+import type { AgentTokenUsage } from "../../domain/agent.model";
+import type { McpAgentStatus, McpServerInfo, McpTask, McpTaskPatch, McpTaskPriority } from "../../domain/mcp.model";
 import { invokeCommand } from "./commands";
+import { listenPayload, type UnlistenFn } from "./events";
 
-/** Window events emitted by the embedded MCP server (see `src-tauri/src/mcp`). */
 export const MCP_EVENTS = {
   tasksChanged: "mcp-tasks-changed",
   message: "mcp-message",
@@ -16,7 +10,6 @@ export const MCP_EVENTS = {
   nudge: "mcp-nudge",
 } as const;
 
-/** The orchestrator assigned a task to an idle agent: type this prompt into it. */
 export interface McpNudgePayload {
   workspace_id: string;
   terminal_id: string;
@@ -27,7 +20,6 @@ export interface McpTasksChangedPayload {
   workspace_id: string;
 }
 
-/** `status: null` means the terminal disconnected. */
 export interface McpAgentStatusPayload {
   workspace_id: string;
   terminal_id: string;
@@ -38,8 +30,8 @@ export function mcpServerInfo(): Promise<McpServerInfo> {
   return invokeCommand("mcpServerInfo");
 }
 
-export function mcpSetEnabled(enabled: boolean): Promise<McpServerInfo> {
-  return invokeCommand("mcpSetEnabled", { enabled });
+export function mcpSetEnabled(isEnabled: boolean): Promise<McpServerInfo> {
+  return invokeCommand("mcpSetEnabled", { isEnabled });
 }
 
 export function mcpListTasks(workspaceId: string): Promise<McpTask[]> {
@@ -51,16 +43,18 @@ export function mcpCreateTask(
   input: { title: string; description?: string; priority?: McpTaskPriority; assignee?: string | null },
 ): Promise<McpTask> {
   return invokeCommand("mcpCreateTask", {
-    workspaceId,
-    title: input.title,
-    description: input.description ?? null,
-    priority: input.priority ?? null,
-    assignee: input.assignee ?? null,
+    request: {
+      workspaceId,
+      title: input.title,
+      description: input.description ?? null,
+      priority: input.priority ?? null,
+      assignee: input.assignee ?? null,
+    },
   });
 }
 
 export function mcpUpdateTask(workspaceId: string, id: string, patch: McpTaskPatch): Promise<McpTask> {
-  return invokeCommand("mcpUpdateTask", { workspaceId, id, patch });
+  return invokeCommand("mcpUpdateTask", { request: { workspaceId, id, patch } });
 }
 
 export function mcpDeleteTask(workspaceId: string, id: string): Promise<void> {
@@ -71,9 +65,20 @@ export function mcpAgentStatuses(workspaceId: string): Promise<McpAgentStatus[]>
   return invokeCommand("mcpAgentStatuses", { workspaceId });
 }
 
-/** Token usage of the workspace's agents, from the session logs their hooks reported. */
 export function agentUsage(workspaceId: string): Promise<AgentTokenUsage[]> {
   return invokeCommand("agentUsage", { workspaceId });
+}
+
+export function onMcpTasksChanged(handler: (payload: McpTasksChangedPayload) => void): Promise<UnlistenFn> {
+  return listenPayload(MCP_EVENTS.tasksChanged, handler);
+}
+
+export function onMcpAgentStatus(handler: (payload: McpAgentStatusPayload) => void): Promise<UnlistenFn> {
+  return listenPayload(MCP_EVENTS.agentStatus, handler);
+}
+
+export function onMcpNudge(handler: (payload: McpNudgePayload) => void): Promise<UnlistenFn> {
+  return listenPayload(MCP_EVENTS.nudge, handler);
 }
 
 export const mcpApi = {

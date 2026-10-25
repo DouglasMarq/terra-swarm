@@ -1,54 +1,30 @@
 import { useEffect, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
-import type {
-  AgentLaunchExtras,
-  AgentRole,
-  ContextPayload,
-  ExitPayload,
-  NotificationPayload,
-  ResumeItem,
-  RunningTerminal,
-  SpawnedTerminal,
-  TitlePayload,
-  Workspace,
-  WorkspaceSnapshotV2,
-} from "../types";
+import { onTerminalContext, onTerminalExit, onTerminalNotification, onTerminalTitle } from "../lib/tauri/pty";
+import { onWorkspacesChanged } from "../lib/tauri/workspace";
+import type { AgentLaunchExtras, AgentRole } from "../domain/agent.model";
+import type { ResumeItem, RunningTerminal, SpawnedTerminal } from "../domain/terminal.model";
+import type { Workspace, WorkspaceSnapshotV2 } from "../domain/workspace.model";
 import { getTerminal } from "../terminalRegistry";
-import { t } from "../i18n";
-import { agentKind, agentLabelText, buildAgentLabels } from "../domain/agentLabels";
-import { pickAgentName } from "../domain/agentNames";
+import { translateNow } from "../i18n";
+import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
+import { agentNamesInUse, pickAgentName } from "../domain/agentNames";
 import { createDebouncedTask } from "../lib/async/debounce";
-import { createSpawnQueue } from "../lib/session/spawnQueue";
-import { isCurrentSpawnedTerminalRunning } from "../lib/session/terminalLifecycle";
-import { workspaceIdForTerminal } from "../lib/session/terminalOwnership";
-import { freshCommand, profileForCommand, resolveResumeCommand } from "../lib/features/agentProfiles";
-import { parseEnvLines, usePreferencesStore } from "../stores/preferencesStore";
+import { createSpawnQueue } from "../domain/session/spawnQueue";
+import { isCurrentSpawnedTerminalRunning } from "../domain/session/terminalLifecycle";
+import { neighborTerminalId, workspaceIdForTerminal } from "../domain/session/terminalOwnership";
+import { freshCommand, profileForCommand } from "../domain/agentProfiles";
+import { resumableItems } from "../domain/session/resumeItems";
+import { launchExtrasFrom } from "../domain/agentLaunchEnv";
+import { usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
 import { errorMessage } from "../lib/errors/errorMessage";
+import { omitKey } from "../lib/records/records";
 
-/** Sessions respawned at the same time when resuming. */
 const RESUME_CONCURRENCY = 2;
 
-/** Debounce for `workspaces-changed` bursts (layout drags, group updates). */
 const WORKSPACES_REFRESH_DEBOUNCE_MS = 75;
-
-export function resumeCommandFor(command: string): string {
-  return resolveResumeCommand(profileForCommand(command), command);
-}
-
-export function resumeItemFor(workspace: Workspace, terminal: Workspace["terminals"][number]): ResumeItem {
-  return {
-    terminalId: terminal.id,
-    wsId: workspace.id,
-    wsName: workspace.name,
-    cwd: workspace.cwd,
-    command: terminal.command,
-    agentId: agentKind(terminal.command),
-    resumeCommand: resumeCommandFor(terminal.command),
-  };
-}
 
 interface TerminalSessionsInput {
   workspaces: readonly Workspace[];
@@ -56,59 +32,43 @@ interface TerminalSessionsInput {
   refresh: () => Promise<void>;
 }
 
-/**
- * Terminal lifecycle as the UI sees it: which ids are live and at which
- * process generation, spawning, closing, restarting and resuming, and the
- * backend events that update per-terminal runtime state.
- */
+export interface SpawnIntoOptions {
+  placement?: { paneId: string; tabId?: string };
+  shouldUseWorktree?: boolean;
+  role?: AgentRole | null;
+}
+
 export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalSessionsInput) {
-  // Authoritative set of terminal ids the UI tracks; mutated only by
-  // spawn/close paths (never rebuilt from `workspaces`, which would race with
-  // pending refreshes and silently drop live ids).
   const liveIds = useRef<Set<string>>(new Set());
   const spawnSeq = useRef<Record<string, number>>({});
   const runtime = () => useTerminalRuntimeStore.getState();
   const defaultShell = () => usePreferencesStore.getState().defaultShell || undefined;
-  /** The user's extra arguments and variables for the command's agent. */
-  const launchExtras = (command: string): AgentLaunchExtras | undefined => {
-    const settings = usePreferencesStore.getState().agentLaunch[profileForCommand(command).id];
-    if (!settings) return undefined;
-    return { args: settings.args.trim() || undefined, env: parseEnvLines(settings.env).env };
-  };
+  const launchExtras = (command: string): AgentLaunchExtras | undefined =>
+    launchExtrasFrom(usePreferencesStore.getState().agentLaunch[profileForCommand(command).id]);
 
-  // Backend events. Registered without a one-time guard so StrictMode's
-  // unmount/remount cycle registers them again.
   useEffect(() => {
-    const unlistenExit = listen<ExitPayload>("terminal-exit", (event) => {
-      if (!liveIds.current.has(event.payload.id)) return;
-      // Ignore exits of a previous process generation (the old PTY dying
-      // right after a restart respawned the same id).
-      const known = spawnSeq.current[event.payload.id];
-      if (known != null && event.payload.seq !== known) return;
-      runtime().setExited((previous) => ({ ...previous, [event.payload.id]: event.payload.code }));
-      runtime().setContextUsage((previous) => {
-        const next = { ...previous };
-        delete next[event.payload.id];
-        return next;
-      });
+    const unlistenExit = onTerminalExit((payload) => {
+      if (!liveIds.current.has(payload.id)) return;
+      const known = spawnSeq.current[payload.id];
+      if (known != null && payload.seq !== known) return;
+      runtime().setExited((previous) => ({ ...previous, [payload.id]: payload.code }));
+      runtime().setContextUsage((previous) => omitKey(previous, payload.id));
     });
-    const unlistenNotification = listen<NotificationPayload>("terminal-notification", (event) => {
-      if (liveIds.current.has(event.payload.id)) runtime().addNotification(event.payload);
+    const unlistenNotification = onTerminalNotification((payload) => {
+      if (liveIds.current.has(payload.id)) runtime().addNotification(payload);
     });
-    const unlistenContext = listen<ContextPayload>("terminal-context", (event) => {
-      if (!liveIds.current.has(event.payload.id)) return;
-      runtime().setContextUsage((previous) => ({ ...previous, [event.payload.id]: event.payload.used }));
+    const unlistenContext = onTerminalContext((payload) => {
+      if (!liveIds.current.has(payload.id)) return;
+      runtime().setContextUsage((previous) => ({ ...previous, [payload.id]: payload.used }));
     });
-    const unlistenTitle = listen<TitlePayload>("terminal-title", (event) => {
-      if (!liveIds.current.has(event.payload.id)) return;
-      runtime().setTitles((previous) => ({ ...previous, [event.payload.id]: event.payload.title }));
+    const unlistenTitle = onTerminalTitle((payload) => {
+      if (!liveIds.current.has(payload.id)) return;
+      runtime().setTitles((previous) => ({ ...previous, [payload.id]: payload.title }));
     });
-    // Layout drags and group updates can emit several events in one turn; a
-    // short debounce keeps other windows current without a request per frame.
     const refreshWorkspaces = createDebouncedTask(() => {
       void refresh();
     }, WORKSPACES_REFRESH_DEBOUNCE_MS);
-    const unlistenWorkspaces = listen("workspaces-changed", () => refreshWorkspaces.schedule());
+    const unlistenWorkspaces = onWorkspacesChanged(() => refreshWorkspaces.schedule());
     return () => {
       refreshWorkspaces.cancel();
       for (const pending of [unlistenExit, unlistenNotification, unlistenContext, unlistenTitle, unlistenWorkspaces]) {
@@ -117,13 +77,11 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     };
   }, [refresh]);
 
-  /** Start tracking terminals found at startup. */
   const track = (ids: Iterable<string>, running: readonly RunningTerminal[]) => {
     for (const id of ids) liveIds.current.add(id);
     for (const terminal of running) spawnSeq.current[terminal.id] = terminal.seq;
   };
 
-  /** Stop tracking terminals that are gone for good. */
   const forget = (ids: Iterable<string>) => {
     for (const id of ids) {
       liveIds.current.delete(id);
@@ -131,7 +89,6 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     }
   };
 
-  /** Drop every tracked terminal (the store was replaced by an import). */
   const forgetAll = (): string[] => {
     const previous = [...liveIds.current];
     liveIds.current.clear();
@@ -139,12 +96,6 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     return previous;
   };
 
-  /**
-   * `spawn_terminal` can resolve after a short-lived child was already reaped
-   * and its exit emitted. Register the id first, then reconcile the returned
-   * generation with the live snapshot so a missed event cannot leave dead
-   * metadata rendered as an active terminal.
-   */
   const registerSpawned = async (result: SpawnedTerminal) => {
     const id = result.meta.id;
     liveIds.current.add(id);
@@ -155,55 +106,44 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
       runtime().setExited((previous) => {
         const next = { ...previous };
         if (isRunning) delete next[id];
-        // The exit may have arrived before the id was registered. Keep a code
-        // a concurrent listener stored; otherwise null marks "unknown code".
         else if (!(id in next)) next[id] = null;
         return next;
       });
       if (!isRunning) {
-        runtime().setContextUsage((previous) => {
-          const next = { ...previous };
-          delete next[id];
-          return next;
-        });
+        runtime().setContextUsage((previous) => omitKey(previous, id));
       }
     } catch (error) {
-      // Registration stays authoritative even when this best-effort check
-      // cannot query an older native binary.
       console.warn(`failed to reconcile spawned terminal ${id}:`, error);
     }
   };
 
-  /** Optional automatic names: a fresh agent gets the next free name. */
   const nameNewAgent = (terminalId: string) => {
     const prefs = usePreferencesStore.getState();
-    if (!prefs.agentAutoNames || prefs.agentNames[terminalId]) return;
-    const openIds = new Set(workspaces.flatMap((workspace) => workspace.terminals.map((terminal) => terminal.id)));
-    const inUse = Object.entries(prefs.agentNames).filter(([id]) => openIds.has(id)).map(([, name]) => name);
-    const name = pickAgentName(inUse, prefs.agentNameList, { avoidSimilar: prefs.avoidSimilarNames, exhausted: prefs.namesExhausted });
+    if (!prefs.shouldAutoNameAgents || prefs.agentNames[terminalId]) return;
+    const inUse = agentNamesInUse(workspaces, prefs.agentNames);
+    const name = pickAgentName(inUse, prefs.agentNameList, { shouldAvoidSimilar: prefs.shouldAvoidSimilarNames, exhausted: prefs.namesExhausted });
     if (name) prefs.setAgentName(terminalId, name);
   };
 
-  /** Open a new agent in a project, optionally in a given pane. */
-  const spawnInto = async (
-    workspaceId: string,
-    command: string,
-    placement?: { paneId: string; tabId?: string },
-    options: { worktree?: boolean; role?: AgentRole | null } = {},
-  ) => {
-    // Spawn at an existing pane's size when possible: otherwise the PTY starts
-    // at 80x24 and the child draws its first frame at the wrong size (worst
-    // on Windows/ConPTY).
+  const spawnInto = async (workspaceId: string, command: string, options: SpawnIntoOptions = {}) => {
+    const { placement } = options;
     const sibling = workspaces
       .find((workspace) => workspace.id === workspaceId)
       ?.terminals.map((terminal) => getTerminal(terminal.id))
       .find((terminal) => terminal && terminal.cols > 0 && terminal.rows > 0);
     const extras = {
       ...launchExtras(command),
-      ...(options.worktree ? { worktree: true } : {}),
+      ...(options.shouldUseWorktree ? { shouldUseWorktree: true } : {}),
       ...(options.role ? { role: options.role } : {}),
     };
-    const result = await api.spawnTerminal(workspaceId, command, undefined, sibling?.cols, sibling?.rows, defaultShell(), extras);
+    const result = await api.spawnTerminal({
+      workspaceId,
+      command,
+      cols: sibling?.cols,
+      rows: sibling?.rows,
+      shell: defaultShell(),
+      launch: extras,
+    });
     await registerSpawned(result);
     nameNewAgent(result.meta.id);
     if (placement?.paneId) {
@@ -216,7 +156,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
         })
         .catch((error) => {
           console.error("failed to persist terminal placement:", error);
-          runtime().pushSystemNotification(t("app.placementNotSaved"));
+          runtime().pushSystemNotification(translateNow("app.placementNotSaved"));
         });
     }
     useUiStore.getState().setFocusedId(result.meta.id);
@@ -225,10 +165,9 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
 
   const reportSpawnError = (error: unknown) => {
     console.error("failed to spawn terminal:", error);
-    runtime().pushSystemNotification(t("app.spawnFailed", { detail: String(error) }));
+    runtime().pushSystemNotification(translateNow("app.spawnFailed", { detail: String(error) }));
   };
 
-  /** End an agent for good: process, record, name and runtime state. */
   const close = async (id: string) => {
     forget([id]);
     usePreferencesStore.getState().setAgentName(id, null);
@@ -236,23 +175,21 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     runtime().clearTerminal(id);
     const ui = useUiStore.getState();
     if (ui.expandedId === id) ui.setExpandedId(null);
-    if (ui.focusedId === id) {
-      const workspace = workspaces.find((candidate) => candidate.terminals.some((terminal) => terminal.id === id));
-      const index = workspace ? workspace.terminals.findIndex((terminal) => terminal.id === id) : -1;
-      const next = workspace?.terminals[index - 1] ?? workspace?.terminals[index + 1] ?? null;
-      ui.setFocusedId(next ? next.id : null);
-    }
+    if (ui.focusedId === id) ui.setFocusedId(neighborTerminalId(workspaces, id));
     await refresh();
   };
 
-  /**
-   * Start a terminal again under the same id, so its position, width and
-   * name are kept. Spawned at the xterm's current size: it fitted to the
-   * pane long ago and nothing else would send the real dimensions.
-   */
   const respawn = async (workspaceId: string, terminalId: string, command: string) => {
     const term = getTerminal(terminalId);
-    const result = await api.spawnTerminal(workspaceId, command, terminalId, term?.cols, term?.rows, defaultShell(), launchExtras(command));
+    const result = await api.spawnTerminal({
+      workspaceId,
+      command,
+      terminalId,
+      cols: term?.cols,
+      rows: term?.rows,
+      shell: defaultShell(),
+      launch: launchExtras(command),
+    });
     await registerSpawned(result);
   };
 
@@ -264,8 +201,6 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     }
     liveIds.current.add(id);
     try {
-      // Stop the old PTY first (its record is kept): spawning onto a live id
-      // would leak the old process and double-emit output.
       await api.stopTerminal(id);
       await respawn(owner, id, freshCommand(command));
     } catch (error) {
@@ -278,7 +213,6 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     await refresh();
   };
 
-  /** Resume one persisted session with its agent's continuation command. */
   const resumeItem = async (item: ResumeItem) => {
     try {
       await respawn(item.wsId, item.terminalId, item.resumeCommand);
@@ -289,7 +223,6 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     }
   };
 
-  /** Resume several sessions, two at a time; returns one result per item. */
   const resumeItems = async (items: readonly ResumeItem[]) => {
     const queue = createSpawnQueue<ResumeItem, void>({ concurrency: RESUME_CONCURRENCY, run: (item) => resumeItem(item), now: Date.now });
     const pending = items.map((item) => queue.enqueue({ id: item.terminalId, input: item }));
@@ -303,21 +236,12 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
     for (const result of results) {
       if (result.status === "succeeded") continue;
       const label = labels.get(result.id) ?? result.id;
-      runtime().pushSystemNotification(t("app.resumeFailed", { name: label, detail: errorMessage(result.error, result.status) }));
+      runtime().pushSystemNotification(translateNow("app.resumeFailed", { name: label, detail: errorMessage(result.error, result.status) }));
     }
   };
 
-  /** Resume agents picked in the Fleet; only exited or suspended ones. */
   const resumeTerminals = async (ids: readonly string[]) => {
-    const exited = runtime().exited;
-    const items = ids.flatMap((id) => {
-      for (const workspace of workspaces) {
-        const terminal = workspace.terminals.find((candidate) => candidate.id === id);
-        // The backend refuses to spawn over a live process.
-        if (terminal && (terminal.id in exited || terminal.suspended)) return [resumeItemFor(workspace, terminal)];
-      }
-      return [];
-    });
+    const items = resumableItems(workspaces, ids, runtime().exited);
     if (items.length === 0) return;
     const results = await resumeItems(items);
     const labels = buildAgentLabels(workspaces as Workspace[], {
@@ -328,7 +252,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
       if (result.status === "succeeded") continue;
       const label = labels[result.id];
       runtime().pushSystemNotification(
-        t("app.resumeAgentFailed", { name: label ? agentLabelText(label) : result.id, detail: errorMessage(result.error, result.status) }),
+        translateNow("app.resumeAgentFailed", { name: label ? agentLabelText(label) : result.id, detail: errorMessage(result.error, result.status) }),
       );
     }
     await refresh();

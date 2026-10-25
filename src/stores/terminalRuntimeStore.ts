@@ -1,31 +1,18 @@
 import { create } from "zustand";
-import type {
-  NotificationItem,
-  NotificationPayload,
-  ResumeItem,
-  TitlePayload,
-} from "../types";
+import type { NotificationItem, NotificationPayload } from "../domain/notification.model";
+import type { ResumeItem, TitlePayload } from "../domain/terminal.model";
 
-/** Maximum number of notification entries retained by the desktop client. */
 export const MAX_NOTIF_ITEMS = 50;
 
 type TerminalRuntimeState = {
-  /** Exit code by terminal id. `null` means the process exited without a code. */
   exited: Record<string, number | null>;
-  /** Number of unread notifications by terminal id. */
   notifications: Record<string, number>;
-  /** Notification history shown by the top bar. */
   notifItems: NotificationItem[];
-  /** Context usage reported by an agent, keyed by terminal id. */
   contextUsage: Record<string, number>;
-  /** Dynamic terminal titles reported by the backend. */
   titles: Record<string, string>;
-  /** Git branch by workspace id. */
   branches: Record<string, string>;
-  /** Startup resume prompt state. */
   resumeItems: ResumeItem[] | null;
   resumeSavedAt: number | null;
-  /** Monotonic key used by notification list entries. */
   nextNotificationKey: number;
 
   setExited: (value: RuntimeUpdater<Record<string, number | null>>) => void;
@@ -68,20 +55,20 @@ const removeKey = <T>(record: Record<string, T>, key: string) => {
 };
 
 const removeKeys = <T>(record: Record<string, T>, keys: Set<string>) => {
-  let changed = false;
+  let hasChanged = false;
   const next = { ...record };
   for (const key of keys) {
     if (!(key in next)) continue;
-    changed = true;
+    hasChanged = true;
     delete next[key];
   }
-  return changed ? next : record;
+  return hasChanged ? next : record;
 };
 
-const sameRecord = (a: Record<string, string>, b: Record<string, string>) => {
-  const aKeys = Object.keys(a);
-  const bKeys = Object.keys(b);
-  return aKeys.length === bKeys.length && aKeys.every((key) => a[key] === b[key]);
+const sameRecord = (left: Record<string, string>, right: Record<string, string>) => {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return leftKeys.length === rightKeys.length && leftKeys.every((key) => left[key] === right[key]);
 };
 
 export const useTerminalRuntimeStore = create<TerminalRuntimeState>((set) => ({
@@ -157,7 +144,7 @@ export const useTerminalRuntimeStore = create<TerminalRuntimeState>((set) => ({
           workspaceId,
           message,
           ts: timestamp,
-          read: false,
+          isRead: false,
         }))
         .reverse();
       return {
@@ -172,20 +159,20 @@ export const useTerminalRuntimeStore = create<TerminalRuntimeState>((set) => ({
 
   markTerminalRead: (id) =>
     set((state) => {
-      if (!state.notifItems.some((item) => item.terminalId === id && !item.read)) {
+      if (!state.notifItems.some((item) => item.terminalId === id && !item.isRead)) {
         return state;
       }
       return {
         notifItems: state.notifItems.map((item) =>
-          item.terminalId === id ? { ...item, read: true } : item,
+          item.terminalId === id ? { ...item, isRead: true } : item,
         ),
       };
     }),
 
   markAllRead: () =>
     set((state) => ({
-      notifItems: state.notifItems.some((item) => !item.read)
-        ? state.notifItems.map((item) => ({ ...item, read: true }))
+      notifItems: state.notifItems.some((item) => !item.isRead)
+        ? state.notifItems.map((item) => ({ ...item, isRead: true }))
         : state.notifItems,
       notifications: {},
     })),
@@ -201,8 +188,8 @@ export const useTerminalRuntimeStore = create<TerminalRuntimeState>((set) => ({
           workspaceId: "",
           message,
           ts: Date.now(),
-          read: false,
-          system: true,
+          isRead: false,
+          isSystem: true,
         },
         ...state.notifItems,
       ].slice(0, MAX_NOTIF_ITEMS),
@@ -218,11 +205,11 @@ export const useTerminalRuntimeStore = create<TerminalRuntimeState>((set) => ({
           workspaceId: "",
           message: `Version ${version} is available (installed: ${current}).`,
           ts: Date.now(),
-          read: false,
-          system: true,
-          update: true,
+          isRead: false,
+          isSystem: true,
+          isUpdate: true,
         },
-        ...state.notifItems.filter((item) => !item.update),
+        ...state.notifItems.filter((item) => !item.isUpdate),
       ].slice(0, MAX_NOTIF_ITEMS),
       nextNotificationKey: state.nextNotificationKey + 1,
     })),

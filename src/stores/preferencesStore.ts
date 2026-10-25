@@ -1,6 +1,9 @@
 import { DEFAULT_NAME_LIST, NAME_SETS, type NameSetId, type NamesExhaustedStrategy } from "../domain/agentNames";
 import { create } from "zustand";
-import { t } from "../i18n";
+import type { AgentLaunchSettings } from "../domain/agentLaunchEnv";
+import { translateNow } from "../i18n";
+import { isRecord } from "../lib/records/records";
+import { storageGet, storageRemove, storageSet } from "../lib/storage/safeStorage";
 import { DEFAULT_VOICE_LANGUAGE, isVoiceLanguage, type VoiceLanguage } from "../domain/voiceLanguages";
 import {
   detectShortcutPlatform,
@@ -11,61 +14,61 @@ import {
 
 export type Hotkey = ShortcutDefinition;
 
-const mk = (
-  key: string,
-  meta = false,
-  shift = false,
-  ctrl = false,
-  alt = false,
-): Hotkey => ({ key, meta, shift, ctrl, alt });
+type HotkeyModifiers = Partial<Omit<Hotkey, "key">>;
 
-const IS_MAC = detectShortcutPlatform() === "mac";
+const mk = (key: string, modifiers: HotkeyModifiers = {}): Hotkey => ({
+  key,
+  hasMeta: false,
+  hasShift: false,
+  hasCtrl: false,
+  hasAlt: false,
+  ...modifiers,
+});
 
-const wsSelect = (n: number): Hotkey =>
-  IS_MAC ? mk(String(n), true) : mk(String(n), false, false, true);
+const isMacPlatform = detectShortcutPlatform() === "mac";
 
-const termSelect = (n: number): Hotkey =>
-  IS_MAC ? mk(String(n), true, true) : mk(String(n), false, true, true);
+const wsSelect = (digit: string): Hotkey =>
+  isMacPlatform ? mk(digit, { hasMeta: true }) : mk(digit, { hasCtrl: true });
 
-// On Windows the meta key is the Win key: Win+W opens Widgets, Win+Enter
-// launches Narrator, Win+= drives the Magnifier, etc. Use Ctrl+Shift / Alt
-// combos there; keep Cmd combos on macOS.
+const termSelect = (digit: string): Hotkey =>
+  isMacPlatform ? mk(digit, { hasMeta: true, hasShift: true }) : mk(digit, { hasShift: true, hasCtrl: true });
+
 export const DEFAULT_HOTKEYS: Readonly<Record<HotkeyActionId, Hotkey>> = {
-  newWorkspace: IS_MAC ? mk("n", true, true) : mk("n", false, true, true),
-  renameWorkspace: IS_MAC ? mk("r", true, true) : mk("r", false, true, true),
-  deleteWorkspace: IS_MAC
-    ? mk("Backspace", true, true)
-    : mk("Backspace", false, true, true),
-  newTerminal: IS_MAC ? mk("t", true) : mk("t", false, true, true),
-  closeTerminal: IS_MAC ? mk("w", true) : mk("w", false, true, true),
-  maximizeTerminal: IS_MAC
-    ? mk("Enter", true)
-    : mk("Enter", false, false, false, true),
-  minimizeTerminal: IS_MAC
-    ? mk("Enter", true, true)
-    : mk("Enter", false, true, false, true),
-  increaseFontSize: IS_MAC ? mk("=", true) : mk("=", false, false, true),
-  decreaseFontSize: IS_MAC ? mk("-", true) : mk("-", false, false, true),
-  resetFontSize: IS_MAC ? mk("0", true) : mk("0", false, false, true),
-  toggleVoice: IS_MAC ? mk(" ", true, true) : mk(" ", false, true, true),
-  selectWorkspace1: wsSelect(1),
-  selectWorkspace2: wsSelect(2),
-  selectWorkspace3: wsSelect(3),
-  selectWorkspace4: wsSelect(4),
-  selectWorkspace5: wsSelect(5),
-  selectWorkspace6: wsSelect(6),
-  selectWorkspace7: wsSelect(7),
-  selectWorkspace8: wsSelect(8),
-  selectWorkspace9: wsSelect(9),
-  selectTerminal1: termSelect(1),
-  selectTerminal2: termSelect(2),
-  selectTerminal3: termSelect(3),
-  selectTerminal4: termSelect(4),
-  selectTerminal5: termSelect(5),
-  selectTerminal6: termSelect(6),
-  selectTerminal7: termSelect(7),
-  selectTerminal8: termSelect(8),
-  selectTerminal9: termSelect(9),
+  newWorkspace: isMacPlatform ? mk("n", { hasMeta: true, hasShift: true }) : mk("n", { hasShift: true, hasCtrl: true }),
+  renameWorkspace: isMacPlatform ? mk("r", { hasMeta: true, hasShift: true }) : mk("r", { hasShift: true, hasCtrl: true }),
+  deleteWorkspace: isMacPlatform
+    ? mk("Backspace", { hasMeta: true, hasShift: true })
+    : mk("Backspace", { hasShift: true, hasCtrl: true }),
+  newTerminal: isMacPlatform ? mk("t", { hasMeta: true }) : mk("t", { hasShift: true, hasCtrl: true }),
+  closeTerminal: isMacPlatform ? mk("w", { hasMeta: true }) : mk("w", { hasShift: true, hasCtrl: true }),
+  maximizeTerminal: isMacPlatform
+    ? mk("Enter", { hasMeta: true })
+    : mk("Enter", { hasAlt: true }),
+  minimizeTerminal: isMacPlatform
+    ? mk("Enter", { hasMeta: true, hasShift: true })
+    : mk("Enter", { hasShift: true, hasAlt: true }),
+  increaseFontSize: isMacPlatform ? mk("=", { hasMeta: true }) : mk("=", { hasCtrl: true }),
+  decreaseFontSize: isMacPlatform ? mk("-", { hasMeta: true }) : mk("-", { hasCtrl: true }),
+  resetFontSize: isMacPlatform ? mk("0", { hasMeta: true }) : mk("0", { hasCtrl: true }),
+  toggleVoice: isMacPlatform ? mk(" ", { hasMeta: true, hasShift: true }) : mk(" ", { hasShift: true, hasCtrl: true }),
+  selectWorkspace1: wsSelect("1"),
+  selectWorkspace2: wsSelect("2"),
+  selectWorkspace3: wsSelect("3"),
+  selectWorkspace4: wsSelect("4"),
+  selectWorkspace5: wsSelect("5"),
+  selectWorkspace6: wsSelect("6"),
+  selectWorkspace7: wsSelect("7"),
+  selectWorkspace8: wsSelect("8"),
+  selectWorkspace9: wsSelect("9"),
+  selectTerminal1: termSelect("1"),
+  selectTerminal2: termSelect("2"),
+  selectTerminal3: termSelect("3"),
+  selectTerminal4: termSelect("4"),
+  selectTerminal5: termSelect("5"),
+  selectTerminal6: termSelect("6"),
+  selectTerminal7: termSelect("7"),
+  selectTerminal8: termSelect("8"),
+  selectTerminal9: termSelect("9"),
 };
 
 export const HOTKEY_ACTIONS = [
@@ -108,23 +111,21 @@ function isNumberedHotkeyAction(id: HotkeyActionId): id is NumberedHotkeyActionI
   return id.startsWith("selectWorkspace") || id.startsWith("selectTerminal");
 }
 
-/** The action's name in the current language. */
 export function hotkeyActionLabel(id: HotkeyActionId): string {
-  if (!isNumberedHotkeyAction(id)) return t(`hotkeys.${id}` as const);
-  const n = id.slice(-1);
-  return id.startsWith("selectWorkspace") ? t("hotkeys.selectWorkspace", { n }) : t("hotkeys.selectTerminal", { n });
+  if (!isNumberedHotkeyAction(id)) return translateNow(`hotkeys.${id}` as const);
+  const slotNumber = id.slice(-1);
+  return id.startsWith("selectWorkspace") ? translateNow("hotkeys.selectWorkspace", { n: slotNumber }) : translateNow("hotkeys.selectTerminal", { n: slotNumber });
 }
 
-/** Keep persisted shortcuts executable when a profile moves between OSes. */
 export function normalizeHotkeyForPlatform(
   hotkey: Hotkey,
   platform: ShortcutPlatform = detectShortcutPlatform(),
 ): Hotkey {
-  if (platform === "other" && hotkey.meta && !hotkey.ctrl) {
-    return { ...hotkey, meta: false, ctrl: true };
+  if (platform === "other" && hotkey.hasMeta && !hotkey.hasCtrl) {
+    return { ...hotkey, hasMeta: false, hasCtrl: true };
   }
-  if (platform === "mac" && hotkey.ctrl && !hotkey.meta) {
-    return { ...hotkey, ctrl: false, meta: true };
+  if (platform === "mac" && hotkey.hasCtrl && !hotkey.hasMeta) {
+    return { ...hotkey, hasCtrl: false, hasMeta: true };
   }
   return { ...hotkey };
 }
@@ -132,7 +133,9 @@ export function normalizeHotkeyForPlatform(
 export const MIN_FONT_SIZE = 8;
 export const MAX_FONT_SIZE = 32;
 const DEFAULT_FONT_SIZE = 13;
-export const GRID_COL_OPTIONS = [2, 3, 4, 5, 6, 7, 8] as const;
+const MIN_GRID_COLS = 2;
+const MAX_GRID_COLS = 8;
+export const GRID_COL_OPTIONS: readonly number[] = [...Array(MAX_GRID_COLS - MIN_GRID_COLS + 1).keys()].map((offset) => MIN_GRID_COLS + offset);
 const DEFAULT_GRID_COLS = 2;
 
 function loadNameSet(): NameSetId {
@@ -140,26 +143,16 @@ function loadNameSet(): NameSetId {
   return stored === "rivers" || stored === "custom" ? stored : "stars";
 }
 
-/** The user's own list lives apart from the presets, so picking "Stars" and
- * coming back to "Custom" keeps it ("agentNameList" is the legacy key). */
 function loadCustomNameList(): string[] {
   try {
     const parsed = JSON.parse(storageGet("agentNameListCustom") ?? storageGet("agentNameList") ?? "null");
     if (Array.isArray(parsed)) return parsed.filter((name): name is string => typeof name === "string" && name.trim().length > 0);
-  } catch {
-    // Fall back to the default list below.
-  }
+  } catch {}
   return [...DEFAULT_NAME_LIST];
 }
 
 function nameListFor(set: NameSetId): string[] {
   return set === "custom" ? loadCustomNameList() : [...NAME_SETS[set]];
-}
-
-/** User launch settings of one agent: extra arguments and `KEY=VALUE` lines. */
-export interface AgentLaunchSettings {
-  args: string;
-  env: string;
 }
 
 function loadAgentLaunch(): Record<string, AgentLaunchSettings> {
@@ -181,94 +174,56 @@ function loadAgentLaunch(): Record<string, AgentLaunchSettings> {
   }
 }
 
-/** Parse `KEY=VALUE` lines; blank lines and `#` comments are skipped. */
-export function parseEnvLines(text: string): { env: Record<string, string>; invalid: string[] } {
-  const env: Record<string, string> = {};
-  const invalid: string[] = [];
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
-    const separator = line.indexOf("=");
-    const key = separator > 0 ? line.slice(0, separator).trim() : "";
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || key.startsWith("TERRA_")) {
-      invalid.push(line);
-      continue;
-    }
-    env[key] = line.slice(separator + 1).trim();
-  }
-  return { env, invalid };
-}
-
 function loadAgentNames(): Record<string, string> {
   try {
     const parsed = JSON.parse(storageGet("agentNames") ?? "{}");
     if (parsed && typeof parsed === "object") {
       return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
     }
-  } catch {
-    // Corrupt storage starts empty.
-  }
+  } catch {}
   return {};
 }
 
-const storageGet = (key: string): string | null => {
-  try {
-    return typeof localStorage === "undefined" ? null : localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
+const LEGACY_HOTKEY_MODIFIERS = {
+  hasMeta: "meta",
+  hasShift: "shift",
+  hasCtrl: "ctrl",
+  hasAlt: "alt",
+} as const satisfies Record<keyof HotkeyModifiers, string>;
 
-const storageSet = (key: string, value: string): void => {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Storage can be unavailable in private or restricted web views.
-  }
-};
+function readStoredModifier(value: Record<string, unknown>, modifier: keyof HotkeyModifiers): boolean | null {
+  const stored = value[modifier] ?? value[LEGACY_HOTKEY_MODIFIERS[modifier]];
+  return typeof stored === "boolean" ? stored : null;
+}
 
-const storageRemove = (key: string): void => {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // Storage can be unavailable in private or restricted web views.
+function readStoredHotkey(value: unknown): Hotkey | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.key !== "string" || value.key.length === 0) return null;
+  const hasMeta = readStoredModifier(value, "hasMeta");
+  const hasShift = readStoredModifier(value, "hasShift");
+  const hasCtrl = readStoredModifier(value, "hasCtrl");
+  const hasAlt = readStoredModifier(value, "hasAlt");
+  if (hasMeta === null || hasShift === null || hasCtrl === null || hasAlt === null) return null;
+  return { key: value.key, hasMeta, hasShift, hasCtrl, hasAlt };
+}
+
+function parseHotkeys(raw: string): Record<HotkeyActionId, Hotkey> {
+  const parsed: unknown = JSON.parse(raw);
+  const stored = isRecord(parsed) ? parsed : {};
+  const clean: Record<HotkeyActionId, Hotkey> = { ...DEFAULT_HOTKEYS };
+  for (const { id: action } of HOTKEY_ACTIONS) {
+    const hotkey = readStoredHotkey(stored[action]);
+    if (!hotkey) continue;
+    clean[action] = normalizeHotkeyForPlatform(hotkey);
   }
-};
+  return clean;
+}
 
 function loadHotkeys(): Record<HotkeyActionId, Hotkey> {
   try {
     const raw = storageGet("hotkeys");
-    if (raw) {
-      const parsed: unknown = JSON.parse(raw);
-      const clean: Record<HotkeyActionId, Hotkey> = { ...DEFAULT_HOTKEYS };
-      for (const { id: action } of HOTKEY_ACTIONS) {
-        const value = (parsed as Record<string, unknown>)?.[action];
-        if (
-          value &&
-          typeof value === "object" &&
-          typeof (value as Hotkey).key === "string" &&
-          (value as Hotkey).key.length > 0 &&
-          ["meta", "shift", "ctrl", "alt"].every(
-            (modifier) =>
-              typeof (value as unknown as Record<string, unknown>)[modifier] ===
-              "boolean",
-          )
-        ) {
-          const hotkey = value as Hotkey;
-          clean[action] = normalizeHotkeyForPlatform({
-            key: hotkey.key,
-            meta: hotkey.meta,
-            shift: hotkey.shift,
-            ctrl: hotkey.ctrl,
-            alt: hotkey.alt,
-          });
-        }
-      }
-      return clean;
-    }
-  } catch {
-    // Corrupted value; fall back to defaults.
-  }
+    if (raw) return parseHotkeys(raw);
+  } catch {}
   return { ...DEFAULT_HOTKEYS };
 }
 
@@ -279,14 +234,13 @@ export function formatHotkey(hotkey: Hotkey, platform?: ShortcutPlatform): strin
 export function matchHotkey(event: KeyboardEvent, hotkey: Hotkey): boolean {
   return (
     event.key.toLowerCase() === hotkey.key.toLowerCase() &&
-    event.metaKey === hotkey.meta &&
-    event.ctrlKey === hotkey.ctrl &&
-    event.altKey === hotkey.alt &&
-    event.shiftKey === hotkey.shift
+    event.metaKey === hotkey.hasMeta &&
+    event.ctrlKey === hotkey.hasCtrl &&
+    event.altKey === hotkey.hasAlt &&
+    event.shiftKey === hotkey.hasShift
   );
 }
 
-/** Unknown persisted values (an older or edited preference) fall back to auto-detection. */
 function loadVoiceLanguage(): VoiceLanguage {
   const stored = storageGet("voiceLanguage");
   return isVoiceLanguage(stored) ? stored : DEFAULT_VOICE_LANGUAGE;
@@ -301,7 +255,7 @@ function loadFontSize(): number {
 
 function loadGridCols(): number {
   const raw = Number(storageGet("gridCols"));
-  return GRID_COL_OPTIONS.includes(raw as (typeof GRID_COL_OPTIONS)[number])
+  return GRID_COL_OPTIONS.includes(raw)
     ? raw
     : DEFAULT_GRID_COLS;
 }
@@ -309,56 +263,49 @@ function loadGridCols(): number {
 export type PreferencesState = {
   defaultAgent: string | null;
   hotkeys: Record<HotkeyActionId, Hotkey>;
-  sidebarCollapsed: boolean;
+  isSidebarCollapsed: boolean;
   fontSize: number;
-  /** Terminal font family name; empty means the default stack. */
   terminalFontFamily: string;
   defaultShell: string;
-  reduceMotion: boolean;
-  /** Resume every saved session at startup without showing the opening screen. */
-  autoResume: boolean;
-  /** Native notifications and the app icon badge when an agent needs you. */
-  systemNotifications: boolean;
-  /** Dictation goes to the project's orchestrator when one is running. */
-  voiceToOrchestrator: boolean;
-  /** Give each new agent a name from `agentNameList` (off by default). */
-  agentAutoNames: boolean;
+  shouldReduceMotion: boolean;
+  shouldAutoResume: boolean;
+  isSystemNotificationsEnabled: boolean;
+  shouldSendVoiceToOrchestrator: boolean;
+  shouldAutoNameAgents: boolean;
   agentNameSet: NameSetId;
   agentNameList: string[];
-  avoidSimilarNames: boolean;
+  shouldAvoidSimilarNames: boolean;
   namesExhausted: NamesExhaustedStrategy;
-  /** Names given to agents (automatically or through Rename), by terminal id. */
   agentNames: Record<string, string>;
-  /** Extra arguments and environment per agent id. */
   agentLaunch: Record<string, AgentLaunchSettings>;
   gridCols: number;
-  voiceEnabled: boolean;
+  isVoiceEnabled: boolean;
   voiceLang: VoiceLanguage;
   voiceModel: string | null;
   voiceInputDevice: string | null;
   setDefaultAgent: (agent: string | null) => void;
   setHotkeys: (hotkeys: Record<HotkeyActionId, Hotkey>) => void;
   resetHotkeys: () => void;
-  setSidebarCollapsed: (collapsed: boolean) => void;
+  setSidebarCollapsed: (isCollapsed: boolean) => void;
   toggleSidebar: () => void;
   setFontSize: (size: number) => void;
   setTerminalFontFamily: (name: string) => void;
   changeFontSize: (delta: number) => void;
   resetFontSize: () => void;
   setDefaultShell: (shell: string) => void;
-  setReduceMotion: (enabled: boolean) => void;
-  setAutoResume: (enabled: boolean) => void;
-  setSystemNotifications: (enabled: boolean) => void;
-  setVoiceToOrchestrator: (enabled: boolean) => void;
-  setAgentAutoNames: (enabled: boolean) => void;
+  setReduceMotion: (isEnabled: boolean) => void;
+  setAutoResume: (isEnabled: boolean) => void;
+  setSystemNotifications: (isEnabled: boolean) => void;
+  setVoiceToOrchestrator: (isEnabled: boolean) => void;
+  setAgentAutoNames: (isEnabled: boolean) => void;
   setAgentNameSet: (set: NameSetId) => void;
   setAgentNameList: (names: string[]) => void;
-  setAvoidSimilarNames: (enabled: boolean) => void;
+  setAvoidSimilarNames: (isEnabled: boolean) => void;
   setNamesExhausted: (strategy: NamesExhaustedStrategy) => void;
   setAgentName: (terminalId: string, name: string | null) => void;
   setAgentLaunch: (agentId: string, settings: AgentLaunchSettings) => void;
   setGridCols: (cols: number) => void;
-  setVoiceEnabled: (enabled: boolean) => void;
+  setVoiceEnabled: (isEnabled: boolean) => void;
   setVoiceLang: (lang: VoiceLanguage) => void;
   setVoiceModel: (model: string | null) => void;
   setVoiceInputDevice: (device: string | null) => void;
@@ -367,23 +314,23 @@ export type PreferencesState = {
 export const usePreferencesStore = create<PreferencesState>((set) => ({
   defaultAgent: storageGet("defaultAgent"),
   hotkeys: loadHotkeys(),
-  sidebarCollapsed: storageGet("sidebarCollapsed") === "1",
+  isSidebarCollapsed: storageGet("sidebarCollapsed") === "1",
   fontSize: loadFontSize(),
   terminalFontFamily: storageGet("termFontFamily")?.trim() ?? "",
   defaultShell: storageGet("defaultShell") ?? "",
-  reduceMotion: storageGet("reduceMotion") === "1",
-  autoResume: storageGet("autoResume") === "1",
-  systemNotifications: storageGet("systemNotifications") !== "0",
-  voiceToOrchestrator: storageGet("voiceToOrchestrator") !== "0",
-  agentAutoNames: storageGet("agentAutoNames") === "1",
+  shouldReduceMotion: storageGet("reduceMotion") === "1",
+  shouldAutoResume: storageGet("autoResume") === "1",
+  isSystemNotificationsEnabled: storageGet("systemNotifications") !== "0",
+  shouldSendVoiceToOrchestrator: storageGet("voiceToOrchestrator") !== "0",
+  shouldAutoNameAgents: storageGet("agentAutoNames") === "1",
   agentNameSet: loadNameSet(),
   agentNameList: nameListFor(loadNameSet()),
-  avoidSimilarNames: storageGet("avoidSimilarNames") !== "0",
+  shouldAvoidSimilarNames: storageGet("avoidSimilarNames") !== "0",
   namesExhausted: storageGet("namesExhausted") === "repeat" ? "repeat" : "type-number",
   agentNames: loadAgentNames(),
   agentLaunch: loadAgentLaunch(),
   gridCols: loadGridCols(),
-  voiceEnabled: storageGet("voiceEnabled") === "1",
+  isVoiceEnabled: storageGet("voiceEnabled") === "1",
   voiceLang: loadVoiceLanguage(),
   voiceModel: storageGet("voiceModel"),
   voiceInputDevice: storageGet("voiceInputDevice"),
@@ -404,16 +351,16 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
     set({ hotkeys: { ...DEFAULT_HOTKEYS } });
   },
 
-  setSidebarCollapsed: (sidebarCollapsed) => {
-    storageSet("sidebarCollapsed", sidebarCollapsed ? "1" : "0");
-    set({ sidebarCollapsed });
+  setSidebarCollapsed: (isSidebarCollapsed) => {
+    storageSet("sidebarCollapsed", isSidebarCollapsed ? "1" : "0");
+    set({ isSidebarCollapsed });
   },
 
   toggleSidebar: () =>
     set((state) => {
-      const sidebarCollapsed = !state.sidebarCollapsed;
-      storageSet("sidebarCollapsed", sidebarCollapsed ? "1" : "0");
-      return { sidebarCollapsed };
+      const isSidebarCollapsed = !state.isSidebarCollapsed;
+      storageSet("sidebarCollapsed", isSidebarCollapsed ? "1" : "0");
+      return { isSidebarCollapsed };
     }),
 
   setFontSize: (fontSize) => {
@@ -451,9 +398,9 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
     set({ defaultShell });
   },
 
-  setAgentAutoNames: (agentAutoNames) => {
-    storageSet("agentAutoNames", agentAutoNames ? "1" : "0");
-    set({ agentAutoNames });
+  setAgentAutoNames: (shouldAutoNameAgents) => {
+    storageSet("agentAutoNames", shouldAutoNameAgents ? "1" : "0");
+    set({ shouldAutoNameAgents });
   },
 
   setAgentNameSet: (agentNameSet) => {
@@ -468,9 +415,9 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
     set({ agentNameList, agentNameSet: "custom" });
   },
 
-  setAvoidSimilarNames: (avoidSimilarNames) => {
-    storageSet("avoidSimilarNames", avoidSimilarNames ? "1" : "0");
-    set({ avoidSimilarNames });
+  setAvoidSimilarNames: (shouldAvoidSimilarNames) => {
+    storageSet("avoidSimilarNames", shouldAvoidSimilarNames ? "1" : "0");
+    set({ shouldAvoidSimilarNames });
   },
 
   setNamesExhausted: (namesExhausted) => {
@@ -496,35 +443,35 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
       return { agentNames };
     }),
 
-  setAutoResume: (autoResume) => {
-    storageSet("autoResume", autoResume ? "1" : "0");
-    set({ autoResume });
+  setAutoResume: (shouldAutoResume) => {
+    storageSet("autoResume", shouldAutoResume ? "1" : "0");
+    set({ shouldAutoResume });
   },
 
-  setSystemNotifications: (systemNotifications) => {
-    storageSet("systemNotifications", systemNotifications ? "1" : "0");
-    set({ systemNotifications });
+  setSystemNotifications: (isSystemNotificationsEnabled) => {
+    storageSet("systemNotifications", isSystemNotificationsEnabled ? "1" : "0");
+    set({ isSystemNotificationsEnabled });
   },
 
-  setVoiceToOrchestrator: (voiceToOrchestrator) => {
-    storageSet("voiceToOrchestrator", voiceToOrchestrator ? "1" : "0");
-    set({ voiceToOrchestrator });
+  setVoiceToOrchestrator: (shouldSendVoiceToOrchestrator) => {
+    storageSet("voiceToOrchestrator", shouldSendVoiceToOrchestrator ? "1" : "0");
+    set({ shouldSendVoiceToOrchestrator });
   },
 
-  setReduceMotion: (reduceMotion) => {
-    storageSet("reduceMotion", reduceMotion ? "1" : "0");
-    set({ reduceMotion });
+  setReduceMotion: (shouldReduceMotion) => {
+    storageSet("reduceMotion", shouldReduceMotion ? "1" : "0");
+    set({ shouldReduceMotion });
   },
 
   setGridCols: (gridCols) => {
-    if (!GRID_COL_OPTIONS.includes(gridCols as (typeof GRID_COL_OPTIONS)[number])) return;
+    if (!GRID_COL_OPTIONS.includes(gridCols)) return;
     storageSet("gridCols", String(gridCols));
     set({ gridCols });
   },
 
-  setVoiceEnabled: (voiceEnabled) => {
-    storageSet("voiceEnabled", voiceEnabled ? "1" : "0");
-    set({ voiceEnabled });
+  setVoiceEnabled: (isVoiceEnabled) => {
+    storageSet("voiceEnabled", isVoiceEnabled ? "1" : "0");
+    set({ isVoiceEnabled });
   },
 
   setVoiceLang: (voiceLang) => {

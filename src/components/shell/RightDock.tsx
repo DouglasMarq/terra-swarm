@@ -9,20 +9,18 @@ export interface RightDockTab {
 }
 
 export interface RightDockProps {
-  open?: boolean;
+  isOpen?: boolean;
   onOpen?: () => void;
   onClose?: () => void;
   title?: string;
   content?: ReactNode;
-  /** With two or more tabs the header becomes a tab strip. */
   tabs?: readonly RightDockTab[];
   activeTab?: DockTab;
   onTabChange?: (id: DockTab) => void;
 }
 
-/** The right dock: the agent inspector (⌘I) and the shared task board. */
 export function RightDock({
-  open = true,
+  isOpen = true,
   onClose,
   title,
   content,
@@ -30,14 +28,14 @@ export function RightDock({
   activeTab,
   onTabChange,
 }: RightDockProps) {
-  const t = useT();
-  if (!open) return null;
-  const tabbed = tabs !== undefined && tabs.length > 1;
+  const translate = useT();
+  if (!isOpen) return null;
+  const isTabbed = tabs !== undefined && tabs.length > 1;
   return (
-    <aside className="terra-right-dock terra-anim-slide-in" aria-label={t("shell.inspector.label")}>
+    <aside className="terra-right-dock terra-anim-slide-in" aria-label={translate("shell.inspector.label")}>
       <div className="terra-right-dock-header">
-        {tabbed ? (
-          <div className="terra-right-dock-tabs" role="tablist" aria-label={t("shell.dock.tabs")}>
+        {isTabbed ? (
+          <div className="terra-right-dock-tabs" role="tablist" aria-label={translate("shell.dock.tabs")}>
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -52,19 +50,19 @@ export function RightDock({
             ))}
           </div>
         ) : (
-          <span className="terra-right-dock-title">{title ?? t("shell.inspector.title")}</span>
+          <span className="terra-right-dock-title">{title ?? translate("shell.inspector.title")}</span>
         )}
         <button
           className="terra-right-dock-close"
           type="button"
           onClick={onClose}
-          aria-label={t("shell.inspector.hide")}
-          title={t("shell.inspector.hide")}
+          aria-label={translate("shell.inspector.hide")}
+          title={translate("shell.inspector.hide")}
         >
           <PanelRightClose size={15} aria-hidden="true" />
         </button>
       </div>
-      <div className="terra-right-dock-content" role={tabbed ? "tabpanel" : undefined}>{content}</div>
+      <div className="terra-right-dock-content" role={isTabbed ? "tabpanel" : undefined}>{content}</div>
     </aside>
   );
 }

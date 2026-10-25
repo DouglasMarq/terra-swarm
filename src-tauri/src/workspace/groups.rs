@@ -1,11 +1,8 @@
-//! Project groups: membership, rename, suspend and resume.
-
 use super::*;
+use std::collections::HashSet;
 use std::sync::atomic::Ordering;
 
 impl WorkspaceStore {
-    /// Keep the workspace's group pointer and the group's project list as a
-    /// bidirectional relationship. Passing `None` unassigns the workspace.
     pub fn set_workspace_group(
         &mut self,
         workspace_id: &str,
@@ -46,8 +43,14 @@ impl WorkspaceStore {
         for terminal in &mut workspace.terminals {
             terminal.group_id = group_id.clone();
         }
-        self.save();
         Ok(())
+    }
+
+    fn group(&self, id: &str) -> Result<&Group, String> {
+        self.groups
+            .iter()
+            .find(|group| group.id == id)
+            .ok_or_else(|| format!("group {} not found", id))
     }
 
     pub fn list_groups(&self) -> Vec<Group> {
@@ -64,16 +67,15 @@ impl WorkspaceStore {
             },
             color: None,
             icon_url: None,
-            collapsed: false,
+            is_collapsed: false,
             project_ids: Vec::new(),
             parent_group_id: None,
             layout_mode: Some(default_layout_mode()),
-            suspended: false,
-            archived: false,
-            created_at: Some(unix_millis()),
+            is_suspended: false,
+            is_archived: false,
+            created_at: Some(crate::clock::now_epoch_millis()),
         };
         self.groups.push(group.clone());
-        self.save();
         group
     }
 
@@ -84,70 +86,87 @@ impl WorkspaceStore {
         }
         let group = self.group_mut(id)?;
         group.name = name.to_string();
-        self.save();
         Ok(())
     }
 
-    /// Remove the group metadata but leave projects and terminals untouched.
     pub fn remove_group(&mut self, id: &str) -> Result<(), String> {
         let Some(index) = self.groups.iter().position(|group| group.id == id) else {
             return Err(format!("group {} not found", id));
         };
         self.groups.remove(index);
         for workspace in &mut self.workspaces {
-            if workspace.group_id.as_deref() == Some(id) {
-                workspace.group_id = None;
-            }
-            for terminal in &mut workspace.terminals {
-                if terminal.group_id.as_deref() == Some(id) {
-                    terminal.group_id = None;
-                }
-            }
+            leave_group(workspace, id);
         }
-        self.save();
         Ok(())
     }
 
-    /// Mark a group and its terminal metadata suspended, returning the PTY
-    /// ids that the caller must stop. This method never touches processes.
-    pub fn suspend_group(&mut self, id: &str) -> Result<Vec<String>, String> {
-        let group = self.group_mut(id)?;
-        group.suspended = true;
-        let project_ids: std::collections::HashSet<String> =
-            group.project_ids.iter().cloned().collect();
+    pub fn group_terminal_ids(&self, id: &str) -> Result<Vec<String>, String> {
+        let group = self.group(id)?;
         let mut terminal_ids = Vec::new();
-        for workspace in &mut self.workspaces {
-            if workspace.group_id.as_deref() != Some(id) && !project_ids.contains(&workspace.id) {
-                continue;
-            }
-            for terminal in &mut workspace.terminals {
-                terminal.suspended = true;
-                if !terminal_ids.iter().any(|id| id == &terminal.id) {
-                    terminal_ids.push(terminal.id.clone());
-                }
-            }
-            let suspended_ids: std::collections::HashSet<&str> =
-                terminal_ids.iter().map(String::as_str).collect();
-            for pane in &mut workspace.panes {
-                for tab in &mut pane.tabs {
-                    if tab
-                        .pty_id
-                        .as_deref()
-                        .is_some_and(|pty_id| suspended_ids.contains(pty_id))
-                    {
-                        tab.suspended = true;
-                    }
-                }
+        for workspace in self
+            .workspaces
+            .iter()
+            .filter(|workspace| is_member(workspace, group))
+        {
+            for terminal in &workspace.terminals {
+                add_unique(&mut terminal_ids, terminal.id.clone());
             }
         }
-        self.save();
         Ok(terminal_ids)
+    }
+
+    pub fn suspend_group(&mut self, id: &str) -> Result<(), String> {
+        let suspended_ids: HashSet<String> = self.group_terminal_ids(id)?.into_iter().collect();
+        let group = self.group(id)?.clone();
+        self.group_mut(id)?.is_suspended = true;
+        for workspace in self
+            .workspaces
+            .iter_mut()
+            .filter(|workspace| is_member(workspace, &group))
+        {
+            suspend_workspace_sessions(workspace, &suspended_ids);
+        }
+        Ok(())
     }
 
     pub fn resume_group(&mut self, id: &str) -> Result<(), String> {
         let group = self.group_mut(id)?;
-        group.suspended = false;
-        self.save();
+        group.is_suspended = false;
         Ok(())
+    }
+}
+
+fn is_member(workspace: &Workspace, group: &Group) -> bool {
+    workspace.group_id.as_deref() == Some(group.id.as_str())
+        || group.project_ids.contains(&workspace.id)
+}
+
+fn suspend_workspace_sessions(workspace: &mut Workspace, suspended_ids: &HashSet<String>) {
+    for terminal in &mut workspace.terminals {
+        terminal.is_suspended = true;
+    }
+    for tab in workspace
+        .panes
+        .iter_mut()
+        .flat_map(|pane| pane.tabs.iter_mut())
+    {
+        if tab
+            .pty_id
+            .as_ref()
+            .is_some_and(|pty_id| suspended_ids.contains(pty_id))
+        {
+            tab.is_suspended = true;
+        }
+    }
+}
+
+fn leave_group(workspace: &mut Workspace, group_id: &str) {
+    if workspace.group_id.as_deref() == Some(group_id) {
+        workspace.group_id = None;
+    }
+    for terminal in &mut workspace.terminals {
+        if terminal.group_id.as_deref() == Some(group_id) {
+            terminal.group_id = None;
+        }
     }
 }

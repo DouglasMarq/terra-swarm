@@ -96,8 +96,6 @@ vi.mock("@xterm/addon-fit", () => ({
     terminal?: { cols: number; rows: number };
     proposeDimensions = vi.fn(() => {
       if (mocks.geometry.width <= 0 || mocks.geometry.height <= 0) {
-        // This is the real addon's minimum fallback. TerminalPane must reject
-        // it when its host is display:none or otherwise has no box.
         return { cols: 2, rows: 1 };
       }
       return { ...mocks.fitDimensions };
@@ -121,14 +119,14 @@ const defaultProps: PaneProps = {
   id: "pty-1",
   command: "luna-max",
   fontSize: 14,
-  exited: false,
-  expanded: false,
+  hasExited: false,
+  isExpanded: false,
   basis: 100,
   height: "100%",
-  entering: false,
-  dragOver: false,
+  isEntering: false,
+  isDragOver: false,
   notifications: 0,
-  focused: true,
+  isFocused: true,
   onClearNotifications: vi.fn(),
   onFocus: vi.fn(),
   onToggleExpand: vi.fn(),
@@ -200,7 +198,7 @@ beforeEach(() => {
     },
   });
 
-  class TestResizeObserver {
+  class TestResizeObserver implements ResizeObserver {
     private readonly callback: ResizeObserverCallback;
     disconnect = vi.fn();
 
@@ -214,7 +212,7 @@ beforeEach(() => {
     unobserve(_target: Element) {}
 
     trigger() {
-      this.callback([], this as unknown as ResizeObserver);
+      this.callback([], this);
     }
   }
 
@@ -235,7 +233,7 @@ afterEach(() => {
 });
 
 describe("TerminalPane geometry and PTY lifecycle", () => {
-  it("measures a visible mount and sends valid xterm dimensions", async () => {
+  it("Given a visible mount, when the pane measures it, then valid xterm dimensions are sent", async () => {
     pane();
     await flushFrames();
 
@@ -243,19 +241,19 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
     expect(mocks.api.resizeTerminal).toHaveBeenCalledWith("pty-1", 100, 24);
   });
 
-  it("never forwards FitAddon's 2x1 hidden fallback", async () => {
+  it("Given a hidden mount, when FitAddon falls back to 2x1, then the size is never forwarded", async () => {
     mocks.geometry.width = 0;
     mocks.geometry.height = 0;
-    pane({ hidden: true });
+    pane({ isHidden: true });
     await flushFrames();
 
     expect(mocks.api.resizeTerminal).not.toHaveBeenCalled();
   });
 
-  it("refits after hidden-to-visible and layout/font changes", async () => {
+  it("Given a hidden pane, when it becomes visible or the layout or font changes, then it refits", async () => {
     mocks.geometry.width = 0;
     mocks.geometry.height = 0;
-    const view = pane({ hidden: true });
+    const view = pane({ isHidden: true });
     await flushFrames();
     expect(mocks.api.resizeTerminal).not.toHaveBeenCalled();
 
@@ -263,7 +261,7 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
     mocks.geometry.height = 600;
     mocks.fitDimensions.cols = 150;
     mocks.fitDimensions.rows = 30;
-    rerenderPane(view, { hidden: false, basis: 50, height: "50%", fontSize: 16 });
+    rerenderPane(view, { isHidden: false, basis: 50, height: "50%", fontSize: 16 });
     await flushFrames();
 
     expect(mocks.api.resizeTerminal).toHaveBeenCalledTimes(1);
@@ -271,7 +269,7 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
     expect(mocks.terminals[0]?.options.fontSize).toBe(16);
   });
 
-  it("coalesces observer, window, focus and visibility signals", async () => {
+  it("Given observer, window, focus and visibility signals, when they arrive together, then they are coalesced", async () => {
     pane();
     await flushFrames();
     mocks.api.resizeTerminal.mockClear();
@@ -287,24 +285,16 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
     expect(mocks.api.resizeTerminal).toHaveBeenCalledWith("pty-1", 125, 24);
   });
 
-  it("keeps exited scrollback mounted without resize/write, then refits after restart", async () => {
+  it("Given an exited terminal, when it restarts, then its scrollback stayed mounted without resize or write and it refits", async () => {
     const view = pane();
     await flushFrames();
     mocks.api.resizeTerminal.mockClear();
     mocks.api.writeTerminal.mockClear();
     const terminal = mocks.terminals[0];
 
-    rerenderPane(view, { exited: true });
+    rerenderPane(view, { hasExited: true });
     terminal?.dataHandler?.("echo should not be sent after exit");
-    terminal?.keyHandler?.({
-      altKey: false,
-      ctrlKey: false,
-      key: "Enter",
-      metaKey: false,
-      preventDefault: vi.fn(),
-      shiftKey: true,
-      type: "keydown",
-    } as unknown as KeyboardEvent);
+    terminal?.keyHandler?.(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true }));
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -318,13 +308,13 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
     expect(view.container).toHaveTextContent("Processo encerrado");
     expect(mocks.api.resizeTerminal).not.toHaveBeenCalled();
 
-    rerenderPane(view, { exited: false });
+    rerenderPane(view, { hasExited: false });
     await flushFrames();
     expect(mocks.api.resizeTerminal).toHaveBeenCalledTimes(1);
     expect(mocks.api.resizeTerminal).toHaveBeenCalledWith("pty-1", 100, 24);
   });
 
-  it("cleans observers, event listeners and pending frames on unmount", async () => {
+  it("Given a mounted pane, when it unmounts, then observers, event listeners and pending frames are cleaned up", async () => {
     const view = pane();
     const terminal = mocks.terminals[0];
     view.unmount();
@@ -343,7 +333,7 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
 });
 
 describe("TerminalPane input", () => {
-  it("given a busy input queue, retries the keystroke until it is written", async () => {
+  it("Given a busy input queue, when a key is typed, then the keystroke is retried until it is written", async () => {
     mocks.api.writeTerminal
       .mockRejectedValueOnce(new IpcError({ code: "busy", message: "input queue full" }))
       .mockResolvedValue(undefined);
@@ -354,7 +344,7 @@ describe("TerminalPane input", () => {
     expect(mocks.api.writeTerminal).toHaveBeenLastCalledWith("pty-1", "a");
   });
 
-  it("given a write that fails for another reason, warns once without retrying", async () => {
+  it("Given a write that fails for another reason, when a key is typed, then it warns once without retrying", async () => {
     const failure = new IpcError({ code: "other", message: "terminal pty-1 input closed" });
     mocks.api.writeTerminal.mockRejectedValue(failure);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -383,7 +373,7 @@ describe("TerminalPane file drop", () => {
     return { view, onFocus, send, terminal: mocks.terminals[0] };
   }
 
-  it("given a file dropped on a running pane, pastes its escaped path and focuses the pane", async () => {
+  it("Given a running pane, when a file is dropped on it, then its escaped path is pasted and the pane is focused", async () => {
     const { onFocus, send, terminal } = await dropOnPane();
 
     send({ type: "drop", paths: ["/Users/me/Screen Shot.png"], position });
@@ -393,7 +383,7 @@ describe("TerminalPane file drop", () => {
     expect(onFocus).toHaveBeenCalled();
   });
 
-  it("given a drop outside the pane, pastes nothing", async () => {
+  it("Given a drop outside the pane, when the drop lands, then nothing is pasted", async () => {
     const { send, terminal } = await dropOnPane({}, "outside");
 
     send({ type: "drop", paths: ["/Users/me/shot.png"], position });
@@ -401,15 +391,15 @@ describe("TerminalPane file drop", () => {
     expect(terminal?.paste).not.toHaveBeenCalled();
   });
 
-  it("given an exited pane, pastes nothing", async () => {
-    const { send, terminal } = await dropOnPane({ exited: true });
+  it("Given an exited pane, when a file is dropped on it, then nothing is pasted", async () => {
+    const { send, terminal } = await dropOnPane({ hasExited: true });
 
     send({ type: "drop", paths: ["/Users/me/shot.png"], position });
 
     expect(terminal?.paste).not.toHaveBeenCalled();
   });
 
-  it("given a drag over the pane, highlights it until the drag leaves", async () => {
+  it("Given a drag over the pane, when the drag leaves, then the highlight is removed", async () => {
     const { view, send } = await dropOnPane();
     const root = view.container.querySelector(".pane");
 
@@ -420,7 +410,7 @@ describe("TerminalPane file drop", () => {
     expect(root?.classList.contains("drop-target")).toBe(false);
   });
 
-  it("given the pane unmounts, stops listening for drops", async () => {
+  it("Given a mounted pane, when it unmounts, then it stops listening for drops", async () => {
     const { view } = await dropOnPane();
 
     view.unmount();

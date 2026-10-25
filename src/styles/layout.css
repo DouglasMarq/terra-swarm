@@ -1,6 +1,3 @@
-/* Layout primitives for the Alethe-inspired orchestration shell. These are
- * deliberately framework-agnostic so React, Tauri, and future views can share
- * the same geometry while the product identity remains Terra. */
 .terra-surface-grid {
   display: grid;
   min-width: 0;

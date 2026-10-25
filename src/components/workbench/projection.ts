@@ -1,13 +1,7 @@
-import { migrateLegacyWorkspaces } from "../../domain/migration";
+import { migrateLegacyWorkspaces } from "../../domain/migration/legacyMigration";
 import { byId } from "../../domain/selectors";
-import type {
-  Group,
-  Pane,
-  Project,
-  TerminalTab,
-  WorkspaceContainer,
-  WorkspaceSnapshotV2,
-} from "../../types";
+import { uniqueStrings } from "../../lib/collections/uniqueStrings";
+import type { Group, Pane, Project, TerminalTab, WorkspaceContainer, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import type {
   WorkbenchContainerProjection,
   WorkbenchPaneProjection,
@@ -15,14 +9,6 @@ import type {
   WorkbenchSource,
 } from "./types";
 
-function uniqueIds(ids: readonly string[]): string[] {
-  const seen = new Set<string>();
-  return ids.filter((id) => {
-    if (!id || seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  });
-}
 
 function isSnapshot(source: WorkbenchSource): source is WorkspaceSnapshotV2 {
   return !Array.isArray(source) && "version" in source && source.version === 2;
@@ -47,18 +33,16 @@ function paneIdsForContainer(
   container: WorkspaceContainer,
   project: Project | null,
 ): string[] {
-  const declared = uniqueIds(container.paneIds);
+  const declared = uniqueStrings(container.paneIds);
   if (declared.length > 0) return declared;
 
-  // Legacy snapshots can have a project-level pane list without copying it
-  // onto its sole container. This fallback keeps the projection lossless.
-  if (project && project.containerIds.length <= 1) return uniqueIds(project.paneIds);
+  if (project && project.containerIds.length <= 1) return uniqueStrings(project.paneIds);
   return [];
 }
 
 function tabsForPane(snapshot: WorkspaceSnapshotV2, pane: Pane): TerminalTab[] {
   const tabsById = new Map(snapshot.tabs.map((tab) => [tab.id, tab]));
-  return uniqueIds(pane.tabIds)
+  return uniqueStrings(pane.tabIds)
     .map((tabId) => tabsById.get(tabId))
     .filter((tab): tab is TerminalTab => tab !== undefined);
 }
@@ -83,13 +67,6 @@ function containerProjection(
   return { container, project, group, panes };
 }
 
-/**
- * Projects normalized domain data into the visual workbench hierarchy.
- *
- * The projection never mutates the source and deliberately keeps hidden and
- * collapsed containers in the result. React can therefore hide a surface
- * without unmounting its terminal render trees or terminating their PTYs.
- */
 export function projectWorkbench(source: WorkbenchSource): WorkbenchProjection {
   const snapshot = toWorkbenchSnapshot(source);
   const containers = snapshot.containers.map((container) =>

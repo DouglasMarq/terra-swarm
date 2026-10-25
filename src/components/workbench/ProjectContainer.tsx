@@ -20,7 +20,7 @@ function projectLabel(props: ProjectContainerProps): string {
 export function ProjectContainer({
   projection,
   renderTab,
-  visible = projection.container.visible && !projection.container.closed,
+  isVisible = projection.container.isVisible && !projection.container.isClosed,
   onCollapseContainer,
   onFullscreenContainer,
   onHideContainer,
@@ -28,17 +28,17 @@ export function ProjectContainer({
   onWorkspaceLayoutChange,
   ...actions
 }: ProjectContainerProps) {
-  const t = useT();
+  const translate = useT();
   const newAgentHotkey = usePreferencesStore((state) => state.hotkeys.newTerminal ?? DEFAULT_HOTKEYS.newTerminal);
   const { container } = projection;
-  const label = projectLabel({ projection, renderTab, visible, ...actions });
+  const label = projectLabel({ projection, renderTab, isVisible, ...actions });
   const paneCount = projection.panes.length;
   const gridDimensions = gridDimensionsForLayout(container.layout, paneCount);
   const storedMode: WorkbenchLayoutMode = projection.project
     ? workbenchModeForLayout(projection.project.layout)
     : container.layout.mode;
   const visibleMode = visibleWorkbenchMode(storedMode);
-  const autoGrid = isAutoGrid(container.layout);
+  const hasAutoGrid = isAutoGrid(container.layout);
 
   const setMode = (nextMode: "grid" | "spotlight"): void => {
     const project = projection.project;
@@ -65,40 +65,40 @@ export function ProjectContainer({
     <section
       className="terra-project-container"
       data-container-id={container.id}
-      data-visible={visible}
-      data-collapsed={container.collapsed}
-      data-fullscreen={container.fullscreen}
-      aria-hidden={!visible}
+      data-visible={isVisible}
+      data-collapsed={container.isCollapsed}
+      data-fullscreen={container.isFullscreen}
+      aria-hidden={!isVisible}
     >
       <header className="terra-project-container__header">
         <button
           type="button"
           className="terra-project-container__action"
-          aria-label={t(container.collapsed ? "workbench.expand" : "workbench.collapse", { name: label })}
-          aria-expanded={!container.collapsed}
-          onClick={() => onCollapseContainer?.(container.id, !container.collapsed)}
+          aria-label={translate(container.isCollapsed ? "workbench.expand" : "workbench.collapse", { name: label })}
+          aria-expanded={!container.isCollapsed}
+          onClick={() => onCollapseContainer?.(container.id, !container.isCollapsed)}
         >
-          {container.collapsed ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+          {container.isCollapsed ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
         </button>
         <span className="terra-project-container__title">
           {label}
         </span>
         {projection.project && onWorkspaceLayoutChange ? (
-          <div className="terra-segmented terra-project-container__modes" role="group" aria-label={t("workbench.layout", { name: label })}>
+          <div className="terra-segmented terra-project-container__modes" role="group" aria-label={translate("workbench.layout", { name: label })}>
             <button type="button" aria-pressed={visibleMode === "grid"} data-active={visibleMode === "grid"} onClick={() => setMode("grid")}>
-              {t("workbench.grid")}
+              {translate("workbench.grid")}
             </button>
             <button type="button" aria-pressed={visibleMode === "spotlight"} data-active={visibleMode === "spotlight"} onClick={() => setMode("spotlight")}>
-              {t("workbench.focus")}
+              {translate("workbench.focus")}
             </button>
           </div>
         ) : null}
         {visibleMode === "grid" ? (
           <GridSizePicker
             dimensions={gridDimensions}
-            auto={autoGrid}
+            isAuto={hasAutoGrid}
             paneCount={paneCount}
-            disabled={!onLayoutChange}
+            isDisabled={!onLayoutChange}
             onSelect={(dimensions) => updateGrid(dimensions)}
             onAuto={() => onLayoutChange?.({ containerId: container.id, layout: workspaceLayoutForAutoGrid(container.layout) })}
           />
@@ -114,7 +114,7 @@ export function ProjectContainer({
             })}
           >
             <Plus size={13} aria-hidden="true" />
-            {t("grid.newAgent")}
+            {translate("grid.newAgent")}
             <kbd>{formatHotkey(newAgentHotkey)}</kbd>
           </button>
         ) : null}
@@ -123,19 +123,19 @@ export function ProjectContainer({
             <button
               type="button"
               className="terra-project-container__action"
-              aria-label={t(container.fullscreen ? "workbench.exitFullscreen" : "workbench.fullscreen", { name: label })}
-              aria-pressed={container.fullscreen}
-              onClick={() => onFullscreenContainer(container.id, !container.fullscreen)}
+              aria-label={translate(container.isFullscreen ? "workbench.exitFullscreen" : "workbench.fullscreen", { name: label })}
+              aria-pressed={container.isFullscreen}
+              onClick={() => onFullscreenContainer(container.id, !container.isFullscreen)}
             >
-              {container.fullscreen ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
+              {container.isFullscreen ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
             </button>
           ) : null}
           {onHideContainer ? (
             <button
               type="button"
               className="terra-project-container__action"
-              aria-label={t("workbench.hide", { name: label })}
-              title={t("workbench.hideTitle")}
+              aria-label={translate("workbench.hide", { name: label })}
+              title={translate("workbench.hideTitle")}
               onClick={() => onHideContainer(container.id)}
             >
               <X size={13} aria-hidden="true" />

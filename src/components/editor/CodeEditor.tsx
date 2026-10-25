@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import { basicSetup, EditorView } from "codemirror";
 import { Compartment, EditorState } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
@@ -7,7 +7,6 @@ import { LanguageDescription } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 
 export interface CodeEditorProps {
-  /** Identifies the document; a new one resets the editor. */
   docKey: string;
   path: string;
   initial: string;
@@ -30,14 +29,16 @@ const theme = EditorView.theme(
   { dark: true },
 );
 
-/** CodeMirror 6 with the language guessed from the file name. Loaded lazily. */
 export default function CodeEditor({ docKey, path, initial, onChange, onSave }: CodeEditorProps) {
   const host = useRef<HTMLDivElement | null>(null);
   const handlers = useRef({ onChange, onSave });
   handlers.current = { onChange, onSave };
 
+  const openedDocument = useEffectEvent(() => ({ initial, path }));
+
   useEffect(() => {
     if (!host.current) return;
+    const { initial, path } = openedDocument();
     const language = new Compartment();
     const view = new EditorView({
       parent: host.current,
@@ -58,16 +59,15 @@ export default function CodeEditor({ docKey, path, initial, onChange, onSave }: 
       }),
     });
     view.focus();
-    let disposed = false;
+    let isDisposed = false;
     const description = LanguageDescription.matchFilename(languages, path.split("/").pop() ?? path);
     void description?.load().then((support) => {
-      if (!disposed) view.dispatch({ effects: language.reconfigure(support) });
+      if (!isDisposed) view.dispatch({ effects: language.reconfigure(support) });
     });
     return () => {
-      disposed = true;
+      isDisposed = true;
       view.destroy();
     };
-    // The editor owns the text after mount; only a new document resets it.
   }, [docKey]);
 
   return <div ref={host} className="terra-editor-host" />;

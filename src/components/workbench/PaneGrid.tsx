@@ -1,11 +1,12 @@
 import { Group, Panel, Separator } from "react-resizable-panels";
 import type { ReactNode } from "react";
-import type { WorkspaceLayout } from "../../types";
+import type { WorkspaceLayout } from "../../domain/workspace.model";
 import {
   gridDimensionsForLayout,
   layoutForPanelIds,
   orderedIds,
   resolveLayoutMode,
+  type PaneArrangement,
 } from "./layout";
 import type {
   ContainerLayoutChange,
@@ -14,10 +15,9 @@ import type {
   WorkbenchPaneProjection,
 } from "./types";
 import { useT } from "../../i18n";
+import { FULL_PERCENT } from "../../lib/math/percent";
 
-/** Share of the row the focused pane takes in spotlight mode, in percent. */
 const SPOTLIGHT_ACTIVE_PERCENT = 72;
-/** Share of the row the first pane takes in sidebar mode, in percent. */
 const SIDEBAR_PANE_PERCENT = 26;
 
 export interface PaneGridProps {
@@ -54,7 +54,7 @@ function panelSizes(
     if (activeId) {
       const remaining = ordered.filter((id) => id !== activeId);
       sizes[activeId] = SPOTLIGHT_ACTIVE_PERCENT;
-      const remainder = remaining.length > 0 ? (100 - SPOTLIGHT_ACTIVE_PERCENT) / remaining.length : 0;
+      const remainder = remaining.length > 0 ? (FULL_PERCENT - SPOTLIGHT_ACTIVE_PERCENT) / remaining.length : 0;
       remaining.forEach((id) => {
         sizes[id] = remainder;
       });
@@ -63,7 +63,7 @@ function panelSizes(
   if (mode === "sidebar" && ordered.length > 1) {
     const sidebarId = ordered[0];
     sizes[sidebarId] = SIDEBAR_PANE_PERCENT;
-    const remainder = (100 - SIDEBAR_PANE_PERCENT) / (ordered.length - 1);
+    const remainder = (FULL_PERCENT - SIDEBAR_PANE_PERCENT) / (ordered.length - 1);
     ordered.slice(1).forEach((id) => {
       sizes[id] = remainder;
     });
@@ -73,11 +73,10 @@ function panelSizes(
 
 function persistedLayout(
   containerId: string,
-  mode: WorkbenchLayoutMode,
-  paneIds: readonly string[],
-  sizes: Record<string, number>,
+  arrangement: Required<PaneArrangement>,
   baseLayout: WorkspaceLayout,
 ): ContainerLayoutChange {
+  const { mode, paneIds, sizes } = arrangement;
   const normalizedSizes = layoutForPanelIds(
     { ...baseLayout, itemIds: [...paneIds], sizes },
     paneIds,
@@ -92,10 +91,6 @@ function persistedLayout(
   return { containerId, layout };
 }
 
-/**
- * Resizable pane surface. `Panel` and `Separator` stay direct children of
- * `Group`, as required by react-resizable-panels v4.
- */
 export function PaneGrid({
   projection,
   mode: explicitMode,
@@ -103,12 +98,9 @@ export function PaneGrid({
   renderPane,
   onLayoutChange,
 }: PaneGridProps) {
-  const t = useT();
+  const translate = useT();
   const mode = resolveLayoutMode(projection.container.layout, explicitMode);
   const isSpotlight = mode === "spotlight";
-  // Grade and Foco share one CSS grid with cells in a stable order, so
-  // focusing a pane or switching modes only moves cells; the terminals inside
-  // are never remounted (that lost scrollback, selection and keyboard focus).
   const panes = paneOrder(projection, isSpotlight ? "grid" : mode, activePaneId);
   if (panes.length === 0) return null;
 
@@ -125,10 +117,6 @@ export function PaneGrid({
       ? (panes.find(({ pane }) => pane.id === activePaneId) ?? panes[0]).pane.id
       : null;
     const sideCount = panes.length - 1;
-    // A fixed grid with free slots: the last row's agents share the whole
-    // width instead of leaving empty cells. Columns are subdivided by the
-    // last row's count so both rows split evenly (4 cols, 3 in the last row
-    // → 12 tracks: full rows span 3, the last row spans 4).
     const usedRows = Math.max(1, Math.ceil(panes.length / columns));
     const lastRowStart = (usedRows - 1) * columns;
     const lastRowCount = panes.length - lastRowStart;
@@ -136,7 +124,7 @@ export function PaneGrid({
     const gridStyle = isSpotlight
       ? {
           gridTemplateColumns: sideCount > 0
-            ? `minmax(0, ${SPOTLIGHT_ACTIVE_PERCENT}fr) minmax(0, ${100 - SPOTLIGHT_ACTIVE_PERCENT}fr)`
+            ? `minmax(0, ${SPOTLIGHT_ACTIVE_PERCENT}fr) minmax(0, ${FULL_PERCENT - SPOTLIGHT_ACTIVE_PERCENT}fr)`
             : "minmax(0, 1fr)",
           gridTemplateRows: `repeat(${Math.max(1, sideCount)}, minmax(0, 1fr))`,
         }
@@ -196,9 +184,7 @@ export function PaneGrid({
           onLayoutChange?.(
             persistedLayout(
               projection.container.id,
-              mode,
-              panes.map(({ pane }) => pane.id),
-              nextSizes,
+              { mode, paneIds: panes.map(({ pane }) => pane.id), sizes: nextSizes },
               projection.container.layout,
             ),
           );
@@ -221,7 +207,7 @@ export function PaneGrid({
                   key={`separator-${projection.container.id}-${paneProjection.pane.id}`}
                   id={`separator-${projection.container.id}-${paneProjection.pane.id}`}
                   className="terra-pane-separator"
-                  aria-label={t("grid.resize")}
+                  aria-label={translate("grid.resize")}
                 />,
               ]
             : []),

@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { translateNow } from "../../i18n";
 import { AlertTriangle, Check, ClipboardCopy, RefreshCw } from "lucide-react";
 import {
   Component,
@@ -13,16 +13,14 @@ import styles from "./system.module.css";
 export interface AppErrorFallbackProps {
   error: unknown;
   details: SafeErrorDetails;
-  copied: boolean;
+  isCopied: boolean;
   reset: () => void;
   copyDetails: () => Promise<void>;
 }
 
 export interface AppErrorBoundaryProps {
   children: ReactNode;
-  /** Render a custom fallback without receiving raw stack/path data. */
   fallback?: ReactNode | ((props: AppErrorFallbackProps) => ReactNode);
-  /** Changes in these values reset a recovered subtree. */
   resetKeys?: readonly unknown[];
   onError?: (error: unknown, info: ErrorInfo) => void;
   onReset?: () => void;
@@ -31,12 +29,11 @@ export interface AppErrorBoundaryProps {
 interface AppErrorBoundaryState {
   error: unknown | null;
   info: ErrorInfo | null;
-  copied: boolean;
+  isCopied: boolean;
 }
 
-const INITIAL_STATE: AppErrorBoundaryState = { copied: false, error: null, info: null };
+const INITIAL_STATE: AppErrorBoundaryState = { isCopied: false, error: null, info: null };
 
-/** How long the "copied" confirmation stays on the copy button. */
 const COPIED_FEEDBACK_MS = 2_400;
 
 export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorBoundaryState> {
@@ -50,7 +47,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   }
 
   public static getDerivedStateFromError(error: unknown): Partial<AppErrorBoundaryState> {
-    return { copied: false, error };
+    return { isCopied: false, error };
   }
 
   public componentDidCatch(error: unknown, info: ReactErrorInfo) {
@@ -81,28 +78,26 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   };
 
   private copyDetails = async () => {
-    const details = getSafeErrorDetails(this.state.error, this.state.info, t);
+    const details = getSafeErrorDetails(this.state.error, this.state.info, translateNow);
     try {
       if (!navigator.clipboard?.writeText) throw new Error("clipboard-unavailable");
       await navigator.clipboard.writeText(details.text);
-      this.setState({ copied: true });
+      this.setState({ isCopied: true });
       if (this.copyTimer !== undefined) clearTimeout(this.copyTimer);
-      this.copyTimer = setTimeout(() => this.setState({ copied: false }), COPIED_FEEDBACK_MS);
+      this.copyTimer = setTimeout(() => this.setState({ isCopied: false }), COPIED_FEEDBACK_MS);
     } catch {
-      // Clipboard permissions are optional; do not expose the raw report or
-      // turn a recoverable error surface into a second error.
-      this.setState({ copied: false });
+      this.setState({ isCopied: false });
     }
   };
 
   public render() {
     if (this.state.error === null) return this.props.children;
 
-    const details = getSafeErrorDetails(this.state.error, this.state.info, t);
+    const details = getSafeErrorDetails(this.state.error, this.state.info, translateNow);
     const fallback = this.props.fallback;
     if (typeof fallback === "function") {
       return fallback({
-        copied: this.state.copied,
+        isCopied: this.state.isCopied,
         copyDetails: this.copyDetails,
         details,
         error: this.state.error,
@@ -120,10 +115,10 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
             </span>
             <div>
               <h1 id="terra-error-title" className={styles.errorTitle}>
-                {t("system.errorTitle")}
+                {translateNow("system.errorTitle")}
               </h1>
               <p className={styles.errorDescription}>
-                {t("system.errorBody")}
+                {translateNow("system.errorBody")}
               </p>
             </div>
           </div>
@@ -135,15 +130,15 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
               onClick={this.reset}
             >
               <RefreshCw size={14} aria-hidden="true" />
-              {t("nav.retry")}
+              {translateNow("nav.retry")}
             </button>
             <button type="button" className={styles.errorButton} onClick={this.copyDetails}>
-              {this.state.copied ? (
+              {this.state.isCopied ? (
                 <Check size={14} aria-hidden="true" />
               ) : (
                 <ClipboardCopy size={14} aria-hidden="true" />
               )}
-              {this.state.copied ? t("system.copied") : t("system.copyReport")}
+              {this.state.isCopied ? translateNow("system.copied") : translateNow("system.copyReport")}
             </button>
           </div>
         </section>

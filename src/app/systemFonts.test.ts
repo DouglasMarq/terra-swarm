@@ -6,7 +6,7 @@ vi.mock("../api", () => ({ api }));
 import { loadSystemFonts } from "./systemFonts";
 
 describe("loadSystemFonts", () => {
-  it("given the backend can't list fonts, warns and falls back to the detected terminal fonts", async () => {
+  it("Given the backend can't list fonts, when loading fonts, then it warns and falls back to the detected terminal fonts", async () => {
     api.listSystemFonts.mockRejectedValue(new Error("no font listing"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await expect(loadSystemFonts()).resolves.toEqual([]);

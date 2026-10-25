@@ -1,5 +1,3 @@
-//! Workspaces and their terminals: create, remove, rename, reorder, resize.
-
 use super::*;
 use std::sync::atomic::Ordering;
 
@@ -30,7 +28,7 @@ impl WorkspaceStore {
             cwd
         };
         let id = format!("ws-{}", NEXT_WS_ID.fetch_add(1, Ordering::SeqCst));
-        let ws = Workspace {
+        let workspace = Workspace {
             id: id.clone(),
             name: if name.trim().is_empty() {
                 "workspace".into()
@@ -44,34 +42,32 @@ impl WorkspaceStore {
             containers: vec![Self::new_container(&id, Self::default_container_id(&id))],
             active_pane_id: None,
             active_container_id: None,
-            collapsed: false,
-            archived: false,
-            created_at: Some(unix_millis()),
+            is_collapsed: false,
+            is_archived: false,
+            created_at: Some(crate::clock::now_epoch_millis()),
             layout_mode: Some(default_layout_mode()),
             layout: Some(WorkspaceLayout::default()),
         };
-        self.workspaces.push(ws.clone());
-        self.save();
-        ws
+        self.workspaces.push(workspace.clone());
+        workspace
     }
 
     pub fn remove(&mut self, id: &str) -> Option<Workspace> {
-        let idx = self.workspaces.iter().position(|w| w.id == id)?;
-        let ws = self.workspaces.remove(idx);
+        let index = self
+            .workspaces
+            .iter()
+            .position(|candidate| candidate.id == id)?;
+        let workspace = self.workspaces.remove(index);
         for group in &mut self.groups {
             group.project_ids.retain(|project_id| project_id != id);
         }
-        self.save();
-        Some(ws)
+        Some(workspace)
     }
 
     pub fn get(&self, id: &str) -> Option<&Workspace> {
-        self.workspaces.iter().find(|w| w.id == id)
+        self.workspaces.iter().find(|candidate| candidate.id == id)
     }
 
-    /// Return the workspace that owns a terminal identity, if any. Terminal
-    /// ids are global PTY keys, so callers must use this instead of searching
-    /// only the target workspace when validating a forced/resume spawn.
     pub fn terminal_owner(&self, terminal_id: &str) -> Option<&str> {
         self.workspaces.iter().find_map(|workspace| {
             workspace
@@ -82,89 +78,87 @@ impl WorkspaceStore {
         })
     }
 
-    /// Returns false when the workspace no longer exists (e.g. it was closed
-    /// while a terminal was being spawned), so the caller can roll back.
-    pub fn add_terminal(&mut self, ws_id: &str, meta: TerminalMeta) -> bool {
-        if self
-            .terminal_owner(&meta.id)
-            .is_some_and(|owner| owner != ws_id)
-        {
-            return false;
-        }
-        let Some(ws) = self.workspace_mut(ws_id).ok() else {
-            return false;
-        };
-        if let Some(existing) = ws.terminals.iter_mut().find(|t| t.id == meta.id) {
-            existing.command = meta.command.clone();
-            existing.suspended = false;
-            if meta.worktree.is_some() {
-                existing.worktree = meta.worktree.clone();
-            }
-            if meta.role.is_some() {
-                existing.role = meta.role;
-            }
-        } else {
-            ws.terminals.push(meta);
-        }
-        self.save();
-        true
+    pub fn can_add_terminal(&self, workspace_id: &str, terminal_id: &str) -> bool {
+        self.get(workspace_id).is_some()
+            && self
+                .terminal_owner(terminal_id)
+                .is_none_or(|owner| owner == workspace_id)
     }
 
-    pub fn remove_terminal(&mut self, terminal_id: &str) {
-        for ws in self.workspaces.iter_mut() {
-            ws.terminals.retain(|t| t.id != terminal_id);
-            for pane in &mut ws.panes {
+    pub fn record_terminal(&mut self, workspace_id: &str, meta: TerminalMeta) {
+        let Ok(workspace) = self.workspace_mut(workspace_id) else {
+            return;
+        };
+        match workspace
+            .terminals
+            .iter_mut()
+            .find(|terminal| terminal.id == meta.id)
+        {
+            Some(existing) => refresh_terminal(existing, meta),
+            None => workspace.terminals.push(meta),
+        }
+    }
+
+    pub fn forget_terminal(&mut self, terminal_id: &str) {
+        for workspace in self.workspaces.iter_mut() {
+            workspace
+                .terminals
+                .retain(|terminal| terminal.id != terminal_id);
+            for pane in &mut workspace.panes {
                 pane.tabs.retain(|tab| {
                     tab.pty_id.as_deref() != Some(terminal_id) && tab.id.as_str() != terminal_id
                 });
-                if pane
-                    .active_tab_id
-                    .as_deref()
-                    .is_some_and(|id| !pane.tabs.iter().any(|tab| tab.id == id))
-                {
-                    pane.active_tab_id = pane.tabs.first().map(|tab| tab.id.clone());
-                }
+                pane.repair_active_tab();
             }
         }
-        self.save();
     }
 
-    /// A blank name leaves the workspace as it is.
     pub fn rename(&mut self, id: &str, name: String) -> Result<(), String> {
         let name = name.trim().to_string();
-        let ws = self.workspace_mut(id)?;
+        let workspace = self.workspace_mut(id)?;
         if name.is_empty() {
             return Ok(());
         }
-        ws.name = name;
-        self.save();
+        workspace.name = name;
         Ok(())
     }
 
     pub fn reorder_workspaces(&mut self, order: &[String]) {
-        let mut remaining = std::mem::take(&mut self.workspaces);
-        let mut sorted = Vec::with_capacity(remaining.len());
-        for id in order {
-            if let Some(pos) = remaining.iter().position(|w| &w.id == id) {
-                sorted.push(remaining.remove(pos));
-            }
-        }
-        sorted.extend(remaining);
-        self.workspaces = sorted;
-        self.save();
+        let workspaces = std::mem::take(&mut self.workspaces);
+        self.workspaces = reorder_by_ids(workspaces, order, |workspace| &workspace.id);
     }
 
-    pub fn set_width(&mut self, ws_id: &str, terminal_id: &str, width: f64) -> Result<(), String> {
-        let ws = self.workspace_mut(ws_id)?;
-        let t = ws
+    pub fn set_width(
+        &mut self,
+        workspace_id: &str,
+        terminal_width: TerminalWidth<'_>,
+    ) -> Result<(), String> {
+        let TerminalWidth { terminal_id, width } = terminal_width;
+        let workspace = self.workspace_mut(workspace_id)?;
+        let terminal = workspace
             .terminals
             .iter_mut()
-            .find(|t| t.id == terminal_id)
-            .ok_or_else(|| format!("terminal {} not found in workspace {}", terminal_id, ws_id))?;
-        t.width = width
+            .find(|terminal| terminal.id == terminal_id)
+            .ok_or_else(|| {
+                format!(
+                    "terminal {} not found in workspace {}",
+                    terminal_id, workspace_id
+                )
+            })?;
+        terminal.width = width
             .is_finite()
             .then_some(width.clamp(MIN_TERMINAL_WIDTH, MAX_TERMINAL_WIDTH));
-        self.save();
         Ok(())
+    }
+}
+
+fn refresh_terminal(existing: &mut TerminalMeta, meta: TerminalMeta) {
+    existing.command = meta.command;
+    existing.is_suspended = false;
+    if meta.worktree.is_some() {
+        existing.worktree = meta.worktree;
+    }
+    if meta.role.is_some() {
+        existing.role = meta.role;
     }
 }

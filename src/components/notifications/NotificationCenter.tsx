@@ -3,16 +3,17 @@ import { Bell, CheckCircle2, Info } from "lucide-react";
 import type { AgentLabel } from "../../domain/agentLabels";
 import { elapsedTime } from "../../domain/elapsedTime";
 import { latestUnreadPerAgent } from "../../domain/notifications";
-import type { NotificationItem } from "../../types";
+import type { NotificationItem } from "../../domain/notification.model";
 import { intlLocale, useT, type Translate } from "../../i18n";
 import "./notifications.css";
+
+const MAX_EARLIER_NOTIFICATIONS = 12;
 
 export interface NotificationCenterProps {
   items: readonly NotificationItem[];
   labels: Readonly<Record<string, AgentLabel | undefined>>;
   workspaceNames: Readonly<Record<string, string | undefined>>;
-  muted: boolean;
-  /** Agents whose context window is nearly full (≥ `CONTEXT_ATTENTION_PERCENT`). */
+  isMuted: boolean;
   contextAlerts?: readonly { terminalId: string; workspaceId: string; used: number }[];
   onJump: (item: NotificationItem) => void;
   onFocusAgent?: (terminalId: string) => void;
@@ -25,11 +26,11 @@ export interface NotificationCenterProps {
 
 type Filter = "attention" | "all";
 
-export function relativeTime(ts: number, t: Translate, now = Date.now()): string {
+export function relativeTime(ts: number, translate: Translate, now = Date.now()): string {
   const elapsed = elapsedTime(ts, now);
-  if (elapsed.unit === "now") return t("time.now");
-  if (elapsed.unit === "minutes") return t("time.minutes", { count: elapsed.count });
-  if (elapsed.unit === "hours") return t("time.hours", { count: elapsed.count });
+  if (elapsed.unit === "now") return translate("time.now");
+  if (elapsed.unit === "minutes") return translate("time.minutes", { count: elapsed.count });
+  if (elapsed.unit === "hours") return translate("time.hours", { count: elapsed.count });
   return new Date(ts).toLocaleDateString(intlLocale(), { day: "2-digit", month: "short" });
 }
 
@@ -37,7 +38,7 @@ export function NotificationCenter({
   items,
   labels,
   workspaceNames,
-  muted,
+  isMuted,
   contextAlerts = [],
   onJump,
   onFocusAgent,
@@ -47,33 +48,33 @@ export function NotificationCenter({
   onOpenFleet,
   now = Date.now(),
 }: NotificationCenterProps) {
-  const t = useT();
+  const translate = useT();
   const pending = useMemo(() => latestUnreadPerAgent(items), [items]);
   const pendingIds = new Set(pending.map((item) => item.terminalId));
   const contextOnly = contextAlerts.filter((alert) => !pendingIds.has(alert.terminalId));
   const attentionCount = pending.length + contextOnly.length;
   const [filter, setFilter] = useState<Filter>(attentionCount > 0 ? "attention" : "all");
   const earlier = useMemo(
-    () => [...items].filter((item) => filter === "all" || item.read || item.system).sort((a, b) => b.ts - a.ts).slice(0, 12),
+    () => [...items].filter((item) => filter === "all" || item.isRead || item.isSystem).sort((left, right) => right.ts - left.ts).slice(0, MAX_EARLIER_NOTIFICATIONS),
     [filter, items],
   );
   const pendingKeys = new Set(pending.map((item) => item.key));
 
   return (
-    <div className="terra-notifications" role="dialog" aria-label={t("notifications.title")}>
+    <div className="terra-notifications" role="dialog" aria-label={translate("notifications.title")}>
       <div className="terra-notifications-head">
         <div className="terra-notifications-title">
-          <strong>{t("notifications.title")}</strong>
+          <strong>{translate("notifications.title")}</strong>
           <button type="button" className="terra-link-button" onClick={onMarkAllRead} disabled={pending.length === 0}>
-            {t("notifications.markAllRead")}
+            {translate("notifications.markAllRead")}
           </button>
         </div>
-        <div className="terra-segmented" role="group" aria-label={t("notifications.filter")}>
+        <div className="terra-segmented" role="group" aria-label={translate("notifications.filter")}>
           <button type="button" aria-pressed={filter === "attention"} data-active={filter === "attention"} onClick={() => setFilter("attention")}>
-            {t("notifications.needsYou", { count: attentionCount })}
+            {translate("notifications.needsYou", { count: attentionCount })}
           </button>
           <button type="button" aria-pressed={filter === "all"} data-active={filter === "all"} onClick={() => setFilter("all")}>
-            {t("notifications.all", { count: items.length + contextOnly.length })}
+            {translate("notifications.all", { count: items.length + contextOnly.length })}
           </button>
         </div>
       </div>
@@ -82,7 +83,7 @@ export function NotificationCenter({
         {attentionCount === 0 && filter === "attention" ? (
           <div className="terra-notifications-empty">
             <CheckCircle2 size={18} aria-hidden="true" />
-            <span>{t("notifications.empty")}</span>
+            <span>{translate("notifications.empty")}</span>
           </div>
         ) : null}
         {filter === "attention"
@@ -93,14 +94,14 @@ export function NotificationCenter({
                 <span className="terra-dot" data-status="attention" aria-hidden="true" />
                 <div className="terra-notification-main">
                   <div className="terra-notification-meta">
-                    <b>{label?.primary ?? t("common.agentFallback")}</b>
-                    <span className="terra-tag">{label?.tag ?? t("common.agent")}{workspaceNames[item.workspaceId] ? ` · ${workspaceNames[item.workspaceId]}` : ""}</span>
-                    <span className="terra-notification-time">{relativeTime(item.ts, t, now)}</span>
+                    <b>{label?.primary ?? translate("common.agentFallback")}</b>
+                    <span className="terra-tag">{label?.tag ?? translate("common.agent")}{workspaceNames[item.workspaceId] ? ` · ${workspaceNames[item.workspaceId]}` : ""}</span>
+                    <span className="terra-notification-time">{relativeTime(item.ts, translate, now)}</span>
                   </div>
                   <p>{item.message}</p>
                   <div className="terra-notification-actions">
-                    <button type="button" className="terra-button terra-button-attention" onClick={() => onJump(item)}>{t("notifications.goToPane")}</button>
-                    <button type="button" className="terra-button" onClick={() => onMarkRead(item.terminalId)}>{t("notifications.markRead")}</button>
+                    <button type="button" className="terra-button terra-button-attention" onClick={() => onJump(item)}>{translate("notifications.goToPane")}</button>
+                    <button type="button" className="terra-button" onClick={() => onMarkRead(item.terminalId)}>{translate("notifications.markRead")}</button>
                   </div>
                 </div>
               </article>
@@ -115,13 +116,13 @@ export function NotificationCenter({
                 <span className="terra-dot" data-status="attention" aria-hidden="true" />
                 <div className="terra-notification-main">
                   <div className="terra-notification-meta">
-                    <b>{label?.primary ?? t("common.agentFallback")}</b>
-                    <span className="terra-tag">{label?.tag ?? t("common.agent")}{workspaceNames[alert.workspaceId] ? ` · ${workspaceNames[alert.workspaceId]}` : ""}</span>
+                    <b>{label?.primary ?? translate("common.agentFallback")}</b>
+                    <span className="terra-tag">{label?.tag ?? translate("common.agent")}{workspaceNames[alert.workspaceId] ? ` · ${workspaceNames[alert.workspaceId]}` : ""}</span>
                   </div>
-                  <p>{t("fleet.contextHigh", { count: alert.used })}</p>
+                  <p>{translate("fleet.contextHigh", { count: alert.used })}</p>
                   {onFocusAgent ? (
                     <div className="terra-notification-actions">
-                      <button type="button" className="terra-button terra-button-attention" onClick={() => onFocusAgent(alert.terminalId)}>{t("notifications.goToPane")}</button>
+                      <button type="button" className="terra-button terra-button-attention" onClick={() => onFocusAgent(alert.terminalId)}>{translate("notifications.goToPane")}</button>
                     </div>
                   ) : null}
                 </div>
@@ -132,21 +133,21 @@ export function NotificationCenter({
 
         {earlier.filter((item) => !pendingKeys.has(item.key) || filter === "all").length > 0 ? (
           <>
-            <span className="terra-notifications-section">{filter === "all" ? t("notifications.recent") : t("notifications.earlier")}</span>
+            <span className="terra-notifications-section">{filter === "all" ? translate("notifications.recent") : translate("notifications.earlier")}</span>
             {earlier
               .filter((item) => filter === "all" || !pendingKeys.has(item.key))
               .map((item) => {
                 const label = labels[item.terminalId];
                 return (
-                  <button type="button" className="terra-notification-row" key={item.key} data-read={item.read} onClick={() => onJump(item)}>
-                    {item.system ? <Info size={14} aria-hidden="true" /> : <Bell size={14} aria-hidden="true" />}
+                  <button type="button" className="terra-notification-row" key={item.key} data-read={item.isRead} onClick={() => onJump(item)}>
+                    {item.isSystem ? <Info size={14} aria-hidden="true" /> : <Bell size={14} aria-hidden="true" />}
                     <span className="terra-notification-row-copy">
-                      <span>{item.system ? item.message : <><b>{label?.primary ?? t("common.agentFallback")}</b> {item.message}</>}</span>
+                      <span>{item.isSystem ? item.message : <><b>{label?.primary ?? translate("common.agentFallback")}</b> {item.message}</>}</span>
                       <span className="terra-notification-row-meta">
-                        {item.system ? t("common.appName") : `${label?.tag ?? t("common.agent")}${workspaceNames[item.workspaceId] ? ` · ${workspaceNames[item.workspaceId]}` : ""}`}
+                        {item.isSystem ? translate("common.appName") : `${label?.tag ?? translate("common.agent")}${workspaceNames[item.workspaceId] ? ` · ${workspaceNames[item.workspaceId]}` : ""}`}
                       </span>
                     </span>
-                    <span className="terra-notification-time">{relativeTime(item.ts, t, now)}</span>
+                    <span className="terra-notification-time">{relativeTime(item.ts, translate, now)}</span>
                   </button>
                 );
               })}
@@ -155,9 +156,9 @@ export function NotificationCenter({
       </div>
 
       <div className="terra-notifications-foot">
-        <button type="button" className="terra-link-button" onClick={onOpenFleet}>{t("notifications.seeFleet")}</button>
-        <button type="button" className="terra-link-button" aria-pressed={muted} onClick={onToggleMute}>
-          {muted ? t("notifications.unmute") : t("notifications.mute")}
+        <button type="button" className="terra-link-button" onClick={onOpenFleet}>{translate("notifications.seeFleet")}</button>
+        <button type="button" className="terra-link-button" aria-pressed={isMuted} onClick={onToggleMute}>
+          {isMuted ? translate("notifications.unmute") : translate("notifications.mute")}
         </button>
       </div>
     </div>

@@ -1,4 +1,3 @@
-/** English — the source dictionary. Every key here must exist in pt-BR.ts. */
 export const en = {
   common: {
     agent: "agent",
@@ -183,7 +182,6 @@ export const en = {
   },
   fleet: {
     statusCount: "{status} · {count}",
-    terminalAgent: "Terminal",
     shellAgent: "Shell",
     summary: { one: "{count} agent in {projects}", other: "{count} agents in {projects}" },
     projectCount: { one: "{count} project", other: "{count} projects" },

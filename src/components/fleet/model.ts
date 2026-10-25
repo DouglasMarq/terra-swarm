@@ -1,11 +1,14 @@
+import { agentKind } from "../../domain/agentLabels";
 import { deriveAgentStatus, type AgentRunStatus } from "../../domain/agentStatus";
-import type { McpAgentState } from "../../types";
-import { DEFAULT_AGENT_PROFILES } from "../../lib/features/agentProfiles";
+import type { McpAgentState } from "../../domain/mcp.model";
+import { DEFAULT_AGENT_PROFILES } from "../../domain/agentProfiles";
 import type { Translate } from "../../i18n";
 import { elapsedTime } from "../../domain/elapsedTime";
-import type { TerminalMeta, Workspace, WorkspaceGroup } from "../../types";
+import { clamp } from "../../lib/math/clamp";
+import { MS_PER_SECOND, SECONDS_PER_HOUR, SECONDS_PER_MINUTE } from "../../lib/time/durations";
+import type { TerminalMeta } from "../../domain/terminal.model";
+import type { Workspace, WorkspaceGroup } from "../../domain/workspace.model";
 
-/** The four states exposed by the fleet command center. */
 export type FleetStatus = AgentRunStatus;
 
 export type FleetStatusFilter = FleetStatus | "all";
@@ -29,13 +32,9 @@ export interface FleetDerivationInput {
   contextUsage?: Readonly<Record<string, number>>;
   titles?: Readonly<Record<string, string>>;
   branches?: Readonly<Record<string, string>>;
-  /** Optional telemetry keyed by terminal id. A value can be a timestamp or display text. */
   lastActivity?: Readonly<Record<string, FleetValue>>;
-  /** Optional duration keyed by terminal id. Milliseconds are formatted for the card. */
   durations?: Readonly<Record<string, FleetValue>>;
-  /** Allows a host to supply a stable display label for a terminal. */
   agentLabels?: Readonly<Record<string, string>>;
-  /** State the agents reported through their hooks, by terminal id. */
   reported?: Readonly<Record<string, McpAgentState>>;
 }
 
@@ -75,7 +74,7 @@ export interface FleetProjectModel {
 export interface FleetGroupModel {
   id: string;
   name: string;
-  suspended: boolean;
+  isSuspended: boolean;
   status: FleetStatus;
   projects: FleetProjectModel[];
 }
@@ -103,7 +102,6 @@ export const DEFAULT_FLEET_FILTERS: FleetFilters = {
 };
 
 const EMPTY_RECORD: Readonly<Record<string, never>> = {};
-/** Durations below this are taken as seconds, larger ones as milliseconds. */
 const DURATION_SECONDS_LIMIT = 1000;
 const UNGROUPED_ID = "ungrouped";
 const UNGROUPED_NAME = "—";
@@ -117,24 +115,24 @@ function mapValue<T>(record: Readonly<Record<string, T>> | undefined, id: string
   return record?.[id];
 }
 
-function agentLabelFromCommand(command: string, t: Translate): string {
-  const token = command.trim().split(/\s+/)[0] ?? "";
-  const executable = token.split(/[\\/]/).pop()?.replace(/\.(?:exe|cmd|sh)$/i, "") ?? "";
-  if (!executable) return t("fleet.terminalAgent");
-  const shell = t("fleet.shellAgent");
-  const known: Record<string, string> = {
-    ...Object.fromEntries(DEFAULT_AGENT_PROFILES.filter((profile) => profile.command).map((profile) => [profile.command, profile.label])),
-    shell,
-    zsh: shell,
-    bash: shell,
-    fish: shell,
-  };
-  return known[executable.toLowerCase()] ?? executable.charAt(0).toUpperCase() + executable.slice(1);
+const SCRIPT_EXTENSION = /\.(?:cmd|sh)$/i;
+const SHELL_KIND = "shell";
+const KNOWN_AGENT_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
+  DEFAULT_AGENT_PROFILES.filter((profile) => profile.command).map((profile) => [profile.command, profile.label]),
+);
+
+function agentLabelFromCommand(command: string, translate: Translate): string {
+  const kind = agentKind(command).replace(SCRIPT_EXTENSION, "");
+  if (kind === SHELL_KIND) return translate("fleet.shellAgent");
+  return KNOWN_AGENT_LABELS[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1);
 }
+
+const MIN_CONTEXT_USAGE = 0;
+const MAX_CONTEXT_USAGE = 100;
 
 function clampContext(value: number | undefined): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return Math.max(0, Math.min(100, value));
+  return clamp(value, MIN_CONTEXT_USAGE, MAX_CONTEXT_USAGE);
 }
 
 function membershipByWorkspace(
@@ -155,7 +153,6 @@ function membershipByWorkspace(
   return result;
 }
 
-/** Fleet statuses from the one that most needs a human to the least. */
 export const FLEET_STATUS_PRIORITY: readonly FleetStatus[] = ["attention", "working", "idle", "suspended", "exited"];
 
 export function fleetAggregateStatus(statuses: readonly FleetStatus[]): FleetStatus {
@@ -168,27 +165,28 @@ function groupForId(groups: readonly WorkspaceGroup[], id: string): WorkspaceGro
     groups.find((group) => group.id === id) ?? {
       id: UNGROUPED_ID,
       name: UNGROUPED_NAME,
-      collapsed: false,
+      isCollapsed: false,
       projectIds: [],
       parentGroupId: null,
-      suspended: false,
+      isSuspended: false,
     }
   );
 }
 
-function makeAgent(
-  workspace: Workspace,
-  terminal: TerminalMeta,
-  group: WorkspaceGroup,
-  input: FleetDerivationInput,
-  t: Translate,
-): FleetAgentModel {
+interface AgentPlacement {
+  workspace: Workspace;
+  terminal: TerminalMeta;
+  group: WorkspaceGroup;
+}
+
+function makeAgent(placement: AgentPlacement, input: FleetDerivationInput, translate: Translate): FleetAgentModel {
+  const { workspace, terminal, group } = placement;
   const exited = input.exited ?? EMPTY_RECORD as Readonly<Record<string, number | null>>;
   const notifications = input.notifications ?? EMPTY_RECORD as Readonly<Record<string, number>>;
   const contextUsage = input.contextUsage ?? EMPTY_RECORD as Readonly<Record<string, number>>;
-  const groupSuspended = Boolean(group.suspended || workspace.terminals.length > 0 && workspace.terminals.every((item) => item.suspended));
+  const isGroupSuspended = Boolean(group.isSuspended || workspace.terminals.length > 0 && workspace.terminals.every((item) => item.isSuspended));
   const command = clean(terminal.command, "shell");
-  const label = clean(mapValue(input.agentLabels, terminal.id), agentLabelFromCommand(command, t));
+  const label = clean(mapValue(input.agentLabels, terminal.id), agentLabelFromCommand(command, translate));
   const title = clean(mapValue(input.titles, terminal.id));
   return {
     id: terminal.id,
@@ -205,8 +203,8 @@ function makeAgent(
     cwd: workspace.cwd,
     branch: clean(mapValue(input.branches, workspace.id)),
     status: deriveAgentStatus({
-      suspended: groupSuspended || terminal.suspended,
-      exited: terminal.id in exited,
+      isSuspended: isGroupSuspended || terminal.isSuspended,
+      hasExited: terminal.id in exited,
       notifications: notifications[terminal.id],
       contextUsed: contextUsage[terminal.id],
       reported: input.reported?.[terminal.id],
@@ -258,25 +256,20 @@ function groupModelFromAgents(
   return {
     id: group.id,
     name: clean(group.name, group.id),
-    suspended: Boolean(group.suspended),
+    isSuspended: Boolean(group.isSuspended),
     status: projectStatus(projects.flatMap((project) => project.agents)),
     projects,
   };
 }
 
-/**
- * Normalizes the legacy workspace response into a board-friendly fleet model.
- * This function is deliberately pure so filters and rendering can be tested
- * without a Tauri runtime or a mounted React tree.
- */
-export function deriveFleetModel(input: FleetDerivationInput, t: Translate): FleetModel {
+export function deriveFleetModel(input: FleetDerivationInput, translate: Translate): FleetModel {
   const workspaces = input.workspaces ?? [];
   const groups = input.groups ?? [];
   const membership = membershipByWorkspace(workspaces, groups);
   const ungrouped = groupForId(groups, UNGROUPED_ID);
   const agents = workspaces.flatMap((workspace) => {
     const group = membership.get(workspace.id) ?? ungrouped;
-    return workspace.terminals.map((terminal) => makeAgent(workspace, terminal, group, input, t));
+    return workspace.terminals.map((terminal) => makeAgent({ workspace, terminal, group }, input, translate));
   });
 
   const groupModels = [
@@ -307,7 +300,6 @@ function searchText(agent: FleetAgentModel): string {
   ].join(" ").toLocaleLowerCase();
 }
 
-/** Applies a filter without mutating the normalized source model. */
 export function filterFleetModel(model: FleetModel, filters: Partial<FleetFilters> = {}): FleetModel {
   const groupId = filters.groupId ?? "all";
   const status = filters.status ?? "all";
@@ -340,30 +332,30 @@ export function filterFleetModel(model: FleetModel, filters: Partial<FleetFilter
   return { agents: filteredAgents, groups, summary: summaryFor(filteredAgents) };
 }
 
-export function formatFleetDuration(value: FleetValue | undefined, now: number, t: Translate): string | null {
+export function formatFleetDuration(value: FleetValue | undefined, now: number, translate: Translate): string | null {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value === "string") return value;
-  if (value instanceof Date) return formatFleetRelativeTime(value.getTime(), now, t);
+  if (value instanceof Date) return formatFleetRelativeTime(value.getTime(), now, translate);
   if (!Number.isFinite(value)) return null;
-  const milliseconds = value < DURATION_SECONDS_LIMIT ? value * 1000 : value;
-  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) return t("time.durationHours", { hours, minutes: String(minutes).padStart(2, "0") });
-  if (minutes > 0) return t("time.durationMinutes", { minutes, seconds: String(seconds).padStart(2, "0") });
-  return t("time.durationSeconds", { seconds });
+  const milliseconds = value < DURATION_SECONDS_LIMIT ? value * MS_PER_SECOND : value;
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / MS_PER_SECOND));
+  const hours = Math.floor(totalSeconds / SECONDS_PER_HOUR);
+  const minutes = Math.floor((totalSeconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+  const seconds = totalSeconds % SECONDS_PER_MINUTE;
+  if (hours > 0) return translate("time.durationHours", { hours, minutes: String(minutes).padStart(2, "0") });
+  if (minutes > 0) return translate("time.durationMinutes", { minutes, seconds: String(seconds).padStart(2, "0") });
+  return translate("time.durationSeconds", { seconds });
 }
 
-export function formatFleetRelativeTime(value: FleetValue | undefined, now: number, t: Translate): string | null {
+export function formatFleetRelativeTime(value: FleetValue | undefined, now: number, translate: Translate): string | null {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value === "string") return value;
   const timestamp = value instanceof Date ? value.getTime() : value;
   if (!Number.isFinite(timestamp)) return null;
   const elapsed = elapsedTime(timestamp, now);
-  if (elapsed.unit === "now") return t("time.ago.now");
-  if (elapsed.unit === "minutes") return t("time.ago.minutes", { count: elapsed.count });
-  if (elapsed.unit === "hours") return t("time.ago.hours", { count: elapsed.count });
-  return t("time.ago.days", { count: elapsed.count });
+  if (elapsed.unit === "now") return translate("time.ago.now");
+  if (elapsed.unit === "minutes") return translate("time.ago.minutes", { count: elapsed.count });
+  if (elapsed.unit === "hours") return translate("time.ago.hours", { count: elapsed.count });
+  return translate("time.ago.days", { count: elapsed.count });
 }
 

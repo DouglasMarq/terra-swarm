@@ -1,4 +1,4 @@
-import { useLocale, useT } from "../../../i18n";
+import { useT } from "../../../i18n";
 import {
   ArchiveRestore,
   Bot,
@@ -22,8 +22,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Command } from "cmdk";
-import { useEffect, useMemo, useState } from "react";
-import type { AgentInfo, Workspace, WorkspaceGroup } from "../../../types";
+import { useEffect, useState } from "react";
+import type { AgentInfo } from "../../../domain/agent.model";
+import type { Workspace, WorkspaceGroup } from "../../../domain/workspace.model";
 import {
   buildCommandModel,
   executeCommand,
@@ -38,14 +39,13 @@ import {
 import styles from "./CommandPalette.module.css";
 
 export interface CommandPaletteProps extends Omit<CommandPaletteData, "workspaces" | "groups" | "agents"> {
-  open: boolean;
+  isOpen: boolean;
   workspaces: readonly Workspace[];
   groups?: readonly WorkspaceGroup[];
   agents?: readonly AgentInfo[];
   callbacks?: CommandPaletteCallbacks;
-  /** Called for destructive actions; the command is not dispatched until the host confirms. */
   onRequestConfirm?: (request: CommandConfirmRequest) => void;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (isOpen: boolean) => void;
 }
 
 const ICONS: Readonly<Record<CommandIconName, LucideIcon>> = {
@@ -70,6 +70,8 @@ const ICONS: Readonly<Record<CommandIconName, LucideIcon>> = {
   clear: Trash2,
 };
 
+const NO_COMMANDS: readonly CommandDescriptor[] = [];
+
 function classes(...values: Array<string | false | undefined>): string {
   return values.filter(Boolean).join(" ");
 }
@@ -78,9 +80,8 @@ function commandKey(command: CommandDescriptor): string {
   return command.id;
 }
 
-/** Terra's keyboard-first command surface. Ctrl/Cmd+K ownership remains with the host. */
 export function CommandPalette({
-  open,
+  isOpen,
   workspaces,
   groups = [],
   agents = [],
@@ -90,9 +91,9 @@ export function CommandPalette({
   recentCommandIds = [],
   hasDetachedTabs = false,
   hasRecentlyClosedTabs = false,
-  dockOpen,
-  voiceEnabled,
-  voiceRecording,
+  isDockOpen,
+  isVoiceEnabled,
+  isVoiceRecording,
   agentLabels,
   resumeCount,
   exitedTerminalIds,
@@ -100,44 +101,34 @@ export function CommandPalette({
   onRequestConfirm,
   onOpenChange,
 }: CommandPaletteProps) {
-  const t = useT();
-  const locale = useLocale();
+  const translate = useT();
   const [query, setQuery] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
-  const commands = useMemo(
-    () =>
-      buildCommandModel({
-        workspaces,
-        groups,
-        agents,
-        focusedWorkspaceId,
-        focusedTerminalId,
-        focusedGroupId,
-        recentCommandIds,
-        hasDetachedTabs,
-        hasRecentlyClosedTabs,
-        dockOpen,
-        voiceEnabled,
-        voiceRecording,
-        agentLabels,
-        resumeCount,
-        exitedTerminalIds,
-      }),
-    // `locale` re-runs the model so labels follow a language switch.
-    [locale, agentLabels, resumeCount, exitedTerminalIds, agents, dockOpen, focusedGroupId, focusedTerminalId, focusedWorkspaceId, groups, hasDetachedTabs, hasRecentlyClosedTabs, recentCommandIds, voiceEnabled, voiceRecording, workspaces],
-  );
-  const visibleCommands = useMemo(() => filterCommands(commands, query), [commands, query]);
-  const visibleGroups = useMemo(
-    () => groupCommands(visibleCommands).filter((group) => group.commands.length > 0),
-    [visibleCommands],
-  );
+  const commands = isOpen ? buildCommandModel({
+    workspaces,
+    groups,
+    agents,
+    focusedWorkspaceId,
+    focusedTerminalId,
+    focusedGroupId,
+    recentCommandIds,
+    hasDetachedTabs,
+    hasRecentlyClosedTabs,
+    isDockOpen,
+    isVoiceEnabled,
+    isVoiceRecording,
+    agentLabels,
+    resumeCount,
+    exitedTerminalIds,
+  }) : NO_COMMANDS;
+  const visibleGroups = groupCommands(filterCommands(commands, query)).filter((group) => group.commands.length > 0);
 
   useEffect(() => {
-    if (!open) {
+    if (!isOpen) {
       setQuery("");
       setStatusMessage("");
     }
-  }, [open]);
+  }, [isOpen]);
 
   function handleSelect(commandId: string) {
     const selected = commands.find((candidate) => commandKey(candidate) === commandId);
@@ -152,19 +143,19 @@ export function CommandPalette({
       onOpenChange(false);
       return;
     }
-    setStatusMessage(t("palette.unavailable"));
+    setStatusMessage(translate("palette.unavailable"));
   }
 
   return (
     <Command.Dialog
       aria-describedby="terra-command-palette-description"
-      aria-label={t("palette.title")}
+      aria-label={translate("palette.title")}
       className={styles.dialog}
       contentClassName={styles.dialogContent}
-      label={t("palette.title")}
+      label={translate("palette.title")}
       loop
       onOpenChange={onOpenChange}
-      open={open}
+      open={isOpen}
       overlayClassName={styles.overlay}
       shouldFilter={false}
     >
@@ -172,21 +163,21 @@ export function CommandPalette({
         <div className={styles.searchRow}>
           <span className={styles.searchGlyph} aria-hidden="true">⌕</span>
           <Command.Input
-            aria-label={t("palette.searchPlaceholder")}
+            aria-label={translate("palette.searchPlaceholder")}
             autoFocus
             className={styles.input}
             onValueChange={setQuery}
-            placeholder={t("palette.searchPlaceholder")}
+            placeholder={translate("palette.searchPlaceholder")}
             value={query}
           />
           <kbd className={styles.escapeKey}>Esc</kbd>
         </div>
         <p className={styles.description} id="terra-command-palette-description">
-          {t("palette.hint")}
+          {translate("palette.hint")}
         </p>
-        <Command.List aria-label={t("palette.title")} className={styles.list}>
+        <Command.List aria-label={translate("palette.title")} className={styles.list}>
           {visibleGroups.length === 0 ? (
-            <Command.Empty className={styles.empty}>{t("palette.empty")}</Command.Empty>
+            <Command.Empty className={styles.empty}>{translate("palette.empty")}</Command.Empty>
           ) : (
             visibleGroups.map((group) => (
               <Command.Group className={styles.group} heading={group.label} key={group.id} value={group.id}>
@@ -195,7 +186,7 @@ export function CommandPalette({
                   return (
                     <Command.Item
                       className={classes(styles.item, command.confirmation && styles.destructive)}
-                      disabled={command.disabled}
+                      disabled={command.isDisabled}
                       key={command.id}
                       keywords={[...command.keywords]}
                       onSelect={() => handleSelect(command.id)}
@@ -207,7 +198,7 @@ export function CommandPalette({
                         <span className={styles.itemDescription}>{command.description}</span>
                       </span>
                       {command.shortcut ? <kbd className={styles.itemShortcut}>{command.shortcut}</kbd> : null}
-                      {command.confirmation ? <span className={styles.confirmHint}>{t("common.confirm")}</span> : null}
+                      {command.confirmation ? <span className={styles.confirmHint}>{translate("common.confirm")}</span> : null}
                     </Command.Item>
                   );
                 })}
@@ -216,8 +207,8 @@ export function CommandPalette({
           )}
         </Command.List>
         <div className={styles.footer}>
-          <span><kbd>↑</kbd><kbd>↓</kbd> {t("palette.navigate")}</span>
-          <span><kbd>Enter</kbd> {t("palette.run")}</span>
+          <span><kbd>↑</kbd><kbd>↓</kbd> {translate("palette.navigate")}</span>
+          <span><kbd>Enter</kbd> {translate("palette.run")}</span>
           <span className={styles.footerStatus} aria-live="polite">{statusMessage}</span>
         </div>
       </div>

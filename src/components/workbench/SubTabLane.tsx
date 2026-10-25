@@ -3,13 +3,13 @@ import { useState, type MouseEvent } from "react";
 import type { SubTabLaneProps, SubTabLaneTab } from "./types";
 import { ConfirmActionDialog } from "../overlays/Dialog";
 
-function tabLabel(entry: SubTabLaneTab, t: Translate): string {
-  const value = entry.tab.title || entry.tab.command || t("lane.terminal");
+function tabLabel(entry: SubTabLaneTab, translate: Translate): string {
+  const value = entry.tab.title || entry.tab.command || translate("lane.terminal");
   return value.trim().slice(0, 2).toUpperCase() || "··";
 }
 
-function tabTitle(entry: SubTabLaneTab, t: Translate): string {
-  return entry.tab.title || entry.tab.command || t("lane.terminalNamed", { id: entry.tab.id });
+function tabTitle(entry: SubTabLaneTab, translate: Translate): string {
+  return entry.tab.title || entry.tab.command || translate("lane.terminalNamed", { id: entry.tab.id });
 }
 
 function stop(event: MouseEvent<HTMLButtonElement>): void {
@@ -27,33 +27,33 @@ function SubTab({
   onDetachTab?: (tabId: string) => void;
   onRequestKill?: (entry: SubTabLaneTab) => void;
 }) {
-  const t = useT();
-  const title = tabTitle(entry, t);
+  const translate = useT();
+  const title = tabTitle(entry, translate);
 
   return (
     <div
       className="terra-subtab-lane__tab"
-      data-active={entry.active}
+      data-active={entry.isActive}
       data-status={entry.status ?? "idle"}
-      data-unread={entry.unread === true}
+      data-unread={entry.isUnread === true}
       role="group"
       title={title}
     >
       <button
         type="button"
         className="terra-subtab-lane__tab-button"
-        aria-label={t("lane.focus", { name: title })}
-        aria-pressed={entry.active}
+        aria-label={translate("lane.focus", { name: title })}
+        aria-pressed={entry.isActive}
         onClick={() => onFocusTab?.(entry.tab.id)}
       >
-        <span aria-hidden="true">{tabLabel(entry, t)}</span>
+        <span aria-hidden="true">{tabLabel(entry, translate)}</span>
         <span className="terra-subtab-lane__sr-only">{title}</span>
       </button>
       {onDetachTab ? (
         <button
           type="button"
           className="terra-subtab-lane__close"
-          aria-label={t("lane.detach", { name: title })}
+          aria-label={translate("lane.detach", { name: title })}
           onClick={(event) => {
             stop(event);
             onDetachTab(entry.tab.id);
@@ -66,7 +66,7 @@ function SubTab({
         <button
           type="button"
           className="terra-subtab-lane__kill"
-          aria-label={t("lane.kill", { name: title })}
+          aria-label={translate("lane.kill", { name: title })}
           onClick={(event) => {
             stop(event);
             onRequestKill(entry);
@@ -87,12 +87,12 @@ export function SubTabLane({
   onKillTab,
   className,
 }: SubTabLaneProps) {
-  const t = useT();
+  const translate = useT();
   const [pendingKill, setPendingKill] = useState<SubTabLaneTab | null>(null);
 
   return (
     <>
-      <aside className={className ? `terra-subtab-lane ${className}` : "terra-subtab-lane"} aria-label={t("lane.tabs")}>
+      <aside className={className ? `terra-subtab-lane ${className}` : "terra-subtab-lane"} aria-label={translate("lane.tabs")}>
         {tabs.map((entry) => (
           <SubTab
             key={entry.tab.id}
@@ -106,7 +106,7 @@ export function SubTabLane({
         <button
           type="button"
           className="terra-subtab-lane__new"
-          aria-label={t("lane.newTab")}
+          aria-label={translate("lane.newTab")}
           onClick={onNewTab}
         >
           +
@@ -114,13 +114,13 @@ export function SubTabLane({
       ) : null}
       </aside>
       <ConfirmActionDialog
-        open={pendingKill !== null}
-        onOpenChange={(open) => {
-          if (!open) setPendingKill(null);
+        isOpen={pendingKill !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setPendingKill(null);
         }}
-        title={pendingKill ? t("lane.killTitleNamed", { name: tabTitle(pendingKill, t) }) : t("lane.killTitle")}
-        description={pendingKill ? t("lane.killDescNamed", { name: tabTitle(pendingKill, t) }) : t("lane.killDesc")}
-        confirmLabel={t("lane.killConfirm")}
+        title={pendingKill ? translate("lane.killTitleNamed", { name: tabTitle(pendingKill, translate) }) : translate("lane.killTitle")}
+        description={pendingKill ? translate("lane.killDescNamed", { name: tabTitle(pendingKill, translate) }) : translate("lane.killDesc")}
+        confirmLabel={translate("lane.killConfirm")}
         onConfirm={() => {
           const tab = pendingKill;
           if (tab) onKillTab?.(tab.tab.id);

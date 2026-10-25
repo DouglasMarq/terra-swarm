@@ -1,21 +1,26 @@
-//! Tauri commands behind the Tasks panel and the Settings toggle. They use
-//! the same `repo` as the MCP tools, log changes as the human ("user") and
-//! emit the same events, so every window refreshes the same way.
-
 use serde::{Deserialize, Deserializer};
 use std::sync::Arc;
 use tauri::State;
 
-use super::repo::{AgentStatus, NewTask, Task, TaskPatch, TaskPriority, TaskStatus};
+use super::model::{Actor, AgentStatus, NewTask, Task, TaskPatch, TaskPriority, TaskStatus};
+use super::repo::TaskQuery;
+use super::tasks::{self, TaskUpdate};
 use super::{McpHub, ServerInfo};
 
 pub const USER_ACTOR: &str = "user";
-/// History shown on each card of the Tasks panel.
 const PANEL_EVENTS: usize = 20;
+const COMMAND_FAILED: &str = "MCP command failed";
+const MAX_BOARD_TASKS: usize = 500;
 
 type Hub<'a> = State<'a, Arc<McpHub>>;
 
-/// Tells "field absent" (`None`) apart from "field is null" (`Some(None)`).
+fn user(workspace_id: &str) -> Actor<'_> {
+    Actor {
+        workspace_id,
+        name: USER_ACTOR,
+    }
+}
+
 fn double_option<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
 where
     D: Deserializer<'de>,
@@ -41,78 +46,100 @@ pub fn mcp_server_info(hub: Hub<'_>) -> ServerInfo {
     hub.info()
 }
 
-/// Turn the injection on or off. Running terminals keep their connection;
-/// the setting applies to terminals started afterwards.
 #[tauri::command(async)]
-pub fn mcp_set_enabled(hub: Hub<'_>, enabled: bool) -> Result<ServerInfo, String> {
+pub fn mcp_set_enabled(hub: Hub<'_>, is_enabled: bool) -> Result<ServerInfo, String> {
     hub.repo()
-        .and_then(|repo| repo.set_enabled(enabled))
-        .map_err(|e| e.to_string())?;
+        .and_then(|repo| repo.set_enabled(is_enabled))
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
+        .map_err(|error| error.to_string())?;
     Ok(hub.info())
 }
 
 #[tauri::command(async)]
 pub fn mcp_list_tasks(hub: Hub<'_>, workspace_id: String) -> Result<Vec<Task>, String> {
     hub.repo()
-        .and_then(|repo| repo.list_tasks(&workspace_id, None, None, Some(PANEL_EVENTS)))
-        .map_err(|e| e.to_string())
+        .and_then(|repo| {
+            repo.queries().list_tasks(&TaskQuery {
+                events: Some(PANEL_EVENTS),
+                limit: MAX_BOARD_TASKS,
+                ..TaskQuery::all(&workspace_id)
+            })
+        })
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
+        .map_err(|error| error.to_string())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewTaskRequest {
+    pub workspace_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub priority: Option<TaskPriority>,
+    pub assignee: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskUpdateRequest {
+    pub workspace_id: String,
+    pub id: String,
+    pub patch: TaskPatchInput,
 }
 
 #[tauri::command(async)]
-pub fn mcp_create_task(
-    hub: Hub<'_>,
-    workspace_id: String,
-    title: String,
-    description: Option<String>,
-    priority: Option<TaskPriority>,
-    assignee: Option<String>,
-) -> Result<Task, String> {
+pub fn mcp_create_task(hub: Hub<'_>, request: NewTaskRequest) -> Result<Task, String> {
+    let workspace_id = request.workspace_id;
     let task = hub
         .repo()
         .and_then(|mut repo| {
-            repo.create_task(
-                &workspace_id,
-                USER_ACTOR,
+            tasks::create(
+                &mut repo,
+                &user(&workspace_id),
                 NewTask {
-                    title,
-                    description,
-                    priority,
-                    assignee,
+                    title: request.title,
+                    description: request.description,
+                    priority: request.priority,
+                    assignee: request.assignee,
                     ..NewTask::default()
                 },
             )
         })
-        .map_err(|e| e.to_string())?;
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
+        .map_err(|error| error.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(task)
 }
 
 #[tauri::command(async)]
-pub fn mcp_update_task(
-    hub: Hub<'_>,
-    workspace_id: String,
-    id: String,
-    patch: TaskPatchInput,
-) -> Result<Task, String> {
+pub fn mcp_update_task(hub: Hub<'_>, request: TaskUpdateRequest) -> Result<Task, String> {
+    let TaskUpdateRequest {
+        workspace_id,
+        id,
+        patch,
+    } = request;
     let task = hub
         .repo()
         .and_then(|mut repo| {
-            repo.update_task(
-                &workspace_id,
-                &id,
-                USER_ACTOR,
-                TaskPatch {
-                    title: patch.title,
-                    description: patch.description,
-                    status: patch.status,
-                    priority: patch.priority,
-                    assignee: patch.assignee,
-                    position: patch.position,
-                    note: patch.note,
+            tasks::update(
+                &mut repo,
+                &user(&workspace_id),
+                TaskUpdate {
+                    id: &id,
+                    patch: TaskPatch {
+                        title: patch.title,
+                        description: patch.description,
+                        status: patch.status,
+                        priority: patch.priority,
+                        assignee: patch.assignee,
+                        position: patch.position,
+                        note: patch.note,
+                    },
                 },
             )
         })
-        .map_err(|e| e.to_string())?;
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
+        .map_err(|error| error.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(task)
 }
@@ -120,38 +147,33 @@ pub fn mcp_update_task(
 #[tauri::command(async)]
 pub fn mcp_delete_task(hub: Hub<'_>, workspace_id: String, id: String) -> Result<(), String> {
     hub.repo()
-        .and_then(|mut repo| repo.delete_task(&workspace_id, &id))
-        .map_err(|e| e.to_string())?;
+        .and_then(|repo| tasks::delete(&repo, &workspace_id, &id))
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
+        .map_err(|error| error.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(())
 }
 
 #[tauri::command(async)]
 pub fn mcp_agent_statuses(hub: Hub<'_>, workspace_id: String) -> Vec<AgentStatus> {
-    hub.repo()
-        .map(|repo| repo.statuses(&workspace_id))
+    hub.statuses()
+        .map(|statuses| statuses.statuses(&workspace_id))
         .unwrap_or_else(|error| {
-            eprintln!("cannot list agent statuses: {}", error);
+            eprintln!("cannot list agent statuses: {:?}", error);
             Vec::new()
         })
 }
 
-/// Tokens used by each agent of the workspace whose session log is known
-/// (reported by its hooks), read from the agent CLI's own log files.
 #[tauri::command(async)]
 pub fn agent_usage(hub: Hub<'_>, workspace_id: String) -> Vec<crate::usage::AgentUsage> {
     hub.workspace_terminals(&workspace_id)
         .into_iter()
         .filter_map(|terminal_id| {
             let log = hub.session_log(&terminal_id)?;
-            let agent = match log {
-                crate::usage::SessionLog::Claude(_) => "claude",
-                crate::usage::SessionLog::Codex(_) => "codex",
-            };
-            let usage = crate::usage::usage_of(&log)?;
+            let usage = super::integration::usage_of(&log)?;
             Some(crate::usage::AgentUsage {
                 terminal_id,
-                agent: agent.into(),
+                agent: log.integration.into(),
                 usage,
             })
         })
@@ -163,7 +185,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn patch_distinguishes_missing_and_null_assignee() {
+    fn given_a_patch_with_a_missing_or_null_assignee_when_parsing_then_the_two_are_distinguished() {
         let missing: TaskPatchInput =
             serde_json::from_str(r#"{"status":"done","position":2.5}"#).unwrap();
         assert_eq!(missing.assignee, None);

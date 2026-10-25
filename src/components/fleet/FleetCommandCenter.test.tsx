@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { buildAgentLabels } from "../../domain/agentLabels";
 import { FleetCommandCenter } from "./FleetCommandCenter";
-import type { Workspace } from "../../types";
+import type { Workspace } from "../../domain/workspace.model";
 
 const workspaces: Workspace[] = [{
   id: "ws-api",
@@ -14,14 +14,14 @@ const workspaces: Workspace[] = [{
   terminals: [
     { id: "term-claude", command: "claude", width: 100 },
     { id: "term-codex", command: "codex", width: 100 },
-    { id: "term-idle", command: "opencode", width: 100, suspended: true },
+    { id: "term-idle", command: "opencode", width: 100, isSuspended: true },
   ],
 }];
 
 const labels = buildAgentLabels(workspaces, { titles: { "term-claude": "✳ Planejador de retomada" } });
 
 describe("FleetCommandCenter", () => {
-  it("summarizes the fleet and lists what needs the user first", async () => {
+  it("Given a fleet, when it renders, then it summarizes the fleet and lists what needs the user first", async () => {
     const user = userEvent.setup();
     const onFocus = vi.fn();
     const onMarkRead = vi.fn();
@@ -48,7 +48,7 @@ describe("FleetCommandCenter", () => {
     expect(onMarkRead).toHaveBeenCalledWith("term-claude");
   });
 
-  it("filters by state chip and by search without losing the source fleet", async () => {
+  it("Given a fleet, when filtering by state chip and by search, then the source fleet is kept", async () => {
     const user = userEvent.setup();
     render(<FleetCommandCenter workspaces={workspaces} labels={labels} />);
 
@@ -63,7 +63,7 @@ describe("FleetCommandCenter", () => {
     expect(screen.getAllByRole("row")).toHaveLength(4);
   });
 
-  it("runs batch actions on the selected agents", async () => {
+  it("Given selected agents, when running a batch action, then it runs on them", async () => {
     const user = userEvent.setup();
     const onBatchAction = vi.fn();
     render(<FleetCommandCenter workspaces={workspaces} labels={labels} onBatchAction={onBatchAction} />);
@@ -77,7 +77,7 @@ describe("FleetCommandCenter", () => {
     expect(onBatchAction).toHaveBeenCalledWith("stop", ["term-codex", "term-idle"]);
   });
 
-  it("opens an agent from its table row", async () => {
+  it("Given an agent row, when it is clicked, then the agent opens", async () => {
     const user = userEvent.setup();
     const onFocus = vi.fn();
     render(<FleetCommandCenter workspaces={workspaces} labels={labels} onFocus={onFocus} />);

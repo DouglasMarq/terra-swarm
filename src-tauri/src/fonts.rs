@@ -1,21 +1,16 @@
-//! System font listing for the terminal font picker. The webview has no API
-//! to enumerate installed fonts, so the backend scans the system font
-//! directories once and reports every family, flagging monospaced ones.
-
 use serde::Serialize;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct FontFamily {
     pub name: String,
-    /// True when any face of the family is fixed-pitch.
-    pub monospace: bool,
+    pub is_monospace: bool,
 }
 
-/// Groups faces into families, skipping hidden system families (".SF…").
 fn families_from<'a>(faces: impl Iterator<Item = (&'a str, bool)>) -> Vec<FontFamily> {
     let mut by_name: BTreeMap<String, (String, bool)> = BTreeMap::new();
-    for (name, monospace) in faces {
+    for (name, is_monospace) in faces {
         let name = name.trim();
         if name.is_empty() || name.starts_with('.') {
             continue;
@@ -23,17 +18,16 @@ fn families_from<'a>(faces: impl Iterator<Item = (&'a str, bool)>) -> Vec<FontFa
         let entry = by_name
             .entry(name.to_lowercase())
             .or_insert_with(|| (name.to_string(), false));
-        entry.1 |= monospace;
+        entry.1 |= is_monospace;
     }
     by_name
         .into_values()
-        .map(|(name, monospace)| FontFamily { name, monospace })
+        .map(|(name, is_monospace)| FontFamily { name, is_monospace })
         .collect()
 }
 
 #[tauri::command]
 pub async fn list_system_fonts() -> Vec<FontFamily> {
-    // Scanning reads every font file header; keep it off the main thread.
     tauri::async_runtime::spawn_blocking(|| {
         let mut db = fontdb::Database::new();
         db.load_system_fonts();
@@ -45,7 +39,11 @@ pub async fn list_system_fonts() -> Vec<FontFamily> {
                     .map(move |(name, _)| (name.clone(), face.monospaced))
             })
             .collect();
-        families_from(faces.iter().map(|(name, mono)| (name.as_str(), *mono)))
+        families_from(
+            faces
+                .iter()
+                .map(|(name, is_monospace)| (name.as_str(), *is_monospace)),
+        )
     })
     .await
     .unwrap_or_else(|error| {
@@ -59,7 +57,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn groups_faces_by_family_case_insensitively() {
+    fn given_faces_of_one_family_in_mixed_case_when_grouping_then_they_form_one_family() {
         let faces = [
             ("JetBrains Mono", true),
             ("jetbrains mono", true),
@@ -73,19 +71,36 @@ mod tests {
             vec![
                 FontFamily {
                     name: "Helvetica".into(),
-                    monospace: false
+                    is_monospace: false
                 },
                 FontFamily {
                     name: "JetBrains Mono".into(),
-                    monospace: true
+                    is_monospace: true
                 },
             ]
         );
     }
 
     #[test]
-    fn a_family_is_monospace_when_any_face_is() {
+    fn given_one_monospace_face_when_grouping_its_family_then_the_family_is_monospace() {
         let families = families_from([("Iosevka", false), ("Iosevka", true)].into_iter());
-        assert!(families[0].monospace);
+        assert!(families[0].is_monospace);
+    }
+
+    #[test]
+    fn given_the_system_fonts_when_listing_them_then_families_are_unique_and_sorted() {
+        let families = tauri::async_runtime::block_on(list_system_fonts());
+
+        let keys: Vec<String> = families
+            .iter()
+            .map(|family| family.name.to_lowercase())
+            .collect();
+        let mut sorted = keys.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(keys, sorted);
+        assert!(families
+            .iter()
+            .all(|family| !family.name.is_empty() && !family.name.starts_with('.')));
     }
 }

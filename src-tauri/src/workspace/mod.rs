@@ -1,11 +1,12 @@
-//! Projects (workspaces), their terminals, layout and groups.
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Runtime};
+
+use crate::collections::{add_unique, reorder_by_ids};
+use crate::text::trim_in_place;
 
 mod commands;
 mod editor;
@@ -14,6 +15,7 @@ mod git;
 mod groups;
 mod layout;
 mod normalize;
+mod persisted;
 mod persistence;
 mod snapshot;
 mod store;
@@ -26,9 +28,10 @@ pub use files::list_workspace_files;
 pub(crate) use files::*;
 pub(crate) use git::*;
 pub use git::{git_branch, git_status};
+pub(crate) use persisted::change_and_save;
 pub(crate) use persistence::*;
 pub(crate) use snapshot::*;
-pub use snapshot::{export_workspace_snapshot, import_workspace_snapshot, store_saved_at};
+pub use snapshot::{export_workspace_snapshot, store_saved_at};
 
 static NEXT_WS_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -38,36 +41,33 @@ const MIN_TERMINAL_WIDTH: f64 = 15.0;
 
 const MAX_TERMINAL_WIDTH: f64 = 100.0;
 
-/// A container's share of the workspace, in percent.
 const MIN_CONTAINER_SIZE_PERCENT: f64 = 0.0;
 
 const MAX_CONTAINER_SIZE_PERCENT: f64 = 100.0;
 
-/// Bounds for the column and row counts a layout may ask for.
 const MIN_LAYOUT_TRACKS: u32 = 1;
 
 const MAX_LAYOUT_TRACKS: u32 = 128;
 
-/// Broadcast durable workspace metadata changes to every Tauri window. The
-/// frontend already coalesces/refreshes this event; keeping emission at the
-/// command boundary also covers secondary windows that did not initiate the
-/// mutation.
-fn emit_workspaces_changed(app: &AppHandle) {
+pub(crate) fn emit_workspaces_changed<R: Runtime>(app: &AppHandle<R>) {
     let _ = app.emit("workspaces-changed", ());
 }
 
 pub fn bump_next_id(id: &str) {
-    if let Some(n) = id.strip_prefix("ws-").and_then(|s| s.parse::<u64>().ok()) {
-        NEXT_WS_ID.fetch_max(n.saturating_add(1), Ordering::SeqCst);
+    if let Some(number) = id
+        .strip_prefix("ws-")
+        .and_then(|digits| digits.parse::<u64>().ok())
+    {
+        NEXT_WS_ID.fetch_max(number.saturating_add(1), Ordering::SeqCst);
     }
 }
 
 pub fn bump_next_group_id(id: &str) {
-    if let Some(n) = id
+    if let Some(number) = id
         .strip_prefix("group-")
-        .and_then(|s| s.parse::<u64>().ok())
+        .and_then(|digits| digits.parse::<u64>().ok())
     {
-        NEXT_GROUP_ID.fetch_max(n.saturating_add(1), Ordering::SeqCst);
+        NEXT_GROUP_ID.fetch_max(number.saturating_add(1), Ordering::SeqCst);
     }
 }
 
@@ -78,22 +78,18 @@ pub struct TerminalMeta {
     pub command: String,
     #[serde(default)]
     pub width: Option<f64>,
-    /// Optional v2 metadata. Existing terminals keep working when these
-    /// fields are absent in a v1/legacy file.
     #[serde(default, alias = "pane_id")]
     pub pane_id: Option<String>,
     #[serde(default, alias = "tab_id")]
     pub tab_id: Option<String>,
     #[serde(default, alias = "group_id")]
     pub group_id: Option<String>,
-    #[serde(default)]
-    pub suspended: bool,
-    /// The git worktree the agent is isolated in, if any.
+    #[serde(default, alias = "suspended")]
+    pub is_suspended: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worktree: Option<crate::worktree::WorktreeInfo>,
-    /// The agent's team role, if it was started with one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub role: Option<crate::mcp::roles::Role>,
+    pub role: Option<crate::roles::Role>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -104,7 +100,6 @@ pub struct Workspace {
     pub cwd: String,
     #[serde(default)]
     pub terminals: Vec<TerminalMeta>,
-    /// A workspace is the compatibility name for the conceptual Project.
     #[serde(default, alias = "group_id")]
     pub group_id: Option<String>,
     #[serde(default)]
@@ -115,22 +110,18 @@ pub struct Workspace {
     pub active_pane_id: Option<String>,
     #[serde(default, alias = "active_container_id")]
     pub active_container_id: Option<String>,
-    #[serde(default)]
-    pub collapsed: bool,
-    #[serde(default)]
-    pub archived: bool,
+    #[serde(default, alias = "collapsed")]
+    pub is_collapsed: bool,
+    #[serde(default, alias = "archived")]
+    pub is_archived: bool,
     #[serde(default, alias = "created_at")]
     pub created_at: Option<u64>,
     #[serde(default, alias = "layout_mode")]
     pub layout_mode: Option<String>,
-    /// Durable workspace-level layout details. `layout_mode` remains as a
-    /// compatibility scalar for older clients and stores.
     #[serde(default)]
     pub layout: Option<WorkspaceLayout>,
 }
 
-/// A durable group of projects. Suspending a group only changes this
-/// metadata; process lifecycle is intentionally handled by PTY commands.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Group {
@@ -142,25 +133,22 @@ pub struct Group {
     pub color: Option<String>,
     #[serde(default, alias = "icon_url")]
     pub icon_url: Option<String>,
-    #[serde(default)]
-    pub collapsed: bool,
+    #[serde(default, alias = "collapsed")]
+    pub is_collapsed: bool,
     #[serde(default, alias = "project_ids")]
     pub project_ids: Vec<String>,
     #[serde(default, alias = "parent_group_id")]
     pub parent_group_id: Option<String>,
     #[serde(default)]
     pub layout_mode: Option<String>,
-    #[serde(default)]
-    pub suspended: bool,
-    #[serde(default)]
-    pub archived: bool,
+    #[serde(default, alias = "suspended")]
+    pub is_suspended: bool,
+    #[serde(default, alias = "archived")]
+    pub is_archived: bool,
     #[serde(default, alias = "created_at")]
     pub created_at: Option<u64>,
 }
 
-/// A visual pane/container metadata record. PTY ownership remains with the
-/// terminal manager, so removing this record cannot accidentally kill a
-/// running process.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Pane {
@@ -176,10 +164,10 @@ pub struct Pane {
     pub active_tab_id: Option<String>,
     #[serde(default)]
     pub kind: Option<String>,
-    #[serde(default)]
-    pub disabled: bool,
-    #[serde(default)]
-    pub collapsed: bool,
+    #[serde(default, alias = "disabled")]
+    pub is_disabled: bool,
+    #[serde(default, alias = "collapsed")]
+    pub is_collapsed: bool,
     #[serde(default)]
     pub width: Option<f64>,
     #[serde(default)]
@@ -190,9 +178,6 @@ pub struct Pane {
     pub layout: Option<WorkspaceLayout>,
 }
 
-/// Metadata for one sub-tab/session inside a pane. The `type` JSON spelling
-/// matches the conceptual Project/Group/Pane/TerminalTab contract, while the
-/// Rust field is named `kind` because `type` is reserved.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalTab {
@@ -210,26 +195,33 @@ pub struct TerminalTab {
     pub session_id: Option<String>,
     #[serde(default, alias = "last_used_at")]
     pub last_used_at: Option<u64>,
-    #[serde(default, alias = "completion_unread")]
-    pub completion_unread: bool,
+    #[serde(default, alias = "completionUnread", alias = "completion_unread")]
+    pub has_unread_completion: bool,
     #[serde(default, alias = "extra_args")]
     pub extra_args: Vec<String>,
-    #[serde(default)]
-    pub suspended: bool,
+    #[serde(default, alias = "suspended")]
+    pub is_suspended: bool,
+}
+
+impl Pane {
+    pub(crate) fn repair_active_tab(&mut self) {
+        if self
+            .active_tab_id
+            .as_deref()
+            .is_some_and(|id| !self.tabs.iter().any(|tab| tab.id == id))
+        {
+            self.active_tab_id = self.tabs.first().map(|tab| tab.id.clone());
+        }
+    }
 }
 
 fn default_tab_kind() -> String {
     "shell".to_string()
 }
 
-/// Persisted project container metadata, based on the reference model's
-/// projectId/paneIds relationship. It is safe to close/remove visually while
-/// PTYs continue to run until an explicit kill command is issued.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceContainer {
-    /// Stable visual identity. Legacy records omitted this field; load-time
-    /// validation derives a deterministic id from the workspace and index.
     #[serde(default)]
     pub id: String,
     #[serde(default, alias = "project_id")]
@@ -242,16 +234,16 @@ pub struct WorkspaceContainer {
     pub size: f64,
     #[serde(default = "default_layout_mode", alias = "internal_layout")]
     pub internal_layout: String,
-    #[serde(default)]
-    pub collapsed: bool,
+    #[serde(default, alias = "collapsed")]
+    pub is_collapsed: bool,
     #[serde(default, alias = "active_pane_id")]
     pub active_pane_id: Option<String>,
-    #[serde(default = "default_visible")]
-    pub visible: bool,
-    #[serde(default)]
-    pub closed: bool,
-    #[serde(default)]
-    pub fullscreen: bool,
+    #[serde(default = "is_visible_by_default", alias = "visible")]
+    pub is_visible: bool,
+    #[serde(default, alias = "closed")]
+    pub is_closed: bool,
+    #[serde(default, alias = "fullscreen")]
+    pub is_fullscreen: bool,
     #[serde(default)]
     pub layout: Option<WorkspaceLayout>,
 }
@@ -260,7 +252,7 @@ fn default_layout_mode() -> String {
     "auto".to_string()
 }
 
-fn default_visible() -> bool {
+fn is_visible_by_default() -> bool {
     true
 }
 
@@ -292,9 +284,6 @@ fn normalize_layout_state(layout: &mut WorkspaceLayout) {
         .retain(|key, value| !key.trim().is_empty() && value.is_finite() && *value > 0.0);
 }
 
-/// Serializable layout state shared by workspace, container and pane
-/// persistence. The frontend can add metadata without requiring a Rust
-/// release; unknown values are retained by serde_json.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceLayout {
@@ -325,22 +314,50 @@ impl Default for WorkspaceLayout {
     }
 }
 
-/// Partial visual state update for a container. `None` leaves a field as-is;
-/// `clear_active_pane` is explicit so callers can clear an existing selection
-/// without conflating that operation with an omitted patch field.
 #[derive(Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceContainerPatch {
-    pub visible: Option<bool>,
-    pub closed: Option<bool>,
-    pub collapsed: Option<bool>,
-    pub fullscreen: Option<bool>,
+    #[serde(alias = "visible")]
+    pub is_visible: Option<bool>,
+    #[serde(alias = "closed")]
+    pub is_closed: Option<bool>,
+    #[serde(alias = "collapsed")]
+    pub is_collapsed: Option<bool>,
+    #[serde(alias = "fullscreen")]
+    pub is_fullscreen: Option<bool>,
     pub active_pane_id: Option<String>,
-    #[serde(default)]
-    pub clear_active_pane: bool,
+    #[serde(default, alias = "clearActivePane")]
+    pub should_clear_active_pane: bool,
     pub internal_layout: Option<String>,
     pub size: Option<f64>,
     pub layout: Option<WorkspaceLayout>,
+}
+
+pub struct TerminalPlacement {
+    pub terminal_id: String,
+    pub pane_id: String,
+    pub tab_id: String,
+}
+
+pub struct PaneMove {
+    pub pane_id: String,
+    pub to_container_id: String,
+    pub index: Option<usize>,
+}
+
+pub struct PaneReorder<'a> {
+    pub container_id: &'a str,
+    pub order: &'a [String],
+}
+
+pub struct ContainerStateChange<'a> {
+    pub container_id: &'a str,
+    pub patch: WorkspaceContainerPatch,
+}
+
+pub struct TerminalWidth<'a> {
+    pub terminal_id: &'a str,
+    pub width: f64,
 }
 
 #[derive(Default)]
@@ -350,28 +367,14 @@ pub struct WorkspaceStore {
     pub save_path: Option<PathBuf>,
 }
 
-fn home_dir() -> String {
-    #[cfg(windows)]
-    {
-        if let Ok(p) = std::env::var("USERPROFILE") {
-            if !p.trim().is_empty() {
-                return p;
-            }
-        }
-        if let (Ok(drive), Ok(path)) = (std::env::var("HOMEDRIVE"), std::env::var("HOMEPATH")) {
-            return format!("{}{}", drive, path);
-        }
-        "C:\\".to_string()
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
-    }
-}
+#[cfg(windows)]
+const FALLBACK_HOME_DIR: &str = "C:\\";
 
-fn unix_millis() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
+#[cfg(not(windows))]
+const FALLBACK_HOME_DIR: &str = "/";
+
+fn home_dir() -> String {
+    crate::paths::home_dir()
+        .map(|home| home.to_string_lossy().into_owned())
+        .unwrap_or_else(|| FALLBACK_HOME_DIR.to_string())
 }

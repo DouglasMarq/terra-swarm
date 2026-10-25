@@ -12,39 +12,35 @@ import { getConfirmationCopy, type ActionIntent } from "./dialogModel";
 import styles from "./ConfirmActionDialog.module.css";
 
 export interface ConfirmActionDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
   title?: ReactNode;
   description: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   intent?: ActionIntent;
   onConfirm: () => void | Promise<void>;
-  busy?: boolean;
+  isBusy?: boolean;
 }
 
-/**
- * A controlled confirmation dialog. The callback is intentionally unreachable
- * until the user presses the explicit confirmation action.
- */
 export function ConfirmActionDialog({
-  busy = false,
+  isBusy = false,
   cancelLabel,
   confirmLabel,
   description,
   intent = "destructive",
   onConfirm,
   onOpenChange,
-  open,
+  isOpen,
   title,
 }: ConfirmActionDialogProps) {
-  const t = useT();
-  const [submitting, setSubmitting] = useState(false);
-  const copy = getConfirmationCopy(intent, t);
-  const isBusy = busy || submitting;
+  const translate = useT();
+  const [isSubmitting, setSubmitting] = useState(false);
+  const copy = getConfirmationCopy(intent, translate);
+  const isBusyOrSubmitting = isBusy || isSubmitting;
 
   async function handleConfirm() {
-    if (isBusy) return;
+    if (isBusyOrSubmitting) return;
 
     setSubmitting(true);
     try {
@@ -57,7 +53,7 @@ export function ConfirmActionDialog({
 
   return (
     <TerraDialog
-      open={open}
+      open={isOpen}
       onOpenChange={onOpenChange}
       title={title ?? copy.title}
       description={
@@ -72,14 +68,14 @@ export function ConfirmActionDialog({
     >
       <DialogFooter>
         <DialogClose asChild>
-          <Button type="button" variant="ghost" disabled={isBusy}>
-            {cancelLabel ?? t("common.cancel")}
+          <Button type="button" variant="ghost" disabled={isBusyOrSubmitting}>
+            {cancelLabel ?? translate("common.cancel")}
           </Button>
         </DialogClose>
         <Button
           type="button"
           variant={intent === "destructive" ? "danger" : "primary"}
-          loading={isBusy}
+          isLoading={isBusyOrSubmitting}
           onClick={() => void handleConfirm()}
         >
           {confirmLabel ?? copy.confirmLabel}

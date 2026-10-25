@@ -1,26 +1,24 @@
 import { create } from "zustand";
-import { t } from "../i18n";
+import { translateNow } from "../i18n";
+import { storageGet, storageSet } from "../lib/storage/safeStorage";
+import { promptTitle, type SavedPrompt } from "../domain/prompts";
 
-export interface SavedPrompt {
-  id: string;
-  title: string;
-  body: string;
-}
+const ID_RADIX = 36;
+const RANDOM_ID_END = 6;
 
 const STORAGE_KEY = "terra-prompt-library";
 
-/** Starting points in the user's language; they can edit or delete them. */
 function defaultPrompts(): SavedPrompt[] {
   return [
-    { id: "review-diff", title: t("library.defaults.reviewTitle"), body: t("library.defaults.reviewBody") },
-    { id: "write-tests", title: t("library.defaults.testsTitle"), body: t("library.defaults.testsBody") },
-    { id: "plan-goal", title: t("library.defaults.planTitle"), body: t("library.defaults.planBody") },
+    { id: "review-diff", title: translateNow("library.defaults.reviewTitle"), body: translateNow("library.defaults.reviewBody") },
+    { id: "write-tests", title: translateNow("library.defaults.testsTitle"), body: translateNow("library.defaults.testsBody") },
+    { id: "plan-goal", title: translateNow("library.defaults.planTitle"), body: translateNow("library.defaults.planBody") },
   ];
 }
 
 function load(): SavedPrompt[] {
   try {
-    const raw = typeof localStorage === "undefined" ? null : localStorage.getItem(STORAGE_KEY);
+    const raw = storageGet(STORAGE_KEY);
     if (!raw) return defaultPrompts();
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return defaultPrompts();
@@ -34,16 +32,7 @@ function load(): SavedPrompt[] {
 }
 
 function persist(prompts: readonly SavedPrompt[]) {
-  try {
-    if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(prompts));
-  } catch {
-    // Private mode or full storage: the library still works for this session.
-  }
-}
-
-/** `{project}` becomes the active project's name. */
-export function fillPrompt(body: string, values: { project?: string | null }): string {
-  return body.replace(/\{project\}/g, values.project?.trim() || "this project");
+  storageSet(STORAGE_KEY, JSON.stringify(prompts));
 }
 
 export type LibraryDialog = "prompts" | "team" | null;
@@ -64,12 +53,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   closeDialog: () => set({ dialog: null }),
   savePrompt: ({ id, title, body }) => {
     const saved: SavedPrompt = {
-      id: id ?? `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      title: title.trim() || body.trim().split(/\s+/).slice(0, 6).join(" ") || "Prompt",
+      id: id ?? `p-${Date.now().toString(ID_RADIX)}-${Math.random().toString(ID_RADIX).slice(2, RANDOM_ID_END)}`,
+      title: promptTitle(title, body),
       body,
     };
-    const exists = get().prompts.some((prompt) => prompt.id === saved.id);
-    const prompts = exists ? get().prompts.map((prompt) => (prompt.id === saved.id ? saved : prompt)) : [...get().prompts, saved];
+    const isExisting = get().prompts.some((prompt) => prompt.id === saved.id);
+    const prompts = isExisting ? get().prompts.map((prompt) => (prompt.id === saved.id ? saved : prompt)) : [...get().prompts, saved];
     persist(prompts);
     set({ prompts });
     return saved;

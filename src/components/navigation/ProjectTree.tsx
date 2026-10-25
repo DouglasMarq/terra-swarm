@@ -6,13 +6,10 @@ import { GroupNode } from "./GroupNode";
 import { NavigatorNodeRow } from "./NavigatorNodeRow";
 import { ProjectNode } from "./ProjectNode";
 import type {
-  NavigatorAgentNode,
-  NavigatorContainerNode,
   NavigatorGroupNode,
   NavigatorNode,
   NavigatorNodeActions,
   NavigatorPanelProps,
-  NavigatorPaneNode,
   NavigatorProjectNode,
   NavigatorTree,
 } from "./types";
@@ -43,6 +40,13 @@ function nodeActive(node: NavigatorNode, props: ProjectTreeViewProps): boolean {
       : node.kind === "pane"
         ? node.paneId === props.activePaneId
     : node.kind === "agent" && node.terminalId === props.activeTerminalId;
+}
+
+function groupAction(handler: ((groupId: string) => void) | undefined): NavigatorNodeActions["onSuspend"] {
+  if (!handler) return undefined;
+  return (ref) => {
+    if (ref.kind === "group") handler(ref.id);
+  };
 }
 
 function actionSet(props: ProjectTreeViewProps): NavigatorNodeActions {
@@ -76,68 +80,63 @@ function actionSet(props: ProjectTreeViewProps): NavigatorNodeActions {
     onHide: (ref) => {
       if (ref.kind === "project") hide?.(ref.id);
     },
-    onSuspend: (ref) => {
-      if (ref.kind === "group") props.onSuspendGroup?.(ref.id);
-    },
-    onResume: (ref) => {
-      if (ref.kind === "group") props.onResumeGroup?.(ref.id);
-    },
+    onSuspend: groupAction(props.onSuspendGroup),
+    onResume: groupAction(props.onResumeGroup),
     onContextMenu: props.onContextMenu,
   };
 }
 
 function renderNode(node: NavigatorNode, props: ProjectTreeViewProps, actions: NavigatorNodeActions): ReactNode {
-  const expanded = props.expandedIds.has(node.id);
+  const isExpanded = props.expandedIds.has(node.id);
   const common = {
-    active: nodeActive(node, props),
-    expanded,
-    selected: nodeSelected(node, props),
-    visible: node.kind === "project" ? node.visible : true,
+    isActive: nodeActive(node, props),
+    isExpanded,
+    isSelected: nodeSelected(node, props),
+    isVisible: node.kind === "project" ? node.isVisible : true,
   };
   let row: ReactNode;
   if (node.kind === "group") {
-    row = <GroupNode {...common} actions={actions} node={node as NavigatorGroupNode} onToggle={props.onToggle} />;
+    row = <GroupNode {...common} actions={actions} node={node} onToggle={props.onToggle} />;
   } else if (node.kind === "project") {
-    row = <ProjectNode {...common} actions={actions} node={node as NavigatorProjectNode} onToggle={props.onToggle} />;
+    row = <ProjectNode {...common} actions={actions} node={node} onToggle={props.onToggle} />;
   } else if (node.kind === "container") {
-    row = <NavigatorNodeRow {...common} actions={actions} node={node as NavigatorContainerNode} onToggle={props.onToggle} />;
+    row = <NavigatorNodeRow {...common} actions={actions} node={node} onToggle={props.onToggle} />;
   } else if (node.kind === "pane") {
-    row = <NavigatorNodeRow {...common} actions={actions} node={node as NavigatorPaneNode} onToggle={props.onToggle} />;
+    row = <NavigatorNodeRow {...common} actions={actions} node={node} onToggle={props.onToggle} />;
   } else {
-    row = <AgentNode {...common} actions={actions} node={node as NavigatorAgentNode} />;
+    row = <AgentNode {...common} actions={actions} node={node} />;
   }
   return (
     <div key={`${node.kind}:${node.id}`}>
       {row}
-      {expanded && node.children.length > 0 ? node.children.map((child) => renderNode(child, props, actions)) : null}
+      {isExpanded && node.children.length > 0 ? node.children.map((child) => renderNode(child, props, actions)) : null}
     </div>
   );
 }
 
-/** Tree renderer kept separate so the panel can own headers and actions. */
 export function ProjectTree({ tree, expandedIds, onToggle, onCreateGroup, ...props }: ProjectTreeViewProps) {
-  const t = useT();
+  const translate = useT();
   const viewProps: ProjectTreeViewProps = { tree, expandedIds, onToggle, onCreateGroup, ...props };
   const actions = actionSet(viewProps);
   const groups = tree.roots.filter((node): node is NavigatorGroupNode => node.kind === "group");
   const ungrouped = tree.roots.filter((node): node is NavigatorProjectNode => node.kind === "project");
   const hasAny = groups.length > 0 || ungrouped.length > 0;
   return (
-    <div aria-label={t("nav.projects")} className={styles.tree} role="tree">
+    <div aria-label={translate("nav.projects")} className={styles.tree} role="tree">
       {groups.length > 0 ? (
         <div className={styles.sectionHeader}>
-          <span className={styles.sectionHeaderText}><Folder aria-hidden="true" size={12} /> {t("nav.groups")} <span className={styles.sectionCount}>{groups.length}</span></span>
-          {onCreateGroup ? <button aria-label={t("nav.createGroup")} className={`${styles.createButton} ${styles.sectionCreate}`} onClick={onCreateGroup} type="button"><Plus aria-hidden="true" size={13} /></button> : null}
+          <span className={styles.sectionHeaderText}><Folder aria-hidden="true" size={12} /> {translate("nav.groups")} <span className={styles.sectionCount}>{groups.length}</span></span>
+          {onCreateGroup ? <button aria-label={translate("nav.createGroup")} className={`${styles.createButton} ${styles.sectionCreate}`} onClick={onCreateGroup} type="button"><Plus aria-hidden="true" size={13} /></button> : null}
         </div>
       ) : null}
       {groups.map((group) => renderNode(group, viewProps, actions))}
       {ungrouped.length > 0 && groups.length > 0 ? (
         <div className={styles.sectionHeader}>
-          <span className={styles.sectionHeaderText}><Folder aria-hidden="true" size={12} /> {t("nav.ungrouped")} <span className={styles.sectionCount}>{ungrouped.length}</span></span>
+          <span className={styles.sectionHeaderText}><Folder aria-hidden="true" size={12} /> {translate("nav.ungrouped")} <span className={styles.sectionCount}>{ungrouped.length}</span></span>
         </div>
       ) : null}
       {ungrouped.map((project) => renderNode(project, viewProps, actions))}
-      {!hasAny ? <div className={styles.emptyState}><div><strong>{t("nav.noProjects")}</strong>{t("nav.noProjectsHint")}</div></div> : null}
+      {!hasAny ? <div className={styles.emptyState}><div><strong>{translate("nav.noProjects")}</strong>{translate("nav.noProjectsHint")}</div></div> : null}
     </div>
   );
 }

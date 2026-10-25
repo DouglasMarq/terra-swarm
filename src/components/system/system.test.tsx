@@ -6,14 +6,14 @@ import { useLocaleStore } from "../../i18n";
 import { LoadingScreen } from "./LoadingScreen";
 
 describe("system surfaces", () => {
-  it("announces the loading state accessibly", () => {
+  it("Given the app is loading, when the loading screen renders, then the loading state is announced accessibly", () => {
     render(<LoadingScreen phase="hydrating" progress={42} />);
 
     expect(screen.getByRole("progressbar", { name: "Progresso da inicialização" })).toHaveAttribute("aria-valuenow", "42");
     expect(screen.getByRole("status")).toHaveTextContent("restaurando o workspace");
   });
 
-  it("given the language changes, re-renders the loading copy in the new language", () => {
+  it("Given the language changes, when the loading screen renders, then its copy follows the new language", () => {
     render(<LoadingScreen phase="hydrating" />);
     act(() => useLocaleStore.setState({ locale: "en" }));
 

@@ -2,7 +2,7 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentTokenUsage } from "../types";
+import type { AgentTokenUsage } from "../domain/agent.model";
 
 const mcp = vi.hoisted(() => ({ agentUsage: vi.fn() }));
 vi.mock("../lib/tauri/mcp", () => ({ mcpApi: mcp }));
@@ -32,13 +32,13 @@ describe("useAgentUsage", () => {
     vi.useRealTimers();
   });
 
-  it("given nothing shows the usage, does not read it", async () => {
+  it("Given nothing shows the usage, when the hook runs, then it does not read it", async () => {
     renderHook(() => useAgentUsage("ws-1", "t-1", false));
     await act(() => vi.advanceTimersByTimeAsync(USAGE_REFRESH_MS));
     expect(mcp.agentUsage).not.toHaveBeenCalled();
   });
 
-  it("given a shown agent, reads its usage and refreshes it", async () => {
+  it("Given a shown agent, when the hook runs, then it reads its usage and refreshes it", async () => {
     const { result } = renderHook(() => useAgentUsage("ws-1", "t-1", true));
     await act(() => vi.advanceTimersByTimeAsync(0));
     expect(result.current).toEqual(usage);
@@ -48,7 +48,7 @@ describe("useAgentUsage", () => {
     expect(mcp.agentUsage).toHaveBeenCalledTimes(2);
   });
 
-  it("given the usage can't be read, warns and shows none", async () => {
+  it("Given the usage can't be read, when the hook runs, then it warns and shows none", async () => {
     mcp.agentUsage.mockRejectedValue("usage unavailable");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { result } = renderHook(() => useAgentUsage("ws-1", "t-1", true));

@@ -1,32 +1,37 @@
-//! Per-terminal bearer tokens. They live only in memory: a restart issues
-//! new ones to the terminals it respawns.
-
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
+use super::model::Actor;
 use super::McpHub;
+use tauri::{Runtime, Wry};
 
-/// Who is calling: resolved from the bearer token, never from the request.
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct AgentIdentity {
     pub terminal_id: String,
     pub workspace_id: String,
     pub agent: String,
-    /// The team role the agent was started with, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub role: Option<super::roles::Role>,
+    pub role: Option<crate::roles::Role>,
 }
 
-pub fn new_token() -> String {
-    let mut bytes = [0u8; 32];
-    // getrandom only fails when the OS has no entropy source at all; a
-    // guessable token is worse than not starting the terminal's access.
-    getrandom::fill(&mut bytes).expect("no OS randomness available for MCP tokens");
-    bytes.iter().map(|byte| format!("{:02x}", byte)).collect()
+impl AgentIdentity {
+    pub fn actor(&self) -> Actor<'_> {
+        Actor {
+            workspace_id: &self.workspace_id,
+            name: &self.terminal_id,
+        }
+    }
 }
 
-/// `t-2` sorts before `t-10`.
+const TOKEN_BYTES: usize = 32;
+
+pub fn new_token() -> Result<String, getrandom::Error> {
+    let mut bytes = [0u8; TOKEN_BYTES];
+    getrandom::fill(&mut bytes)?;
+    Ok(bytes.iter().map(|byte| format!("{:02x}", byte)).collect())
+}
+
 fn terminal_order(id: &str) -> (u64, String) {
     let number = id
         .strip_prefix("t-")
@@ -41,27 +46,25 @@ pub struct TokenRegistry {
 }
 
 impl TokenRegistry {
-    /// A fresh token for a terminal; any older token of it stops working.
-    pub fn issue(&mut self, identity: AgentIdentity) -> String {
-        let token = new_token();
+    pub fn issue(&mut self, identity: AgentIdentity) -> Result<String, getrandom::Error> {
+        let token = new_token()?;
         self.by_token
             .retain(|_, existing| existing.terminal_id != identity.terminal_id);
         self.by_token.insert(token.clone(), identity);
-        token
+        Ok(token)
     }
 
     pub fn identify(&self, token: &str) -> Option<AgentIdentity> {
         self.by_token.get(token).cloned()
     }
 
-    /// Revoke one token; returns its identity if the terminal now has none.
     pub fn revoke_token(&mut self, token: &str) -> Option<AgentIdentity> {
         let identity = self.by_token.remove(token)?;
-        let still_connected = self
+        let is_still_connected = self
             .by_token
             .values()
             .any(|other| other.terminal_id == identity.terminal_id);
-        (!still_connected).then_some(identity)
+        (!is_still_connected).then_some(identity)
     }
 
     #[cfg(test)]
@@ -81,7 +84,6 @@ impl TokenRegistry {
             .retain(|_, identity| identity.workspace_id != workspace_id);
     }
 
-    /// Terminals of a workspace that hold a token, in terminal order.
     pub fn peers(&self, workspace_id: &str) -> Vec<AgentIdentity> {
         let mut peers: Vec<AgentIdentity> = self
             .by_token
@@ -89,22 +91,19 @@ impl TokenRegistry {
             .filter(|identity| identity.workspace_id == workspace_id)
             .cloned()
             .collect();
-        peers.sort_by_key(|a| terminal_order(&a.terminal_id));
-        peers.dedup_by(|a, b| a.terminal_id == b.terminal_id);
+        peers.sort_by_key(|peer| terminal_order(&peer.terminal_id));
+        peers.dedup_by(|peer, previous| peer.terminal_id == previous.terminal_id);
         peers
     }
 }
 
-/// Revokes its token when dropped. A PTY entry owns one, so every way a
-/// terminal goes away (kill, stop, exit, app shutdown) also closes its
-/// access to the MCP server.
-pub struct McpLease {
-    hub: Weak<McpHub>,
+pub struct McpLease<R: Runtime = Wry> {
+    hub: Weak<McpHub<R>>,
     token: String,
 }
 
-impl McpLease {
-    pub fn new(hub: &Arc<McpHub>, token: String) -> Self {
+impl<R: Runtime> McpLease<R> {
+    pub fn new(hub: &Arc<McpHub<R>>, token: String) -> Self {
         Self {
             hub: Arc::downgrade(hub),
             token,
@@ -112,7 +111,7 @@ impl McpLease {
     }
 }
 
-impl Drop for McpLease {
+impl<R: Runtime> Drop for McpLease<R> {
     fn drop(&mut self) {
         if let Some(hub) = self.hub.upgrade() {
             hub.revoke_token(&self.token);
@@ -134,25 +133,25 @@ mod tests {
     }
 
     #[test]
-    fn tokens_are_unique_and_replaced_per_terminal() {
+    fn given_a_terminal_when_issuing_tokens_then_they_are_unique_and_replace_the_previous_one() {
         let mut registry = TokenRegistry::default();
-        let first = registry.issue(identity("t-1", "ws-1"));
-        let second = registry.issue(identity("t-1", "ws-1"));
+        let first = registry.issue(identity("t-1", "ws-1")).unwrap();
+        let second = registry.issue(identity("t-1", "ws-1")).unwrap();
         assert_ne!(first, second);
         assert_eq!(first.len(), 64);
         assert!(registry.identify(&first).is_none());
         assert_eq!(registry.identify(&second).unwrap().terminal_id, "t-1");
-        // Revoking a token that was already replaced reports nothing.
         assert!(registry.revoke_token(&first).is_none());
         assert_eq!(registry.revoke_token(&second).unwrap().terminal_id, "t-1");
     }
 
     #[test]
-    fn peers_are_per_workspace_and_ordered() {
+    fn given_agents_in_several_workspaces_when_listing_peers_then_they_are_per_workspace_and_ordered(
+    ) {
         let mut registry = TokenRegistry::default();
-        registry.issue(identity("t-10", "ws-1"));
-        registry.issue(identity("t-2", "ws-1"));
-        registry.issue(identity("t-3", "ws-2"));
+        registry.issue(identity("t-10", "ws-1")).unwrap();
+        registry.issue(identity("t-2", "ws-1")).unwrap();
+        registry.issue(identity("t-3", "ws-2")).unwrap();
         let peers: Vec<String> = registry
             .peers("ws-1")
             .into_iter()

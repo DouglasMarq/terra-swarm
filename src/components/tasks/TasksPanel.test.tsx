@@ -3,7 +3,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { McpServerInfo, McpTask } from "../../types";
+import type { McpServerInfo, McpTask } from "../../domain/mcp.model";
 
 const api = vi.hoisted(() => ({
   mcpServerInfo: vi.fn(),
@@ -22,6 +22,7 @@ vi.mock("../../lib/tauri/mcp", async (importOriginal) => ({
 
 import { useMcpStore } from "../../stores/mcpStore";
 import { TasksPanel } from "./TasksPanel";
+import { defined } from "../../test/defined";
 
 function task(id: string, extra: Partial<McpTask> = {}): McpTask {
   return {
@@ -44,7 +45,7 @@ function task(id: string, extra: Partial<McpTask> = {}): McpTask {
 }
 
 function info(extra: Partial<McpServerInfo> = {}): McpServerInfo {
-  return { enabled: true, available: true, running: true, url: "http://127.0.0.1:9/mcp", port: 9, db_path: "/tmp/mcp.db", error: null, ...extra };
+  return { isEnabled: true, isAvailable: true, isRunning: true, url: "http://127.0.0.1:9/mcp", port: 9, dbPath: "/tmp/mcp.db", error: null, ...extra };
 }
 
 const agents = [
@@ -62,7 +63,7 @@ describe("TasksPanel", () => {
   });
   afterEach(() => useMcpStore.getState().reset());
 
-  it("groups the board by status with the assignee and its state", async () => {
+  it("Given tasks, when the panel renders, then the board is grouped by status with the assignee and its state", async () => {
     api.mcpListTasks.mockResolvedValue([
       task("T-1", { status: "in_progress", assignee: "t-2", priority: "high" }),
       task("T-2"),
@@ -77,13 +78,12 @@ describe("TasksPanel", () => {
     expect(assignee).toHaveTextContent("Lyra");
     expect(assignee).toHaveTextContent("trabalhando");
     expect(within(screen.getByRole("region", { name: "A fazer" })).getByText("Task T-2")).toBeInTheDocument();
-    // Finished work starts collapsed.
     const done = screen.getByRole("region", { name: "Concluída" });
     expect(within(done).queryByText("Task T-3")).not.toBeInTheDocument();
     expect(api.mcpListTasks).toHaveBeenCalledWith("ws-1");
   });
 
-  it("creates, moves, assigns and deletes tasks", async () => {
+  it("Given the panel, when creating, moving, assigning and deleting tasks, then each action reaches the store", async () => {
     const user = userEvent.setup();
     api.mcpListTasks.mockResolvedValue([task("T-1")]);
     render(<TasksPanel workspaceId="ws-1" agents={agents} />);
@@ -95,13 +95,13 @@ describe("TasksPanel", () => {
     expect(await screen.findByText("Write docs")).toBeInTheDocument();
 
     api.mcpUpdateTask.mockResolvedValue(task("T-1", { status: "blocked" }));
-    const card = screen.getByText("Task T-1").closest("article")!;
+    const card = defined(screen.getByText("Task T-1").closest("article"));
     await user.selectOptions(within(card).getByRole("combobox", { name: "Status" }), "blocked");
     expect(api.mcpUpdateTask).toHaveBeenCalledWith("ws-1", "T-1", { status: "blocked" });
     expect(await screen.findByRole("region", { name: "Bloqueada" })).toHaveTextContent("Task T-1");
 
     api.mcpUpdateTask.mockResolvedValue(task("T-1", { status: "blocked", assignee: "t-1" }));
-    const moved = screen.getByText("Task T-1").closest("article")!;
+    const moved = defined(screen.getByText("Task T-1").closest("article"));
     await user.selectOptions(within(moved).getByRole("combobox", { name: "Responsável" }), "t-1");
     expect(api.mcpUpdateTask).toHaveBeenLastCalledWith("ws-1", "T-1", { assignee: "t-1" });
 
@@ -111,7 +111,7 @@ describe("TasksPanel", () => {
     expect(screen.queryByText("Write docs")).not.toBeInTheDocument();
   });
 
-  it("shows details and the progress log on demand", async () => {
+  it("Given a task, when asking for details, then the details and the progress log are shown", async () => {
     const user = userEvent.setup();
     api.mcpListTasks.mockResolvedValue([
       task("T-1", {
@@ -142,8 +142,8 @@ describe("TasksPanel", () => {
     ]);
   });
 
-  it("warns when the server is off and handles no project", async () => {
-    api.mcpServerInfo.mockResolvedValue(info({ enabled: false }));
+  it("Given the server is off or no project is open, when the panel renders, then it warns or handles the missing project", async () => {
+    api.mcpServerInfo.mockResolvedValue(info({ isEnabled: false }));
     api.mcpListTasks.mockResolvedValue([]);
     const { rerender } = render(<TasksPanel workspaceId="ws-1" agents={[]} />);
     expect(await screen.findByText(/coordenação de agentes está desligada/)).toBeInTheDocument();
@@ -152,8 +152,8 @@ describe("TasksPanel", () => {
     expect(screen.getByText("Abra um projeto para ver as tarefas dele.")).toBeInTheDocument();
   });
 
-  it("explains when the database could not be opened", async () => {
-    api.mcpServerInfo.mockResolvedValue(info({ available: false, enabled: false, error: "migration 1 failed" }));
+  it("Given the database could not be opened, when the panel renders, then it explains why", async () => {
+    api.mcpServerInfo.mockResolvedValue(info({ isAvailable: false, isEnabled: false, error: "migration 1 failed" }));
     api.mcpListTasks.mockRejectedValue("the Terra MCP database is unavailable: migration 1 failed");
     render(<TasksPanel workspaceId="ws-1" agents={[]} />);
     expect(await screen.findByText(/banco da coordenação/)).toBeInTheDocument();

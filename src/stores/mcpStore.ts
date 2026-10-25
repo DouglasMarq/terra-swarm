@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import { create } from "zustand";
-import { listen } from "@tauri-apps/api/event";
 import {
-  MCP_EVENTS,
   mcpApi,
+  onMcpAgentStatus,
+  onMcpNudge,
+  onMcpTasksChanged,
   type McpAgentStatusPayload,
   type McpNudgePayload,
-  type McpTasksChangedPayload,
 } from "../lib/tauri/mcp";
 import { taskNumber } from "../domain/tasks";
 import { errorMessage } from "../lib/errors/errorMessage";
@@ -178,17 +178,17 @@ export function useReportedStates(): Record<string, McpAgentState> {
  */
 export function startMcpEventBridge(onNudge: (payload: McpNudgePayload) => void): () => void {
   const pending = [
-    listen<McpTasksChangedPayload>(MCP_EVENTS.tasksChanged, (event) => {
-      const workspaceId = event.payload?.workspace_id;
+    onMcpTasksChanged((payload) => {
+      const workspaceId = payload?.workspace_id;
       if (workspaceId && workspaceId in useMcpStore.getState().tasks) {
         void useMcpStore.getState().loadTasks(workspaceId);
       }
     }),
-    listen<McpAgentStatusPayload>(MCP_EVENTS.agentStatus, (event) => {
-      if (event.payload?.terminal_id) useMcpStore.getState().applyStatus(event.payload);
+    onMcpAgentStatus((payload) => {
+      if (payload?.terminal_id) useMcpStore.getState().applyStatus(payload);
     }),
-    listen<McpNudgePayload>(MCP_EVENTS.nudge, (event) => {
-      if (event.payload?.terminal_id && event.payload.prompt) onNudge(event.payload);
+    onMcpNudge((payload) => {
+      if (payload?.terminal_id && payload.prompt) onNudge(payload);
     }),
   ];
   return () => {

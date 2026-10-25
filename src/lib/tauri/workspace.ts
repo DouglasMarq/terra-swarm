@@ -11,6 +11,7 @@ import type {
   WorkspaceFileSaved,
 } from "../../types";
 import { invokeCommand } from "./commands";
+import { listenPayload, type UnlistenFn } from "./events";
 
 export function listWorkspaces(): Promise<Workspace[]> {
   return invokeCommand("listWorkspaces");
@@ -171,6 +172,10 @@ export function setTerminalWidth(
   width: number,
 ): Promise<void> {
   return invokeCommand("setTerminalWidth", { wsId, terminalId, width });
+}
+
+export function onWorkspacesChanged(handler: () => void): Promise<UnlistenFn> {
+  return listenPayload("workspaces-changed", handler);
 }
 
 export const workspaceApi = {

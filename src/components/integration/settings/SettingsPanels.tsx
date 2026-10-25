@@ -1,4 +1,4 @@
-import { listen } from "@tauri-apps/api/event";
+import { onVoiceAudioLevel } from "../../../lib/tauri/voice";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 
@@ -149,10 +149,10 @@ function MicLevelMeter({ active }: { active: boolean }) {
 
   useEffect(() => {
     if (!active) return undefined;
-    const unlisten = listen<number>("voice-audio-level", (event) => {
+    const unlisten = onVoiceAudioLevel((level) => {
       const element = fillRef.current;
       if (!element) return;
-      element.style.transform = `scaleX(${Math.min(1, event.payload * MIC_LEVEL_GAIN)})`;
+      element.style.transform = `scaleX(${Math.min(1, level * MIC_LEVEL_GAIN)})`;
     });
     return () => {
       void unlisten.then((cleanup) => cleanup());

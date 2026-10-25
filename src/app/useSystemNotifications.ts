@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
-import type { NotificationPayload, Workspace } from "../types";
+import { ensureNotificationPermission, setAppBadgeCount, showNotification } from "../lib/tauri/notifications";
+import { onAgentAttention, onTerminalNotification } from "../lib/tauri/pty";
+import type { Workspace } from "../types";
 import { t } from "../i18n";
 import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { deriveAgentStatus } from "../domain/agentStatus";
@@ -12,13 +11,6 @@ import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 
 /** One native notification per agent at most this often. */
 const PER_AGENT_COOLDOWN_MS = 30_000;
-
-interface AttentionPayload {
-  terminal_id: string;
-  workspace_id: string;
-  workspace_name?: string | null;
-  message?: string;
-}
 
 /** Whether a native notification should be shown for this agent now. */
 export function shouldNotify(
@@ -32,17 +24,6 @@ export function shouldNotify(
   if (last !== undefined && now - last < PER_AGENT_COOLDOWN_MS) return false;
   lastShown.set(terminalId, now);
   return true;
-}
-
-let permission: Promise<boolean> | null = null;
-function ensurePermission(): Promise<boolean> {
-  permission ??= isPermissionGranted()
-    .then((granted) => granted || requestPermission().then((answer) => answer === "granted"))
-    .catch((error) => {
-      console.warn("notification permission check failed:", error);
-      return false;
-    });
-  return permission;
 }
 
 /**
@@ -78,8 +59,7 @@ export function useSystemNotifications(workspaces: readonly Workspace[]) {
 
   useEffect(() => {
     const count = enabled && waiting > 0 ? waiting : undefined;
-    getCurrentWindow()
-      .setBadgeCount(count)
+    setAppBadgeCount(count)
       .catch((error) => console.warn("could not set the app badge:", error));
   }, [enabled, waiting]);
 
@@ -87,23 +67,23 @@ export function useSystemNotifications(workspaces: readonly Workspace[]) {
     const show = async (terminalId: string, body: string) => {
       const { workspaces: current, enabled: on } = latest.current;
       if (!on || !shouldNotify(lastShown.current, terminalId, Date.now(), document.hasFocus())) return;
-      if (!(await ensurePermission())) return;
+      if (!(await ensureNotificationPermission())) return;
       const labels = buildAgentLabels(current as Workspace[], {
         titles: useTerminalRuntimeStore.getState().titles,
         names: usePreferencesStore.getState().agentNames,
       });
       const label = labels[terminalId];
-      sendNotification({
+      showNotification({
         title: t("notifications.needsYouTitle", { name: label ? agentLabelText(label) : terminalId }),
         body: body || t("notifications.needsYouBody"),
       });
     };
     const pending = [
-      listen<AttentionPayload>("agent-attention", (event) => {
-        void show(event.payload.terminal_id, event.payload.message ?? "");
+      onAgentAttention((payload) => {
+        void show(payload.terminal_id, payload.message ?? "");
       }),
-      listen<NotificationPayload>("terminal-notification", (event) => {
-        void show(event.payload.id, event.payload.messages[0] ?? "");
+      onTerminalNotification((payload) => {
+        void show(payload.id, payload.messages[0] ?? "");
       }),
     ];
     return () => {

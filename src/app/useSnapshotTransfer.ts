@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { openDialog, saveDialog } from "../lib/tauri/system";
 import { api } from "../api";
 import { t } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";

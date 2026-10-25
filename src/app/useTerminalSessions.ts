@@ -1,16 +1,13 @@
 import { useEffect, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
+import { onTerminalContext, onTerminalExit, onTerminalNotification, onTerminalTitle } from "../lib/tauri/pty";
+import { onWorkspacesChanged } from "../lib/tauri/workspace";
 import type {
   AgentLaunchExtras,
   AgentRole,
-  ContextPayload,
-  ExitPayload,
-  NotificationPayload,
   ResumeItem,
   RunningTerminal,
   SpawnedTerminal,
-  TitlePayload,
   Workspace,
   WorkspaceSnapshotV2,
 } from "../types";
@@ -79,36 +76,36 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
   // Backend events. Registered without a one-time guard so StrictMode's
   // unmount/remount cycle registers them again.
   useEffect(() => {
-    const unlistenExit = listen<ExitPayload>("terminal-exit", (event) => {
-      if (!liveIds.current.has(event.payload.id)) return;
+    const unlistenExit = onTerminalExit((payload) => {
+      if (!liveIds.current.has(payload.id)) return;
       // Ignore exits of a previous process generation (the old PTY dying
       // right after a restart respawned the same id).
-      const known = spawnSeq.current[event.payload.id];
-      if (known != null && event.payload.seq !== known) return;
-      runtime().setExited((previous) => ({ ...previous, [event.payload.id]: event.payload.code }));
+      const known = spawnSeq.current[payload.id];
+      if (known != null && payload.seq !== known) return;
+      runtime().setExited((previous) => ({ ...previous, [payload.id]: payload.code }));
       runtime().setContextUsage((previous) => {
         const next = { ...previous };
-        delete next[event.payload.id];
+        delete next[payload.id];
         return next;
       });
     });
-    const unlistenNotification = listen<NotificationPayload>("terminal-notification", (event) => {
-      if (liveIds.current.has(event.payload.id)) runtime().addNotification(event.payload);
+    const unlistenNotification = onTerminalNotification((payload) => {
+      if (liveIds.current.has(payload.id)) runtime().addNotification(payload);
     });
-    const unlistenContext = listen<ContextPayload>("terminal-context", (event) => {
-      if (!liveIds.current.has(event.payload.id)) return;
-      runtime().setContextUsage((previous) => ({ ...previous, [event.payload.id]: event.payload.used }));
+    const unlistenContext = onTerminalContext((payload) => {
+      if (!liveIds.current.has(payload.id)) return;
+      runtime().setContextUsage((previous) => ({ ...previous, [payload.id]: payload.used }));
     });
-    const unlistenTitle = listen<TitlePayload>("terminal-title", (event) => {
-      if (!liveIds.current.has(event.payload.id)) return;
-      runtime().setTitles((previous) => ({ ...previous, [event.payload.id]: event.payload.title }));
+    const unlistenTitle = onTerminalTitle((payload) => {
+      if (!liveIds.current.has(payload.id)) return;
+      runtime().setTitles((previous) => ({ ...previous, [payload.id]: payload.title }));
     });
     // Layout drags and group updates can emit several events in one turn; a
     // short debounce keeps other windows current without a request per frame.
     const refreshWorkspaces = createDebouncedTask(() => {
       void refresh();
     }, WORKSPACES_REFRESH_DEBOUNCE_MS);
-    const unlistenWorkspaces = listen("workspaces-changed", () => refreshWorkspaces.schedule());
+    const unlistenWorkspaces = onWorkspacesChanged(() => refreshWorkspaces.schedule());
     return () => {
       refreshWorkspaces.cancel();
       for (const pending of [unlistenExit, unlistenNotification, unlistenContext, unlistenTitle, unlistenWorkspaces]) {

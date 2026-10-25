@@ -4,9 +4,10 @@ import { useMcpStore } from "../stores/mcpStore";
 import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api } from "../api";
 import { isIpcError } from "../lib/tauri/errors";
+import type { UnlistenFn } from "../lib/tauri/events";
+import { onPtyOutput } from "../lib/tauri/pty";
 import type { OutputChunk } from "../types";
 import { registerTerminal, unregisterTerminal, getTerminal } from "../terminalRegistry";
 import {
@@ -260,13 +261,13 @@ export function TerminalPane(props: Props) {
     const preLive: OutputChunk[] = [];
     let unlisten: UnlistenFn | null = null;
     (async () => {
-      const un = await listen<OutputChunk>(`pty-output-${id}`, (e) => {
+      const un = await onPtyOutput(id, (chunk) => {
         if (disposed) return;
         if (!live) {
-          preLive.push(e.payload);
+          preLive.push(chunk);
           return;
         }
-        enqueueOutput(e.payload.data);
+        enqueueOutput(chunk.data);
       });
       if (disposed) {
         un();

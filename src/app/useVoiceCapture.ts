@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
+import {
+  onVoiceAudioLevel,
+  onVoiceRecordingError,
+  onVoiceRecordingStarted,
+  onVoiceRecordingStopped,
+  onVoiceTranscriptionComplete,
+  onVoiceTranscriptionError,
+  onVoiceTranscriptionStarted,
+} from "../lib/tauri/voice";
 import type { AgentInfo, VoiceStatus, Workspace, WorkspaceGroup } from "../types";
 import {
   createInitialVoiceCapsuleModel,
@@ -310,7 +318,7 @@ export function useVoiceCapture({
   // else becomes a profile-aware prompt; transcript text is never interpreted
   // as a shell command.
   useEffect(() => {
-    const unRecStart = listen("voice-recording-started", () => {
+    const unRecStart = onVoiceRecordingStarted(() => {
       setVoiceStatus("recording");
       setVoiceFeedback(null);
       setVoiceSubmitted(false);
@@ -318,22 +326,22 @@ export function useVoiceCapture({
       setVoiceSamples([]);
       dispatchVoiceCapsule({ type: "start-listening" });
     });
-    const unRecStop = listen("voice-recording-stopped", () => {
+    const unRecStop = onVoiceRecordingStopped(() => {
       setVoiceStatus("transcribing");
       dispatchVoiceCapsule({ type: "stop-listening" });
     });
-    const unAudioLevel = listen<number>("voice-audio-level", (e) => {
-      const level = Math.max(0, Math.min(1, Number(e.payload) || 0));
+    const unAudioLevel = onVoiceAudioLevel((payload) => {
+      const level = Math.max(0, Math.min(1, Number(payload) || 0));
       setVoiceLevel(level);
       setVoiceSamples((previous) => [...previous.slice(-(VOICE_WAVEFORM_SAMPLES - 1)), level]);
     });
-    const unTrStart = listen("voice-transcription-started", () => {
+    const unTrStart = onVoiceTranscriptionStarted(() => {
       setVoiceStatus("transcribing");
       dispatchVoiceCapsule({ type: "begin-transcription" });
     });
-    const unTrDone = listen<string>("voice-transcription-complete", (e) => {
+    const unTrDone = onVoiceTranscriptionComplete((transcript) => {
       setVoiceStatus("idle");
-      const text = e.payload.trim();
+      const text = transcript.trim();
       if (!text) {
         dispatchVoiceCapsule({ type: "transcription-ready", transcript: "", intent: null });
         setVoiceFeedback(t("app.voice.noTranscript"));
@@ -363,21 +371,21 @@ export function useVoiceCapture({
       }
       void deliverDictationRef.current(id, text);
     });
-    const unTrErr = listen<string>("voice-transcription-error", (e) => {
+    const unTrErr = onVoiceTranscriptionError((message) => {
       setVoiceStatus("idle");
-      dispatchVoiceCapsule({ type: "fail", message: e.payload || t("app.voice.transcriptionFailed") });
-      setVoiceFeedback(e.payload || t("app.voice.transcriptionFailed"));
-      console.error("voice transcription error:", e.payload);
-      if (isVoiceModelError(e.payload)) {
+      dispatchVoiceCapsule({ type: "fail", message: message || t("app.voice.transcriptionFailed") });
+      setVoiceFeedback(message || t("app.voice.transcriptionFailed"));
+      console.error("voice transcription error:", message);
+      if (isVoiceModelError(message)) {
         openVoiceSettings();
       }
     });
-    const unRecErr = listen<string>("voice-recording-error", (e) => {
+    const unRecErr = onVoiceRecordingError((message) => {
       setVoiceStatus("idle");
-      dispatchVoiceCapsule({ type: "fail", message: e.payload || t("app.voice.captureFailed") });
-      setVoiceFeedback(e.payload || t("app.voice.captureFailed"));
-      console.error("voice recording error:", e.payload);
-      if (isVoiceModelError(e.payload)) {
+      dispatchVoiceCapsule({ type: "fail", message: message || t("app.voice.captureFailed") });
+      setVoiceFeedback(message || t("app.voice.captureFailed"));
+      console.error("voice recording error:", message);
+      if (isVoiceModelError(message)) {
         openVoiceSettings();
       }
     });

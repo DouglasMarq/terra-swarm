@@ -1,5 +1,14 @@
+import { open, save, type OpenDialogOptions, type SaveDialogOptions } from "@tauri-apps/plugin-dialog";
 import type { AgentInfo, WorkspaceGitStatus } from "../../types";
 import { invokeCommand } from "./commands";
+
+export function openDialog(options: OpenDialogOptions) {
+  return open(options);
+}
+
+export function saveDialog(options: SaveDialogOptions) {
+  return save(options);
+}
 
 /** Last persistence timestamp used by the session-resume flow. */
 export function storeSavedAt(): Promise<number | null> {

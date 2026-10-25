@@ -1,11 +1,17 @@
 import type {
   AgentLaunchExtras,
   BacklogSnapshot,
+  ContextPayload,
+  ExitPayload,
+  NotificationPayload,
+  OutputChunk,
   RunningTerminal,
   SpawnedTerminal,
   TerminalRuntimeInfo,
+  TitlePayload,
 } from "../../types";
 import { invokeCommand } from "./commands";
+import { listenPayload, type UnlistenFn } from "./events";
 
 /** Size a PTY starts with until its pane is measured. */
 const DEFAULT_TERMINAL_COLUMNS = 80;
@@ -66,6 +72,37 @@ export function runningTerminals(): Promise<RunningTerminal[]> {
 
 export function terminalRuntimeInfo(id: string): Promise<TerminalRuntimeInfo | null> {
   return invokeCommand("terminalRuntimeInfo", { id });
+}
+
+export interface AgentAttentionPayload {
+  terminal_id: string;
+  workspace_id: string;
+  workspace_name?: string | null;
+  message?: string;
+}
+
+export function onPtyOutput(id: string, handler: (chunk: OutputChunk) => void): Promise<UnlistenFn> {
+  return listenPayload(`pty-output-${id}`, handler);
+}
+
+export function onTerminalExit(handler: (payload: ExitPayload) => void): Promise<UnlistenFn> {
+  return listenPayload("terminal-exit", handler);
+}
+
+export function onTerminalNotification(handler: (payload: NotificationPayload) => void): Promise<UnlistenFn> {
+  return listenPayload("terminal-notification", handler);
+}
+
+export function onTerminalContext(handler: (payload: ContextPayload) => void): Promise<UnlistenFn> {
+  return listenPayload("terminal-context", handler);
+}
+
+export function onTerminalTitle(handler: (payload: TitlePayload) => void): Promise<UnlistenFn> {
+  return listenPayload("terminal-title", handler);
+}
+
+export function onAgentAttention(handler: (payload: AgentAttentionPayload) => void): Promise<UnlistenFn> {
+  return listenPayload("agent-attention", handler);
 }
 
 export const ptyApi = {

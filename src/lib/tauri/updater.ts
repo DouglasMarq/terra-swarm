@@ -2,28 +2,31 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { getVersion } from "@tauri-apps/api/app";
 
+export type { Update };
+
 export type UpdateCheckResult =
-  | { kind: "update"; version: string; current: string }
+  | { kind: "update"; version: string; current: string; update: Update }
   | { kind: "none" }
   | { kind: "error" };
 
-let pendingUpdate: Update | null = null;
+export function appVersion(): Promise<string> {
+  return getVersion();
+}
 
 export async function checkForUpdate(): Promise<UpdateCheckResult> {
   try {
     const update = await check();
     if (!update) return { kind: "none" };
-    pendingUpdate = update;
     const current = await getVersion();
-    return { kind: "update", version: update.version, current };
+    return { kind: "update", version: update.version, current, update };
   } catch (err) {
     console.error("update check failed:", err);
     return { kind: "error" };
   }
 }
 
-export async function installPendingUpdate(): Promise<void> {
-  if (!pendingUpdate) return;
-  await pendingUpdate.downloadAndInstall();
+export async function installUpdate(update: Update | null): Promise<void> {
+  if (!update) return;
+  await update.downloadAndInstall();
   await relaunch();
 }

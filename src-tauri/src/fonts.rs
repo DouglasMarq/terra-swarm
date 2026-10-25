@@ -86,4 +86,21 @@ mod tests {
         let families = families_from([("Iosevka", false), ("Iosevka", true)].into_iter());
         assert!(families[0].is_monospace);
     }
+
+    #[test]
+    fn given_the_system_fonts_when_listing_them_then_families_are_unique_and_sorted() {
+        let families = tauri::async_runtime::block_on(list_system_fonts());
+
+        let keys: Vec<String> = families
+            .iter()
+            .map(|family| family.name.to_lowercase())
+            .collect();
+        let mut sorted = keys.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(keys, sorted);
+        assert!(families
+            .iter()
+            .all(|family| !family.name.is_empty() && !family.name.starts_with('.')));
+    }
 }

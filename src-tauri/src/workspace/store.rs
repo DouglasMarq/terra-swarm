@@ -142,15 +142,8 @@ impl WorkspaceStore {
     }
 
     pub fn reorder_workspaces(&mut self, order: &[String]) {
-        let mut remaining = std::mem::take(&mut self.workspaces);
-        let mut sorted = Vec::with_capacity(remaining.len());
-        for id in order {
-            if let Some(pos) = remaining.iter().position(|w| &w.id == id) {
-                sorted.push(remaining.remove(pos));
-            }
-        }
-        sorted.extend(remaining);
-        self.workspaces = sorted;
+        let workspaces = std::mem::take(&mut self.workspaces);
+        self.workspaces = reorder_by_ids(workspaces, order, |workspace| &workspace.id);
         self.save();
     }
 

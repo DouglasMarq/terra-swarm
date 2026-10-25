@@ -56,6 +56,18 @@ pub(crate) fn emit_workspaces_changed(app: &AppHandle) {
     let _ = app.emit("workspaces-changed", ());
 }
 
+fn reorder_by_ids<T>(items: Vec<T>, order: &[String], id_of: impl Fn(&T) -> &str) -> Vec<T> {
+    let mut remaining = items;
+    let mut sorted = Vec::with_capacity(remaining.len());
+    for id in order {
+        if let Some(position) = remaining.iter().position(|item| id_of(item) == id) {
+            sorted.push(remaining.remove(position));
+        }
+    }
+    sorted.extend(remaining);
+    sorted
+}
+
 pub fn bump_next_id(id: &str) {
     if let Some(n) = id.strip_prefix("ws-").and_then(|s| s.parse::<u64>().ok()) {
         NEXT_WS_ID.fetch_max(n.saturating_add(1), Ordering::SeqCst);

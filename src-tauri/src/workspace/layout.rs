@@ -255,15 +255,8 @@ impl WorkspaceStore {
         order: &[String],
     ) -> Result<(), String> {
         let workspace = self.workspace_mut(workspace_id)?;
-        let mut remaining = std::mem::take(&mut workspace.containers);
-        let mut sorted = Vec::with_capacity(remaining.len());
-        for id in order {
-            if let Some(index) = remaining.iter().position(|container| &container.id == id) {
-                sorted.push(remaining.remove(index));
-            }
-        }
-        sorted.extend(remaining);
-        workspace.containers = sorted;
+        let containers = std::mem::take(&mut workspace.containers);
+        workspace.containers = reorder_by_ids(containers, order, |container| &container.id);
         self.save();
         Ok(())
     }
@@ -290,15 +283,8 @@ impl WorkspaceStore {
             }
         };
         let container = &mut workspace.containers[container_index];
-        let mut remaining = std::mem::take(&mut container.pane_ids);
-        let mut sorted = Vec::with_capacity(remaining.len());
-        for id in order {
-            if let Some(index) = remaining.iter().position(|pane_id| pane_id == id) {
-                sorted.push(remaining.remove(index));
-            }
-        }
-        sorted.extend(remaining);
-        container.pane_ids = sorted;
+        let pane_ids = std::mem::take(&mut container.pane_ids);
+        container.pane_ids = reorder_by_ids(pane_ids, order, String::as_str);
         if let Some(layout) = &mut container.layout {
             layout.item_ids = container.pane_ids.clone();
         }

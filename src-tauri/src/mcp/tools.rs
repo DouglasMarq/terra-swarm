@@ -72,217 +72,267 @@ fn state_values() -> Vec<&'static str> {
 
 pub fn definitions() -> Vec<ToolDef> {
     vec![
-        ToolDef {
-            name: "whoami",
-            title: "Who am I",
-            description: "Returns your own terminal id, agent name and project (workspace), plus \
-                the teammates currently connected to this project with their reported state. Call \
-                this first: other tools refer to agents by terminal id (for example `t-3`).",
-            read_only: true,
-            schema: json!({ "type": "object", "properties": {} }),
-        },
-        ToolDef {
-            name: "list_tasks",
-            title: "List tasks",
-            description:
-                "Lists the tasks on this project's shared board: active work first, then by \
-                priority and board position. Filter by `status` and/or `assignee` (a terminal id, \
-                or \"me\" for your own tasks). `blocked_by` lists unfinished dependencies: such a \
-                task can't be claimed yet. Each entry is a summary; use `get_task` for the \
-                description and history.",
-            read_only: true,
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "status": { "type": "string", "enum": status_values() },
-                    "assignee": { "type": "string", "description": "Terminal id, or \"me\"." }
-                }
-            }),
-        },
-        ToolDef {
-            name: "get_task",
-            title: "Get task",
-            description: "Returns one task with its full description, dependencies and its latest \
-                history `events` (created, claimed, status, assigned, note, completed).",
-            read_only: true,
-            schema: json!({
-                "type": "object",
-                "properties": { "id": { "type": "string", "description": "Task id, e.g. \"T-4\"." } },
-                "required": ["id"]
-            }),
-        },
-        ToolDef {
-            name: "create_task",
-            title: "Create task",
-            description: "Adds a task to the shared board in `todo`, unassigned, so any agent can \
-                claim it. Split large work into tasks a single agent can finish. `depends_on` \
-                lists task ids that must be `done` before this one can be claimed.",
-            read_only: false,
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "title": {
-                        "type": "string",
-                        "description": format!("Short imperative summary (max {} characters).", MAX_TITLE_CHARS)
-                    },
-                    "description": { "type": "string", "description": "What done looks like, relevant files, constraints." },
-                    "priority": { "type": "string", "enum": priority_values_lowest_first(), "default": "medium" },
-                    "depends_on": { "type": "array", "items": { "type": "string" } },
-                    "labels": { "type": "array", "items": { "type": "string" } }
-                },
-                "required": ["title"]
-            }),
-        },
-        ToolDef {
-            name: "claim_task",
-            title: "Claim task",
-            description:
-                "Assigns a `todo` task to you and moves it to `in_progress`. Claim before \
-                you start working on a task. Atomic: if another agent already claimed it, it is \
-                not in `todo`, or a dependency is not done yet, this fails and you should pick \
-                something else.",
-            read_only: false,
-            schema: json!({
-                "type": "object",
-                "properties": { "id": { "type": "string" } },
-                "required": ["id"]
-            }),
-        },
-        ToolDef {
-            name: "update_task",
-            title: "Update task",
-            description: "Changes a task's status and/or adds a note to its history. Use \
-                `status: \"blocked\"` with a `note` explaining what you are waiting for. To hand \
-                work in, prefer `complete_task`.",
-            read_only: false,
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "id": { "type": "string" },
-                    "status": { "type": "string", "enum": status_values() },
-                    "note": { "type": "string", "description": "Progress log entry." }
-                },
-                "required": ["id"]
-            }),
-        },
-        ToolDef {
-            name: "complete_task",
-            title: "Complete task",
-            description: "Marks your task as finished and moves it to `review` for a human to \
-                check, recording `summary` (what changed, how it was verified) in the log. Only \
-                the assignee can complete an assigned task.",
-            read_only: false,
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "id": { "type": "string" },
-                    "summary": { "type": "string" }
-                },
-                "required": ["id", "summary"]
-            }),
-        },
-        ToolDef {
-            name: "send_message",
-            title: "Send message",
-            description: "Sends a message to a teammate by terminal id (see `whoami`), or to \
-                \"all\" to broadcast to every agent in this project. Messages are delivered \
-                through the recipient's `read_inbox`.",
-            read_only: false,
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "to": { "type": "string", "description": "Terminal id or \"all\"." },
-                    "body": { "type": "string" }
-                },
-                "required": ["to", "body"]
-            }),
-        },
-        ToolDef {
-            name: "read_inbox",
-            title: "Read inbox",
-            description: "Returns messages sent to you or to \"all\", oldest first (at most \
-                `limit`, default 50), and marks them as read. By default only unread messages \
-                are returned; pass `unread_only: false` to see the history too.",
-            read_only: false,
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "unread_only": { "type": "boolean", "default": true },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": MAX_LIMIT, "default": DEFAULT_INBOX_LIMIT }
-                }
-            }),
-        },
-        ToolDef {
-            name: "add_note",
-            title: "Add note",
-            description: "Saves a note to this project's shared memory, visible to every agent \
-                now and in later sessions. Use it for facts worth keeping: commands, conventions, \
-                decisions, gotchas. Giving a `key` (e.g. \"test-command\") replaces the earlier \
-                note with the same key.",
-            read_only: false,
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "body": { "type": "string" },
-                    "key": { "type": "string", "description": "Optional stable name for the note." }
-                },
-                "required": ["body"]
-            }),
-        },
-        ToolDef {
-            name: "search_notes",
-            title: "Search notes",
-            description: "Full-text search over the project's shared notes (key and text). Every \
-                word must match, as a prefix, ignoring case and accents; best matches first, at \
-                most `limit` (default 20). An empty query lists the most recently updated notes.",
-            read_only: true,
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "query": { "type": "string" },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": MAX_LIMIT, "default": DEFAULT_SEARCH_LIMIT }
-                },
-                "required": ["query"]
-            }),
-        },
-        ToolDef {
-            name: "assign_task",
-            title: "Assign task",
-            description: "Orchestrator only. Hands a task to a teammate: makes them the assignee, \
-                moves a `todo` task to `in_progress`, puts the task (and your optional `note`) in \
-                their inbox, and, when they are idle, types a prompt into their terminal so they \
-                start right away. A task with unfinished dependencies cannot be assigned yet.",
-            read_only: false,
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "id": { "type": "string", "description": "Task id, e.g. \"T-4\"." },
-                    "to": { "type": "string", "description": "Teammate's terminal id (see `whoami`)." },
-                    "note": { "type": "string", "description": "Extra guidance for the teammate." }
-                },
-                "required": ["id", "to"]
-            }),
-        },
-        ToolDef {
-            name: "report_status",
-            title: "Report status",
-            description: "Tells your teammates and the humans watching what you are doing: \
-                `working`, `idle`, `needs_input` (waiting for a human) or `blocked`, with a \
-                one-line `summary`. Update it when your state changes.",
-            read_only: false,
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "state": { "type": "string", "enum": state_values() },
-                    "summary": {
-                        "type": "string",
-                        "description": format!("One line, max {} characters.", MAX_STATUS_SUMMARY_CHARS)
-                    }
-                },
-                "required": ["state", "summary"]
-            }),
-        },
+        whoami_tool(),
+        list_tasks_tool(),
+        get_task_tool(),
+        create_task_tool(),
+        claim_task_tool(),
+        update_task_tool(),
+        complete_task_tool(),
+        send_message_tool(),
+        read_inbox_tool(),
+        add_note_tool(),
+        search_notes_tool(),
+        assign_task_tool(),
+        report_status_tool(),
     ]
+}
+
+fn whoami_tool() -> ToolDef {
+    ToolDef {
+        name: "whoami",
+        title: "Who am I",
+        description: "Returns your own terminal id, agent name and project (workspace), plus \
+            the teammates currently connected to this project with their reported state. Call \
+            this first: other tools refer to agents by terminal id (for example `t-3`).",
+        read_only: true,
+        schema: json!({ "type": "object", "properties": {} }),
+    }
+}
+
+fn list_tasks_tool() -> ToolDef {
+    ToolDef {
+        name: "list_tasks",
+        title: "List tasks",
+        description: "Lists the tasks on this project's shared board: active work first, then by \
+            priority and board position. Filter by `status` and/or `assignee` (a terminal id, \
+            or \"me\" for your own tasks). `blocked_by` lists unfinished dependencies: such a \
+            task can't be claimed yet. Each entry is a summary; use `get_task` for the \
+            description and history.",
+        read_only: true,
+        schema: json!({
+            "type": "object",
+            "properties": {
+                "status": { "type": "string", "enum": status_values() },
+                "assignee": { "type": "string", "description": "Terminal id, or \"me\"." }
+            }
+        }),
+    }
+}
+
+fn get_task_tool() -> ToolDef {
+    ToolDef {
+        name: "get_task",
+        title: "Get task",
+        description: "Returns one task with its full description, dependencies and its latest \
+            history `events` (created, claimed, status, assigned, note, completed).",
+        read_only: true,
+        schema: json!({
+            "type": "object",
+            "properties": { "id": { "type": "string", "description": "Task id, e.g. \"T-4\"." } },
+            "required": ["id"]
+        }),
+    }
+}
+
+fn create_task_tool() -> ToolDef {
+    ToolDef {
+        name: "create_task",
+        title: "Create task",
+        description: "Adds a task to the shared board in `todo`, unassigned, so any agent can \
+            claim it. Split large work into tasks a single agent can finish. `depends_on` \
+            lists task ids that must be `done` before this one can be claimed.",
+        read_only: false,
+        schema: json!({
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": format!("Short imperative summary (max {} characters).", MAX_TITLE_CHARS)
+                },
+                "description": { "type": "string", "description": "What done looks like, relevant files, constraints." },
+                "priority": { "type": "string", "enum": priority_values_lowest_first(), "default": "medium" },
+                "depends_on": { "type": "array", "items": { "type": "string" } },
+                "labels": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": ["title"]
+        }),
+    }
+}
+
+fn claim_task_tool() -> ToolDef {
+    ToolDef {
+        name: "claim_task",
+        title: "Claim task",
+        description: "Assigns a `todo` task to you and moves it to `in_progress`. Claim before \
+            you start working on a task. Atomic: if another agent already claimed it, it is \
+            not in `todo`, or a dependency is not done yet, this fails and you should pick \
+            something else.",
+        read_only: false,
+        schema: json!({
+            "type": "object",
+            "properties": { "id": { "type": "string" } },
+            "required": ["id"]
+        }),
+    }
+}
+
+fn update_task_tool() -> ToolDef {
+    ToolDef {
+        name: "update_task",
+        title: "Update task",
+        description: "Changes a task's status and/or adds a note to its history. Use \
+            `status: \"blocked\"` with a `note` explaining what you are waiting for. To hand \
+            work in, prefer `complete_task`.",
+        read_only: false,
+        schema: json!({
+            "type": "object",
+            "properties": {
+                "id": { "type": "string" },
+                "status": { "type": "string", "enum": status_values() },
+                "note": { "type": "string", "description": "Progress log entry." }
+            },
+            "required": ["id"]
+        }),
+    }
+}
+
+fn complete_task_tool() -> ToolDef {
+    ToolDef {
+        name: "complete_task",
+        title: "Complete task",
+        description: "Marks your task as finished and moves it to `review` for a human to \
+            check, recording `summary` (what changed, how it was verified) in the log. Only \
+            the assignee can complete an assigned task.",
+        read_only: false,
+        schema: json!({
+            "type": "object",
+            "properties": {
+                "id": { "type": "string" },
+                "summary": { "type": "string" }
+            },
+            "required": ["id", "summary"]
+        }),
+    }
+}
+
+fn send_message_tool() -> ToolDef {
+    ToolDef {
+        name: "send_message",
+        title: "Send message",
+        description: "Sends a message to a teammate by terminal id (see `whoami`), or to \
+            \"all\" to broadcast to every agent in this project. Messages are delivered \
+            through the recipient's `read_inbox`.",
+        read_only: false,
+        schema: json!({
+            "type": "object",
+            "properties": {
+                "to": { "type": "string", "description": "Terminal id or \"all\"." },
+                "body": { "type": "string" }
+            },
+            "required": ["to", "body"]
+        }),
+    }
+}
+
+fn read_inbox_tool() -> ToolDef {
+    ToolDef {
+        name: "read_inbox",
+        title: "Read inbox",
+        description: "Returns messages sent to you or to \"all\", oldest first (at most \
+            `limit`, default 50), and marks them as read. By default only unread messages \
+            are returned; pass `unread_only: false` to see the history too.",
+        read_only: false,
+        schema: json!({
+            "type": "object",
+            "properties": {
+                "unread_only": { "type": "boolean", "default": true },
+                "limit": { "type": "integer", "minimum": 1, "maximum": MAX_LIMIT, "default": DEFAULT_INBOX_LIMIT }
+            }
+        }),
+    }
+}
+
+fn add_note_tool() -> ToolDef {
+    ToolDef {
+        name: "add_note",
+        title: "Add note",
+        description: "Saves a note to this project's shared memory, visible to every agent \
+            now and in later sessions. Use it for facts worth keeping: commands, conventions, \
+            decisions, gotchas. Giving a `key` (e.g. \"test-command\") replaces the earlier \
+            note with the same key.",
+        read_only: false,
+        schema: json!({
+            "type": "object",
+            "properties": {
+                "body": { "type": "string" },
+                "key": { "type": "string", "description": "Optional stable name for the note." }
+            },
+            "required": ["body"]
+        }),
+    }
+}
+
+fn search_notes_tool() -> ToolDef {
+    ToolDef {
+        name: "search_notes",
+        title: "Search notes",
+        description: "Full-text search over the project's shared notes (key and text). Every \
+            word must match, as a prefix, ignoring case and accents; best matches first, at \
+            most `limit` (default 20). An empty query lists the most recently updated notes.",
+        read_only: true,
+        schema: json!({
+            "type": "object",
+            "properties": {
+                "query": { "type": "string" },
+                "limit": { "type": "integer", "minimum": 1, "maximum": MAX_LIMIT, "default": DEFAULT_SEARCH_LIMIT }
+            },
+            "required": ["query"]
+        }),
+    }
+}
+
+fn assign_task_tool() -> ToolDef {
+    ToolDef {
+        name: "assign_task",
+        title: "Assign task",
+        description: "Orchestrator only. Hands a task to a teammate: makes them the assignee, \
+            moves a `todo` task to `in_progress`, puts the task (and your optional `note`) in \
+            their inbox, and, when they are idle, types a prompt into their terminal so they \
+            start right away. A task with unfinished dependencies cannot be assigned yet.",
+        read_only: false,
+        schema: json!({
+            "type": "object",
+            "properties": {
+                "id": { "type": "string", "description": "Task id, e.g. \"T-4\"." },
+                "to": { "type": "string", "description": "Teammate's terminal id (see `whoami`)." },
+                "note": { "type": "string", "description": "Extra guidance for the teammate." }
+            },
+            "required": ["id", "to"]
+        }),
+    }
+}
+
+fn report_status_tool() -> ToolDef {
+    ToolDef {
+        name: "report_status",
+        title: "Report status",
+        description: "Tells your teammates and the humans watching what you are doing: \
+            `working`, `idle`, `needs_input` (waiting for a human) or `blocked`, with a \
+            one-line `summary`. Update it when your state changes.",
+        read_only: false,
+        schema: json!({
+            "type": "object",
+            "properties": {
+                "state": { "type": "string", "enum": state_values() },
+                "summary": {
+                    "type": "string",
+                    "description": format!("One line, max {} characters.", MAX_STATUS_SUMMARY_CHARS)
+                }
+            },
+            "required": ["state", "summary"]
+        }),
+    }
 }
 
 fn parse<T: for<'de> Deserialize<'de>>(args: Value) -> Result<T, ToolError> {
@@ -393,6 +443,26 @@ struct ReportStatusArgs {
     summary: String,
 }
 
+type Handler<R> = fn(&McpHub<R>, &AgentIdentity, Value) -> Result<Value, ToolError>;
+
+fn handlers<R: Runtime>() -> [(&'static str, Handler<R>); 13] {
+    [
+        ("whoami", whoami),
+        ("list_tasks", list_tasks),
+        ("get_task", get_task),
+        ("create_task", create_task),
+        ("claim_task", claim_task),
+        ("update_task", update_task),
+        ("complete_task", complete_task),
+        ("send_message", send_message),
+        ("assign_task", assign_task),
+        ("read_inbox", read_inbox),
+        ("add_note", add_note),
+        ("search_notes", search_notes),
+        ("report_status", report_status),
+    ]
+}
+
 /// Run one tool for `who`. Every store call uses `who.workspace_id`, so a
 /// caller can never reach another project's data.
 pub fn call<R: Runtime>(
@@ -401,253 +471,367 @@ pub fn call<R: Runtime>(
     name: &str,
     args: Value,
 ) -> Result<Value, ToolError> {
+    let (_, handler) = handlers::<R>()
+        .into_iter()
+        .find(|(tool, _)| *tool == name)
+        .ok_or_else(|| ToolError::UnknownTool(name.to_string()))?;
+    handler(hub, who, args)
+}
+
+fn peer_summaries<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+) -> Result<Vec<Value>, ToolError> {
+    let statuses = hub.statuses()?;
+    Ok(hub
+        .peers(&who.workspace_id)
+        .into_iter()
+        .filter(|peer| peer.terminal_id != who.terminal_id)
+        .map(|peer| {
+            let status = statuses.status_of(&peer.terminal_id);
+            json!({
+                "terminal_id": peer.terminal_id,
+                "agent": peer.agent,
+                "role": peer.role,
+                "state": status.map(|status| status.state),
+                "summary": status.map(|status| status.summary.clone()),
+                "updated_at": status.map(|status| status.updated_at),
+            })
+        })
+        .collect())
+}
+
+fn whoami<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    _args: Value,
+) -> Result<Value, ToolError> {
     let ws = who.workspace_id.as_str();
     let me = who.terminal_id.as_str();
-    let actor = who.actor();
-    match name {
-        "whoami" => {
-            let workspace = hub.workspace(ws);
-            let statuses = hub.statuses()?;
-            let peers: Vec<Value> = hub
-                .peers(ws)
-                .into_iter()
-                .filter(|peer| peer.terminal_id != me)
-                .map(|peer| {
-                    let status = statuses.status_of(&peer.terminal_id);
-                    json!({
-                        "terminal_id": peer.terminal_id,
-                        "agent": peer.agent,
-                        "role": peer.role,
-                        "state": status.map(|status| status.state),
-                        "summary": status.map(|status| status.summary.clone()),
-                        "updated_at": status.map(|status| status.updated_at),
-                    })
-                })
-                .collect();
-            drop(statuses);
-            let repo = hub.repo()?;
-            let mine = repo.queries().list_tasks(ws, None, Some(me), None)?;
-            Ok(json!({
-                "terminal_id": me,
-                "agent": who.agent,
-                "role": who.role,
-                "role_instructions": who.role.map(|role| role.instructions()),
-                "workspace_id": ws,
-                "workspace_name": workspace.as_ref().map(|info| info.name.clone()),
-                "workspace_cwd": workspace.as_ref().map(|info| info.cwd.clone()),
-                "unread_messages": repo.queries().unread_count(ws, me)?,
-                "my_open_tasks": mine
-                    .iter()
-                    .filter(|task| task.status != TaskStatus::Done)
-                    .map(task_summary)
-                    .collect::<Vec<_>>(),
-                "peers": peers,
-            }))
-        }
-        "list_tasks" => {
-            let args: ListTasksArgs = parse(args)?;
-            let status = status_arg(args.status)?;
-            let assignee = args
-                .assignee
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
-                .map(|value| if value == "me" { me.to_string() } else { value });
-            let tasks = hub
-                .repo()?
-                .queries()
-                .list_tasks(ws, status, assignee.as_deref(), None)?;
-            Ok(json!({
-                "tasks": tasks.iter().map(task_summary).collect::<Vec<_>>(),
-            }))
-        }
-        "get_task" => {
-            let args: IdArgs = parse(args)?;
-            Ok(json!(tasks::get(&*hub.repo()?, ws, &args.id)?))
-        }
-        "create_task" => {
-            let args: CreateTaskArgs = parse(args)?;
-            let priority = args
-                .priority
-                .map(|raw| {
-                    TaskPriority::parse(raw.trim()).ok_or_else(|| {
-                        ToolError::InvalidArguments(format!(
-                            "priority must be one of {}",
-                            priority_values_lowest_first().join(", ")
-                        ))
-                    })
-                })
-                .transpose()?;
-            let task = tasks::create(
-                &mut *hub.repo()?,
-                &actor,
-                NewTask {
-                    title: args.title,
-                    description: args.description,
-                    priority,
-                    labels: args.labels,
-                    depends_on: args.depends_on,
-                    assignee: None,
-                },
-            )?;
-            hub.emit_tasks_changed(ws);
-            Ok(json!(task))
-        }
-        "claim_task" => {
-            let args: IdArgs = parse(args)?;
-            let task = tasks::claim(&mut *hub.repo()?, &actor, &args.id)?;
-            hub.emit_tasks_changed(ws);
-            Ok(json!(task))
-        }
-        "update_task" => {
-            let args: UpdateTaskArgs = parse(args)?;
-            let status = status_arg(args.status)?;
-            if status.is_none()
-                && args
-                    .note
-                    .as_deref()
-                    .is_none_or(|note| note.trim().is_empty())
-            {
-                return Err(ToolError::InvalidArguments(
-                    "pass a status, a note, or both".into(),
-                ));
+    let workspace = hub.workspace(ws);
+    let peers = peer_summaries(hub, who)?;
+    let repo = hub.repo()?;
+    let mine = repo.queries().list_tasks(ws, None, Some(me), None)?;
+    Ok(json!({
+        "terminal_id": me,
+        "agent": who.agent,
+        "role": who.role,
+        "role_instructions": who.role.map(|role| role.instructions()),
+        "workspace_id": ws,
+        "workspace_name": workspace.as_ref().map(|info| info.name.clone()),
+        "workspace_cwd": workspace.as_ref().map(|info| info.cwd.clone()),
+        "unread_messages": repo.queries().unread_count(ws, me)?,
+        "my_open_tasks": mine
+            .iter()
+            .filter(|task| task.status != TaskStatus::Done)
+            .map(task_summary)
+            .collect::<Vec<_>>(),
+        "peers": peers,
+    }))
+}
+
+fn list_tasks<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    args: Value,
+) -> Result<Value, ToolError> {
+    let args: ListTasksArgs = parse(args)?;
+    let status = status_arg(args.status)?;
+    let assignee = args
+        .assignee
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            if value == "me" {
+                who.terminal_id.clone()
+            } else {
+                value
             }
-            let task = tasks::update(
-                &mut *hub.repo()?,
-                &actor,
-                TaskUpdate {
-                    id: &args.id,
-                    patch: TaskPatch {
-                        status,
-                        note: args.note,
-                        ..TaskPatch::default()
-                    },
-                },
-            )?;
-            hub.emit_tasks_changed(ws);
-            Ok(json!(task))
-        }
-        "complete_task" => {
-            let args: CompleteTaskArgs = parse(args)?;
-            let completion = Completion {
-                id: &args.id,
-                summary: &args.summary,
-            };
-            let task = tasks::complete(&mut *hub.repo()?, &actor, &completion)?;
-            hub.emit_tasks_changed(ws);
-            Ok(json!(task))
-        }
-        "send_message" => {
-            let args: SendMessageArgs = parse(args)?;
-            let to = args.to.trim();
-            if to == me {
-                return Err(ToolError::InvalidArguments(
-                    "you cannot send a message to yourself".into(),
-                ));
-            }
-            let known = to == "all"
-                || hub.peers(ws).iter().any(|peer| peer.terminal_id == to)
-                || hub.workspace_terminals(ws).iter().any(|id| id == to);
-            if !known {
-                return Err(ToolError::InvalidArguments(format!(
-                    "`{}` is not a terminal of this project; use a terminal id from `whoami` \
-                     or \"all\"",
-                    to
-                )));
-            }
-            let outgoing = Outgoing {
-                to,
-                body: &args.body,
-            };
-            let message = messages::send(hub.repo()?.queries(), &actor, &outgoing)?;
-            hub.emit_message(&message);
-            Ok(json!(message))
-        }
-        "assign_task" => {
-            let args: AssignTaskArgs = parse(args)?;
-            if !who.role.is_some_and(|role| role.can_assign()) {
-                return Err(ToolError::InvalidArguments(
-                    "only the team's orchestrator can assign tasks; claim one with `claim_task` \
-                     or message the orchestrator"
-                        .into(),
-                ));
-            }
-            let to = args.to.trim();
-            if to == me {
-                return Err(ToolError::InvalidArguments(
-                    "assign tasks to teammates, not to yourself".into(),
-                ));
-            }
-            if !hub.peers(ws).iter().any(|peer| peer.terminal_id == to) {
-                return Err(ToolError::InvalidArguments(format!(
-                    "`{}` is not a running teammate in this project; see `whoami`",
-                    to
-                )));
-            }
-            let assignment = Assignment {
-                id: &args.id,
-                to,
-                note: args.note.as_deref(),
-            };
-            let (task, message) = tasks::assign(&mut *hub.repo()?, &actor, &assignment)?;
-            // Typing into a terminal that is busy or waiting on a human could
-            // answer a prompt by accident, so only idle agents are woken.
-            let idle = hub
-                .statuses()?
-                .status_of(to)
-                .is_some_and(|status| status.state == AgentState::Idle);
-            hub.emit_tasks_changed(ws);
-            hub.emit_message(&message);
-            if idle {
-                let prompt = format!(
-                    "Task {} on the Terra board was assigned to you by {}: \"{}\". Read it with the get_task tool and your inbox with read_inbox, do the work, then hand it in with complete_task.",
-                    task.id, me, task.title
-                );
-                hub.emit_nudge(ws, to, &prompt);
-            }
-            Ok(json!({ "task": task, "woken": idle }))
-        }
-        "read_inbox" => {
-            let args: ReadInboxArgs = parse(args)?;
-            let request = InboxRequest {
-                unread_only: args.unread_only.unwrap_or(true),
-                limit: args.limit,
-            };
-            let messages = messages::read_inbox(&mut *hub.repo()?, &actor, &request)?;
-            Ok(json!({ "messages": messages }))
-        }
-        "add_note" => {
-            let args: AddNoteArgs = parse(args)?;
-            let draft = NoteDraft {
-                key: args.key.as_deref(),
-                body: &args.body,
-            };
-            let note = notes::add(hub.repo()?.queries(), &actor, &draft)?;
-            Ok(json!(note))
-        }
-        "search_notes" => {
-            let args: SearchNotesArgs = parse(args)?;
-            let search = NoteSearch {
-                query: &args.query,
-                limit: args.limit,
-            };
-            Ok(json!({ "notes": notes::search(hub.repo()?.queries(), ws, &search)? }))
-        }
-        "report_status" => {
-            let args: ReportStatusArgs = parse(args)?;
-            let state = AgentState::parse(args.state.trim()).ok_or_else(|| {
+        });
+    let tasks =
+        hub.repo()?
+            .queries()
+            .list_tasks(&who.workspace_id, status, assignee.as_deref(), None)?;
+    Ok(json!({
+        "tasks": tasks.iter().map(task_summary).collect::<Vec<_>>(),
+    }))
+}
+
+fn get_task<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    args: Value,
+) -> Result<Value, ToolError> {
+    let args: IdArgs = parse(args)?;
+    let task = tasks::get(&*hub.repo()?, &who.workspace_id, &args.id)?;
+    Ok(json!(task))
+}
+
+fn priority_arg(value: Option<String>) -> Result<Option<TaskPriority>, ToolError> {
+    value
+        .map(|raw| {
+            TaskPriority::parse(raw.trim()).ok_or_else(|| {
                 ToolError::InvalidArguments(format!(
-                    "state must be one of {}",
-                    state_values().join(", ")
+                    "priority must be one of {}",
+                    priority_values_lowest_first().join(", ")
                 ))
-            })?;
-            let status = hub
-                .statuses()?
-                .report_status(ws, me, state, &args.summary)?;
-            hub.emit_agent_status(&status);
-            Ok(json!(status))
-        }
-        other => Err(ToolError::UnknownTool(other.to_string())),
+            })
+        })
+        .transpose()
+}
+
+fn create_task<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    args: Value,
+) -> Result<Value, ToolError> {
+    let args: CreateTaskArgs = parse(args)?;
+    let priority = priority_arg(args.priority)?;
+    let task = tasks::create(
+        &mut *hub.repo()?,
+        &who.actor(),
+        NewTask {
+            title: args.title,
+            description: args.description,
+            priority,
+            labels: args.labels,
+            depends_on: args.depends_on,
+            assignee: None,
+        },
+    )?;
+    hub.emit_tasks_changed(&who.workspace_id);
+    Ok(json!(task))
+}
+
+fn claim_task<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    args: Value,
+) -> Result<Value, ToolError> {
+    let args: IdArgs = parse(args)?;
+    let task = tasks::claim(&mut *hub.repo()?, &who.actor(), &args.id)?;
+    hub.emit_tasks_changed(&who.workspace_id);
+    Ok(json!(task))
+}
+
+fn update_task<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    args: Value,
+) -> Result<Value, ToolError> {
+    let args: UpdateTaskArgs = parse(args)?;
+    let status = status_arg(args.status)?;
+    if status.is_none()
+        && args
+            .note
+            .as_deref()
+            .is_none_or(|note| note.trim().is_empty())
+    {
+        return Err(ToolError::InvalidArguments(
+            "pass a status, a note, or both".into(),
+        ));
     }
+    let task = tasks::update(
+        &mut *hub.repo()?,
+        &who.actor(),
+        TaskUpdate {
+            id: &args.id,
+            patch: TaskPatch {
+                status,
+                note: args.note,
+                ..TaskPatch::default()
+            },
+        },
+    )?;
+    hub.emit_tasks_changed(&who.workspace_id);
+    Ok(json!(task))
+}
+
+fn complete_task<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    args: Value,
+) -> Result<Value, ToolError> {
+    let args: CompleteTaskArgs = parse(args)?;
+    let completion = Completion {
+        id: &args.id,
+        summary: &args.summary,
+    };
+    let task = tasks::complete(&mut *hub.repo()?, &who.actor(), &completion)?;
+    hub.emit_tasks_changed(&who.workspace_id);
+    Ok(json!(task))
+}
+
+fn ensure_known_recipient<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    to: &str,
+) -> Result<(), ToolError> {
+    let ws = who.workspace_id.as_str();
+    if to == who.terminal_id {
+        return Err(ToolError::InvalidArguments(
+            "you cannot send a message to yourself".into(),
+        ));
+    }
+    let known = to == "all"
+        || hub.peers(ws).iter().any(|peer| peer.terminal_id == to)
+        || hub.workspace_terminals(ws).iter().any(|id| id == to);
+    if !known {
+        return Err(ToolError::InvalidArguments(format!(
+            "`{}` is not a terminal of this project; use a terminal id from `whoami` \
+             or \"all\"",
+            to
+        )));
+    }
+    Ok(())
+}
+
+fn send_message<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    args: Value,
+) -> Result<Value, ToolError> {
+    let args: SendMessageArgs = parse(args)?;
+    let to = args.to.trim();
+    ensure_known_recipient(hub, who, to)?;
+    let outgoing = Outgoing {
+        to,
+        body: &args.body,
+    };
+    let message = messages::send(hub.repo()?.queries(), &who.actor(), &outgoing)?;
+    hub.emit_message(&message);
+    Ok(json!(message))
+}
+
+fn ensure_can_assign_to<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    to: &str,
+) -> Result<(), ToolError> {
+    if !who.role.is_some_and(|role| role.can_assign()) {
+        return Err(ToolError::InvalidArguments(
+            "only the team's orchestrator can assign tasks; claim one with `claim_task` \
+             or message the orchestrator"
+                .into(),
+        ));
+    }
+    if to == who.terminal_id {
+        return Err(ToolError::InvalidArguments(
+            "assign tasks to teammates, not to yourself".into(),
+        ));
+    }
+    let is_teammate = hub
+        .peers(&who.workspace_id)
+        .iter()
+        .any(|peer| peer.terminal_id == to);
+    if !is_teammate {
+        return Err(ToolError::InvalidArguments(format!(
+            "`{}` is not a running teammate in this project; see `whoami`",
+            to
+        )));
+    }
+    Ok(())
+}
+
+fn is_idle<R: Runtime>(hub: &McpHub<R>, terminal_id: &str) -> Result<bool, ToolError> {
+    Ok(hub
+        .statuses()?
+        .status_of(terminal_id)
+        .is_some_and(|status| status.state == AgentState::Idle))
+}
+
+fn assignment_prompt(task: &Task, by: &str) -> String {
+    format!(
+        "Task {} on the Terra board was assigned to you by {}: \"{}\". Read it with the get_task tool and your inbox with read_inbox, do the work, then hand it in with complete_task.",
+        task.id, by, task.title
+    )
+}
+
+fn assign_task<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    args: Value,
+) -> Result<Value, ToolError> {
+    let args: AssignTaskArgs = parse(args)?;
+    let to = args.to.trim();
+    ensure_can_assign_to(hub, who, to)?;
+    let assignment = Assignment {
+        id: &args.id,
+        to,
+        note: args.note.as_deref(),
+    };
+    let (task, message) = tasks::assign(&mut *hub.repo()?, &who.actor(), &assignment)?;
+    // Typing into a terminal that is busy or waiting on a human could
+    // answer a prompt by accident, so only idle agents are woken.
+    let idle = is_idle(hub, to)?;
+    hub.emit_tasks_changed(&who.workspace_id);
+    hub.emit_message(&message);
+    if idle {
+        let prompt = assignment_prompt(&task, &who.terminal_id);
+        hub.emit_nudge(&who.workspace_id, to, &prompt);
+    }
+    Ok(json!({ "task": task, "woken": idle }))
+}
+
+fn read_inbox<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    args: Value,
+) -> Result<Value, ToolError> {
+    let args: ReadInboxArgs = parse(args)?;
+    let request = InboxRequest {
+        unread_only: args.unread_only.unwrap_or(true),
+        limit: args.limit,
+    };
+    let messages = messages::read_inbox(&mut *hub.repo()?, &who.actor(), &request)?;
+    Ok(json!({ "messages": messages }))
+}
+
+fn add_note<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    args: Value,
+) -> Result<Value, ToolError> {
+    let args: AddNoteArgs = parse(args)?;
+    let draft = NoteDraft {
+        key: args.key.as_deref(),
+        body: &args.body,
+    };
+    let note = notes::add(hub.repo()?.queries(), &who.actor(), &draft)?;
+    Ok(json!(note))
+}
+
+fn search_notes<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    args: Value,
+) -> Result<Value, ToolError> {
+    let args: SearchNotesArgs = parse(args)?;
+    let search = NoteSearch {
+        query: &args.query,
+        limit: args.limit,
+    };
+    let notes = notes::search(hub.repo()?.queries(), &who.workspace_id, &search)?;
+    Ok(json!({ "notes": notes }))
+}
+
+fn report_status<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    args: Value,
+) -> Result<Value, ToolError> {
+    let args: ReportStatusArgs = parse(args)?;
+    let state = AgentState::parse(args.state.trim()).ok_or_else(|| {
+        ToolError::InvalidArguments(format!(
+            "state must be one of {}",
+            state_values().join(", ")
+        ))
+    })?;
+    let status =
+        hub.statuses()?
+            .report_status(&who.workspace_id, &who.terminal_id, state, &args.summary)?;
+    hub.emit_agent_status(&status);
+    Ok(json!(status))
 }
 
 #[cfg(test)]

@@ -78,10 +78,6 @@ function AppLoadingSurface() {
   );
 }
 
-type DurableScrollbackApi = {
-  setDurableScrollbackEnabled?: (enabled: boolean) => Promise<void>;
-};
-
 function App() {
   // Re-render on a language switch so dialogs and labels built here follow it.
   useLocale();
@@ -247,18 +243,8 @@ function App() {
     document.documentElement.classList.toggle("reduce-motion", reduceMotion);
   }, [reduceMotion]);
 
-  // Keep the backend's scrollback writer aligned with the opt-in flag. The
-  // optional lookup is a fail-closed bridge while older native binaries are
-  // upgraded; once the command is available, a disabled flag explicitly
-  // turns persistence off and failures stay contained to this feature.
   useEffect(() => {
-    const setter = (api as typeof api & DurableScrollbackApi)
-      .setDurableScrollbackEnabled;
-    if (typeof setter !== "function") {
-      console.warn("durable scrollback command is unavailable; keeping it disabled");
-      return;
-    }
-    setter(flags.durableScrollback).catch((error) => {
+    api.setDurableScrollbackEnabled(flags.durableScrollback).catch((error) => {
       console.warn("failed to sync durable scrollback setting:", error);
     });
   }, [flags.durableScrollback]);

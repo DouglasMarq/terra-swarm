@@ -62,7 +62,7 @@ struct DownloadProgress {
 #[cfg(not(target_os = "windows"))]
 fn load_transcriber(path: &Path) -> Result<Transcriber, String> {
     match Transcriber::new(path, true) {
-        Ok(t) => Ok(t),
+        Ok(transcriber) => Ok(transcriber),
         Err(gpu_err) => {
             eprintln!("GPU model load failed, retrying on CPU: {gpu_err}");
             Transcriber::new(path, false)
@@ -99,9 +99,9 @@ fn start_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let device = state.input_device.lock_or_recover().clone();
 
     state.audio_buffer.lock_or_recover().clear();
-    if let Err(e) = controller.start(state.audio_buffer.clone(), app.clone(), device) {
-        let _ = app.emit("voice-recording-error", &e);
-        return Err(e);
+    if let Err(error) = controller.start(state.audio_buffer.clone(), app.clone(), device) {
+        let _ = app.emit("voice-recording-error", &error);
+        return Err(error);
     }
     *recording = true;
     let _ = app.emit("voice-recording-started", ());
@@ -119,9 +119,9 @@ pub fn stop_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String>
     }
     let controller = app.state::<AudioController<R>>();
 
-    if let Err(e) = controller.stop() {
-        eprintln!("audio stop failed: {}", e);
-        let _ = app.emit("voice-recording-error", &e);
+    if let Err(error) = controller.stop() {
+        eprintln!("audio stop failed: {}", error);
+        let _ = app.emit("voice-recording-error", &error);
     }
     let _ = app.emit("voice-recording-stopped", ());
 
@@ -134,15 +134,15 @@ pub fn stop_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String>
         let _ = app_handle.emit("voice-transcription-started", ());
         let result =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match &transcriber {
-                Some(t) => t.transcribe(&audio_data, &language),
+                Some(transcriber) => transcriber.transcribe(&audio_data, &language),
                 None => Err("No model loaded".into()),
             }));
         match result {
             Ok(Ok(text)) => {
                 let _ = app_handle.emit("voice-transcription-complete", text);
             }
-            Ok(Err(e)) => {
-                let _ = app_handle.emit("voice-transcription-error", e);
+            Ok(Err(error)) => {
+                let _ = app_handle.emit("voice-transcription-error", error);
             }
             Err(_) => {
                 let _ = app_handle.emit(
@@ -173,14 +173,14 @@ pub fn voice_set_language(language: String, state: tauri::State<'_, VoiceState>)
 pub async fn voice_mic_available() -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(audio::has_input_device)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub async fn voice_list_input_devices() -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(audio::list_input_devices)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -198,14 +198,14 @@ pub async fn voice_test_mic_start(
             .start(device, app.clone())
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
 pub async fn voice_test_mic_stop(app: tauri::AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || app.state::<audio::MicTestController>().stop())
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|error| error.to_string())?
 }
 
 fn emit_if_mic_changed(app: &tauri::AppHandle, last: &mut Option<bool>) {
@@ -303,13 +303,15 @@ pub fn voice_list_models(
     let active = state.active_model_id.lock_or_recover().clone();
     Ok(models::available_models()
         .into_iter()
-        .map(|m| VoiceModelInfo {
-            id: m.id.to_string(),
-            display_name: m.display_name.to_string(),
-            size_label: m.size_label.to_string(),
-            description: m.description.to_string(),
-            downloaded: downloaded.iter().any(|d| d == m.id),
-            active: active.as_deref() == Some(m.id),
+        .map(|model| VoiceModelInfo {
+            id: model.id.to_string(),
+            display_name: model.display_name.to_string(),
+            size_label: model.size_label.to_string(),
+            description: model.description.to_string(),
+            downloaded: downloaded
+                .iter()
+                .any(|downloaded_id| downloaded_id == model.id),
+            active: active.as_deref() == Some(model.id),
         })
         .collect())
 }
@@ -327,15 +329,15 @@ pub async fn voice_set_model(model_id: String, app: tauri::AppHandle) -> Result<
 fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))
+        .map_err(|error| format!("Failed to get app data dir: {error}"))
 }
 
 #[tauri::command]
 pub async fn voice_download_model(model_id: String, app: tauri::AppHandle) -> Result<(), String> {
     {
         let state = app.state::<VoiceState>();
-        let mut dl = state.downloading.lock_or_recover();
-        if !dl.insert(model_id.clone()) {
+        let mut downloading = state.downloading.lock_or_recover();
+        if !downloading.insert(model_id.clone()) {
             return Err(format!("Download of {} is already in progress", model_id));
         }
     }
@@ -385,7 +387,8 @@ async fn download_model_impl(model_id: String, app: tauri::AppHandle) -> Result<
 
 async fn create_models_dir(dir: PathBuf) -> Result<(), String> {
     run_blocking(move || {
-        std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create models dir: {e}"))
+        std::fs::create_dir_all(&dir)
+            .map_err(|error| format!("Failed to create models dir: {error}"))
     })
     .await
 }
@@ -407,7 +410,7 @@ async fn run_blocking<T: Send + 'static>(
 ) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(work)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|error| error.to_string())?
 }
 
 #[cfg(test)]

@@ -37,8 +37,11 @@ static NEXT_TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
 static SPAWN_SEQ: AtomicU64 = AtomicU64::new(1);
 
 pub fn bump_next_terminal_id(id: &str) {
-    if let Some(n) = id.strip_prefix("t-").and_then(|s| s.parse::<u64>().ok()) {
-        NEXT_TERMINAL_ID.fetch_max(n.saturating_add(1), Ordering::SeqCst);
+    if let Some(number) = id
+        .strip_prefix("t-")
+        .and_then(|digits| digits.parse::<u64>().ok())
+    {
+        NEXT_TERMINAL_ID.fetch_max(number.saturating_add(1), Ordering::SeqCst);
     }
 }
 
@@ -51,28 +54,28 @@ const DEMO_AGENT_COMMANDS: [&str; 4] = ["claude", "codex", "opencode", "kimi"];
 const DEMO_AGENT_COUNT: usize = 2;
 
 pub struct Backlog {
-    buf: Vec<u8>,
+    retained: Vec<u8>,
     total: u64,
 }
 
 impl Backlog {
     fn from_bytes(data: Vec<u8>) -> Self {
         let total = byte_count(&data);
-        let buf = if data.len() > BACKLOG_CAP_BYTES {
+        let retained = if data.len() > BACKLOG_CAP_BYTES {
             data[data.len() - BACKLOG_CAP_BYTES..].to_vec()
         } else {
             data
         };
-        Self { buf, total }
+        Self { retained, total }
     }
 
-    fn push(&mut self, s: &str) {
-        self.buf.extend_from_slice(s.as_bytes());
-        if self.buf.len() > BACKLOG_CAP_BYTES {
-            let cut = self.buf.len() - BACKLOG_CAP_BYTES;
-            self.buf.drain(..cut);
+    fn push(&mut self, text: &str) {
+        self.retained.extend_from_slice(text.as_bytes());
+        if self.retained.len() > BACKLOG_CAP_BYTES {
+            let cut = self.retained.len() - BACKLOG_CAP_BYTES;
+            self.retained.drain(..cut);
         }
-        self.total += byte_count(s.as_bytes());
+        self.total += byte_count(text.as_bytes());
     }
 }
 
@@ -429,7 +432,7 @@ fn workspace_cwd(store: &Mutex<WorkspaceStore>, workspace_id: &str) -> Result<St
     store
         .lock_or_recover()
         .get(workspace_id)
-        .map(|ws| ws.cwd.clone())
+        .map(|workspace| workspace.cwd.clone())
         .ok_or_else(|| format!("workspace {} not found", workspace_id))
 }
 
@@ -460,7 +463,12 @@ fn stored_terminal(store: &Mutex<WorkspaceStore>, workspace_id: &str, id: &str) 
     store
         .lock_or_recover()
         .get(workspace_id)
-        .and_then(|ws| ws.terminals.iter().find(|terminal| terminal.id == id))
+        .and_then(|workspace| {
+            workspace
+                .terminals
+                .iter()
+                .find(|terminal| terminal.id == id)
+        })
         .map_or(
             StoredTerminal {
                 worktree: None,
@@ -509,7 +517,7 @@ fn new_worktree<R: Runtime>(
         None => app
             .path()
             .app_data_dir()
-            .map_err(|e| e.to_string())?
+            .map_err(|error| error.to_string())?
             .join("worktrees"),
     };
     crate::worktree::create(NewWorktree {
@@ -550,11 +558,11 @@ fn spawn_process<'a, R: Runtime>(
 
     let pair = native_pty_system()
         .openpty(pty_size(launch.cols, launch.rows))
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
     let child = pair
         .slave
         .spawn_command(cmd)
-        .map_err(|e| format!("failed to spawn `{}`: {}", launch.command, e))?;
+        .map_err(|error| format!("failed to spawn `{}`: {}", launch.command, error))?;
     drop(pair.slave);
     Ok(SpawnedProcess {
         launch,
@@ -693,8 +701,11 @@ fn start_terminal_io<R: Runtime>(
     let reader = process
         .master
         .try_clone_reader()
-        .map_err(|e| e.to_string())?;
-    let writer = process.master.take_writer().map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
+    let writer = process
+        .master
+        .take_writer()
+        .map_err(|error| error.to_string())?;
 
     output::spawn_output_pump(
         app,
@@ -940,7 +951,7 @@ pub fn write_terminal(
         manager
             .terminals
             .get(&id)
-            .map(|e| e.input.clone())
+            .map(|entry| entry.input.clone())
             .ok_or_else(|| format!("terminal {} not found", id))?
     };
     send_input(&input, &id, data)
@@ -990,7 +1001,7 @@ pub fn resize_terminal(
     let guard = master.lock_or_recover();
     guard
         .resize(pty_size(cols, rows))
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
     *last_size.lock_or_recover() = (cols, rows);
     Ok(())
 }
@@ -1014,7 +1025,7 @@ pub fn kill_all(manager: &Mutex<PtyManager>) {
         .lock_or_recover()
         .terminals
         .drain()
-        .map(|(_, e)| e)
+        .map(|(_, entry)| entry)
         .collect();
     for entry in entries {
         kill_entry(entry, false);
@@ -1051,16 +1062,19 @@ pub fn terminal_backlog(
     let (backlog, scrollback, durable_scrollback_enabled) = {
         let manager = manager.lock_or_recover();
         (
-            manager.terminals.get(&id).map(|e| Arc::clone(&e.backlog)),
+            manager
+                .terminals
+                .get(&id)
+                .map(|entry| Arc::clone(&entry.backlog)),
             manager.scrollback(),
             manager.durable_scrollback_enabled(),
         )
     };
     if let Some(backlog) = backlog {
-        let b = backlog.lock_or_recover();
+        let backlog = backlog.lock_or_recover();
         return Ok(BacklogSnapshot {
-            data: String::from_utf8_lossy(&b.buf).into_owned(),
-            total: b.total,
+            data: String::from_utf8_lossy(&backlog.retained).into_owned(),
+            total: backlog.total,
         });
     }
 

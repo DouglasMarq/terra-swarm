@@ -51,7 +51,7 @@ impl StatusRegistry {
             .filter(|status| status.workspace_id == workspace_id)
             .cloned()
             .collect();
-        list.sort_by(|a, b| a.terminal_id.cmp(&b.terminal_id));
+        list.sort_by(|left, right| left.terminal_id.cmp(&right.terminal_id));
         list
     }
 

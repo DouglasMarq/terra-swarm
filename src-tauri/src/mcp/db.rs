@@ -194,11 +194,11 @@ mod tests {
         {
             let conn = open(&path).unwrap();
             let version: u32 = conn
-                .query_row("PRAGMA user_version", [], |r| r.get(0))
+                .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
             assert_eq!(version, schema_version());
             let mode: String = conn
-                .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+                .query_row("PRAGMA journal_mode", [], |row| row.get(0))
                 .unwrap();
             assert_eq!(mode, "wal");
             conn.execute(
@@ -210,9 +210,11 @@ mod tests {
         let mut conn = open(&path).unwrap();
         assert_eq!(migrate(&mut conn).unwrap(), schema_version());
         let kept: String = conn
-            .query_row("SELECT value FROM settings WHERE key = 'probe'", [], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'probe'",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert_eq!(kept, "kept");
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
@@ -337,7 +339,7 @@ mod tests {
             .query_row(
                 "SELECT COUNT(*) FROM notes_fts WHERE notes_fts MATCH '\"acao\"'",
                 [],
-                |r| r.get(0),
+                |row| row.get(0),
             )
             .unwrap();
         assert_eq!(hits, 1);

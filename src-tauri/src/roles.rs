@@ -86,7 +86,7 @@ mod tests {
             assert!(role
                 .brief()
                 .chars()
-                .all(|c| c.is_ascii_alphanumeric() || " .:,".contains(c)));
+                .all(|character| character.is_ascii_alphanumeric() || " .:,".contains(character)));
         }
         assert!(Role::Orchestrator.can_assign());
         assert!(!Role::Executor.can_assign());

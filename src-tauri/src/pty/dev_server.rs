@@ -38,8 +38,9 @@ pub fn detect_dev_server_urls(text: &str) -> Vec<String> {
             }
             let path: String = after[digits.len()..]
                 .chars()
-                .take_while(|c| {
-                    !c.is_whitespace() && !matches!(c, '"' | '\'' | ')' | '>' | '\u{1b}')
+                .take_while(|character| {
+                    !character.is_whitespace()
+                        && !matches!(character, '"' | '\'' | ')' | '>' | '\u{1b}')
                 })
                 .collect();
             if OWN_PATHS.iter().any(|own| path.starts_with(own)) {

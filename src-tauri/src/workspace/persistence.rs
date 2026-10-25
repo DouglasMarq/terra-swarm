@@ -140,8 +140,8 @@ pub(crate) fn decode_group_entries(entries: Vec<Value>) -> (Vec<Group>, bool) {
 }
 
 pub(crate) fn write_guarded(path: &std::path::Path, json: &str, seq: u64) {
-    if let Err(e) = write_guarded_result(path, json, seq) {
-        eprintln!("failed to save workspaces: {}", e);
+    if let Err(error) = write_guarded_result(path, json, seq) {
+        eprintln!("failed to save workspaces: {}", error);
     }
 }
 
@@ -460,7 +460,7 @@ impl WorkspaceStore {
             Ok(json) => {
                 write_guarded(path, &json, next_save_seq());
             }
-            Err(e) => eprintln!("failed to serialize workspaces on exit: {}", e),
+            Err(error) => eprintln!("failed to serialize workspaces on exit: {}", error),
         }
     }
 }

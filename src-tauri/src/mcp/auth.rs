@@ -91,8 +91,8 @@ impl TokenRegistry {
             .filter(|identity| identity.workspace_id == workspace_id)
             .cloned()
             .collect();
-        peers.sort_by_key(|a| terminal_order(&a.terminal_id));
-        peers.dedup_by(|a, b| a.terminal_id == b.terminal_id);
+        peers.sort_by_key(|peer| terminal_order(&peer.terminal_id));
+        peers.dedup_by(|peer, previous| peer.terminal_id == previous.terminal_id);
         peers
     }
 }

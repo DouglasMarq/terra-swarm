@@ -175,7 +175,7 @@ pub fn find_codex_log(sessions: &Path, thread_id: &str) -> Option<PathBuf> {
     if thread_id.is_empty()
         || !thread_id
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
     {
         return None;
     }

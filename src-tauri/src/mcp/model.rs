@@ -221,13 +221,15 @@ pub enum StoreError {
 }
 
 impl std::fmt::Display for StoreError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             StoreError::NotFound(message)
             | StoreError::Invalid(message)
-            | StoreError::Conflict(message) => f.write_str(message),
-            StoreError::Unavailable(_) => f.write_str("the Terra MCP database is unavailable"),
-            StoreError::Database(_) => f.write_str("database error"),
+            | StoreError::Conflict(message) => formatter.write_str(message),
+            StoreError::Unavailable(_) => {
+                formatter.write_str("the Terra MCP database is unavailable")
+            }
+            StoreError::Database(_) => formatter.write_str("database error"),
         }
     }
 }
@@ -260,8 +262,8 @@ pub fn normalize_task_id(raw: &str) -> Option<String> {
     digits
         .parse::<u64>()
         .ok()
-        .filter(|n| *n > 0)
-        .map(|n| format!("T-{}", n))
+        .filter(|number| *number > 0)
+        .map(|number| format!("T-{}", number))
 }
 
 pub fn task_not_found(raw: &str) -> StoreError {

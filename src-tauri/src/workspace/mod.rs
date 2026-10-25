@@ -54,17 +54,20 @@ pub(crate) fn emit_workspaces_changed<R: Runtime>(app: &AppHandle<R>) {
 }
 
 pub fn bump_next_id(id: &str) {
-    if let Some(n) = id.strip_prefix("ws-").and_then(|s| s.parse::<u64>().ok()) {
-        NEXT_WS_ID.fetch_max(n.saturating_add(1), Ordering::SeqCst);
+    if let Some(number) = id
+        .strip_prefix("ws-")
+        .and_then(|digits| digits.parse::<u64>().ok())
+    {
+        NEXT_WS_ID.fetch_max(number.saturating_add(1), Ordering::SeqCst);
     }
 }
 
 pub fn bump_next_group_id(id: &str) {
-    if let Some(n) = id
+    if let Some(number) = id
         .strip_prefix("group-")
-        .and_then(|s| s.parse::<u64>().ok())
+        .and_then(|digits| digits.parse::<u64>().ok())
     {
-        NEXT_GROUP_ID.fetch_max(n.saturating_add(1), Ordering::SeqCst);
+        NEXT_GROUP_ID.fetch_max(number.saturating_add(1), Ordering::SeqCst);
     }
 }
 

@@ -28,7 +28,7 @@ impl WorkspaceStore {
             cwd
         };
         let id = format!("ws-{}", NEXT_WS_ID.fetch_add(1, Ordering::SeqCst));
-        let ws = Workspace {
+        let workspace = Workspace {
             id: id.clone(),
             name: if name.trim().is_empty() {
                 "workspace".into()
@@ -48,21 +48,24 @@ impl WorkspaceStore {
             layout_mode: Some(default_layout_mode()),
             layout: Some(WorkspaceLayout::default()),
         };
-        self.workspaces.push(ws.clone());
-        ws
+        self.workspaces.push(workspace.clone());
+        workspace
     }
 
     pub fn remove(&mut self, id: &str) -> Option<Workspace> {
-        let idx = self.workspaces.iter().position(|w| w.id == id)?;
-        let ws = self.workspaces.remove(idx);
+        let index = self
+            .workspaces
+            .iter()
+            .position(|candidate| candidate.id == id)?;
+        let workspace = self.workspaces.remove(index);
         for group in &mut self.groups {
             group.project_ids.retain(|project_id| project_id != id);
         }
-        Some(ws)
+        Some(workspace)
     }
 
     pub fn get(&self, id: &str) -> Option<&Workspace> {
-        self.workspaces.iter().find(|w| w.id == id)
+        self.workspaces.iter().find(|candidate| candidate.id == id)
     }
 
     pub fn terminal_owner(&self, terminal_id: &str) -> Option<&str> {
@@ -75,27 +78,33 @@ impl WorkspaceStore {
         })
     }
 
-    pub fn can_add_terminal(&self, ws_id: &str, terminal_id: &str) -> bool {
-        self.get(ws_id).is_some()
+    pub fn can_add_terminal(&self, workspace_id: &str, terminal_id: &str) -> bool {
+        self.get(workspace_id).is_some()
             && self
                 .terminal_owner(terminal_id)
-                .is_none_or(|owner| owner == ws_id)
+                .is_none_or(|owner| owner == workspace_id)
     }
 
-    pub fn record_terminal(&mut self, ws_id: &str, meta: TerminalMeta) {
-        let Ok(ws) = self.workspace_mut(ws_id) else {
+    pub fn record_terminal(&mut self, workspace_id: &str, meta: TerminalMeta) {
+        let Ok(workspace) = self.workspace_mut(workspace_id) else {
             return;
         };
-        match ws.terminals.iter_mut().find(|t| t.id == meta.id) {
+        match workspace
+            .terminals
+            .iter_mut()
+            .find(|terminal| terminal.id == meta.id)
+        {
             Some(existing) => refresh_terminal(existing, meta),
-            None => ws.terminals.push(meta),
+            None => workspace.terminals.push(meta),
         }
     }
 
     pub fn forget_terminal(&mut self, terminal_id: &str) {
-        for ws in self.workspaces.iter_mut() {
-            ws.terminals.retain(|t| t.id != terminal_id);
-            for pane in &mut ws.panes {
+        for workspace in self.workspaces.iter_mut() {
+            workspace
+                .terminals
+                .retain(|terminal| terminal.id != terminal_id);
+            for pane in &mut workspace.panes {
                 pane.tabs.retain(|tab| {
                     tab.pty_id.as_deref() != Some(terminal_id) && tab.id.as_str() != terminal_id
                 });
@@ -106,11 +115,11 @@ impl WorkspaceStore {
 
     pub fn rename(&mut self, id: &str, name: String) -> Result<(), String> {
         let name = name.trim().to_string();
-        let ws = self.workspace_mut(id)?;
+        let workspace = self.workspace_mut(id)?;
         if name.is_empty() {
             return Ok(());
         }
-        ws.name = name;
+        workspace.name = name;
         Ok(())
     }
 
@@ -119,14 +128,24 @@ impl WorkspaceStore {
         self.workspaces = reorder_by_ids(workspaces, order, |workspace| &workspace.id);
     }
 
-    pub fn set_width(&mut self, ws_id: &str, terminal_id: &str, width: f64) -> Result<(), String> {
-        let ws = self.workspace_mut(ws_id)?;
-        let t = ws
+    pub fn set_width(
+        &mut self,
+        workspace_id: &str,
+        terminal_id: &str,
+        width: f64,
+    ) -> Result<(), String> {
+        let workspace = self.workspace_mut(workspace_id)?;
+        let terminal = workspace
             .terminals
             .iter_mut()
-            .find(|t| t.id == terminal_id)
-            .ok_or_else(|| format!("terminal {} not found in workspace {}", terminal_id, ws_id))?;
-        t.width = width
+            .find(|terminal| terminal.id == terminal_id)
+            .ok_or_else(|| {
+                format!(
+                    "terminal {} not found in workspace {}",
+                    terminal_id, workspace_id
+                )
+            })?;
+        terminal.width = width
             .is_finite()
             .then_some(width.clamp(MIN_TERMINAL_WIDTH, MAX_TERMINAL_WIDTH));
         Ok(())

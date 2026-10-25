@@ -452,7 +452,8 @@ mod tests {
             .lock()
             .unwrap()
             .iter()
-            .any(|(e, p)| e == EVENT_TASKS_CHANGED && p["workspace_id"] == "ws-1"));
+            .any(|(event, payload)| event == EVENT_TASKS_CHANGED
+                && payload["workspace_id"] == "ws-1"));
     }
 
     #[test]

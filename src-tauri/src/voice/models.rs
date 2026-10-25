@@ -91,7 +91,7 @@ pub fn available_models() -> Vec<VoiceModel> {
 }
 
 pub fn find_model(id: &str) -> Option<VoiceModel> {
-    available_models().into_iter().find(|m| m.id == id)
+    available_models().into_iter().find(|model| model.id == id)
 }
 
 pub fn models_dir(data_dir: &Path) -> PathBuf {
@@ -107,8 +107,8 @@ pub fn model_path(data_dir: &Path, id: &str) -> Option<PathBuf> {
 pub fn downloaded_model_ids(data_dir: &Path) -> Vec<String> {
     available_models()
         .iter()
-        .filter(|m| models_dir(data_dir).join(m.filename).exists())
-        .map(|m| m.id.to_string())
+        .filter(|model| models_dir(data_dir).join(model.filename).exists())
+        .map(|model| model.id.to_string())
         .collect()
 }
 

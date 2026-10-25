@@ -126,9 +126,11 @@ mod tests {
             },
         )
         .unwrap();
-        let bodies: Vec<&str> = inbox.iter().map(|m| m.body.as_str()).collect();
+        let bodies: Vec<&str> = inbox.iter().map(|message| message.body.as_str()).collect();
         assert_eq!(bodies, vec!["hi two", "hi all"]);
-        assert!(inbox.iter().all(|m| m.read_by.contains(&"t-2".to_string())));
+        assert!(inbox
+            .iter()
+            .all(|message| message.read_by.contains(&"t-2".to_string())));
         assert!(read_inbox(
             &mut repo,
             &actor("ws-1", "t-2"),
@@ -172,13 +174,13 @@ mod tests {
     #[test]
     fn history_is_kept_in_full() {
         let mut repo = Repo::in_memory();
-        for n in 0..700 {
+        for message_number in 0..700 {
             send(
                 repo.queries(),
                 &actor("ws-1", "t-1"),
                 &Outgoing {
                     to: "all",
-                    body: &format!("m{}", n),
+                    body: &format!("m{}", message_number),
                 },
             )
             .unwrap();
@@ -213,14 +215,14 @@ mod tests {
         let id = tasks::create(&mut repo, &actor("ws-1", "t-1"), task("log"))
             .unwrap()
             .id;
-        for n in 0..150 {
+        for step in 0..150 {
             tasks::update(
                 &mut repo,
                 &actor("ws-1", "t-1"),
                 TaskUpdate {
                     id: &id,
                     patch: TaskPatch {
-                        note: Some(format!("step {}", n)),
+                        note: Some(format!("step {}", step)),
                         ..TaskPatch::default()
                     },
                 },

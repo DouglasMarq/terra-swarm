@@ -21,7 +21,7 @@ pub(super) fn client(timeouts: Timeouts) -> Result<reqwest::Client, String> {
         .connect_timeout(timeouts.connect)
         .read_timeout(timeouts.read)
         .build()
-        .map_err(|e| format!("Failed to create the download client: {e}"))
+        .map_err(|error| format!("Failed to create the download client: {error}"))
 }
 
 pub(super) struct DownloadRequest<'a> {
@@ -79,7 +79,7 @@ async fn stream_to_partial(
         .send()
         .await
         .and_then(reqwest::Response::error_for_status)
-        .map_err(|e| format!("Download failed: {e}"))?;
+        .map_err(|error| format!("Download failed: {error}"))?;
     let total = response.content_length().unwrap_or(request.expected_size);
     let mut reporter = ProgressReporter {
         total,
@@ -95,8 +95,8 @@ async fn stream_to_partial(
     let streamed = forward_chunks(response.bytes_stream(), chunk_tx, &mut reporter).await;
     let written = writer
         .await
-        .map_err(|e| e.to_string())
-        .and_then(|result| result.map_err(|e| format!("Write error: {e}")));
+        .map_err(|error| error.to_string())
+        .and_then(|result| result.map_err(|error| format!("Write error: {error}")));
     let downloaded = streamed?;
     let digest = written?;
     if downloaded < total {
@@ -124,7 +124,7 @@ async fn forward_chunks<C: AsRef<[u8]>, E: std::fmt::Display>(
     let mut downloaded: u64 = 0;
     let mut stream = std::pin::pin!(stream);
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("Download error: {e}"))?;
+        let chunk = chunk.map_err(|error| format!("Download error: {error}"))?;
         let chunk_bytes = u64::try_from(chunk.as_ref().len()).unwrap_or(u64::MAX);
         if chunk_tx.send(chunk).await.is_err() {
             break;
@@ -150,7 +150,7 @@ fn finalize(
 ) -> Result<(), String> {
     let Err(error) = outcome else {
         return std::fs::rename(partial_path, final_path)
-            .map_err(|e| format!("Failed to finalize download: {e}"));
+            .map_err(|error| format!("Failed to finalize download: {error}"));
     };
     if let Err(remove_error) = std::fs::remove_file(partial_path) {
         eprintln!(

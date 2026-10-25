@@ -89,10 +89,10 @@ fn setup(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn reserve_known_ids(store: &workspace::WorkspaceStore) {
-    for ws in &store.workspaces {
-        workspace::bump_next_id(&ws.id);
-        for t in &ws.terminals {
-            pty::bump_next_terminal_id(&t.id);
+    for known_workspace in &store.workspaces {
+        workspace::bump_next_id(&known_workspace.id);
+        for terminal in &known_workspace.terminals {
+            pty::bump_next_terminal_id(&terminal.id);
         }
     }
 }

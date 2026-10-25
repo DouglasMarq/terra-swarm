@@ -85,8 +85,8 @@ pub(super) fn find_on_path(exe: &str) -> Option<String> {
     let pathext: Vec<String> = std::env::var("PATHEXT")
         .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string())
         .split(';')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+        .map(|extension| extension.trim().to_string())
+        .filter(|extension| !extension.is_empty())
         .collect();
     for dir in std::env::split_paths(&paths) {
         if dir.as_os_str().is_empty() {
@@ -110,7 +110,7 @@ pub(super) fn find_on_path(exe: &str) -> Option<String> {
 fn find_git_bash() -> Option<String> {
     if let Some(git) = find_on_path("git.exe") {
         let path = std::path::Path::new(&git);
-        if let Some(root) = path.parent().and_then(|p| p.parent()) {
+        if let Some(root) = path.parent().and_then(|bin| bin.parent()) {
             let bash = root.join("bin").join("bash.exe");
             if bash.exists() {
                 return Some(bash.to_string_lossy().into_owned());
@@ -132,8 +132,8 @@ fn find_git_bash() -> Option<String> {
     }
     candidates
         .into_iter()
-        .find(|p| p.exists())
-        .map(|p| p.to_string_lossy().into_owned())
+        .find(|candidate| candidate.exists())
+        .map(|candidate| candidate.to_string_lossy().into_owned())
 }
 
 #[cfg(windows)]
@@ -148,7 +148,7 @@ pub(super) enum ShellFlavor {
 pub(super) fn shell_flavor(shell: &str) -> ShellFlavor {
     let name = std::path::Path::new(shell)
         .file_name()
-        .and_then(|n| n.to_str())
+        .and_then(|file_name| file_name.to_str())
         .unwrap_or(shell)
         .to_lowercase();
     if name.starts_with("pwsh") || name.starts_with("powershell") {

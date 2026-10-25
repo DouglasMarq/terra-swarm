@@ -25,7 +25,7 @@ fn is_on_path(id: &str) -> bool {
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
-        .map(|s| s.success())
+        .map(|status| status.success())
         .unwrap_or(false)
 }
 

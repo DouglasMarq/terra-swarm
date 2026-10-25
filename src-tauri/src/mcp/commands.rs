@@ -51,7 +51,7 @@ pub fn mcp_set_enabled(hub: Hub<'_>, enabled: bool) -> Result<ServerInfo, String
     hub.repo()
         .and_then(|repo| repo.set_enabled(enabled))
         .inspect_err(|error| error.log_internal(COMMAND_FAILED))
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
     Ok(hub.info())
 }
 
@@ -66,7 +66,7 @@ pub fn mcp_list_tasks(hub: Hub<'_>, workspace_id: String) -> Result<Vec<Task>, S
             })
         })
         .inspect_err(|error| error.log_internal(COMMAND_FAILED))
-        .map_err(|e| e.to_string())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command(async)]
@@ -94,7 +94,7 @@ pub fn mcp_create_task(
             )
         })
         .inspect_err(|error| error.log_internal(COMMAND_FAILED))
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(task)
 }
@@ -127,7 +127,7 @@ pub fn mcp_update_task(
             )
         })
         .inspect_err(|error| error.log_internal(COMMAND_FAILED))
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(task)
 }
@@ -137,7 +137,7 @@ pub fn mcp_delete_task(hub: Hub<'_>, workspace_id: String, id: String) -> Result
     hub.repo()
         .and_then(|repo| tasks::delete(&repo, &workspace_id, &id))
         .inspect_err(|error| error.log_internal(COMMAND_FAILED))
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| error.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(())
 }

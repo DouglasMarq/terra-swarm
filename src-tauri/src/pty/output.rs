@@ -91,17 +91,17 @@ pub(super) fn spawn_output_pump<R: Runtime>(
 fn spawn_reader(mut reader: Box<dyn Read + Send>, id: String) -> Receiver<Vec<u8>> {
     let (chunk_tx, chunk_rx) = std::sync::mpsc::channel::<Vec<u8>>();
     std::thread::spawn(move || {
-        let mut buf = [0u8; READ_BUFFER_BYTES];
+        let mut buffer = [0u8; READ_BUFFER_BYTES];
         loop {
-            match reader.read(&mut buf) {
+            match reader.read(&mut buffer) {
                 Ok(0) => break,
-                Ok(n) => {
-                    if chunk_tx.send(buf[..n].to_vec()).is_err() {
+                Ok(read_bytes) => {
+                    if chunk_tx.send(buffer[..read_bytes].to_vec()).is_err() {
                         break;
                     }
                 }
-                Err(e) => {
-                    eprintln!("pty reader for {} failed: {}", id, e);
+                Err(error) => {
+                    eprintln!("pty reader for {} failed: {}", id, error);
                     break;
                 }
             }
@@ -449,7 +449,7 @@ mod tests {
             titles.recv_timeout(EVENT_DEADLINE).expect("title event"),
             json!({ "id": "t-pump", "workspace_id": "w-pump", "title": "Build" })
         );
-        assert_eq!(backlog.lock_or_recover().buf, output.to_vec());
+        assert_eq!(backlog.lock_or_recover().retained, output.to_vec());
     }
 
     #[test]

@@ -129,8 +129,8 @@ pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
             .unwrap_or_default()
             .to_string();
         let mut numbers = count_line.split('\t');
-        let additions = numbers.next().and_then(|n| n.parse().ok());
-        let deletions = numbers.next().and_then(|n| n.parse().ok());
+        let additions = numbers.next().and_then(|count| count.parse().ok());
+        let deletions = numbers.next().and_then(|count| count.parse().ok());
         files.push(ChangedFile {
             path: newest_path,
             change: change_kind(code).into(),

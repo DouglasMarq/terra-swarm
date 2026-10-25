@@ -953,21 +953,21 @@ mod tests {
     #[test]
     fn purge_removes_only_that_workspace() {
         let mut repo = Repo::in_memory();
-        for ws in ["ws-1", "ws-2"] {
-            let a = tasks::create(&mut repo, &actor(ws, "t-1"), task("a")).unwrap();
+        for workspace_id in ["ws-1", "ws-2"] {
+            let first = tasks::create(&mut repo, &actor(workspace_id, "t-1"), task("a")).unwrap();
             tasks::create(
                 &mut repo,
-                &actor(ws, "t-1"),
+                &actor(workspace_id, "t-1"),
                 NewTask {
                     title: "b".into(),
-                    depends_on: vec![a.id],
+                    depends_on: vec![first.id],
                     ..NewTask::default()
                 },
             )
             .unwrap();
             let message = messages::send(
                 repo.queries(),
-                &actor(ws, "t-1"),
+                &actor(workspace_id, "t-1"),
                 &Outgoing {
                     to: "all",
                     body: "hi",
@@ -976,7 +976,7 @@ mod tests {
             .unwrap();
             messages::read_inbox(
                 &mut repo,
-                &actor(ws, "t-2"),
+                &actor(workspace_id, "t-2"),
                 &InboxRequest {
                     unread_only: true,
                     limit: None,
@@ -986,7 +986,7 @@ mod tests {
             assert!(message.id > 0);
             notes::add(
                 repo.queries(),
-                &actor(ws, "t-1"),
+                &actor(workspace_id, "t-1"),
                 &NoteDraft {
                     key: Some("k"),
                     body: "note",

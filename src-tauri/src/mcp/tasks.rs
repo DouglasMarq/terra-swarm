@@ -484,7 +484,7 @@ mod tests {
             .as_ref()
             .unwrap()
             .iter()
-            .map(|e| e.kind.as_str())
+            .map(|event| event.kind.as_str())
             .collect();
         assert_eq!(kinds, vec!["created", "status", "note"]);
         assert_eq!(updated.events.as_ref().unwrap()[1].body, "todo → blocked");
@@ -538,7 +538,7 @@ mod tests {
             .list_tasks(&TaskQuery::all("ws-1"))
             .unwrap()
             .into_iter()
-            .map(|t| t.id)
+            .map(|task| task.id)
             .collect();
         assert_eq!(ids, vec!["T-4", "T-2", "T-3", "T-1", "T-5"]);
         assert!(
@@ -948,20 +948,20 @@ mod tests {
         let agents = 8;
         let barrier = Arc::new(Barrier::new(agents));
         let handles: Vec<_> = (0..agents)
-            .map(|n| {
+            .map(|agent_number| {
                 let repo = Arc::clone(&repo);
                 let barrier = Arc::clone(&barrier);
                 let id = id.clone();
                 std::thread::spawn(move || {
                     barrier.wait();
-                    let name = format!("t-{}", n + 10);
+                    let name = format!("t-{}", agent_number + 10);
                     claim(&mut repo.lock().unwrap(), &actor("ws-1", &name), &id).is_ok()
                 })
             })
             .collect();
         let winners = handles
             .into_iter()
-            .map(|h| h.join().unwrap())
+            .map(|handle| handle.join().unwrap())
             .filter(|won| *won)
             .count();
         assert_eq!(winners, 1);

@@ -34,11 +34,11 @@ impl Transcriber {
             model_path.to_str().ok_or("Invalid model path encoding")?,
             ctx_params,
         )
-        .map_err(|e| format!("Failed to load Whisper model: {e}"))?;
+        .map_err(|error| format!("Failed to load Whisper model: {error}"))?;
 
         let state = ctx
             .create_state()
-            .map_err(|e| format!("Failed to create whisper state: {e}"))?;
+            .map_err(|error| format!("Failed to create whisper state: {error}"))?;
 
         Ok(Self {
             ctx,
@@ -58,18 +58,18 @@ impl Transcriber {
         let mut guard = self.state.lock_or_recover();
 
         let mut state = match guard.take() {
-            Some(s) => s,
+            Some(state) => state,
             None => self
                 .ctx
                 .create_state()
-                .map_err(|e| format!("Failed to recreate whisper state: {e}"))?,
+                .map_err(|error| format!("Failed to recreate whisper state: {error}"))?,
         };
 
         let result = state.full(params, audio);
 
-        if let Err(e) = result {
+        if let Err(error) = result {
             *guard = None;
-            return Err(format!("Transcription failed: {e}"));
+            return Err(format!("Transcription failed: {error}"));
         }
 
         let text = segments_text(&state);
@@ -116,12 +116,14 @@ fn thread_count(use_gpu: bool) -> i32 {
 fn segments_text(state: &WhisperState) -> String {
     let mut text = String::new();
 
-    for i in 0..state.full_n_segments() {
-        let Some(segment) = state.get_segment(i) else {
+    for segment_index in 0..state.full_n_segments() {
+        let Some(segment) = state.get_segment(segment_index) else {
             continue;
         };
-        let Ok(s) = segment.to_str() else { continue };
-        text.push_str(s);
+        let Ok(segment_text) = segment.to_str() else {
+            continue;
+        };
+        text.push_str(segment_text);
     }
 
     text

@@ -59,9 +59,9 @@ pub fn list_input_devices() -> Vec<String> {
         };
         let mut seen = std::collections::HashSet::new();
         devices
-            .filter_map(|d| {
-                let name = d.description().ok()?.name().to_string();
-                if !is_usable_input(&name, &d) {
+            .filter_map(|device| {
+                let name = device.description().ok()?.name().to_string();
+                if !is_usable_input(&name, &device) {
                     return None;
                 }
                 if !seen.insert(name.clone()) {
@@ -74,11 +74,11 @@ pub fn list_input_devices() -> Vec<String> {
 }
 
 #[cfg(target_os = "linux")]
-fn suppress_alsa_stderr<F, R>(f: F) -> R
+fn suppress_alsa_stderr<F, R>(enumerate: F) -> R
 where
     F: FnOnce() -> R,
 {
-    with_stderr_silenced(f)
+    with_stderr_silenced(enumerate)
 }
 
 #[cfg(all(unix, any(target_os = "linux", test)))]
@@ -137,11 +137,11 @@ impl Drop for SilencedStderr {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn suppress_alsa_stderr<F, R>(f: F) -> R
+fn suppress_alsa_stderr<F, R>(enumerate: F) -> R
 where
     F: FnOnce() -> R,
 {
-    f()
+    enumerate()
 }
 
 // `name` is only read by the Linux filter of ALSA's virtual devices.
@@ -173,7 +173,10 @@ fn is_usable_input(name: &str, device: &cpal::Device) -> bool {
             "pulse",
         ];
         let lower = name.to_lowercase();
-        if VIRTUAL_PREFIXES.iter().any(|p| lower.starts_with(p)) {
+        if VIRTUAL_PREFIXES
+            .iter()
+            .any(|prefix| lower.starts_with(prefix))
+        {
             return false;
         }
     }
@@ -197,9 +200,9 @@ impl<R: Runtime> AudioController<R> {
                         drop(active_stream.take());
 
                         let stream = match build_stream(buffer, *app, device_name) {
-                            Ok(s) => s,
-                            Err(e) => {
-                                let _ = reply.send(Err(e));
+                            Ok(stream) => stream,
+                            Err(error) => {
+                                let _ = reply.send(Err(error));
                                 continue;
                             }
                         };
@@ -208,9 +211,9 @@ impl<R: Runtime> AudioController<R> {
                                 active_stream = Some(stream);
                                 let _ = reply.send(Ok(()));
                             }
-                            Err(e) => {
-                                let _ =
-                                    reply.send(Err(format!("Failed to start audio stream: {e}")));
+                            Err(error) => {
+                                let _ = reply
+                                    .send(Err(format!("Failed to start audio stream: {error}")));
                             }
                         }
                     }
@@ -239,7 +242,7 @@ impl<R: Runtime> AudioController<R> {
                 device_name,
                 reply_tx,
             ))
-            .map_err(|e| format!("Audio thread not available: {e}"))?;
+            .map_err(|error| format!("Audio thread not available: {error}"))?;
         reply_rx
             .recv()
             .map_err(|_| "Audio thread stopped unexpectedly".to_string())?
@@ -248,7 +251,7 @@ impl<R: Runtime> AudioController<R> {
     pub fn stop(&self) -> Result<(), String> {
         self.tx
             .send(Command::Stop)
-            .map_err(|e| format!("Audio thread not available: {e}"))
+            .map_err(|error| format!("Audio thread not available: {error}"))
     }
 }
 
@@ -272,8 +275,9 @@ struct StreamContext<R: Runtime> {
 fn resolve_input_device(host: &cpal::Host, device_name: &Option<String>) -> Option<cpal::Device> {
     if let Some(name) = device_name {
         let found = suppress_alsa_stderr(|| {
-            host.input_devices().ok()?.find(|d| {
-                d.description()
+            host.input_devices().ok()?.find(|device| {
+                device
+                    .description()
                     .ok()
                     .map(|desc| desc.name() == name.as_str())
                     .unwrap_or(false)
@@ -331,12 +335,12 @@ fn resampler_for(source_sample_rate: u32) -> Result<Option<Arc<Mutex<Fft<f32>>>>
         MONO_CHANNELS,
         FixedSync::Input,
     )
-    .map_err(|e| format!("Failed to create resampler: {e}"))?;
+    .map_err(|error| format!("Failed to create resampler: {error}"))?;
     Ok(Some(Arc::new(Mutex::new(resampler))))
 }
 
 fn rate_in_hz(sample_rate: u32) -> Result<usize, String> {
-    usize::try_from(sample_rate).map_err(|e| format!("Failed to create resampler: {e}"))
+    usize::try_from(sample_rate).map_err(|error| format!("Failed to create resampler: {error}"))
 }
 
 trait ConvertibleSample: cpal::SizedSample {
@@ -411,7 +415,7 @@ fn input_stream_of<T: ConvertibleSample>(
             |error| eprintln!("Microphone stream error: {error}"),
             None,
         )
-        .map_err(|e| format!("Failed to build input stream: {e}"))
+        .map_err(|error| format!("Failed to build input stream: {error}"))
 }
 
 fn build_output<F>(
@@ -457,7 +461,7 @@ fn output_stream_of<T: ConvertibleSample>(
             |error| eprintln!("Speaker stream error: {error}"),
             None,
         )
-        .map_err(|e| format!("Failed to build output stream: {e}"))
+        .map_err(|error| format!("Failed to build output stream: {error}"))
 }
 
 fn mono_downmix(data: &[f32], channels: u16) -> Vec<f32> {
@@ -475,79 +479,79 @@ pub(super) fn compute_rms(samples: &[f32]) -> f32 {
     }
     // A mean over audio samples tolerates the rounding of a very large count.
     let count = samples.len() as f32;
-    (samples.iter().map(|s| s * s).sum::<f32>() / count).sqrt()
+    (samples.iter().map(|sample| sample * sample).sum::<f32>() / count).sqrt()
 }
 
 const I24_FULL_SCALE: f32 = 8_388_607.0;
 const U24_MIDPOINT: f32 = 8_388_607.5;
 
-fn i8_to_f32(s: &i8) -> f32 {
-    f32::from(*s) / f32::from(i8::MAX)
+fn i8_to_f32(sample: &i8) -> f32 {
+    f32::from(*sample) / f32::from(i8::MAX)
 }
 
-fn u8_to_f32(s: &u8) -> f32 {
-    (f32::from(*s) - f32::from(u8::MAX) / 2.0) / (f32::from(u8::MAX) / 2.0)
+fn u8_to_f32(sample: &u8) -> f32 {
+    (f32::from(*sample) - f32::from(u8::MAX) / 2.0) / (f32::from(u8::MAX) / 2.0)
 }
 
-fn i16_to_f32(s: &i16) -> f32 {
-    f32::from(*s) / f32::from(i16::MAX)
+fn i16_to_f32(sample: &i16) -> f32 {
+    f32::from(*sample) / f32::from(i16::MAX)
 }
 
-fn u16_to_f32(s: &u16) -> f32 {
-    (f32::from(*s) - f32::from(u16::MAX) / 2.0) / (f32::from(u16::MAX) / 2.0)
+fn u16_to_f32(sample: &u16) -> f32 {
+    (f32::from(*sample) - f32::from(u16::MAX) / 2.0) / (f32::from(u16::MAX) / 2.0)
 }
 
-fn i24_to_f32(s: &cpal::I24) -> f32 {
+fn i24_to_f32(sample: &cpal::I24) -> f32 {
     // A 24-bit value fits the f32 mantissa, so this conversion is exact.
-    s.inner() as f32 / I24_FULL_SCALE
+    sample.inner() as f32 / I24_FULL_SCALE
 }
 
-fn u24_to_f32(s: &cpal::U24) -> f32 {
+fn u24_to_f32(sample: &cpal::U24) -> f32 {
     // A 24-bit value fits the f32 mantissa, so this conversion is exact.
-    (s.inner() as f32 - U24_MIDPOINT) / U24_MIDPOINT
+    (sample.inner() as f32 - U24_MIDPOINT) / U24_MIDPOINT
 }
 
-fn i32_to_f32(s: &i32) -> f32 {
+fn i32_to_f32(sample: &i32) -> f32 {
     // Rounding to f32 precision is inaudible in a normalised sample.
-    *s as f32 / i32::MAX as f32
+    *sample as f32 / i32::MAX as f32
 }
 
-fn f32_to_i8(s: f32) -> i8 {
+fn f32_to_i8(sample: f32) -> i8 {
     // A float-to-int `as` saturates, clipping out-of-range samples.
-    (s * f32::from(i8::MAX)) as i8
+    (sample * f32::from(i8::MAX)) as i8
 }
 
-fn f32_to_u8(s: f32) -> u8 {
-    // .round() so digital silence lands exactly on the format's equilibrium
+fn f32_to_u8(sample: f32) -> u8 {
+    // .round() so digital silence lands exactly on the format'sample equilibrium
     // instead of 1 LSB below it (a tiny DC offset).
     // A float-to-int `as` saturates, clipping out-of-range samples.
-    (s * (f32::from(u8::MAX) / 2.0) + f32::from(u8::MAX) / 2.0).round() as u8
+    (sample * (f32::from(u8::MAX) / 2.0) + f32::from(u8::MAX) / 2.0).round() as u8
 }
 
-fn f32_to_i16(s: f32) -> i16 {
+fn f32_to_i16(sample: f32) -> i16 {
     // A float-to-int `as` saturates, clipping out-of-range samples.
-    (s * f32::from(i16::MAX)) as i16
+    (sample * f32::from(i16::MAX)) as i16
 }
 
-fn f32_to_u16(s: f32) -> u16 {
+fn f32_to_u16(sample: f32) -> u16 {
     // A float-to-int `as` saturates, clipping out-of-range samples.
-    (s * (f32::from(u16::MAX) / 2.0) + f32::from(u16::MAX) / 2.0).round() as u16
+    (sample * (f32::from(u16::MAX) / 2.0) + f32::from(u16::MAX) / 2.0).round() as u16
 }
 
-fn f32_to_i24(s: f32) -> cpal::I24 {
+fn f32_to_i24(sample: f32) -> cpal::I24 {
     // A float-to-int `as` saturates, clipping out-of-range samples.
-    cpal::I24::new_unchecked((s * I24_FULL_SCALE) as i32)
+    cpal::I24::new_unchecked((sample * I24_FULL_SCALE) as i32)
 }
 
-fn f32_to_u24(s: f32) -> cpal::U24 {
+fn f32_to_u24(sample: f32) -> cpal::U24 {
     // A float-to-int `as` saturates, clipping out-of-range samples.
-    cpal::U24::new_unchecked((s * U24_MIDPOINT + U24_MIDPOINT).round() as i32)
+    cpal::U24::new_unchecked((sample * U24_MIDPOINT + U24_MIDPOINT).round() as i32)
 }
 
-fn f32_to_i32(s: f32) -> i32 {
+fn f32_to_i32(sample: f32) -> i32 {
     // Rounding i32::MAX to f32 and the saturating float-to-int `as` clip
     // out-of-range samples, which is the intended behaviour.
-    (s * i32::MAX as f32) as i32
+    (sample * i32::MAX as f32) as i32
 }
 
 #[cfg(test)]
@@ -631,13 +635,13 @@ fn process_audio<R: Runtime>(data: &[f32], ctx: &StreamContext<R>) {
         match resampler.process(&input, None) {
             Ok(output) => {
                 let samples: Vec<f32> = (0..output.frames())
-                    .map(|i| output.read_sample(0, i).unwrap_or(0.0))
+                    .map(|frame| output.read_sample(0, frame).unwrap_or(0.0))
                     .collect();
                 emit_audio_level(&samples, ctx);
                 ctx.buffer.lock_or_recover().extend_from_slice(&samples);
             }
-            Err(e) => {
-                eprintln!("Resampling error: {e}");
+            Err(error) => {
+                eprintln!("Resampling error: {error}");
                 return;
             }
         }
@@ -707,15 +711,15 @@ impl MicTestController {
                         drop(active.take());
 
                         let streams = match build_test_streams(device_name, app) {
-                            Ok(s) => s,
-                            Err(e) => {
-                                let _ = reply.send(Err(e));
+                            Ok(streams) => streams,
+                            Err(error) => {
+                                let _ = reply.send(Err(error));
                                 continue;
                             }
                         };
                         let (input, output) = streams;
-                        if let Err(e) = output.play() {
-                            let _ = reply.send(Err(format!("Failed to start playback: {e}")));
+                        if let Err(error) = output.play() {
+                            let _ = reply.send(Err(format!("Failed to start playback: {error}")));
                             continue;
                         }
                         match input.play() {
@@ -723,8 +727,9 @@ impl MicTestController {
                                 active = Some((input, output));
                                 let _ = reply.send(Ok(()));
                             }
-                            Err(e) => {
-                                let _ = reply.send(Err(format!("Failed to start microphone: {e}")));
+                            Err(error) => {
+                                let _ =
+                                    reply.send(Err(format!("Failed to start microphone: {error}")));
                             }
                         }
                     }
@@ -743,7 +748,7 @@ impl MicTestController {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.tx
             .send(TestCommand::Start(device_name, app, reply_tx))
-            .map_err(|e| format!("Mic test thread not available: {e}"))?;
+            .map_err(|error| format!("Mic test thread not available: {error}"))?;
         reply_rx
             .recv()
             .map_err(|_| "Mic test thread stopped unexpectedly".to_string())?
@@ -752,7 +757,7 @@ impl MicTestController {
     pub fn stop(&self) -> Result<(), String> {
         self.tx
             .send(TestCommand::Stop)
-            .map_err(|e| format!("Mic test thread not available: {e}"))
+            .map_err(|error| format!("Mic test thread not available: {error}"))
     }
 }
 
@@ -822,12 +827,14 @@ mod loopback_tests {
     #[test]
     fn push_loopback_caps_and_keeps_latest_samples() {
         let ring = Mutex::new(VecDeque::new());
-        let all: Vec<f32> = (0..LOOPBACK_MAX_SAMPLES + 100).map(|i| i as f32).collect();
+        let all: Vec<f32> = (0..LOOPBACK_MAX_SAMPLES + 100)
+            .map(|sample| sample as f32)
+            .collect();
         push_loopback(&ring, &all);
-        let buf = ring.lock().unwrap();
-        assert_eq!(buf.len(), LOOPBACK_MAX_SAMPLES);
-        assert_eq!(*buf.front().unwrap(), 100.0);
-        assert_eq!(*buf.back().unwrap(), (LOOPBACK_MAX_SAMPLES + 99) as f32);
+        let kept = ring.lock().unwrap();
+        assert_eq!(kept.len(), LOOPBACK_MAX_SAMPLES);
+        assert_eq!(*kept.front().unwrap(), 100.0);
+        assert_eq!(*kept.back().unwrap(), (LOOPBACK_MAX_SAMPLES + 99) as f32);
     }
 }
 
@@ -911,7 +918,7 @@ fn open_speaker(host: &cpal::Host) -> Result<(cpal::Device, cpal::SupportedStrea
         .ok_or("No speaker found. Please connect a speaker or headphones and try again.")?;
     let config = device
         .default_output_config()
-        .map_err(|e| format!("Speaker is not available: {e}"))?;
+        .map_err(|error| format!("Speaker is not available: {error}"))?;
     if config.channels() == 0 {
         return Err("Speaker reports zero output channels".into());
     }
@@ -935,13 +942,15 @@ mod resample_tests {
 
         let amplitude = 0.5f32;
         let input: Vec<f32> = (0..48000)
-            .map(|i| amplitude * (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 48000.0).sin())
+            .map(|frame| {
+                amplitude * (2.0 * std::f32::consts::PI * 440.0 * frame as f32 / 48000.0).sin()
+            })
             .collect();
 
         let mut out = Vec::new();
         for chunk in input.as_chunks::<RESAMPLE_CHUNK_SIZE>().0 {
             let output = resampler.process(&MonoSlice(chunk), None).unwrap();
-            out.extend((0..output.frames()).map(|i| output.read_sample(0, i).unwrap()));
+            out.extend((0..output.frames()).map(|frame| output.read_sample(0, frame).unwrap()));
         }
 
         let chunks = input.len() / RESAMPLE_CHUNK_SIZE;
@@ -953,7 +962,8 @@ mod resample_tests {
         );
 
         let tail = &out[out.len() / 2..];
-        let rms = (tail.iter().map(|s| s * s).sum::<f32>() / tail.len() as f32).sqrt();
+        let rms =
+            (tail.iter().map(|sample| sample * sample).sum::<f32>() / tail.len() as f32).sqrt();
         let want = amplitude / std::f32::consts::SQRT_2;
         assert!((rms - want).abs() < want * 0.05, "rms {rms}, want {want}");
     }

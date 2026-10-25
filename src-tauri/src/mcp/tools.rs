@@ -27,11 +27,13 @@ pub enum ToolError {
 }
 
 impl std::fmt::Display for ToolError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ToolError::UnknownTool(name) => write!(f, "unknown tool `{}`", name),
-            ToolError::InvalidArguments(message) => write!(f, "invalid arguments: {}", message),
-            ToolError::Store(error) => write!(f, "{}", error),
+            ToolError::UnknownTool(name) => write!(formatter, "unknown tool `{}`", name),
+            ToolError::InvalidArguments(message) => {
+                write!(formatter, "invalid arguments: {}", message)
+            }
+            ToolError::Store(error) => write!(formatter, "{}", error),
         }
     }
 }
@@ -506,25 +508,25 @@ fn whoami<R: Runtime>(
     who: &AgentIdentity,
     _args: Value,
 ) -> Result<Value, ToolError> {
-    let ws = who.workspace_id.as_str();
+    let workspace_id = who.workspace_id.as_str();
     let me = who.terminal_id.as_str();
-    let workspace = hub.workspace(ws);
+    let workspace = hub.workspace(workspace_id);
     let peers = peer_summaries(hub, who)?;
     let repo = hub.repo()?;
     let mine = repo.queries().list_tasks(&TaskQuery {
         status: StatusFilter::Unfinished,
         assignee: Some(me),
-        ..TaskQuery::all(ws)
+        ..TaskQuery::all(workspace_id)
     })?;
     Ok(json!({
         "terminal_id": me,
         "agent": who.agent,
         "role": who.role,
         "role_instructions": who.role.map(|role| role.instructions()),
-        "workspace_id": ws,
+        "workspace_id": workspace_id,
         "workspace_name": workspace.as_ref().map(|info| info.name.clone()),
         "workspace_cwd": workspace.as_ref().map(|info| info.cwd.clone()),
-        "unread_messages": repo.queries().unread_count(ws, me)?,
+        "unread_messages": repo.queries().unread_count(workspace_id, me)?,
         "my_open_tasks": mine.iter().map(task_summary).collect::<Vec<_>>(),
         "peers": peers,
     }))
@@ -668,15 +670,21 @@ fn ensure_known_recipient<R: Runtime>(
     who: &AgentIdentity,
     to: &str,
 ) -> Result<(), ToolError> {
-    let ws = who.workspace_id.as_str();
+    let workspace_id = who.workspace_id.as_str();
     if to == who.terminal_id {
         return Err(ToolError::InvalidArguments(
             "you cannot send a message to yourself".into(),
         ));
     }
     let known = to == "all"
-        || hub.peers(ws).iter().any(|peer| peer.terminal_id == to)
-        || hub.workspace_terminals(ws).iter().any(|id| id == to);
+        || hub
+            .peers(workspace_id)
+            .iter()
+            .any(|peer| peer.terminal_id == to)
+        || hub
+            .workspace_terminals(workspace_id)
+            .iter()
+            .any(|id| id == to);
     if !known {
         return Err(ToolError::InvalidArguments(format!(
             "`{}` is not a terminal of this project; use a terminal id from `whoami` \
@@ -1017,7 +1025,7 @@ mod tests {
             .as_array()
             .unwrap()
             .iter()
-            .map(|e| e["kind"].as_str().unwrap())
+            .map(|event| event["kind"].as_str().unwrap())
             .collect();
         assert_eq!(kinds, vec!["created", "claimed", "completed"]);
 
@@ -1055,13 +1063,13 @@ mod tests {
         assert!(
             events
                 .iter()
-                .filter(|(e, _)| e == EVENT_TASKS_CHANGED)
+                .filter(|(event, _)| event == EVENT_TASKS_CHANGED)
                 .count()
                 >= 3
         );
         assert!(events
             .iter()
-            .any(|(e, p)| e == EVENT_MESSAGE && p["to"] == "t-2"));
+            .any(|(event, payload)| event == EVENT_MESSAGE && payload["to"] == "t-2"));
     }
 
     #[test]
@@ -1316,7 +1324,7 @@ mod tests {
             .lock()
             .unwrap()
             .iter()
-            .any(|(e, _)| e == EVENT_AGENT_STATUS));
+            .any(|(event, _)| event == EVENT_AGENT_STATUS));
 
         call(
             &hub,

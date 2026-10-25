@@ -93,7 +93,7 @@ pub struct TerminalMeta {
     pub worktree: Option<crate::worktree::WorktreeInfo>,
     /// The agent's team role, if it was started with one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub role: Option<crate::mcp::roles::Role>,
+    pub role: Option<crate::roles::Role>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

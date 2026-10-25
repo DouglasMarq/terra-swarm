@@ -16,7 +16,6 @@ pub mod db;
 pub mod hooks;
 pub mod launch;
 pub mod repo;
-pub mod roles;
 pub mod server;
 mod tauri_host;
 pub mod tools;

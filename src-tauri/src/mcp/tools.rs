@@ -610,10 +610,10 @@ pub fn call(
 
 #[cfg(test)]
 mod tests {
-    use super::super::roles::Role;
     use super::super::test_support::{hub, identity};
     use super::super::{EVENT_AGENT_STATUS, EVENT_MESSAGE, EVENT_NUDGE, EVENT_TASKS_CHANGED};
     use super::*;
+    use crate::roles::Role;
 
     #[test]
     fn every_tool_has_an_object_schema_and_a_handler() {

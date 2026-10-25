@@ -15,7 +15,7 @@ pub struct AgentIdentity {
     pub agent: String,
     /// The team role the agent was started with, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub role: Option<super::roles::Role>,
+    pub role: Option<crate::roles::Role>,
 }
 
 pub fn new_token() -> String {

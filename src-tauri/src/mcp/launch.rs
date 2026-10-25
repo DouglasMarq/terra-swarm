@@ -6,8 +6,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use super::roles::Role;
 use super::{AgentIdentity, McpHub, McpLease};
+use crate::roles::Role;
 
 pub const ENV_URL: &str = "TERRA_MCP_URL";
 pub const ENV_TOKEN: &str = "TERRA_MCP_TOKEN";

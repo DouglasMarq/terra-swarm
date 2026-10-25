@@ -5,6 +5,7 @@ mod ipc_error;
 mod mcp;
 mod paths;
 mod pty;
+mod roles;
 mod scrollback;
 mod sync;
 mod usage;

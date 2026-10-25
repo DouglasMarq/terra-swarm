@@ -186,7 +186,7 @@ pub struct SpawnOptions {
     /// Where worktrees go; the app data directory when unset.
     pub worktree_root: Option<std::path::PathBuf>,
     /// Team role for a new agent; a respawned one keeps its recorded role.
-    pub role: Option<crate::mcp::roles::Role>,
+    pub role: Option<crate::roles::Role>,
 }
 
 impl SpawnOptions {
@@ -212,7 +212,7 @@ pub struct LaunchExtras {
     #[serde(default)]
     pub worktree: bool,
     #[serde(default)]
-    pub role: Option<crate::mcp::roles::Role>,
+    pub role: Option<crate::roles::Role>,
 }
 
 #[derive(Serialize, Clone)]

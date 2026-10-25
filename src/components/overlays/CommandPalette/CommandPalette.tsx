@@ -71,6 +71,8 @@ const ICONS: Readonly<Record<CommandIconName, LucideIcon>> = {
   clear: Trash2,
 };
 
+const NO_COMMANDS: readonly CommandDescriptor[] = [];
+
 function classes(...values: Array<string | false | undefined>): string {
   return values.filter(Boolean).join(" ");
 }
@@ -104,7 +106,7 @@ export function CommandPalette({
   const t = useT();
   const [query, setQuery] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
-  const commands = buildCommandModel({
+  const commands = open ? buildCommandModel({
     workspaces,
     groups,
     agents,
@@ -120,7 +122,7 @@ export function CommandPalette({
     agentLabels,
     resumeCount,
     exitedTerminalIds,
-  });
+  }) : NO_COMMANDS;
   const visibleGroups = groupCommands(filterCommands(commands, query)).filter((group) => group.commands.length > 0);
 
   useEffect(() => {

@@ -30,7 +30,7 @@ struct KnownTerminals<'a> {
 }
 
 impl KnownTerminals<'_> {
-    fn allows(&self, tab: &TerminalTab) -> bool {
+    fn is_allowed(&self, tab: &TerminalTab) -> bool {
         tab.pty_id
             .as_deref()
             .is_none_or(|pty_id| !self.duplicates.contains(pty_id) && self.ids.contains(pty_id))
@@ -110,7 +110,7 @@ fn normalize_panes(workspace: &mut Workspace, duplicates: &HashSet<String>) {
 fn normalize_pane(pane: &mut Pane, known: &KnownTerminals) {
     pane.tabs.retain_mut(|tab| {
         trim_in_place(&mut tab.id);
-        !tab.id.is_empty() && known.allows(tab)
+        !tab.id.is_empty() && known.is_allowed(tab)
     });
     pane.repair_active_tab();
     pane.width = pane

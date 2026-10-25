@@ -15,7 +15,7 @@ pub struct ToolDef {
     pub name: &'static str,
     pub title: &'static str,
     pub description: &'static str,
-    pub read_only: bool,
+    pub is_read_only: bool,
     pub schema: Value,
 }
 
@@ -95,7 +95,7 @@ fn whoami_tool() -> ToolDef {
         description: "Returns your own terminal id, agent name and project (workspace), plus \
             the teammates currently connected to this project with their reported state. Call \
             this first: other tools refer to agents by terminal id (for example `t-3`).",
-        read_only: true,
+        is_read_only: true,
         schema: json!({ "type": "object", "properties": {} }),
     }
 }
@@ -109,7 +109,7 @@ fn list_tasks_tool() -> ToolDef {
             or \"me\" for your own tasks). `blocked_by` lists unfinished dependencies: such a \
             task can't be claimed yet. Each entry is a summary; use `get_task` for the \
             description and history.",
-        read_only: true,
+        is_read_only: true,
         schema: json!({
             "type": "object",
             "properties": {
@@ -126,7 +126,7 @@ fn get_task_tool() -> ToolDef {
         title: "Get task",
         description: "Returns one task with its full description, dependencies and its latest \
             history `events` (created, claimed, status, assigned, note, completed).",
-        read_only: true,
+        is_read_only: true,
         schema: json!({
             "type": "object",
             "properties": { "id": { "type": "string", "description": "Task id, e.g. \"T-4\"." } },
@@ -142,7 +142,7 @@ fn create_task_tool() -> ToolDef {
         description: "Adds a task to the shared board in `todo`, unassigned, so any agent can \
             claim it. Split large work into tasks a single agent can finish. `depends_on` \
             lists task ids that must be `done` before this one can be claimed.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -168,7 +168,7 @@ fn claim_task_tool() -> ToolDef {
             you start working on a task. Atomic: if another agent already claimed it, it is \
             not in `todo`, or a dependency is not done yet, this fails and you should pick \
             something else.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": { "id": { "type": "string" } },
@@ -184,7 +184,7 @@ fn update_task_tool() -> ToolDef {
         description: "Changes a task's status and/or adds a note to its history. Use \
             `status: \"blocked\"` with a `note` explaining what you are waiting for. To hand \
             work in, prefer `complete_task`.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -204,7 +204,7 @@ fn complete_task_tool() -> ToolDef {
         description: "Marks your task as finished and moves it to `review` for a human to \
             check, recording `summary` (what changed, how it was verified) in the log. Only \
             the assignee can complete an assigned task.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -223,7 +223,7 @@ fn send_message_tool() -> ToolDef {
         description: "Sends a message to a teammate by terminal id (see `whoami`), or to \
             \"all\" to broadcast to every agent in this project. Messages are delivered \
             through the recipient's `read_inbox`.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -242,7 +242,7 @@ fn read_inbox_tool() -> ToolDef {
         description: "Returns messages sent to you or to \"all\", oldest first (at most \
             `limit`, default 50), and marks them as read. By default only unread messages \
             are returned; pass `unread_only: false` to see the history too.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -261,7 +261,7 @@ fn add_note_tool() -> ToolDef {
             now and in later sessions. Use it for facts worth keeping: commands, conventions, \
             decisions, gotchas. Giving a `key` (e.g. \"test-command\") replaces the earlier \
             note with the same key.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -280,7 +280,7 @@ fn search_notes_tool() -> ToolDef {
         description: "Full-text search over the project's shared notes (key and text). Every \
             word must match, as a prefix, ignoring case and accents; best matches first, at \
             most `limit` (default 20). An empty query lists the most recently updated notes.",
-        read_only: true,
+        is_read_only: true,
         schema: json!({
             "type": "object",
             "properties": {
@@ -300,7 +300,7 @@ fn assign_task_tool() -> ToolDef {
             moves a `todo` task to `in_progress`, puts the task (and your optional `note`) in \
             their inbox, and, when they are idle, types a prompt into their terminal so they \
             start right away. A task with unfinished dependencies cannot be assigned yet.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -320,7 +320,7 @@ fn report_status_tool() -> ToolDef {
         description: "Tells your teammates and the humans watching what you are doing: \
             `working`, `idle`, `needs_input` (waiting for a human) or `blocked`, with a \
             one-line `summary`. Update it when your state changes.",
-        read_only: false,
+        is_read_only: false,
         schema: json!({
             "type": "object",
             "properties": {
@@ -676,7 +676,7 @@ fn ensure_known_recipient<R: Runtime>(
             "you cannot send a message to yourself".into(),
         ));
     }
-    let known = to == "all"
+    let is_known = to == "all"
         || hub
             .peers(workspace_id)
             .iter()
@@ -685,7 +685,7 @@ fn ensure_known_recipient<R: Runtime>(
             .workspace_terminals(workspace_id)
             .iter()
             .any(|id| id == to);
-    if !known {
+    if !is_known {
         return Err(ToolError::InvalidArguments(format!(
             "`{}` is not a terminal of this project; use a terminal id from `whoami` \
              or \"all\"",
@@ -770,14 +770,14 @@ fn assign_task<R: Runtime>(
         note: args.note.as_deref(),
     };
     let (task, message) = tasks::assign(&mut *hub.repo()?, &who.actor(), &assignment)?;
-    let idle = is_idle(hub, to)?;
+    let is_target_idle = is_idle(hub, to)?;
     hub.emit_tasks_changed(&who.workspace_id);
     hub.emit_message(&message);
-    if idle {
+    if is_target_idle {
         let prompt = assignment_prompt(&task, &who.terminal_id);
         hub.emit_nudge(&who.workspace_id, to, &prompt);
     }
-    Ok(json!({ "task": task, "woken": idle }))
+    Ok(json!({ "task": task, "woken": is_target_idle }))
 }
 
 fn read_inbox<R: Runtime>(
@@ -787,7 +787,7 @@ fn read_inbox<R: Runtime>(
 ) -> Result<Value, ToolError> {
     let args: ReadInboxArgs = parse(args)?;
     let request = InboxRequest {
-        unread_only: args.unread_only.unwrap_or(true),
+        is_unread_only: args.unread_only.unwrap_or(true),
         limit: args.limit,
     };
     let messages = messages::read_inbox(&mut *hub.repo()?, &who.actor(), &request)?;

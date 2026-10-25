@@ -166,12 +166,12 @@ impl ScrollbackStore {
                 Ok(metadata) if metadata.file_type().is_file() => metadata,
                 _ => continue,
             };
-            let old_enough = metadata
+            let is_old_enough = metadata
                 .modified()
                 .ok()
                 .and_then(|modified| now.duration_since(modified).ok())
                 .is_some_and(|elapsed| elapsed >= age);
-            if old_enough && fs::remove_file(path).is_ok() {
+            if is_old_enough && fs::remove_file(path).is_ok() {
                 removed += 1;
             }
         }

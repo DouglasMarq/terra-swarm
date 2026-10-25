@@ -262,7 +262,7 @@ mod tests {
         }
     }
 
-    fn leaves_no_file(dir: &Path) -> bool {
+    fn has_left_no_file(dir: &Path) -> bool {
         !dir.join("ggml-test.bin").exists() && !dir.join("ggml-test.bin.tmp").exists()
     }
 
@@ -302,7 +302,7 @@ mod tests {
         ));
 
         assert!(result.is_err_and(|error| error.starts_with("Checksum mismatch")));
-        assert!(leaves_no_file(&dir));
+        assert!(has_left_no_file(&dir));
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -321,7 +321,7 @@ mod tests {
         ));
 
         assert!(result.is_err_and(|error| error.starts_with("Download failed")));
-        assert!(leaves_no_file(&dir));
+        assert!(has_left_no_file(&dir));
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -340,7 +340,7 @@ mod tests {
         ));
 
         assert!(result.is_err());
-        assert!(leaves_no_file(&dir));
+        assert!(has_left_no_file(&dir));
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -362,7 +362,7 @@ mod tests {
 
         assert!(result.is_err_and(|error| error.starts_with("Download error")));
         assert!(started.elapsed() < SERVER_STALL);
-        assert!(leaves_no_file(&dir));
+        assert!(has_left_no_file(&dir));
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -382,7 +382,7 @@ mod tests {
         ));
 
         assert!(result.is_err_and(|error| error.starts_with("Download failed")));
-        assert!(leaves_no_file(&dir));
+        assert!(has_left_no_file(&dir));
         let _ = std::fs::remove_dir_all(dir);
     }
 

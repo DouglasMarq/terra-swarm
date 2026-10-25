@@ -21,13 +21,13 @@ const SILENCE_THRESHOLD: f32 = 0.01;
 pub struct Transcriber {
     ctx: WhisperContext,
     state: Mutex<Option<WhisperState>>,
-    use_gpu: bool,
+    should_use_gpu: bool,
 }
 
 impl Transcriber {
-    pub fn new(model_path: &Path, use_gpu: bool) -> Result<Self, String> {
+    pub fn new(model_path: &Path, should_use_gpu: bool) -> Result<Self, String> {
         let mut ctx_params = WhisperContextParameters::default();
-        ctx_params.use_gpu(use_gpu);
+        ctx_params.use_gpu(should_use_gpu);
         ctx_params.flash_attn(true);
 
         let ctx = WhisperContext::new_with_params(
@@ -43,7 +43,7 @@ impl Transcriber {
         Ok(Self {
             ctx,
             state: Mutex::new(Some(state)),
-            use_gpu,
+            should_use_gpu,
         })
     }
 
@@ -53,7 +53,7 @@ impl Transcriber {
         }
 
         let audio = trim_trailing_silence(audio);
-        let params = decoding_params(language, audio.len(), thread_count(self.use_gpu));
+        let params = decoding_params(language, audio.len(), thread_count(self.should_use_gpu));
 
         let mut guard = self.state.lock_or_recover();
 
@@ -102,11 +102,11 @@ fn decoding_params(language: &str, sample_count: usize, threads: i32) -> FullPar
     params
 }
 
-fn thread_count(use_gpu: bool) -> i32 {
+fn thread_count(should_use_gpu: bool) -> i32 {
     std::thread::available_parallelism()
         .ok()
         .and_then(|cores| i32::try_from(cores.get()).ok())
-        .map(|cores| match use_gpu {
+        .map(|cores| match should_use_gpu {
             true => cores,
             false => (cores / 2).max(1),
         })

@@ -284,9 +284,9 @@ pub fn clean_title(raw: &str) -> StoreResult<String> {
     Ok(title.to_string())
 }
 
-pub fn clean_body(raw: &str, what: &str, allow_empty: bool) -> StoreResult<String> {
+pub fn clean_body(raw: &str, what: &str, can_be_empty: bool) -> StoreResult<String> {
     let body = raw.trim();
-    if body.is_empty() && !allow_empty {
+    if body.is_empty() && !can_be_empty {
         return Err(StoreError::Invalid(format!("{} cannot be empty", what)));
     }
     if body.len() > MAX_BODY_BYTES {

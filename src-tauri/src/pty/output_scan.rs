@@ -31,7 +31,7 @@ pub(super) fn extract_notifications(data: &[u8], tail: &[u8]) -> (usize, Vec<Str
     let mut bels = 0;
     let mut position = 0;
     while position < data.len() {
-        if !starts_osc(data, position) {
+        if !is_osc_start(data, position) {
             if data[position] == BEL {
                 count += 1;
                 bels += 1;
@@ -66,7 +66,7 @@ pub(super) fn extract_notifications(data: &[u8], tail: &[u8]) -> (usize, Vec<Str
     (count, messages)
 }
 
-fn starts_osc(data: &[u8], position: usize) -> bool {
+fn is_osc_start(data: &[u8], position: usize) -> bool {
     data[position] == ESC && data.get(position + 1) == Some(&b']')
 }
 
@@ -154,7 +154,7 @@ fn fallback_notification(tail: &[u8]) -> String {
 pub(super) fn scan_titles(pending: &mut Vec<u8>, titles: &mut Vec<String>) {
     let mut position = 0;
     while position < pending.len() {
-        if starts_osc(pending, position) {
+        if is_osc_start(pending, position) {
             let Some((end, terminator_len)) = find_string_terminator(pending, position + 2) else {
                 if pending.len() - position > MAX_TITLE_SEQUENCE_BYTES {
                     position += 2;

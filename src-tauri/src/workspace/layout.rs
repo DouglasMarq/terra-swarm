@@ -225,9 +225,9 @@ impl WorkspaceStore {
         Ok(())
     }
 
-    pub fn set_collapsed(&mut self, workspace_id: &str, collapsed: bool) -> Result<(), String> {
+    pub fn set_collapsed(&mut self, workspace_id: &str, is_collapsed: bool) -> Result<(), String> {
         let workspace = self.workspace_mut(workspace_id)?;
-        workspace.collapsed = collapsed;
+        workspace.collapsed = is_collapsed;
         Ok(())
     }
 }
@@ -249,7 +249,7 @@ impl TerminalPlacement {
         })
     }
 
-    fn displaces(&self, tab: &TerminalTab) -> bool {
+    fn is_displacing(&self, tab: &TerminalTab) -> bool {
         tab.pty_id.as_deref() == Some(self.terminal_id.as_str()) || tab.id == self.tab_id
     }
 
@@ -303,7 +303,7 @@ fn remove_displaced(workspace: &mut Workspace, placement: &TerminalPlacement) {
         remove_displaced_tabs(pane, placement);
     }
     for terminal in &mut workspace.terminals {
-        if terminal.id != placement.terminal_id && was_displaced(terminal, &displaced) {
+        if terminal.id != placement.terminal_id && is_displaced(terminal, &displaced) {
             terminal.pane_id = None;
             terminal.tab_id = None;
         }
@@ -314,7 +314,7 @@ fn displaced_tabs(panes: &[Pane], placement: &TerminalPlacement) -> Vec<Displace
     panes
         .iter()
         .flat_map(|pane| &pane.tabs)
-        .filter(|tab| placement.displaces(tab))
+        .filter(|tab| placement.is_displacing(tab))
         .map(|tab| DisplacedTab {
             pty_id: tab.pty_id.clone(),
             id: tab.id.clone(),
@@ -323,13 +323,13 @@ fn displaced_tabs(panes: &[Pane], placement: &TerminalPlacement) -> Vec<Displace
 }
 
 fn remove_displaced_tabs(pane: &mut Pane, placement: &TerminalPlacement) {
-    pane.tabs.retain(|tab| !placement.displaces(tab));
+    pane.tabs.retain(|tab| !placement.is_displacing(tab));
     if pane.active_tab_id.as_deref() == Some(placement.tab_id.as_str()) {
         pane.active_tab_id = pane.tabs.first().map(|tab| tab.id.clone());
     }
 }
 
-fn was_displaced(terminal: &TerminalMeta, displaced: &[DisplacedTab]) -> bool {
+fn is_displaced(terminal: &TerminalMeta, displaced: &[DisplacedTab]) -> bool {
     displaced.iter().any(|tab| {
         tab.pty_id.as_deref() == Some(terminal.id.as_str())
             || terminal.tab_id.as_deref() == Some(tab.id.as_str())
@@ -402,11 +402,11 @@ fn resolve_container(workspace: &mut Workspace, container_id: &str) -> Result<us
 
 fn apply_container_patch(container: &mut WorkspaceContainer, patch: WorkspaceContainerPatch) {
     apply_visibility(container, patch.visible, patch.closed);
-    if let Some(collapsed) = patch.collapsed {
-        container.collapsed = collapsed;
+    if let Some(is_collapsed) = patch.collapsed {
+        container.collapsed = is_collapsed;
     }
-    if let Some(fullscreen) = patch.fullscreen {
-        container.fullscreen = fullscreen;
+    if let Some(is_fullscreen) = patch.fullscreen {
+        container.fullscreen = is_fullscreen;
     }
     if patch.clear_active_pane {
         container.active_pane_id = None;
@@ -426,19 +426,19 @@ fn apply_container_patch(container: &mut WorkspaceContainer, patch: WorkspaceCon
 
 fn apply_visibility(
     container: &mut WorkspaceContainer,
-    visible: Option<bool>,
-    closed: Option<bool>,
+    is_visible: Option<bool>,
+    is_closed: Option<bool>,
 ) {
-    if let Some(visible) = visible {
-        container.visible = visible;
-        if closed.is_none() {
-            container.closed = !visible;
+    if let Some(is_visible) = is_visible {
+        container.visible = is_visible;
+        if is_closed.is_none() {
+            container.closed = !is_visible;
         }
     }
-    if let Some(closed) = closed {
-        container.closed = closed;
-        if visible.is_none() {
-            container.visible = !closed;
+    if let Some(is_closed) = is_closed {
+        container.closed = is_closed;
+        if is_visible.is_none() {
+            container.visible = !is_closed;
         }
     }
 }

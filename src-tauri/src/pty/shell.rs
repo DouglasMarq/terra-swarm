@@ -69,12 +69,12 @@ fn read_passwd_shell(buffer: &mut [libc::c_char]) -> Result<Option<String>, libc
 }
 
 #[cfg(unix)]
-fn valid_shell(shell: &str) -> bool {
+fn is_valid_shell(shell: &str) -> bool {
     shell.starts_with('/') && std::path::Path::new(shell).exists()
 }
 
 #[cfg(windows)]
-fn valid_shell(shell: &str) -> bool {
+fn is_valid_shell(shell: &str) -> bool {
     let path = std::path::Path::new(shell);
     path.is_absolute() && path.exists()
 }
@@ -166,7 +166,7 @@ pub(super) fn user_shell() -> String {
         return shell;
     }
     if let Ok(shell) = std::env::var("SHELL") {
-        if valid_shell(&shell) {
+        if is_valid_shell(&shell) {
             return shell;
         }
     }
@@ -182,7 +182,7 @@ pub(super) fn user_shell() -> String {
         return ps;
     }
     if let Ok(comspec) = std::env::var("COMSPEC") {
-        if valid_shell(&comspec) {
+        if is_valid_shell(&comspec) {
             return comspec;
         }
     }
@@ -191,7 +191,7 @@ pub(super) fn user_shell() -> String {
 
 pub(super) fn resolve_shell(preferred: Option<&str>) -> String {
     match preferred.map(str::trim) {
-        Some(shell) if valid_shell(shell) => shell.to_string(),
+        Some(shell) if is_valid_shell(shell) => shell.to_string(),
         _ => user_shell(),
     }
 }
@@ -200,7 +200,7 @@ pub(super) fn resolve_shell(preferred: Option<&str>) -> String {
 pub fn list_available_shells() -> Vec<String> {
     let mut shells: Vec<String> = Vec::new();
     let mut add = |shell: String| {
-        if valid_shell(&shell) && !shells.contains(&shell) {
+        if is_valid_shell(&shell) && !shells.contains(&shell) {
             shells.push(shell);
         }
     };

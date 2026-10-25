@@ -113,10 +113,10 @@ pub fn schema_version() -> u32 {
     MIGRATIONS.len() as u32
 }
 
-fn configure(conn: &Connection, file_backed: bool) -> rusqlite::Result<()> {
+fn configure(conn: &Connection, is_file_backed: bool) -> rusqlite::Result<()> {
     conn.busy_timeout(BUSY_TIMEOUT)?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
-    if file_backed {
+    if is_file_backed {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
     }

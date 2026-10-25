@@ -18,7 +18,7 @@ const DEVICE_SETTLE_DELAY: std::time::Duration = std::time::Duration::from_milli
 const MIC_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
 
 pub struct VoiceState {
-    pub recording: Mutex<bool>,
+    pub is_recording: Mutex<bool>,
     pub audio_buffer: Arc<Mutex<Vec<f32>>>,
     pub active_model_id: Mutex<Option<String>>,
     pub language: Mutex<String>,
@@ -30,7 +30,7 @@ pub struct VoiceState {
 impl Default for VoiceState {
     fn default() -> Self {
         Self {
-            recording: Mutex::new(false),
+            is_recording: Mutex::new(false),
             audio_buffer: Arc::new(Mutex::new(Vec::new())),
             active_model_id: Mutex::new(None),
             language: Mutex::new("auto".into()),
@@ -86,8 +86,8 @@ fn activate_model(app: &tauri::AppHandle, model_id: &str, path: PathBuf) -> Resu
 
 fn start_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let state = app.state::<VoiceState>();
-    let mut recording = state.recording.lock_or_recover();
-    if *recording {
+    let mut is_recording = state.is_recording.lock_or_recover();
+    if *is_recording {
         return Err("Already recording".into());
     }
     if state.transcriber.lock_or_recover().is_none() {
@@ -103,7 +103,7 @@ fn start_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
         let _ = app.emit("voice-recording-error", &error);
         return Err(error);
     }
-    *recording = true;
+    *is_recording = true;
     let _ = app.emit("voice-recording-started", ());
     Ok(())
 }
@@ -111,11 +111,11 @@ fn start_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
 pub fn stop_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let state = app.state::<VoiceState>();
     {
-        let mut recording = state.recording.lock_or_recover();
-        if !*recording {
+        let mut is_recording = state.is_recording.lock_or_recover();
+        if !*is_recording {
             return Err("Not recording".into());
         }
-        *recording = false;
+        *is_recording = false;
     }
     let controller = app.state::<AudioController<R>>();
 
@@ -157,8 +157,8 @@ pub fn stop_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String>
 
 #[tauri::command(async)]
 pub fn voice_toggle_recording(app: tauri::AppHandle) -> Result<(), String> {
-    let recording = *app.state::<VoiceState>().recording.lock_or_recover();
-    match recording {
+    let is_recording = *app.state::<VoiceState>().is_recording.lock_or_recover();
+    match is_recording {
         true => stop_recording_impl(&app),
         false => start_recording_impl(&app),
     }
@@ -208,14 +208,14 @@ pub async fn voice_test_mic_stop(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|error| error.to_string())?
 }
 
-fn emit_if_mic_changed(app: &tauri::AppHandle, last: &mut Option<bool>) {
-    let available = audio::has_input_device();
-    if *last == Some(available) {
+fn emit_if_mic_changed(app: &tauri::AppHandle, was_mic_available: &mut Option<bool>) {
+    let is_mic_available = audio::has_input_device();
+    if *was_mic_available == Some(is_mic_available) {
         return;
     }
-    *last = Some(available);
-    let _ = app.emit("voice-mic-changed", available);
-    if !available && *app.state::<VoiceState>().recording.lock_or_recover() {
+    *was_mic_available = Some(is_mic_available);
+    let _ = app.emit("voice-mic-changed", is_mic_available);
+    if !is_mic_available && *app.state::<VoiceState>().is_recording.lock_or_recover() {
         if let Err(error) = stop_recording_impl(app) {
             eprintln!(
                 "failed to stop recording after the mic disappeared: {}",
@@ -253,7 +253,7 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
             return;
         }
 
-        let mut last: Option<bool> = None;
+        let mut was_mic_available: Option<bool> = None;
         let mut buf = [0u8; INOTIFY_BUFFER_BYTES];
         loop {
             // SAFETY: `buf` is writable for `buf.len()` bytes and `fd` is open.
@@ -273,7 +273,7 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
                 libc::fcntl(fd, libc::F_SETFL, flags);
             }
 
-            emit_if_mic_changed(&app, &mut last);
+            emit_if_mic_changed(&app, &mut was_mic_available);
         }
 
         // SAFETY: `fd` is the open inotify descriptor this thread owns, closed
@@ -285,9 +285,9 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
 #[cfg(not(target_os = "linux"))]
 pub fn watch_input_devices(app: tauri::AppHandle) {
     std::thread::spawn(move || {
-        let mut last: Option<bool> = None;
+        let mut was_mic_available: Option<bool> = None;
         loop {
-            emit_if_mic_changed(&app, &mut last);
+            emit_if_mic_changed(&app, &mut was_mic_available);
             std::thread::sleep(MIC_POLL_INTERVAL);
         }
     });
@@ -431,11 +431,11 @@ mod recording_tests {
     }
 
     fn set_recording(app: &tauri::App<MockRuntime>, is_recording: bool) {
-        *app.state::<VoiceState>().recording.lock_or_recover() = is_recording;
+        *app.state::<VoiceState>().is_recording.lock_or_recover() = is_recording;
     }
 
     fn is_recording(app: &tauri::App<MockRuntime>) -> bool {
-        *app.state::<VoiceState>().recording.lock_or_recover()
+        *app.state::<VoiceState>().is_recording.lock_or_recover()
     }
 
     fn payloads_of(app: &tauri::App<MockRuntime>, event: &str) -> mpsc::Receiver<String> {

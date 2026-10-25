@@ -123,8 +123,8 @@ fn dechunk(mut data: &[u8]) -> Vec<u8> {
     out
 }
 
-fn parse_messages(body: &str, event_stream: bool) -> Result<Vec<Value>, String> {
-    if !event_stream {
+fn parse_messages(body: &str, is_event_stream: bool) -> Result<Vec<Value>, String> {
+    if !is_event_stream {
         return match serde_json::from_str::<Value>(body) {
             Ok(Value::Array(items)) => Ok(items),
             Ok(value) => Ok(vec![value]),

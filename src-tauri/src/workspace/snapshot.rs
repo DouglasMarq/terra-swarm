@@ -66,7 +66,7 @@ pub(crate) fn validate_explicit_path(raw: &str) -> Result<PathBuf, String> {
 
 pub(crate) fn parse_import_snapshot(raw: &str) -> Result<WorkspaceStore, String> {
     let decoded = decode_workspace_file(raw)?;
-    if decoded.dropped_entries {
+    if decoded.has_dropped_entries {
         return Err("snapshot contains malformed workspace or group entries".to_string());
     }
     let candidate = WorkspaceStore {

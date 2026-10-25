@@ -61,12 +61,12 @@ fn untracked_change(file: &str, text: &str) -> ChangedFile {
         .filter(|line| line.starts_with('+') && !line.starts_with("+++"))
         .count();
     let additions = u32::try_from(added_lines).unwrap_or(u32::MAX);
-    let binary = text.contains("Binary files");
+    let is_binary = text.contains("Binary files");
     ChangedFile {
         path: file.to_string(),
         change: "untracked".into(),
-        additions: (!binary).then_some(additions),
-        deletions: (!binary).then_some(0),
+        additions: (!is_binary).then_some(additions),
+        deletions: (!is_binary).then_some(0),
     }
 }
 
@@ -147,13 +147,13 @@ pub fn diff(info: &WorktreeInfo) -> Result<WorktreeDiff, String> {
         patch.append(&text);
     }
     let is_file_list_cut = untracked_paths.len() > MAX_UNTRACKED_FILES;
-    let truncated = is_file_list_cut || patch.is_truncated();
+    let is_truncated = is_file_list_cut || patch.is_truncated();
     let patch = patch.finish();
     Ok(WorktreeDiff {
         status: status(info)?,
         files,
         patch,
-        truncated,
+        truncated: is_truncated,
     })
 }
 

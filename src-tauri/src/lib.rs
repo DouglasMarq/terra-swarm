@@ -115,7 +115,7 @@ fn open_mcp_hub(
             error
         ),
     }
-    if hub.available() {
+    if hub.is_available() {
         if let Err(error) = mcp::server::start(Arc::clone(&hub)) {
             eprintln!("failed to start the MCP server: {}", error);
         }

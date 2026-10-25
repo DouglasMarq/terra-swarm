@@ -140,7 +140,7 @@ pub struct NoteRecord<'a> {
 pub struct InboxQuery<'a> {
     pub workspace_id: &'a str,
     pub reader: &'a str,
-    pub unread_only: bool,
+    pub is_unread_only: bool,
     pub limit: usize,
 }
 
@@ -511,7 +511,7 @@ impl Queries<'_> {
             params![
                 query.workspace_id,
                 query.reader,
-                query.unread_only,
+                query.is_unread_only,
                 sql_limit(query.limit)
             ],
             message_from_row,
@@ -671,7 +671,7 @@ impl Repo {
         Ok(RepoTx { tx })
     }
 
-    pub fn enabled(&self) -> bool {
+    pub fn is_enabled(&self) -> bool {
         match self
             .conn
             .query_row(
@@ -692,10 +692,10 @@ impl Repo {
         }
     }
 
-    pub fn set_enabled(&self, enabled: bool) -> StoreResult<()> {
+    pub fn set_enabled(&self, is_enabled: bool) -> StoreResult<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO settings(key, value) VALUES ('enabled', ?1)",
-            params![if enabled { "1" } else { "0" }],
+            params![if is_enabled { "1" } else { "0" }],
         )?;
         Ok(())
     }
@@ -978,7 +978,7 @@ mod tests {
                 &mut repo,
                 &actor(workspace_id, "t-2"),
                 &InboxRequest {
-                    unread_only: true,
+                    is_unread_only: true,
                     limit: None,
                 },
             )
@@ -1031,7 +1031,7 @@ mod tests {
     fn given_an_unreadable_setting_the_server_stays_enabled() {
         let repo = Repo::in_memory();
         repo.execute("ALTER TABLE settings RENAME TO settings_gone", &[]);
-        assert!(repo.enabled());
+        assert!(repo.is_enabled());
     }
 
     #[test]
@@ -1040,7 +1040,7 @@ mod tests {
         let path = dir.join("mcp.db");
         {
             let mut repo = Repo::new(super::super::db::open(&path).unwrap());
-            assert!(repo.enabled());
+            assert!(repo.is_enabled());
             repo.set_enabled(false).unwrap();
             tasks::create(&mut repo, &actor("ws-1", "t-1"), task("kept")).unwrap();
             messages::send(
@@ -1063,7 +1063,7 @@ mod tests {
             .unwrap();
         }
         let mut repo = Repo::new(super::super::db::open(&path).unwrap());
-        assert!(!repo.enabled());
+        assert!(!repo.is_enabled());
         assert_eq!(
             repo.queries()
                 .list_tasks(&TaskQuery::all("ws-1"))
@@ -1076,7 +1076,7 @@ mod tests {
                 &mut repo,
                 &actor("ws-1", "t-2"),
                 &InboxRequest {
-                    unread_only: true,
+                    is_unread_only: true,
                     limit: None
                 }
             )

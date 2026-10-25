@@ -17,7 +17,7 @@ pub mod shell;
 #[cfg(unix)]
 use process_group::ProcessGroup;
 
-use agents::command_available;
+use agents::is_command_available;
 use shell::resolve_shell;
 #[cfg(windows)]
 use shell::{shell_flavor, ShellFlavor};
@@ -90,17 +90,17 @@ pub struct PtyEntry {
     pub pid: Option<u32>,
     pub last_size: Arc<Mutex<(u16, u16)>>,
     pub seq: u64,
-    pub reaped: Arc<AtomicBool>,
+    pub is_reaped: Arc<AtomicBool>,
     pub backlog: Arc<Mutex<Backlog>>,
-    pub scrollback_enabled: Arc<AtomicBool>,
+    pub is_scrollback_enabled: Arc<AtomicBool>,
     pub _mcp_lease: Option<McpLease>,
     #[cfg(unix)]
     process_group: Option<Arc<ProcessGroup>>,
 }
 
-fn kill_entry(entry: PtyEntry, disable_scrollback: bool) {
-    if disable_scrollback {
-        entry.scrollback_enabled.store(false, Ordering::SeqCst);
+fn kill_entry(entry: PtyEntry, should_disable_scrollback: bool) {
+    if should_disable_scrollback {
+        entry.is_scrollback_enabled.store(false, Ordering::SeqCst);
     }
     #[cfg(unix)]
     if let Some(group) = &entry.process_group {
@@ -116,7 +116,7 @@ pub struct PtyManager {
     terminals: HashMap<String, PtyEntry>,
     spawning: HashSet<String>,
     scrollback: Arc<ScrollbackStore>,
-    durable_scrollback_enabled: Arc<AtomicBool>,
+    is_durable_scrollback_enabled: Arc<AtomicBool>,
 }
 
 impl Default for PtyManager {
@@ -125,7 +125,7 @@ impl Default for PtyManager {
             terminals: HashMap::new(),
             spawning: HashSet::new(),
             scrollback: Arc::new(ScrollbackStore::default()),
-            durable_scrollback_enabled: Arc::new(AtomicBool::new(false)),
+            is_durable_scrollback_enabled: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -136,7 +136,7 @@ impl PtyManager {
             terminals: HashMap::new(),
             spawning: HashSet::new(),
             scrollback: Arc::new(ScrollbackStore::from_root(path)),
-            durable_scrollback_enabled: Arc::new(AtomicBool::new(false)),
+            is_durable_scrollback_enabled: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -145,18 +145,18 @@ impl PtyManager {
     }
 
     pub fn durable_scrollback_enabled(&self) -> Arc<AtomicBool> {
-        Arc::clone(&self.durable_scrollback_enabled)
+        Arc::clone(&self.is_durable_scrollback_enabled)
     }
 
-    pub fn set_durable_scrollback_enabled(&self, enabled: bool) {
-        self.durable_scrollback_enabled
-            .store(enabled, Ordering::SeqCst);
+    pub fn set_durable_scrollback_enabled(&self, is_enabled: bool) {
+        self.is_durable_scrollback_enabled
+            .store(is_enabled, Ordering::SeqCst);
     }
 
     fn running_terminals(&self) -> Vec<RunningTerminal> {
         self.terminals
             .iter()
-            .filter(|(_, entry)| !entry.reaped.load(Ordering::SeqCst))
+            .filter(|(_, entry)| !entry.is_reaped.load(Ordering::SeqCst))
             .map(|(id, entry)| RunningTerminal {
                 id: id.clone(),
                 seq: entry.seq,
@@ -178,7 +178,7 @@ pub struct SpawnOptions {
     pub shell: Option<String>,
     pub args: Option<String>,
     pub env: HashMap<String, String>,
-    pub worktree: bool,
+    pub should_use_worktree: bool,
     pub worktree_root: Option<std::path::PathBuf>,
     pub role: Option<crate::roles::Role>,
 }
@@ -273,7 +273,7 @@ fn runtime_info_from_manager(
         cols,
         rows,
         generation: entry.seq,
-        is_reaped: entry.reaped.load(Ordering::SeqCst),
+        is_reaped: entry.is_reaped.load(Ordering::SeqCst),
     })))
 }
 
@@ -336,7 +336,7 @@ struct SpawnedProcess<'a> {
 struct TerminalIo {
     input: std::sync::mpsc::SyncSender<Vec<u8>>,
     backlog: Arc<Mutex<Backlog>>,
-    scrollback_enabled: Arc<AtomicBool>,
+    is_scrollback_enabled: Arc<AtomicBool>,
 }
 
 type SharedKiller = Arc<Mutex<Box<dyn ChildKiller + Send + Sync>>>;
@@ -346,7 +346,7 @@ struct ExitWatch {
     workspace_id: String,
     seq: u64,
     killer: SharedKiller,
-    reaped: Arc<AtomicBool>,
+    is_reaped: Arc<AtomicBool>,
     #[cfg(unix)]
     process_group: Option<Arc<ProcessGroup>>,
 }
@@ -501,7 +501,7 @@ fn resolve_worktree<R: Runtime>(
     if let Some(existing) = stored {
         return Ok((Some(existing_worktree(existing)?), CreatedWorktree(None)));
     }
-    if !target.options.worktree {
+    if !target.options.should_use_worktree {
         return Ok((None, CreatedWorktree(None)));
     }
     let info = new_worktree(app, target)?;
@@ -533,9 +533,9 @@ fn spawn_process<'a, R: Runtime>(
     launch: ProcessLaunch<'a>,
 ) -> Result<SpawnedProcess<'a>, String> {
     let shell = resolve_shell(launch.options.shell.as_deref());
-    let interactive = launch.command.is_empty() || launch.command == "shell";
+    let is_interactive = launch.command.is_empty() || launch.command == "shell";
     let command_with_agent_args = match launch.options.args.as_deref().map(str::trim) {
-        Some(args) if !args.is_empty() && !interactive => format!("{} {}", launch.command, args),
+        Some(args) if !args.is_empty() && !is_interactive => format!("{} {}", launch.command, args),
         _ => launch.command.to_string(),
     };
     let mut mcp_launch = app.try_state::<Arc<McpHub>>().and_then(|hub| {
@@ -552,7 +552,7 @@ fn spawn_process<'a, R: Runtime>(
         |launch| launch.command.clone(),
     );
     let mut cmd = CommandBuilder::new(&shell);
-    cmd.args(shell_args(&shell, interactive, &run_command));
+    cmd.args(shell_args(&shell, is_interactive, &run_command));
     cmd.cwd(launch.cwd);
     apply_env(&mut cmd, launch.options, mcp_launch.as_ref());
 
@@ -586,23 +586,23 @@ fn quoting_for(shell: &str) -> Quoting {
 }
 
 #[cfg(unix)]
-fn shell_args(_shell: &str, interactive: bool, run_command: &str) -> Vec<String> {
-    posix_shell_args(interactive, run_command)
+fn shell_args(_shell: &str, is_interactive: bool, run_command: &str) -> Vec<String> {
+    posix_shell_args(is_interactive, run_command)
 }
 
 #[cfg(windows)]
-fn shell_args(shell: &str, interactive: bool, run_command: &str) -> Vec<String> {
+fn shell_args(shell: &str, is_interactive: bool, run_command: &str) -> Vec<String> {
     match shell_flavor(shell) {
-        ShellFlavor::PowerShell if interactive => vec!["-NoLogo".into()],
+        ShellFlavor::PowerShell if is_interactive => vec!["-NoLogo".into()],
         ShellFlavor::PowerShell => vec!["-NoLogo".into(), "-Command".into(), run_command.into()],
-        ShellFlavor::Cmd if interactive => Vec::new(),
+        ShellFlavor::Cmd if is_interactive => Vec::new(),
         ShellFlavor::Cmd => vec!["/C".into(), run_command.into()],
-        ShellFlavor::Posix => posix_shell_args(interactive, run_command),
+        ShellFlavor::Posix => posix_shell_args(is_interactive, run_command),
     }
 }
 
-fn posix_shell_args(interactive: bool, run_command: &str) -> Vec<String> {
-    if interactive {
+fn posix_shell_args(is_interactive: bool, run_command: &str) -> Vec<String> {
+    if is_interactive {
         return vec!["-l".into(), "-i".into()];
     }
     vec!["-l".into(), "-c".into(), format!("exec {}", run_command)]
@@ -652,13 +652,13 @@ fn register_process<R: Runtime>(
     #[cfg(unix)]
     let process_group = pid.and_then(ProcessGroup::of_leader).map(Arc::new);
     let killer = Arc::new(Mutex::new(child.clone_killer()));
-    let reaped = Arc::new(AtomicBool::new(false));
+    let is_reaped = Arc::new(AtomicBool::new(false));
     let watch = ExitWatch {
         id: launch.id.to_string(),
         workspace_id: launch.workspace_id.to_string(),
         seq: launch.seq,
         killer: Arc::clone(&killer),
-        reaped: Arc::clone(&reaped),
+        is_reaped: Arc::clone(&is_reaped),
         #[cfg(unix)]
         process_group: process_group.clone(),
     };
@@ -669,9 +669,9 @@ fn register_process<R: Runtime>(
         pid,
         last_size: Arc::new(Mutex::new((launch.cols, launch.rows))),
         seq: launch.seq,
-        reaped,
+        is_reaped,
         backlog: io.backlog,
-        scrollback_enabled: io.scrollback_enabled,
+        is_scrollback_enabled: io.is_scrollback_enabled,
         _mcp_lease: mcp_lease,
         #[cfg(unix)]
         process_group,
@@ -691,12 +691,12 @@ fn start_terminal_io<R: Runtime>(
     process: &SpawnedProcess<'_>,
 ) -> Result<TerminalIo, String> {
     let launch = process.launch;
-    let scrollback_enabled = Arc::new(AtomicBool::new(true));
-    let (scrollback, durable_scrollback_enabled) = {
+    let is_scrollback_enabled = Arc::new(AtomicBool::new(true));
+    let (scrollback, is_durable_scrollback_enabled) = {
         let manager = manager.lock_or_recover();
         (manager.scrollback(), manager.durable_scrollback_enabled())
     };
-    let restored = restored_backlog(&scrollback, &durable_scrollback_enabled, launch.id);
+    let restored = restored_backlog(&scrollback, &is_durable_scrollback_enabled, launch.id);
     let backlog = Arc::new(Mutex::new(Backlog::from_bytes(restored)));
     let reader = process
         .master
@@ -718,15 +718,15 @@ fn start_terminal_io<R: Runtime>(
             backlog: Arc::clone(&backlog),
             scrollback: output::DurableScrollback {
                 store: Arc::clone(&scrollback),
-                is_terminal_enabled: Arc::clone(&scrollback_enabled),
-                is_app_enabled: durable_scrollback_enabled,
+                is_terminal_enabled: Arc::clone(&is_scrollback_enabled),
+                is_app_enabled: is_durable_scrollback_enabled,
             },
         },
     );
     Ok(TerminalIo {
         input: spawn_input_writer(writer),
         backlog,
-        scrollback_enabled,
+        is_scrollback_enabled,
     })
 }
 
@@ -775,7 +775,7 @@ fn spawn_exit_monitor<R: Runtime>(
                 None
             }
         };
-        watch.reaped.store(true, Ordering::SeqCst);
+        watch.is_reaped.store(true, Ordering::SeqCst);
         forget_exited_terminal(&app, &watch);
         let _ = app.emit(
             "terminal-exit",
@@ -878,7 +878,7 @@ pub fn spawn_terminal(
         shell,
         args: launch.args,
         env: launch.env,
-        worktree: launch.worktree,
+        should_use_worktree: launch.worktree,
         worktree_root: None,
         role: launch.role,
     };
@@ -908,7 +908,7 @@ pub fn demo_seed(app: &AppHandle) {
     };
     let picked: Vec<&str> = DEMO_AGENT_COMMANDS
         .into_iter()
-        .filter(|command| command_available(command))
+        .filter(|command| is_command_available(command))
         .take(DEMO_AGENT_COUNT)
         .collect();
     let options = SpawnOptions::default();
@@ -1059,7 +1059,7 @@ pub fn terminal_backlog(
     manager: State<'_, Mutex<PtyManager>>,
     id: String,
 ) -> Result<BacklogSnapshot, String> {
-    let (backlog, scrollback, durable_scrollback_enabled) = {
+    let (backlog, scrollback, is_durable_scrollback_enabled) = {
         let manager = manager.lock_or_recover();
         (
             manager
@@ -1078,7 +1078,7 @@ pub fn terminal_backlog(
         });
     }
 
-    if !durable_scrollback_enabled.load(Ordering::SeqCst) {
+    if !is_durable_scrollback_enabled.load(Ordering::SeqCst) {
         return Ok(BacklogSnapshot {
             data: String::new(),
             total: 0,
@@ -1148,10 +1148,10 @@ mod scrollback_flag_tests {
             .append("t-flag", b"existing")
             .expect("seed scrollback");
         let manager = PtyManager::with_scrollback_dir(root.clone());
-        let enabled = manager.durable_scrollback_enabled();
+        let is_enabled = manager.durable_scrollback_enabled();
 
-        assert!(!enabled.load(Ordering::SeqCst));
-        let hidden = if enabled.load(Ordering::SeqCst) {
+        assert!(!is_enabled.load(Ordering::SeqCst));
+        let hidden = if is_enabled.load(Ordering::SeqCst) {
             store.read("t-flag").expect("read")
         } else {
             Vec::new()
@@ -1159,12 +1159,12 @@ mod scrollback_flag_tests {
         assert!(hidden.is_empty());
 
         manager.set_durable_scrollback_enabled(true);
-        assert!(enabled.load(Ordering::SeqCst));
+        assert!(is_enabled.load(Ordering::SeqCst));
         assert_eq!(store.read("t-flag").expect("enabled read"), b"existing");
 
         manager.set_durable_scrollback_enabled(false);
-        assert!(!enabled.load(Ordering::SeqCst));
-        let hidden_again = if enabled.load(Ordering::SeqCst) {
+        assert!(!is_enabled.load(Ordering::SeqCst));
+        let hidden_again = if is_enabled.load(Ordering::SeqCst) {
             store.read("t-flag").expect("read")
         } else {
             Vec::new()
@@ -1464,7 +1464,7 @@ mod spawn_lifecycle_tests {
         let manager = app.state::<Mutex<PtyManager>>();
         let options = SpawnOptions {
             shell: Some("/bin/sh".into()),
-            worktree: true,
+            should_use_worktree: true,
             worktree_root: Some(root.clone()),
             ..SpawnOptions::default()
         };
@@ -1565,14 +1565,14 @@ mod kill_tests {
             },
         )
         .expect("spawn long-running command");
-        let reaped = Arc::clone(
+        let is_reaped = Arc::clone(
             &manager
                 .lock()
                 .expect("pty manager")
                 .terminals
                 .get(&spawned.meta.id)
                 .expect("registered terminal")
-                .reaped,
+                .is_reaped,
         );
         std::thread::scope(|scope| {
             let poisoner = scope.spawn(|| {
@@ -1590,7 +1590,7 @@ mod kill_tests {
             .terminals
             .contains_key(&spawned.meta.id));
         let deadline = Instant::now() + Duration::from_secs(3);
-        while !reaped.load(Ordering::SeqCst) {
+        while !is_reaped.load(Ordering::SeqCst) {
             assert!(
                 Instant::now() < deadline,
                 "the process outlived kill_terminal_inner"

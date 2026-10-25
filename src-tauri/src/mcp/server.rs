@@ -47,7 +47,7 @@ fn tool_list() -> Vec<Tool> {
             tool.title = Some(def.title.to_string());
             tool.annotations = Some(ToolAnnotations::from_raw(
                 Some(def.title.to_string()),
-                Some(def.read_only),
+                Some(def.is_read_only),
                 Some(false),
                 None,
                 Some(false),

@@ -238,7 +238,7 @@ pub struct WorkspaceContainer {
     pub collapsed: bool,
     #[serde(default, alias = "active_pane_id")]
     pub active_pane_id: Option<String>,
-    #[serde(default = "default_visible")]
+    #[serde(default = "is_visible_by_default")]
     pub visible: bool,
     #[serde(default)]
     pub closed: bool,
@@ -252,7 +252,7 @@ fn default_layout_mode() -> String {
     "auto".to_string()
 }
 
-fn default_visible() -> bool {
+fn is_visible_by_default() -> bool {
     true
 }
 

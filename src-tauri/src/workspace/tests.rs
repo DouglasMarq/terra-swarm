@@ -817,7 +817,7 @@ fn replacing_store_keeps_a_recoverable_backup_and_current_file_atomic() {
             .unwrap_or(""),
         std::process::id()
     );
-    let leftover_temp = fs::read_dir(current.parent().expect("current parent"))
+    let has_leftover_temp = fs::read_dir(current.parent().expect("current parent"))
         .expect("current directory")
         .filter_map(Result::ok)
         .any(|entry| {
@@ -826,7 +826,7 @@ fn replacing_store_keeps_a_recoverable_backup_and_current_file_atomic() {
                 .to_string_lossy()
                 .starts_with(&temp_prefix)
         });
-    assert!(!leftover_temp);
+    assert!(!has_leftover_temp);
     cleanup(&current);
 }
 

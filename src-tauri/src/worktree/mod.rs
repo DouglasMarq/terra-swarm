@@ -103,7 +103,7 @@ pub fn repo_root(dir: &Path) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-fn branch_exists(repo: &Path, branch: &str) -> bool {
+fn has_branch(repo: &Path, branch: &str) -> bool {
     git(
         repo,
         &[
@@ -175,7 +175,7 @@ fn base_ref(repo: &Path) -> Result<String, String> {
 fn free_branch(repo: &Path, terminal_id: &str) -> String {
     let mut branch = format!("{}{}", BRANCH_PREFIX, terminal_id);
     let mut suffix = FIRST_BRANCH_SUFFIX;
-    while branch_exists(repo, &branch) {
+    while has_branch(repo, &branch) {
         branch = format!("{}{}-{}", BRANCH_PREFIX, terminal_id, suffix);
         suffix += 1;
     }
@@ -202,8 +202,8 @@ fn count(text: &str) -> u32 {
 pub fn status(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
     info.check()?;
     let path = Path::new(&info.path);
-    let exists = path.is_dir();
-    let dirty = if exists {
+    let is_present = path.is_dir();
+    let dirty = if is_present {
         git(path, &["status", "--porcelain"])
             .map_err(|error| format!("could not read the worktree status: {}", error))?
             .lines()
@@ -221,7 +221,7 @@ pub fn status(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
         dirty,
         ahead,
         behind,
-        exists,
+        exists: is_present,
     })
 }
 
@@ -236,7 +236,7 @@ fn divergence(info: &WorktreeInfo) -> Result<(u32, u32), String> {
             };
             Ok((count(behind), count(ahead)))
         }
-        Err(_) if !branch_exists(repo, &info.branch) => Ok((0, 0)),
+        Err(_) if !has_branch(repo, &info.branch) => Ok((0, 0)),
         Err(error) => Err(format!(
             "could not compare {} with {}: {}",
             info.branch, info.base, error
@@ -244,7 +244,7 @@ fn divergence(info: &WorktreeInfo) -> Result<(u32, u32), String> {
     }
 }
 
-pub fn remove(info: &WorktreeInfo, delete_branch: bool) -> Result<(), String> {
+pub fn remove(info: &WorktreeInfo, should_delete_branch: bool) -> Result<(), String> {
     info.check()?;
     let repo = Path::new(&info.repo);
     if Path::new(&info.path).exists() {
@@ -252,7 +252,7 @@ pub fn remove(info: &WorktreeInfo, delete_branch: bool) -> Result<(), String> {
     } else if let Err(error) = git(repo, &["worktree", "prune"]) {
         eprintln!("failed to prune worktrees of {}: {}", info.repo, error);
     }
-    if delete_branch && branch_exists(repo, &info.branch) {
+    if should_delete_branch && has_branch(repo, &info.branch) {
         git(repo, &["branch", "-D", "--", &info.branch])?;
     }
     Ok(())
@@ -335,9 +335,9 @@ mod tests {
 
         remove(&info, true).unwrap();
         assert!(!Path::new(&info.path).exists());
-        assert!(!branch_exists(&repo, "terra/t-3"));
+        assert!(!has_branch(&repo, "terra/t-3"));
         remove(&again, false).unwrap();
-        assert!(branch_exists(&repo, "terra/t-3b"));
+        assert!(has_branch(&repo, "terra/t-3b"));
         cleanup(&repo, &root);
     }
 
@@ -528,7 +528,7 @@ mod tests {
         info.branch = "--receive-pack=x".to_string();
         assert!(remove(&info, true).unwrap_err().contains("invalid"));
         assert!(Path::new(&info.path).exists());
-        assert!(branch_exists(&repo, "terra/t-1"));
+        assert!(has_branch(&repo, "terra/t-1"));
         cleanup(&repo, &root);
     }
 }

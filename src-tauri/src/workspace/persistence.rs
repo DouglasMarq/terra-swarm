@@ -49,8 +49,8 @@ pub(crate) struct WorkspaceFile {
 pub(crate) struct DecodedWorkspaceFile {
     pub(crate) workspaces: Vec<Workspace>,
     pub(crate) groups: Vec<Group>,
-    pub(crate) legacy: bool,
-    pub(crate) dropped_entries: bool,
+    pub(crate) is_legacy: bool,
+    pub(crate) has_dropped_entries: bool,
 }
 
 pub(crate) fn decode_workspace_file(raw: &str) -> Result<DecodedWorkspaceFile, String> {
@@ -58,12 +58,12 @@ pub(crate) fn decode_workspace_file(raw: &str) -> Result<DecodedWorkspaceFile, S
 
     match value {
         Value::Array(entries) => {
-            let (workspaces, dropped_entries) = decode_workspace_entries(entries);
+            let (workspaces, has_dropped_entries) = decode_workspace_entries(entries);
             Ok(DecodedWorkspaceFile {
                 workspaces,
                 groups: Vec::new(),
-                legacy: true,
-                dropped_entries,
+                is_legacy: true,
+                has_dropped_entries,
             })
         }
         Value::Object(mut object) => {
@@ -84,8 +84,8 @@ pub(crate) fn decode_workspace_file(raw: &str) -> Result<DecodedWorkspaceFile, S
                     return Err("workspace store workspaces must be an array".to_string());
                 }
             };
-            let (workspaces, dropped_entries) = decode_workspace_entries(entries);
-            let (groups, dropped_groups) = match object.remove("groups") {
+            let (workspaces, has_dropped_entries) = decode_workspace_entries(entries);
+            let (groups, has_dropped_groups) = match object.remove("groups") {
                 Some(Value::Array(entries)) => decode_group_entries(entries),
                 None => (Vec::new(), false),
                 Some(_) => {
@@ -95,8 +95,8 @@ pub(crate) fn decode_workspace_file(raw: &str) -> Result<DecodedWorkspaceFile, S
             Ok(DecodedWorkspaceFile {
                 workspaces,
                 groups,
-                legacy: version == u64::from(LEGACY_WORKSPACE_FILE_VERSION),
-                dropped_entries: dropped_entries || dropped_groups,
+                is_legacy: version == u64::from(LEGACY_WORKSPACE_FILE_VERSION),
+                has_dropped_entries: has_dropped_entries || has_dropped_groups,
             })
         }
         _ => Err("workspace store must be an object or array".to_string()),
@@ -104,13 +104,13 @@ pub(crate) fn decode_workspace_file(raw: &str) -> Result<DecodedWorkspaceFile, S
 }
 
 pub(crate) fn decode_workspace_entries(entries: Vec<Value>) -> (Vec<Workspace>, bool) {
-    let mut dropped_entries = false;
+    let mut has_dropped_entries = false;
     let mut workspaces = Vec::with_capacity(entries.len());
     for (index, value) in entries.into_iter().enumerate() {
         match serde_json::from_value::<Workspace>(value) {
             Ok(workspace) => workspaces.push(workspace),
             Err(error) => {
-                dropped_entries = true;
+                has_dropped_entries = true;
                 eprintln!(
                     "skipping malformed workspace entry {} while loading: {}",
                     index, error
@@ -118,17 +118,17 @@ pub(crate) fn decode_workspace_entries(entries: Vec<Value>) -> (Vec<Workspace>, 
             }
         }
     }
-    (workspaces, dropped_entries)
+    (workspaces, has_dropped_entries)
 }
 
 pub(crate) fn decode_group_entries(entries: Vec<Value>) -> (Vec<Group>, bool) {
-    let mut dropped_entries = false;
+    let mut has_dropped_entries = false;
     let mut groups = Vec::with_capacity(entries.len());
     for (index, value) in entries.into_iter().enumerate() {
         match serde_json::from_value::<Group>(value) {
             Ok(group) => groups.push(group),
             Err(error) => {
-                dropped_entries = true;
+                has_dropped_entries = true;
                 eprintln!(
                     "skipping malformed group entry {} while loading: {}",
                     index, error
@@ -136,7 +136,7 @@ pub(crate) fn decode_group_entries(entries: Vec<Value>) -> (Vec<Group>, bool) {
             }
         }
     }
-    (groups, dropped_entries)
+    (groups, has_dropped_entries)
 }
 
 pub(crate) fn write_guarded(path: &std::path::Path, json: &str, seq: u64) {
@@ -365,8 +365,8 @@ fn decode_store(path: &Path, raw: &str) -> LoadedStore {
             groups: decoded.groups,
             save_path: Some(path.to_path_buf()),
         },
-        is_legacy: decoded.legacy,
-        has_dropped_entries: decoded.dropped_entries,
+        is_legacy: decoded.is_legacy,
+        has_dropped_entries: decoded.has_dropped_entries,
         is_unusable: false,
     }
 }

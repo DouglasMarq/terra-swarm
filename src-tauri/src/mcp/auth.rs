@@ -60,11 +60,11 @@ impl TokenRegistry {
 
     pub fn revoke_token(&mut self, token: &str) -> Option<AgentIdentity> {
         let identity = self.by_token.remove(token)?;
-        let still_connected = self
+        let is_still_connected = self
             .by_token
             .values()
             .any(|other| other.terminal_id == identity.terminal_id);
-        (!still_connected).then_some(identity)
+        (!is_still_connected).then_some(identity)
     }
 
     #[cfg(test)]

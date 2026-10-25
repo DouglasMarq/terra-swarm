@@ -54,8 +54,8 @@ fn resolve_file(root: &Path, relative: &str) -> Result<PathBuf, String> {
         .join(&relative)
         .canonicalize()
         .map_err(|error| format!("file is unavailable: {}", error))?;
-    let does_resolve_inside_workspace = target.starts_with(&root);
-    if !does_resolve_inside_workspace {
+    let is_inside_workspace = target.starts_with(&root);
+    if !is_inside_workspace {
         return Err("file path cannot escape the workspace".into());
     }
     if !target.is_file() {

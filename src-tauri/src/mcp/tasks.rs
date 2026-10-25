@@ -602,8 +602,9 @@ mod tests {
     fn given_a_task_of_another_workspace_task_writes_find_nothing_and_change_nothing() {
         let mut repo = Repo::in_memory();
         create(&mut repo, &actor("ws-1", "t-1"), task("private")).unwrap();
-        let not_found = |result: StoreResult<Task>| matches!(result, Err(StoreError::NotFound(_)));
-        assert!(not_found(update(
+        let is_not_found =
+            |result: StoreResult<Task>| matches!(result, Err(StoreError::NotFound(_)));
+        assert!(is_not_found(update(
             &mut repo,
             &actor("ws-2", "t-9"),
             TaskUpdate {
@@ -616,8 +617,8 @@ mod tests {
                 }
             }
         )));
-        assert!(not_found(claim(&mut repo, &actor("ws-2", "t-9"), "T-1")));
-        assert!(not_found(complete(
+        assert!(is_not_found(claim(&mut repo, &actor("ws-2", "t-9"), "T-1")));
+        assert!(is_not_found(complete(
             &mut repo,
             &actor("ws-2", "t-9"),
             &Completion {
@@ -962,7 +963,7 @@ mod tests {
         let winners = handles
             .into_iter()
             .map(|handle| handle.join().unwrap())
-            .filter(|won| *won)
+            .filter(|has_won| *has_won)
             .count();
         assert_eq!(winners, 1);
     }

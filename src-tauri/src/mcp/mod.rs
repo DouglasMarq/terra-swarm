@@ -101,7 +101,7 @@ impl<R: Runtime> McpHub<R> {
         }
     }
 
-    pub fn available(&self) -> bool {
+    pub fn is_available(&self) -> bool {
         self.repo.is_some()
     }
 
@@ -152,15 +152,15 @@ impl<R: Runtime> McpHub<R> {
         self.config_dir.as_ref()
     }
 
-    pub fn enabled(&self) -> bool {
-        self.repo().map(|repo| repo.enabled()).unwrap_or(false)
+    pub fn is_enabled(&self) -> bool {
+        self.repo().map(|repo| repo.is_enabled()).unwrap_or(false)
     }
 
     pub fn info(&self) -> ServerInfo {
         let port = self.port();
         ServerInfo {
-            enabled: self.enabled(),
-            available: self.available(),
+            enabled: self.is_enabled(),
+            available: self.is_available(),
             running: port.is_some(),
             url: self.url(),
             port,

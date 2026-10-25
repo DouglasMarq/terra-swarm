@@ -25,7 +25,7 @@ impl AgentIntegration for Codex {
     }
 
     fn launch_command(&self, command: &str, context: &LaunchContext<'_>) -> String {
-        let notify = if user_has_codex_notify() {
+        let notify = if has_user_codex_notify() {
             None
         } else {
             context.hook_program
@@ -119,16 +119,16 @@ pub fn rewrite(command: &str, registration: &Overrides<'_>, quoting: Quoting) ->
     }
 }
 
-pub fn user_has_codex_notify() -> bool {
+pub fn has_user_codex_notify() -> bool {
     let Some(home) = codex_home() else {
         return false;
     };
     std::fs::read_to_string(home.join("config.toml"))
-        .map(|text| codex_config_sets_notify(&text))
+        .map(|text| has_codex_notify_setting(&text))
         .unwrap_or(false)
 }
 
-pub fn codex_config_sets_notify(config: &str) -> bool {
+pub fn has_codex_notify_setting(config: &str) -> bool {
     for line in config.lines() {
         let line = line.trim();
         if line.starts_with('[') {
@@ -255,13 +255,13 @@ mod tests {
 
     #[test]
     fn an_existing_codex_notify_is_detected() {
-        assert!(codex_config_sets_notify(
+        assert!(has_codex_notify_setting(
             "model = \"o3\"\nnotify = [\"say\", \"done\"]\n"
         ));
-        assert!(!codex_config_sets_notify(
+        assert!(!has_codex_notify_setting(
             "model = \"o3\"\n[tui]\nnotify = true\n"
         ));
-        assert!(!codex_config_sets_notify(""));
+        assert!(!has_codex_notify_setting(""));
     }
 
     #[test]

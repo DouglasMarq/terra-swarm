@@ -41,7 +41,7 @@ impl<R: Runtime> McpHub<R> {
             role,
             quoting,
         } = request;
-        if !self.enabled() {
+        if !self.is_enabled() {
             return None;
         }
         let url = self.url()?;

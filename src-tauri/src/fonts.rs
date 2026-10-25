@@ -9,7 +9,7 @@ pub struct FontFamily {
 
 fn families_from<'a>(faces: impl Iterator<Item = (&'a str, bool)>) -> Vec<FontFamily> {
     let mut by_name: BTreeMap<String, (String, bool)> = BTreeMap::new();
-    for (name, monospace) in faces {
+    for (name, is_monospace) in faces {
         let name = name.trim();
         if name.is_empty() || name.starts_with('.') {
             continue;
@@ -17,11 +17,14 @@ fn families_from<'a>(faces: impl Iterator<Item = (&'a str, bool)>) -> Vec<FontFa
         let entry = by_name
             .entry(name.to_lowercase())
             .or_insert_with(|| (name.to_string(), false));
-        entry.1 |= monospace;
+        entry.1 |= is_monospace;
     }
     by_name
         .into_values()
-        .map(|(name, monospace)| FontFamily { name, monospace })
+        .map(|(name, is_monospace)| FontFamily {
+            name,
+            monospace: is_monospace,
+        })
         .collect()
 }
 
@@ -38,7 +41,11 @@ pub async fn list_system_fonts() -> Vec<FontFamily> {
                     .map(move |(name, _)| (name.clone(), face.monospaced))
             })
             .collect();
-        families_from(faces.iter().map(|(name, mono)| (name.as_str(), *mono)))
+        families_from(
+            faces
+                .iter()
+                .map(|(name, is_monospace)| (name.as_str(), *is_monospace)),
+        )
     })
     .await
     .unwrap_or_else(|error| {

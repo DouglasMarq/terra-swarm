@@ -14,7 +14,7 @@ pub struct AgentInfo {
     pub available: bool,
 }
 
-pub(super) fn command_available(id: &str) -> bool {
+pub(super) fn is_command_available(id: &str) -> bool {
     catalog().iter().any(|agent| agent.id == id) && is_on_path(id)
 }
 
@@ -61,7 +61,7 @@ fn available_commands(ids: &[&str]) -> std::collections::HashSet<String> {
 #[cfg(windows)]
 fn available_commands(ids: &[&str]) -> std::collections::HashSet<String> {
     ids.iter()
-        .filter(|id| command_available(id))
+        .filter(|id| is_command_available(id))
         .map(|id| id.to_string())
         .collect()
 }
@@ -98,7 +98,7 @@ mod tests {
         #[cfg(windows)]
         let installed = "cmd";
         assert!(is_on_path(installed));
-        assert!(!command_available(installed));
-        assert!(!command_available("claude; exit 0"));
+        assert!(!is_command_available(installed));
+        assert!(!is_command_available("claude; exit 0"));
     }
 }

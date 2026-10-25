@@ -10,7 +10,7 @@ pub struct Outgoing<'a> {
 }
 
 pub struct InboxRequest {
-    pub unread_only: bool,
+    pub is_unread_only: bool,
     pub limit: Option<usize>,
 }
 
@@ -41,7 +41,7 @@ pub fn read_inbox(
     let query = InboxQuery {
         workspace_id: reader.workspace_id,
         reader: reader.name,
-        unread_only: request.unread_only,
+        is_unread_only: request.is_unread_only,
         limit: clamp_limit(request.limit, DEFAULT_INBOX_LIMIT),
     };
     let tx = repo.transaction()?;
@@ -121,7 +121,7 @@ mod tests {
             &mut repo,
             &actor("ws-1", "t-2"),
             &InboxRequest {
-                unread_only: true,
+                is_unread_only: true,
                 limit: None,
             },
         )
@@ -135,7 +135,7 @@ mod tests {
             &mut repo,
             &actor("ws-1", "t-2"),
             &InboxRequest {
-                unread_only: true,
+                is_unread_only: true,
                 limit: None
             }
         )
@@ -146,7 +146,7 @@ mod tests {
                 &mut repo,
                 &actor("ws-1", "t-2"),
                 &InboxRequest {
-                    unread_only: false,
+                    is_unread_only: false,
                     limit: None
                 }
             )
@@ -160,7 +160,7 @@ mod tests {
                 &mut repo,
                 &actor("ws-1", "t-3"),
                 &InboxRequest {
-                    unread_only: true,
+                    is_unread_only: true,
                     limit: Some(1)
                 }
             )
@@ -191,7 +191,7 @@ mod tests {
                 &mut repo,
                 &actor("ws-1", "t-2"),
                 &InboxRequest {
-                    unread_only: true,
+                    is_unread_only: true,
                     limit: Some(MAX_LIMIT + 50)
                 }
             )
@@ -204,7 +204,7 @@ mod tests {
                 &mut repo,
                 &actor("ws-1", "t-2"),
                 &InboxRequest {
-                    unread_only: true,
+                    is_unread_only: true,
                     limit: None
                 }
             )

@@ -86,7 +86,7 @@ pub fn rewrite_command(
     quoting: Quoting,
 ) -> String {
     let command = command.trim();
-    match crate::pty::agents::integration_of(agent) {
+    match crate::agent_catalog::integration_of(agent) {
         Some("claude") => {
             let mut flags = String::new();
             if let Some(path) = registration.claude_settings {
@@ -290,7 +290,7 @@ impl McpHub {
         let lease = McpLease::new(self, token.clone());
         let hook_url =
             url.trim_end_matches(super::server::MCP_PATH).to_string() + super::hooks::HOOKS_PATH;
-        let integration = crate::pty::agents::integration_of(&agent);
+        let integration = crate::agent_catalog::integration_of(&agent);
         let written = |what: &str, result: std::io::Result<PathBuf>| match result {
             Ok(path) => Some(path),
             Err(error) => {

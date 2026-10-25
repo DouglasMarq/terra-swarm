@@ -1,3 +1,4 @@
+mod agent_catalog;
 pub mod cli;
 mod clock;
 mod fonts;

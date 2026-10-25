@@ -1,7 +1,8 @@
 //! Coding-agent CLIs Terra Swarm knows and which of them are installed.
 
-use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
+use serde::Serialize;
+
+use crate::agent_catalog::catalog;
 
 #[cfg(windows)]
 use super::shell::find_on_path;
@@ -35,53 +36,6 @@ fn is_on_path(id: &str) -> bool {
 #[cfg(windows)]
 fn is_on_path(id: &str) -> bool {
     find_on_path(id).is_some()
-}
-
-/// The shared agent catalog, also read by the frontend.
-const AGENT_CATALOG_JSON: &str = include_str!("../../../src/lib/features/agents.json");
-
-#[derive(Deserialize, Clone, Debug, PartialEq)]
-pub struct CatalogAgent {
-    pub id: String,
-    pub label: String,
-    #[serde(default)]
-    pub resume: Option<String>,
-    /// How Terra connects the agent to its MCP server and state hooks.
-    #[serde(default)]
-    pub integration: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct Catalog {
-    agents: Vec<CatalogAgent>,
-}
-
-/// Coding-agent CLIs Terra Swarm knows, in display order. The id doubles as
-/// the executable name and as the profile id used by the frontend.
-pub fn catalog() -> &'static [CatalogAgent] {
-    static CATALOG: OnceLock<Vec<CatalogAgent>> = OnceLock::new();
-    CATALOG.get_or_init(|| {
-        serde_json::from_str::<Catalog>(AGENT_CATALOG_JSON)
-            .map(|catalog| catalog.agents)
-            .expect("agents.json is compiled in and must parse")
-    })
-}
-
-/// The integration of a known agent ("claude", "codex"), if any.
-pub fn integration_of(agent: &str) -> Option<&'static str> {
-    catalog()
-        .iter()
-        .find(|entry| entry.id == agent)
-        .and_then(|entry| entry.integration.as_deref())
-}
-
-/// Whether `command` is a known agent's continuation command
-/// (`claude --continue`, `codex resume --last`, …).
-pub fn is_resume_command(command: &str) -> bool {
-    let command = command.split_whitespace().collect::<Vec<_>>().join(" ");
-    catalog()
-        .iter()
-        .any(|entry| entry.resume.as_deref() == Some(command.as_str()))
 }
 
 /// Which of `ids` resolve on the user's PATH. On Unix a single login shell
@@ -144,28 +98,6 @@ pub fn detect_agents() -> Vec<AgentInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn continuation_commands_are_recognised() {
-        assert!(is_resume_command("claude --continue"));
-        assert!(is_resume_command("codex  resume --last"));
-        assert!(!is_resume_command("claude"));
-        assert!(!is_resume_command("claude --model opus"));
-    }
-
-    #[test]
-    fn the_catalog_parses_with_unique_ids() {
-        let ids: Vec<&str> = catalog().iter().map(|agent| agent.id.as_str()).collect();
-        let mut unique = ids.clone();
-        unique.sort_unstable();
-        unique.dedup();
-        assert_eq!(unique.len(), ids.len());
-        assert_eq!(ids[0], "claude");
-        assert_eq!(integration_of("claude"), Some("claude"));
-        assert_eq!(integration_of("codex"), Some("codex"));
-        assert_eq!(integration_of("opencode"), None);
-        assert_eq!(integration_of("unknown"), None);
-    }
 
     #[test]
     fn given_an_id_outside_the_catalog_reports_it_unavailable_without_looking_it_up() {

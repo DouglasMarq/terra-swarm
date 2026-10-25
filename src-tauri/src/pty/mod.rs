@@ -196,13 +196,14 @@ impl SpawnOptions {
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct LaunchExtras {
     #[serde(default)]
     pub args: Option<String>,
     #[serde(default)]
     pub env: HashMap<String, String>,
-    #[serde(default)]
-    pub worktree: bool,
+    #[serde(default, alias = "worktree")]
+    pub should_use_worktree: bool,
     #[serde(default)]
     pub role: Option<crate::roles::Role>,
 }
@@ -226,8 +227,8 @@ pub struct TerminalRuntimeInfo {
     pub pid: Option<u32>,
     pub cols: u16,
     pub rows: u16,
-    pub running: bool,
-    pub reaped: bool,
+    pub is_running: bool,
+    pub is_reaped: bool,
     pub generation: u64,
 }
 
@@ -253,8 +254,8 @@ fn runtime_info_from_values(facts: RuntimeFacts<'_>) -> TerminalRuntimeInfo {
         pid: unrecycled_pid(&facts),
         cols: facts.cols,
         rows: facts.rows,
-        running: !facts.is_reaped,
-        reaped: facts.is_reaped,
+        is_running: !facts.is_reaped,
+        is_reaped: facts.is_reaped,
         generation: facts.generation,
     }
 }
@@ -397,7 +398,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
         pane_id: None,
         tab_id: None,
         group_id: None,
-        suspended: false,
+        is_suspended: false,
         worktree,
         role,
     };
@@ -878,7 +879,7 @@ pub fn spawn_terminal(
         shell,
         args: launch.args,
         env: launch.env,
-        should_use_worktree: launch.worktree,
+        should_use_worktree: launch.should_use_worktree,
         worktree_root: None,
         role: launch.role,
     };
@@ -1096,10 +1097,10 @@ pub fn terminal_backlog(
 #[tauri::command(async)]
 pub fn set_durable_scrollback_enabled(
     manager: State<'_, Mutex<PtyManager>>,
-    enabled: bool,
+    is_enabled: bool,
 ) -> Result<(), String> {
     let manager = manager.lock_or_recover();
-    manager.set_durable_scrollback_enabled(enabled);
+    manager.set_durable_scrollback_enabled(is_enabled);
     Ok(())
 }
 
@@ -1227,8 +1228,8 @@ mod runtime_info_tests {
         assert_eq!(info.id, "term-live");
         assert_eq!(info.pid, Some(42));
         assert_eq!((info.cols, info.rows), (120, 40));
-        assert!(info.running);
-        assert!(!info.reaped);
+        assert!(info.is_running);
+        assert!(!info.is_reaped);
         assert_eq!(info.generation, 7);
     }
 
@@ -1243,8 +1244,8 @@ mod runtime_info_tests {
             is_reaped: true,
         });
         assert_eq!(info.pid, None);
-        assert!(!info.running);
-        assert!(info.reaped);
+        assert!(!info.is_running);
+        assert!(info.is_reaped);
     }
 
     #[test]

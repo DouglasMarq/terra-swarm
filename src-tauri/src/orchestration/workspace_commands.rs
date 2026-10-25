@@ -273,7 +273,7 @@ mod tests {
             .iter()
             .find(|terminal| terminal.id == terminal_id)
             .expect("terminal metadata");
-        assert!(terminal.suspended);
+        assert!(terminal.is_suspended);
     }
 
     #[test]
@@ -352,7 +352,7 @@ mod tests {
             let state = app.state::<Mutex<WorkspaceStore>>();
             let mut store = state.lock_or_recover();
             assert_eq!(store.workspaces.len(), 1);
-            assert!(store.workspaces[0].terminals[0].suspended);
+            assert!(store.workspaces[0].terminals[0].is_suspended);
             let next_group = store.create_group("next".to_string());
             assert!(id_number(&next_group.id, "group-") > IMPORTED_ID_NUMBER);
             store.save_path = None;

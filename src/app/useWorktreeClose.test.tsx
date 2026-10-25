@@ -25,7 +25,7 @@ const workspaces: Workspace[] = [
 ];
 
 function status(extra: Partial<WorktreeStatus> = {}): WorktreeStatus {
-  return { branch: "terra/t-1", base: "main", path: "/wt/t-1", dirty: [], ahead: 0, behind: 0, exists: true, ...extra };
+  return { branch: "terra/t-1", base: "main", path: "/wt/t-1", dirty: [], ahead: 0, behind: 0, isPresent: true, ...extra };
 }
 
 describe("useWorktreeClose", () => {

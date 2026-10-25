@@ -27,7 +27,7 @@ export function useSystemNotifications(workspaces: readonly Workspace[]) {
         .filter(
           (terminal) =>
             deriveAgentStatus({
-              isSuspended: terminal.suspended,
+              isSuspended: terminal.isSuspended,
               hasExited: terminal.id in exited,
               notifications: notifications[terminal.id],
               contextUsed: contextUsage[terminal.id],

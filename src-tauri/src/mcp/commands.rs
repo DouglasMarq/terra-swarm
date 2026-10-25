@@ -47,9 +47,9 @@ pub fn mcp_server_info(hub: Hub<'_>) -> ServerInfo {
 }
 
 #[tauri::command(async)]
-pub fn mcp_set_enabled(hub: Hub<'_>, enabled: bool) -> Result<ServerInfo, String> {
+pub fn mcp_set_enabled(hub: Hub<'_>, is_enabled: bool) -> Result<ServerInfo, String> {
     hub.repo()
-        .and_then(|repo| repo.set_enabled(enabled))
+        .and_then(|repo| repo.set_enabled(is_enabled))
         .inspect_err(|error| error.log_internal(COMMAND_FAILED))
         .map_err(|error| error.to_string())?;
     Ok(hub.info())

@@ -86,7 +86,7 @@ export function resolveVoiceAgent(agents: readonly AgentInfo[], target: string):
   const needle = normalizeVoiceText(target);
   return agents.find(
     (candidate) =>
-      candidate.available &&
+      candidate.isAvailable &&
       (normalizeVoiceText(candidate.id) === needle ||
         normalizeVoiceText(candidate.label) === needle),
   ) ?? null;

@@ -13,10 +13,10 @@ const workspace: Workspace = {
 const group: WorkspaceGroup = {
   id: "group-a",
   name: "  ",
-  collapsed: false,
+  isCollapsed: false,
   projectIds: [],
   parentGroupId: null,
-  suspended: false,
+  isSuspended: false,
 };
 
 describe("deriveSnapshot", () => {
@@ -36,7 +36,7 @@ describe("deriveSnapshot", () => {
 
     const { snapshot } = deriveSnapshot({ workspaces: [workspace], groups: [] }, { [containerId]: false }, first.snapshot);
 
-    expect(snapshot.containers[0]).toMatchObject({ visible: false, closed: true });
+    expect(snapshot.containers[0]).toMatchObject({ isVisible: false, isClosed: true });
   });
 
   it("Given an active group that no longer exists, when deriving the snapshot, then no group is active", () => {

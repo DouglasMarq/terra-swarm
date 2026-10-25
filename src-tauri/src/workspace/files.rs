@@ -23,7 +23,7 @@ pub struct WorkspaceFileEntry {
 pub struct WorkspaceFileListing {
     pub path: String,
     pub entries: Vec<WorkspaceFileEntry>,
-    pub truncated: bool,
+    pub is_truncated: bool,
     pub limit: usize,
 }
 
@@ -75,7 +75,7 @@ pub(crate) fn list_directory_entries(
     Ok(WorkspaceFileListing {
         path: relative_path_string(&relative),
         entries,
-        truncated: is_truncated,
+        is_truncated,
         limit,
     })
 }

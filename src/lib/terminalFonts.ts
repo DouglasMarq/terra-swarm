@@ -2,7 +2,7 @@ import { normalizeSearchText } from "./text/normalizeSearchText";
 
 export interface SystemFont {
   name: string;
-  monospace: boolean;
+  isMonospace: boolean;
 }
 
 export const BUNDLED_TERMINAL_FONT = "JetBrains Mono Variable";
@@ -20,5 +20,5 @@ export function terminalFontStack(name: string | null | undefined): string {
 
 export function filterFonts(fonts: readonly SystemFont[], query: string, isMonospaceOnly: boolean): SystemFont[] {
   const needle = normalizeSearchText(query);
-  return fonts.filter((font) => (!isMonospaceOnly || font.monospace) && (!needle || normalizeSearchText(font.name).includes(needle)));
+  return fonts.filter((font) => (!isMonospaceOnly || font.isMonospace) && (!needle || normalizeSearchText(font.name).includes(needle)));
 }

@@ -18,39 +18,39 @@ type HotkeyModifiers = Partial<Omit<Hotkey, "key">>;
 
 const mk = (key: string, modifiers: HotkeyModifiers = {}): Hotkey => ({
   key,
-  meta: false,
-  shift: false,
-  ctrl: false,
-  alt: false,
+  hasMeta: false,
+  hasShift: false,
+  hasCtrl: false,
+  hasAlt: false,
   ...modifiers,
 });
 
 const isMacPlatform = detectShortcutPlatform() === "mac";
 
 const wsSelect = (digit: string): Hotkey =>
-  isMacPlatform ? mk(digit, { meta: true }) : mk(digit, { ctrl: true });
+  isMacPlatform ? mk(digit, { hasMeta: true }) : mk(digit, { hasCtrl: true });
 
 const termSelect = (digit: string): Hotkey =>
-  isMacPlatform ? mk(digit, { meta: true, shift: true }) : mk(digit, { shift: true, ctrl: true });
+  isMacPlatform ? mk(digit, { hasMeta: true, hasShift: true }) : mk(digit, { hasShift: true, hasCtrl: true });
 
 export const DEFAULT_HOTKEYS: Readonly<Record<HotkeyActionId, Hotkey>> = {
-  newWorkspace: isMacPlatform ? mk("n", { meta: true, shift: true }) : mk("n", { shift: true, ctrl: true }),
-  renameWorkspace: isMacPlatform ? mk("r", { meta: true, shift: true }) : mk("r", { shift: true, ctrl: true }),
+  newWorkspace: isMacPlatform ? mk("n", { hasMeta: true, hasShift: true }) : mk("n", { hasShift: true, hasCtrl: true }),
+  renameWorkspace: isMacPlatform ? mk("r", { hasMeta: true, hasShift: true }) : mk("r", { hasShift: true, hasCtrl: true }),
   deleteWorkspace: isMacPlatform
-    ? mk("Backspace", { meta: true, shift: true })
-    : mk("Backspace", { shift: true, ctrl: true }),
-  newTerminal: isMacPlatform ? mk("t", { meta: true }) : mk("t", { shift: true, ctrl: true }),
-  closeTerminal: isMacPlatform ? mk("w", { meta: true }) : mk("w", { shift: true, ctrl: true }),
+    ? mk("Backspace", { hasMeta: true, hasShift: true })
+    : mk("Backspace", { hasShift: true, hasCtrl: true }),
+  newTerminal: isMacPlatform ? mk("t", { hasMeta: true }) : mk("t", { hasShift: true, hasCtrl: true }),
+  closeTerminal: isMacPlatform ? mk("w", { hasMeta: true }) : mk("w", { hasShift: true, hasCtrl: true }),
   maximizeTerminal: isMacPlatform
-    ? mk("Enter", { meta: true })
-    : mk("Enter", { alt: true }),
+    ? mk("Enter", { hasMeta: true })
+    : mk("Enter", { hasAlt: true }),
   minimizeTerminal: isMacPlatform
-    ? mk("Enter", { meta: true, shift: true })
-    : mk("Enter", { shift: true, alt: true }),
-  increaseFontSize: isMacPlatform ? mk("=", { meta: true }) : mk("=", { ctrl: true }),
-  decreaseFontSize: isMacPlatform ? mk("-", { meta: true }) : mk("-", { ctrl: true }),
-  resetFontSize: isMacPlatform ? mk("0", { meta: true }) : mk("0", { ctrl: true }),
-  toggleVoice: isMacPlatform ? mk(" ", { meta: true, shift: true }) : mk(" ", { shift: true, ctrl: true }),
+    ? mk("Enter", { hasMeta: true, hasShift: true })
+    : mk("Enter", { hasShift: true, hasAlt: true }),
+  increaseFontSize: isMacPlatform ? mk("=", { hasMeta: true }) : mk("=", { hasCtrl: true }),
+  decreaseFontSize: isMacPlatform ? mk("-", { hasMeta: true }) : mk("-", { hasCtrl: true }),
+  resetFontSize: isMacPlatform ? mk("0", { hasMeta: true }) : mk("0", { hasCtrl: true }),
+  toggleVoice: isMacPlatform ? mk(" ", { hasMeta: true, hasShift: true }) : mk(" ", { hasShift: true, hasCtrl: true }),
   selectWorkspace1: wsSelect("1"),
   selectWorkspace2: wsSelect("2"),
   selectWorkspace3: wsSelect("3"),
@@ -121,11 +121,11 @@ export function normalizeHotkeyForPlatform(
   hotkey: Hotkey,
   platform: ShortcutPlatform = detectShortcutPlatform(),
 ): Hotkey {
-  if (platform === "other" && hotkey.meta && !hotkey.ctrl) {
-    return { ...hotkey, meta: false, ctrl: true };
+  if (platform === "other" && hotkey.hasMeta && !hotkey.hasCtrl) {
+    return { ...hotkey, hasMeta: false, hasCtrl: true };
   }
-  if (platform === "mac" && hotkey.ctrl && !hotkey.meta) {
-    return { ...hotkey, ctrl: false, meta: true };
+  if (platform === "mac" && hotkey.hasCtrl && !hotkey.hasMeta) {
+    return { ...hotkey, hasCtrl: false, hasMeta: true };
   }
   return { ...hotkey };
 }
@@ -184,12 +184,27 @@ function loadAgentNames(): Record<string, string> {
   return {};
 }
 
-const HOTKEY_MODIFIERS = ["meta", "shift", "ctrl", "alt"] as const;
+const LEGACY_HOTKEY_MODIFIERS = {
+  hasMeta: "meta",
+  hasShift: "shift",
+  hasCtrl: "ctrl",
+  hasAlt: "alt",
+} as const satisfies Record<keyof HotkeyModifiers, string>;
 
-function isStoredHotkey(value: unknown): value is Hotkey {
-  if (!isRecord(value)) return false;
-  if (typeof value.key !== "string" || value.key.length === 0) return false;
-  return HOTKEY_MODIFIERS.every((modifier) => typeof value[modifier] === "boolean");
+function readStoredModifier(value: Record<string, unknown>, modifier: keyof HotkeyModifiers): boolean | null {
+  const stored = value[modifier] ?? value[LEGACY_HOTKEY_MODIFIERS[modifier]];
+  return typeof stored === "boolean" ? stored : null;
+}
+
+function readStoredHotkey(value: unknown): Hotkey | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.key !== "string" || value.key.length === 0) return null;
+  const hasMeta = readStoredModifier(value, "hasMeta");
+  const hasShift = readStoredModifier(value, "hasShift");
+  const hasCtrl = readStoredModifier(value, "hasCtrl");
+  const hasAlt = readStoredModifier(value, "hasAlt");
+  if (hasMeta === null || hasShift === null || hasCtrl === null || hasAlt === null) return null;
+  return { key: value.key, hasMeta, hasShift, hasCtrl, hasAlt };
 }
 
 function parseHotkeys(raw: string): Record<HotkeyActionId, Hotkey> {
@@ -197,15 +212,9 @@ function parseHotkeys(raw: string): Record<HotkeyActionId, Hotkey> {
   const stored = isRecord(parsed) ? parsed : {};
   const clean: Record<HotkeyActionId, Hotkey> = { ...DEFAULT_HOTKEYS };
   for (const { id: action } of HOTKEY_ACTIONS) {
-    const hotkey = stored[action];
-    if (!isStoredHotkey(hotkey)) continue;
-    clean[action] = normalizeHotkeyForPlatform({
-      key: hotkey.key,
-      meta: hotkey.meta,
-      shift: hotkey.shift,
-      ctrl: hotkey.ctrl,
-      alt: hotkey.alt,
-    });
+    const hotkey = readStoredHotkey(stored[action]);
+    if (!hotkey) continue;
+    clean[action] = normalizeHotkeyForPlatform(hotkey);
   }
   return clean;
 }
@@ -225,10 +234,10 @@ export function formatHotkey(hotkey: Hotkey, platform?: ShortcutPlatform): strin
 export function matchHotkey(event: KeyboardEvent, hotkey: Hotkey): boolean {
   return (
     event.key.toLowerCase() === hotkey.key.toLowerCase() &&
-    event.metaKey === hotkey.meta &&
-    event.ctrlKey === hotkey.ctrl &&
-    event.altKey === hotkey.alt &&
-    event.shiftKey === hotkey.shift
+    event.metaKey === hotkey.hasMeta &&
+    event.ctrlKey === hotkey.hasCtrl &&
+    event.altKey === hotkey.hasAlt &&
+    event.shiftKey === hotkey.hasShift
   );
 }
 

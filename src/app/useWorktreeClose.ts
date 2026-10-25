@@ -44,7 +44,7 @@ export function useWorktreeClose(workspaces: readonly Workspace[], sessions: Wor
       useTerminalRuntimeStore.getState().pushSystemNotification(translateNow("app.worktreeStatusFailed", { detail: String(error) }));
       return;
     }
-    if (!status || !status.exists) {
+    if (!status || !status.isPresent) {
       await sessions.close(terminalId);
       return;
     }

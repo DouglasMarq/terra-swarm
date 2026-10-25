@@ -183,13 +183,13 @@ function selectGroupPtyIds(snapshot: WorkspaceSnapshotV2, groupId: string): stri
 export const getGroupPtyIds = selectGroupPtyIds;
 function selectOrphanedTabs(snapshot: WorkspaceSnapshotV2): TerminalTab[] {
   const orphanIds = new Set(snapshot.orphanedTabIds);
-  return snapshot.tabs.filter((tab) => tab.orphaned || orphanIds.has(tab.id));
+  return snapshot.tabs.filter((tab) => tab.isOrphaned || orphanIds.has(tab.id));
 }
 
 export const getOrphanedTabs = selectOrphanedTabs;
 
 export function isContainerVisible(container: WorkspaceContainer | null | undefined): boolean {
-  return Boolean(container && !container.closed && container.visible);
+  return Boolean(container && !container.isClosed && container.isVisible);
 }
 
 export function shouldTerminatePtyWhenContainerCloses(): false {

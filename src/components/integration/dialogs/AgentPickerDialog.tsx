@@ -51,9 +51,9 @@ export function AgentPickerDialog({
         ) : (
           agents.map((agent) => (
             <button
-              aria-label={agent.available ? agent.label : translate("dialogs.picker.unavailableNamed", { name: agent.label })}
+              aria-label={agent.isAvailable ? agent.label : translate("dialogs.picker.unavailableNamed", { name: agent.label })}
               className={styles.agentOption}
-              disabled={!agent.available}
+              disabled={!agent.isAvailable}
               key={agent.id}
               onClick={() => void onChoose(agent.id)}
               type="button"
@@ -62,7 +62,7 @@ export function AgentPickerDialog({
                 {agent.id}
               </span>
               <span className={styles.agentLabel}>{agent.label}</span>
-              {agent.available ? (
+              {agent.isAvailable ? (
                 <Check aria-hidden="true" size={15} strokeWidth={1.8} />
               ) : (
                 <span className={styles.agentMissing}>

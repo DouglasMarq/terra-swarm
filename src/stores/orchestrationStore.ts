@@ -109,15 +109,15 @@ function updateSnapshotContainerState(
   if (!container) return snapshot;
   const nextContainer: WorkspaceContainer = {
     ...container,
-    ...(patch.visible === undefined ? {} : { visible: patch.visible, closed: !patch.visible }),
-    ...(patch.closed === undefined ? {} : { closed: patch.closed, visible: !patch.closed }),
-    ...(patch.collapsed === undefined ? {} : { collapsed: patch.collapsed }),
-    ...(patch.fullscreen === undefined ? {} : { fullscreen: patch.fullscreen }),
+    ...(patch.isVisible === undefined ? {} : { isVisible: patch.isVisible, isClosed: !patch.isVisible }),
+    ...(patch.isClosed === undefined ? {} : { isClosed: patch.isClosed, isVisible: !patch.isClosed }),
+    ...(patch.isCollapsed === undefined ? {} : { isCollapsed: patch.isCollapsed }),
+    ...(patch.isFullscreen === undefined ? {} : { isFullscreen: patch.isFullscreen }),
     ...(patch.internalLayout === undefined ? {} : { internalLayout: patch.internalLayout }),
     ...(patch.size === undefined ? {} : { size: patch.size }),
-    ...(patch.activePaneId === undefined && !patch.clearActivePane
+    ...(patch.activePaneId === undefined && !patch.shouldClearActivePane
       ? {}
-      : { activePaneId: patch.clearActivePane ? null : patch.activePaneId ?? null }),
+      : { activePaneId: patch.shouldClearActivePane ? null : patch.activePaneId ?? null }),
     ...(patch.layout === undefined ? {} : { layout: normalizeLayout(patch.layout) }),
   };
   return {
@@ -301,7 +301,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
       if (knownContainerIds.has(id)) containerVisibility[id] = isVisible;
     }
     for (const container of derived.snapshot.containers) {
-      containerVisibility[container.id] = container.visible;
+      containerVisibility[container.id] = container.isVisible;
     }
     persist({ containerVisibility, flags: state.flags, snapshot: derived.snapshot, detachedTerminalIds });
     set({
@@ -342,15 +342,15 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
       [containerId]: isVisible,
     };
     const snapshot = updateSnapshotContainerState(get().snapshot, containerId, {
-      visible: isVisible,
-      closed: !isVisible,
+      isVisible,
+      isClosed: !isVisible,
     });
     const container = snapshot?.containers.find((candidate) => candidate.id === containerId);
     if (container?.projectId) {
       persistCommand(
         workspaceApi.setWorkspaceContainerState(container.projectId, containerId, {
-          visible: isVisible,
-          closed: !isVisible,
+          isVisible,
+          isClosed: !isVisible,
         }),
         "container visibility",
         [`container:${containerId}`],
@@ -379,12 +379,12 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     const normalizedPatch: WorkspaceContainerPatch = {
       ...patch,
       ...(patch.activePaneId === null
-        ? { activePaneId: undefined, clearActivePane: true }
+        ? { activePaneId: undefined, shouldClearActivePane: true }
         : {}),
     };
     let snapshot = updateSnapshotContainerState(current, containerId, patch);
-    if (snapshot && projectId && (patch.activePaneId !== undefined || patch.clearActivePane)) {
-      const activePaneId = patch.clearActivePane ? null : patch.activePaneId ?? null;
+    if (snapshot && projectId && (patch.activePaneId !== undefined || patch.shouldClearActivePane)) {
+      const activePaneId = patch.shouldClearActivePane ? null : patch.activePaneId ?? null;
       snapshot = {
         ...snapshot,
         activeProjectId: projectId,
@@ -398,11 +398,11 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
       };
     }
     const containerVisibility = { ...get().containerVisibility };
-    if (patch.visible !== undefined) containerVisibility[containerId] = patch.visible;
-    if (patch.closed !== undefined) containerVisibility[containerId] = !patch.closed;
+    if (patch.isVisible !== undefined) containerVisibility[containerId] = patch.isVisible;
+    if (patch.isClosed !== undefined) containerVisibility[containerId] = !patch.isClosed;
     if (projectId) {
       const targets = [`container:${containerId}`];
-      if (patch.activePaneId !== undefined || patch.clearActivePane) {
+      if (patch.activePaneId !== undefined || patch.shouldClearActivePane) {
         targets.push("active-pane", `project:${projectId}`);
       }
       persistCommand(
@@ -418,15 +418,15 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
   },
 
   setContainerCollapsed: (containerId, isCollapsed) =>
-    get().setContainerState(containerId, { collapsed: isCollapsed }),
+    get().setContainerState(containerId, { isCollapsed }),
 
   setContainerFullscreen: (containerId, isFullscreen) =>
-    get().setContainerState(containerId, { fullscreen: isFullscreen }),
+    get().setContainerState(containerId, { isFullscreen }),
 
   setContainerActivePane: (containerId, paneId) =>
     get().setContainerState(containerId, {
       activePaneId: paneId,
-      ...(paneId === null ? { clearActivePane: true } : {}),
+      ...(paneId === null ? { shouldClearActivePane: true } : {}),
     }),
 
   setContainerInternalLayout: (containerId, internalLayout) =>
@@ -570,7 +570,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     const next = {
       ...snapshot,
       projects: snapshot.projects.map((project) =>
-        project.id === projectId ? { ...project, collapsed: isCollapsed } : project,
+        project.id === projectId ? { ...project, isCollapsed } : project,
       ),
     };
     persistCommand(
@@ -584,12 +584,12 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
 
   setGroupSuspended: (groupId, isSuspended) => {
     markNewerProjection();
-    const snapshot = patchGroup(get().snapshot, groupId, { suspended: isSuspended });
+    const snapshot = patchGroup(get().snapshot, groupId, { isSuspended });
     persist({ ...get(), snapshot });
     set({
       snapshot,
       groups: get().groups.map((group) =>
-        group.id === groupId ? { ...group, suspended: isSuspended } : group,
+        group.id === groupId ? { ...group, isSuspended } : group,
       ),
     });
   },

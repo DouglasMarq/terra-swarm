@@ -70,7 +70,7 @@ export function useVoiceSettings({ isSettingsOpen, isVoiceSectionOpen }: VoiceSe
   const applyStoredSettings = () => {
     if (!prefs.getState().isVoiceEnabled) return;
     api
-      .voiceMicAvailable()
+      .voiceIsMicAvailable()
       .then((isAvailable) => {
         setMicAvailable(isAvailable);
         if (!isAvailable) disableVoice(false);
@@ -85,7 +85,7 @@ export function useVoiceSettings({ isSettingsOpen, isVoiceSectionOpen }: VoiceSe
       return;
     }
     api
-      .voiceMicAvailable()
+      .voiceIsMicAvailable()
       .then((isAvailable) => {
         setMicAvailable(isAvailable);
         if (!isAvailable) return;
@@ -169,7 +169,7 @@ export function useVoiceSettings({ isSettingsOpen, isVoiceSectionOpen }: VoiceSe
 
   useEffect(() => {
     if (!isSettingsOpen) return;
-    api.voiceMicAvailable().then(setMicAvailable).catch(warn("could not check the microphone"));
+    api.voiceIsMicAvailable().then(setMicAvailable).catch(warn("could not check the microphone"));
     refreshModels();
     if (isVoiceEnabled) refreshInputDevices();
     api.listShells().then(setAvailableShells).catch(warn("could not list shells"));

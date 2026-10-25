@@ -67,12 +67,12 @@ impl WorkspaceStore {
             },
             color: None,
             icon_url: None,
-            collapsed: false,
+            is_collapsed: false,
             project_ids: Vec::new(),
             parent_group_id: None,
             layout_mode: Some(default_layout_mode()),
-            suspended: false,
-            archived: false,
+            is_suspended: false,
+            is_archived: false,
             created_at: Some(crate::clock::now_epoch_millis()),
         };
         self.groups.push(group.clone());
@@ -118,7 +118,7 @@ impl WorkspaceStore {
     pub fn suspend_group(&mut self, id: &str) -> Result<(), String> {
         let suspended_ids: HashSet<String> = self.group_terminal_ids(id)?.into_iter().collect();
         let group = self.group(id)?.clone();
-        self.group_mut(id)?.suspended = true;
+        self.group_mut(id)?.is_suspended = true;
         for workspace in self
             .workspaces
             .iter_mut()
@@ -131,7 +131,7 @@ impl WorkspaceStore {
 
     pub fn resume_group(&mut self, id: &str) -> Result<(), String> {
         let group = self.group_mut(id)?;
-        group.suspended = false;
+        group.is_suspended = false;
         Ok(())
     }
 }
@@ -143,7 +143,7 @@ fn is_member(workspace: &Workspace, group: &Group) -> bool {
 
 fn suspend_workspace_sessions(workspace: &mut Workspace, suspended_ids: &HashSet<String>) {
     for terminal in &mut workspace.terminals {
-        terminal.suspended = true;
+        terminal.is_suspended = true;
     }
     for tab in workspace
         .panes
@@ -155,7 +155,7 @@ fn suspend_workspace_sessions(workspace: &mut Workspace, suspended_ids: &HashSet
             .as_ref()
             .is_some_and(|pty_id| suspended_ids.contains(pty_id))
         {
-            tab.suspended = true;
+            tab.is_suspended = true;
         }
     }
 }

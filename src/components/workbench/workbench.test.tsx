@@ -19,7 +19,7 @@ const snapshot: WorkspaceSnapshotV2 = {
     activePaneId: "pane-1",
     activeContainerId: "container-1",
     layout: { mode: "auto", itemIds: ["container-1"] },
-    collapsed: false,
+    isCollapsed: false,
   }],
   groups: [],
   containers: [{
@@ -27,10 +27,10 @@ const snapshot: WorkspaceSnapshotV2 = {
     projectId: "project-1",
     paneIds: ["pane-1"],
     layout: { mode: "auto", itemIds: ["pane-1"] },
-    visible: true,
-    collapsed: false,
-    closed: false,
-    fullscreen: false,
+    isVisible: true,
+    isCollapsed: false,
+    isClosed: false,
+    isFullscreen: false,
   }],
   panes: [{
     id: "pane-1",
@@ -48,7 +48,7 @@ const snapshot: WorkspaceSnapshotV2 = {
     cwd: "/tmp/terra-api",
     width: 100,
     title: "Luna Max",
-    orphaned: false,
+    isOrphaned: false,
   }],
   orphanedTabIds: [],
   activeProjectId: "project-1",
@@ -219,7 +219,7 @@ describe("WorkspaceWorkbench", () => {
       id: "container-2",
       projectId: "project-2",
       paneIds: ["pane-2"],
-      collapsed: true,
+      isCollapsed: true,
     };
     const secondPane = {
       ...snapshot.panes[0],

@@ -162,10 +162,10 @@ pub fn set_workspace_collapsed(
     app: AppHandle,
     store: State<'_, Mutex<WorkspaceStore>>,
     workspace_id: String,
-    collapsed: bool,
+    is_collapsed: bool,
 ) -> Result<(), String> {
     update_and_notify(&app, &store, |store| {
-        store.set_collapsed(&workspace_id, collapsed)
+        store.set_collapsed(&workspace_id, is_collapsed)
     })
 }
 

@@ -17,7 +17,7 @@ function pressKey(init: KeyboardEventInit, target: EventTarget = window) {
 }
 
 function fullscreenContainer(id: string): WorkspaceContainer {
-  return { id, projectId: null, paneIds: [], layout: { mode: "grid" }, visible: true, collapsed: false, closed: false, fullscreen: true };
+  return { id, projectId: null, paneIds: [], layout: { mode: "grid" }, isVisible: true, isCollapsed: false, isClosed: false, isFullscreen: true };
 }
 
 function snapshotWithFullscreen(containerIds: readonly string[]): WorkspaceSnapshotV2 {

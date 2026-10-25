@@ -49,7 +49,7 @@ export function useFileEditor(target: EditorTarget | null): FileEditor {
   }, [load]);
 
   const save = async (shouldOverwrite = false): Promise<boolean> => {
-    if (!target || !file || isSaving || file.binary) return false;
+    if (!target || !file || isSaving || file.isBinary) return false;
     setIsSaving(true);
     setSaveError(null);
     try {

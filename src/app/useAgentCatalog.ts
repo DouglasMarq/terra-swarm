@@ -22,6 +22,6 @@ export function useAgentCatalog() {
     agents,
     detect,
     whenReady: () => ready.current,
-    isAvailable: (id: string) => latest.current.some((agent) => agent.id === id && agent.available),
+    isAvailable: (id: string) => latest.current.some((agent) => agent.id === id && agent.isAvailable),
   };
 }

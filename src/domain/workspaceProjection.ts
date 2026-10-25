@@ -60,14 +60,14 @@ function toDomainGroups(
         name: source.name.trim() || source.id,
         projectIds: projectIdsForGroup,
         parentGroupId,
-        collapsed: Boolean(source.collapsed),
-        suspended: Boolean(source.suspended),
+        isCollapsed: Boolean(source.isCollapsed),
+        isSuspended: Boolean(source.isSuspended),
         layout: mergeWorkspaceLayout(
           { previous: previous?.layout, incoming: { ...layout, itemIds: projectIdsForGroup } },
           new Set(projectIdsForGroup),
           DEFAULT_WORKSPACE_LAYOUT,
         ),
-        ...(("archived" in source && source.archived) ? { archived: true } : {}),
+        ...(("isArchived" in source && source.isArchived) ? { isArchived: true } : {}),
       };
     });
 }
@@ -89,14 +89,14 @@ export function deriveSnapshot(
       workspace && workspace.groupId !== undefined
         ? workspace.groupId
         : project.groupId ?? null;
-    project.collapsed = workspace?.collapsed ?? project.collapsed;
-    project.archived = workspace?.archived ?? project.archived;
+    project.isCollapsed = workspace?.isCollapsed ?? project.isCollapsed;
+    project.isArchived = workspace?.isArchived ?? project.isArchived;
   }
 
   for (const container of snapshot.containers) {
     const isVisible = visibility[container.id] ?? true;
-    container.visible = isVisible;
-    container.closed = !isVisible;
+    container.isVisible = isVisible;
+    container.isClosed = !isVisible;
   }
 
   const groups = toDomainGroups(source, snapshot, previous?.groups ?? snapshot.groups);

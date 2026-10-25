@@ -45,6 +45,16 @@ describe("agent profiles", () => {
     const disabled = normalizeAgentProfile({ id: "silent", voicePromptBehavior: false });
     expect(buildVoicePrompt(disabled, "keep this text")).toBe("keep this text");
   });
+
+  it("Given a voice behavior saved with the old enabled name, when normalizing it, then the flag survives under the new name", () => {
+    const profile = normalizeAgentProfile({
+      id: "voice-agent",
+      voicePromptBehavior: { enabled: false, mode: "append" },
+    });
+    expect(profile.voicePromptBehavior.isEnabled).toBe(false);
+    expect(profile.voicePromptBehavior).not.toHaveProperty("enabled");
+    expect(buildVoicePrompt(profile, "keep this text")).toBe("keep this text");
+  });
 });
 
 describe("freshCommand", () => {
@@ -67,7 +77,7 @@ describe("fallbackProfile", () => {
       label: "my-agent",
       command: "my-agent",
       resumeCommandStrategy: { kind: "original" },
-      voicePromptBehavior: { enabled: true, mode: "append", prefix: "", suffix: "" },
+      voicePromptBehavior: { isEnabled: true, mode: "append", prefix: "", suffix: "" },
     });
   });
 });

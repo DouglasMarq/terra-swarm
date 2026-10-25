@@ -10,7 +10,7 @@ export interface WorkspaceFileEntry {
 export interface WorkspaceFileContent {
   path: string;
   content: string;
-  binary: boolean;
+  isBinary: boolean;
   size: number;
   modified: number;
 }
@@ -23,6 +23,6 @@ export interface WorkspaceFileSaved {
 export interface WorkspaceFileListing {
   path: string;
   entries: WorkspaceFileEntry[];
-  truncated: boolean;
+  isTruncated: boolean;
   limit: number;
 }

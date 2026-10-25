@@ -51,7 +51,7 @@ describe("resolveVoiceTerminal", () => {
 
 describe("resolveVoiceGroup", () => {
   const groups: WorkspaceGroup[] = [
-    { id: "group-front", name: "Frontend", collapsed: false, projectIds: [], parentGroupId: null, suspended: false },
+    { id: "group-front", name: "Frontend", isCollapsed: false, projectIds: [], parentGroupId: null, isSuspended: false },
   ];
 
   it("Given a group name or id, when resolving, then it returns the group id", () => {
@@ -66,8 +66,8 @@ describe("resolveVoiceGroup", () => {
 
 describe("resolveVoiceAgent", () => {
   const agents = [
-    { id: "claude", label: "Claude Code", available: true },
-    { id: "gemini", label: "Gemini", available: false },
+    { id: "claude", label: "Claude Code", isAvailable: true },
+    { id: "gemini", label: "Gemini", isAvailable: false },
   ];
 
   it("Given an available agent's label, when resolving, then it returns that agent", () => {

@@ -58,7 +58,7 @@ export interface TeamRoster {
 
 export function planTeam(template: TeamTemplate, roster: TeamRoster): TeamPlan {
   const { agents, defaultAgent, canIsolate } = roster;
-  const available = agents.filter((agent) => agent.available && agent.id !== "shell");
+  const available = agents.filter((agent) => agent.isAvailable && agent.id !== "shell");
   const has = (id: string | null): id is string => Boolean(id && available.some((agent) => agent.id === id));
   const fallback = has(defaultAgent) ? defaultAgent : available[0]?.id ?? null;
   if (!fallback) return { members: [], isBlocked: true };

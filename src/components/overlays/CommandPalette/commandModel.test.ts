@@ -28,16 +28,16 @@ const groups: WorkspaceGroup[] = [
   {
     id: "grp-core",
     name: "Núcleo",
-    collapsed: false,
+    isCollapsed: false,
     projectIds: ["ws-terra"],
     parentGroupId: null,
-    suspended: false,
+    isSuspended: false,
   },
 ];
 
 const agents: AgentInfo[] = [
-  { id: "codex", label: "Codex", available: true },
-  { id: "claude", label: "Claude Code", available: false },
+  { id: "codex", label: "Codex", isAvailable: true },
+  { id: "claude", label: "Claude Code", isAvailable: false },
 ];
 
 describe("command palette model", () => {

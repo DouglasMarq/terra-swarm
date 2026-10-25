@@ -20,7 +20,7 @@ function projectLabel(props: ProjectContainerProps): string {
 export function ProjectContainer({
   projection,
   renderTab,
-  isVisible = projection.container.visible && !projection.container.closed,
+  isVisible = projection.container.isVisible && !projection.container.isClosed,
   onCollapseContainer,
   onFullscreenContainer,
   onHideContainer,
@@ -66,19 +66,19 @@ export function ProjectContainer({
       className="terra-project-container"
       data-container-id={container.id}
       data-visible={isVisible}
-      data-collapsed={container.collapsed}
-      data-fullscreen={container.fullscreen}
+      data-collapsed={container.isCollapsed}
+      data-fullscreen={container.isFullscreen}
       aria-hidden={!isVisible}
     >
       <header className="terra-project-container__header">
         <button
           type="button"
           className="terra-project-container__action"
-          aria-label={translate(container.collapsed ? "workbench.expand" : "workbench.collapse", { name: label })}
-          aria-expanded={!container.collapsed}
-          onClick={() => onCollapseContainer?.(container.id, !container.collapsed)}
+          aria-label={translate(container.isCollapsed ? "workbench.expand" : "workbench.collapse", { name: label })}
+          aria-expanded={!container.isCollapsed}
+          onClick={() => onCollapseContainer?.(container.id, !container.isCollapsed)}
         >
-          {container.collapsed ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+          {container.isCollapsed ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
         </button>
         <span className="terra-project-container__title">
           {label}
@@ -123,11 +123,11 @@ export function ProjectContainer({
             <button
               type="button"
               className="terra-project-container__action"
-              aria-label={translate(container.fullscreen ? "workbench.exitFullscreen" : "workbench.fullscreen", { name: label })}
-              aria-pressed={container.fullscreen}
-              onClick={() => onFullscreenContainer(container.id, !container.fullscreen)}
+              aria-label={translate(container.isFullscreen ? "workbench.exitFullscreen" : "workbench.fullscreen", { name: label })}
+              aria-pressed={container.isFullscreen}
+              onClick={() => onFullscreenContainer(container.id, !container.isFullscreen)}
             >
-              {container.fullscreen ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
+              {container.isFullscreen ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
             </button>
           ) : null}
           {onHideContainer ? (

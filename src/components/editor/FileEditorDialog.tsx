@@ -8,7 +8,7 @@ import { DialogFooter, TerraDialog } from "../overlays/Dialog";
 import { Button } from "../ui/Button";
 import "./editor.css";
 
-const SAVE_SHORTCUT: ShortcutDefinition = { key: "s", meta: true, shift: false, ctrl: false, alt: false };
+const SAVE_SHORTCUT: ShortcutDefinition = { key: "s", hasMeta: true, hasShift: false, hasCtrl: false, hasAlt: false };
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
 
@@ -65,7 +65,7 @@ export function FileEditorDialog() {
       <div className="terra-editor-body">
         {loadError ? (
           <p className="terra-editor-message" role="alert">{loadError}</p>
-        ) : file?.binary ? (
+        ) : file?.isBinary ? (
           <p className="terra-editor-message">{translate("editor.binary")}</p>
         ) : file ? (
           <Suspense fallback={<p className="terra-editor-message">{translate("editor.loading")}</p>}>
@@ -92,7 +92,7 @@ export function FileEditorDialog() {
             </Button>
           </>
         ) : (
-          <Button type="button" variant="primary" onClick={() => void save()} disabled={!isDirty || isSaving || !file || file.binary}>
+          <Button type="button" variant="primary" onClick={() => void save()} disabled={!isDirty || isSaving || !file || file.isBinary}>
             <Save size={14} aria-hidden="true" />
             {isSaving ? translate("editor.saving") : translate("editor.save")}
           </Button>

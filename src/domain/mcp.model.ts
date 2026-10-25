@@ -58,11 +58,11 @@ export interface McpAgentStatus {
 }
 
 export interface McpServerInfo {
-  enabled: boolean;
-  available: boolean;
-  running: boolean;
+  isEnabled: boolean;
+  isAvailable: boolean;
+  isRunning: boolean;
   url: string | null;
   port: number | null;
-  db_path: string | null;
+  dbPath: string | null;
   error: string | null;
 }

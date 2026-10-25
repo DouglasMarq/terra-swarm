@@ -43,7 +43,7 @@ import { formatShortcut } from "../../lib/platform/shortcuts";
 import styles from "./SettingsDialog.module.css";
 
 const cx = (...classes: Array<string | undefined | false>) => classes.filter(Boolean).join(" ");
-const SEARCH_HOTKEY = { key: "k", meta: true, shift: false, ctrl: false, alt: false } as const;
+const SEARCH_HOTKEY = { key: "k", hasMeta: true, hasShift: false, hasCtrl: false, hasAlt: false } as const;
 
 const SECTION_ICONS: Record<SettingsSectionId, LucideIcon> = {
   general: SlidersHorizontal,

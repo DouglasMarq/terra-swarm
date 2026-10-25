@@ -20,7 +20,7 @@ async function loaded() {
 
 describe("useFileEditor", () => {
   beforeEach(() => {
-    api.readWorkspaceFile.mockReset().mockResolvedValue({ path: "src/a.ts", content: "one", binary: false, size: 3, modified: 10 });
+    api.readWorkspaceFile.mockReset().mockResolvedValue({ path: "src/a.ts", content: "one", isBinary: false, size: 3, modified: 10 });
     api.writeWorkspaceFile.mockReset();
   });
 

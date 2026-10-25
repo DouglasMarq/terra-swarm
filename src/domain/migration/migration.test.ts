@@ -30,8 +30,8 @@ describe("migrateLegacyWorkspaces", () => {
     expect(snapshot.containers[0]).toMatchObject({
       projectId: "ws-alpha",
       paneIds: ["pane-ws-alpha-1", "pane-ws-alpha-2"],
-      visible: true,
-      closed: false,
+      isVisible: true,
+      isClosed: false,
     });
     expect(snapshot.panes.map((pane) => pane.tabIds)).toEqual([["tab-ws-alpha-1"], ["tab-ws-alpha-2"]]);
     expect(snapshot.tabs).toMatchObject([
@@ -41,14 +41,14 @@ describe("migrateLegacyWorkspaces", () => {
         ptyId: "pty-1",
         command: "codex",
         cwd: "/work/alpha",
-        orphaned: false,
+        isOrphaned: false,
       },
       {
         id: "tab-ws-alpha-2",
         paneId: "pane-ws-alpha-2",
         ptyId: "pty-2",
         command: "bash",
-        orphaned: false,
+        isOrphaned: false,
       },
     ]);
     expect(snapshot.activeProjectId).toBe("ws-alpha");
@@ -66,7 +66,7 @@ describe("migrateLegacyWorkspaces", () => {
         activePaneId: "p-c",
         containers: [
           { id: "c-left", paneIds: ["p-b", "p-a"], activePaneId: "p-a" },
-          { id: "c-right", visible: false, size: 30 },
+          { id: "c-right", isVisible: false, size: 30 },
         ],
         panes: [
           { id: "p-a", activeTabId: "t-a2", tabs: [{ id: "t-a2" }, { id: "t-a1" }] },
@@ -89,8 +89,8 @@ describe("migrateLegacyWorkspaces", () => {
       groupId: "group-1",
     });
     expect(snapshot.containers).toMatchObject([
-      { id: "c-left", paneIds: ["p-b", "p-a"], activePaneId: "p-a", visible: true },
-      { id: "c-right", paneIds: ["p-c"], activePaneId: "p-c", visible: false, closed: true, size: 30 },
+      { id: "c-left", paneIds: ["p-b", "p-a"], activePaneId: "p-a", isVisible: true },
+      { id: "c-right", paneIds: ["p-c"], activePaneId: "p-c", isVisible: false, isClosed: true, size: 30 },
     ]);
     expect(snapshot.panes.find((pane) => pane.id === "p-a")).toMatchObject({
       tabIds: ["t-a2", "t-a1"],
@@ -100,7 +100,7 @@ describe("migrateLegacyWorkspaces", () => {
     expect(snapshot.tabs.find((tab) => tab.id === "t-b")).toMatchObject({
       paneId: "p-b",
       legacyWorkspaceId: "ws-split",
-      orphaned: false,
+      isOrphaned: false,
     });
   });
 
@@ -143,7 +143,7 @@ describe("migrateLegacyWorkspaces", () => {
 
     expect(snapshot.tabs).toHaveLength(4);
     expect(snapshot.tabs[0]?.ptyId).toBe("dup");
-    expect(snapshot.tabs.slice(1).every((tab) => tab.orphaned)).toBe(true);
+    expect(snapshot.tabs.slice(1).every((tab) => tab.isOrphaned)).toBe(true);
     expect(snapshot.tabs.slice(1).map((tab) => tab.legacyTerminalId)).toEqual(["dup", undefined, undefined]);
     expect(snapshot.orphanedTabIds).toEqual([
       "tab-ws-1-2",
@@ -180,7 +180,7 @@ describe("normalizeSnapshotV2", () => {
           name: "Group",
           projectIds: ["project-1", "missing-project"],
           parentGroupId: "missing-parent",
-          suspended: true,
+          isSuspended: true,
         },
       ],
       containers: [
@@ -188,8 +188,8 @@ describe("normalizeSnapshotV2", () => {
           id: "container-1",
           projectId: "project-1",
           paneIds: ["pane-1", "missing-pane"],
-          visible: false,
-          closed: false,
+          isVisible: false,
+          isClosed: false,
         },
       ],
       panes: [
@@ -221,11 +221,11 @@ describe("normalizeSnapshotV2", () => {
     expect(normalized.groups[0]).toMatchObject({
       projectIds: ["project-1"],
       parentGroupId: null,
-      suspended: true,
+      isSuspended: true,
     });
     expect(normalized.containers[0]).toMatchObject({
-      visible: false,
-      closed: true,
+      isVisible: false,
+      isClosed: true,
       paneIds: ["pane-1"],
     });
     expect(normalized.panes[0]?.activeTabId).toBe("tab-1");
@@ -234,7 +234,7 @@ describe("normalizeSnapshotV2", () => {
       id: "tab-orphan",
       paneId: null,
       ptyId: "pty-orphan",
-      orphaned: true,
+      isOrphaned: true,
     });
     expect(normalized.orphanedTabIds).toEqual(["tab-orphan"]);
     expect(normalized.activeProjectId).toBe("project-1");
@@ -256,6 +256,47 @@ describe("normalizeSnapshotV2", () => {
   });
 });
 
+describe("snapshots and workspaces with the old flag names", () => {
+  it("Given a snapshot exported with the old flag names, when normalizing it, then every flag survives under the new names", () => {
+    const normalized = normalizeSnapshotV2({
+      version: 2,
+      projects: [
+        { id: "project-1", name: "Project", cwd: "/project", paneIds: ["pane-1"], containerIds: ["container-1"], collapsed: true, archived: true },
+      ],
+      groups: [{ id: "group-1", name: "Group", projectIds: ["project-1"], collapsed: true, suspended: true }],
+      containers: [
+        { id: "container-1", projectId: "project-1", paneIds: ["pane-1"], visible: false, collapsed: true, fullscreen: true },
+      ],
+      panes: [{ id: "pane-1", projectId: "project-1", containerId: "container-1", tabIds: ["tab-1"] }],
+      tabs: [{ id: "tab-1", paneId: "pane-1", ptyId: "pty-1", command: "codex", cwd: "/project", suspended: true, orphaned: true }],
+    });
+
+    expect(normalized.projects[0]).toMatchObject({ isCollapsed: true, isArchived: true });
+    expect(normalized.groups[0]).toMatchObject({ isCollapsed: true, isSuspended: true });
+    expect(normalized.containers[0]).toMatchObject({ isVisible: false, isClosed: true, isCollapsed: true, isFullscreen: true });
+    expect(normalized.tabs[0]).toMatchObject({ isSuspended: true, isOrphaned: true });
+    expect(normalized.orphanedTabIds).toEqual(["tab-1"]);
+    expect(normalized.containers[0]).not.toHaveProperty("visible");
+  });
+
+  it("Given backend workspaces with the old flag names, when migrating them, then every flag survives under the new names", () => {
+    const snapshot = migrateLegacyWorkspaces([
+      {
+        id: "ws-old",
+        name: "Old",
+        cwd: "/old",
+        collapsed: true,
+        containers: [{ id: "c-old", closed: true, collapsed: true, fullscreen: true }],
+        terminals: [{ id: "pty-old", command: "codex", suspended: true }],
+      },
+    ]);
+
+    expect(snapshot.projects[0]).toMatchObject({ isCollapsed: true });
+    expect(snapshot.containers[0]).toMatchObject({ isVisible: false, isClosed: true, isCollapsed: true, isFullscreen: true });
+    expect(snapshot.tabs[0]).toMatchObject({ isSuspended: true });
+  });
+});
+
 describe("mergeWorkspaceSnapshot", () => {
   const sharedPaneWorkspaces = [
     {
@@ -271,7 +312,7 @@ describe("mergeWorkspaceSnapshot", () => {
           paneId: "pane-main",
           tabId: "tab-one",
           groupId: "group-agents",
-          suspended: true,
+          isSuspended: true,
         },
         {
           id: "pty-two",
@@ -296,7 +337,7 @@ describe("mergeWorkspaceSnapshot", () => {
       activeTabId: "tab-one",
     });
     expect(first.tabs.map((tab) => tab.id)).toEqual(["tab-one", "tab-two"]);
-    expect((first.tabs[0] as typeof first.tabs[number] & { suspended?: boolean }).suspended).toBe(true);
+    expect((first.tabs[0] as typeof first.tabs[number] & { isSuspended?: boolean }).isSuspended).toBe(true);
     expect(refreshed).toEqual(first);
   });
 
@@ -304,7 +345,7 @@ describe("mergeWorkspaceSnapshot", () => {
     const first = mergeWorkspaceSnapshot(sharedPaneWorkspaces, null);
     const previous = {
       ...first,
-      tabs: [...first.tabs, { ...first.tabs[0], id: "tab-orphan", ptyId: null, orphaned: true }],
+      tabs: [...first.tabs, { ...first.tabs[0], id: "tab-orphan", ptyId: null, isOrphaned: true }],
       panes: first.panes.map((pane) => ({ ...pane, tabIds: [...pane.tabIds, "tab-orphan"] })),
     };
     const containerId = first.containers[0]?.id ?? "";
@@ -313,15 +354,15 @@ describe("mergeWorkspaceSnapshot", () => {
       containerVisibility: { [containerId]: false },
     });
 
-    expect(refreshed.tabs.find((tab) => tab.id === "tab-orphan")).toMatchObject({ orphaned: true, ptyId: null });
+    expect(refreshed.tabs.find((tab) => tab.id === "tab-orphan")).toMatchObject({ isOrphaned: true, ptyId: null });
     expect(refreshed.orphanedTabIds).toEqual(["tab-orphan"]);
     expect(refreshed.panes[0]?.tabIds).toEqual(["tab-one", "tab-two", "tab-orphan"]);
-    expect(refreshed.containers[0]).toMatchObject({ id: containerId, visible: false, closed: true });
+    expect(refreshed.containers[0]).toMatchObject({ id: containerId, isVisible: false, isClosed: true });
   });
 
   it("Given a previous snapshot that placed the project in another group, when refreshing, then the project follows the backend group", () => {
     const first = mergeWorkspaceSnapshot(sharedPaneWorkspaces, null);
-    const group = { name: "Group", projectIds: [], parentGroupId: null, collapsed: false, suspended: false, layout: first.layout };
+    const group = { name: "Group", projectIds: [], parentGroupId: null, isCollapsed: false, isSuspended: false, layout: first.layout };
     const previous = {
       ...first,
       groups: [{ ...group, id: "group-agents" }, { ...group, id: "group-other" }],

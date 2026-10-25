@@ -65,7 +65,7 @@ export function loadSystemFonts(): Promise<SystemFont[]> {
     })
     .catch((error) => {
       console.warn("listing system fonts failed, falling back to the known terminal fonts:", error);
-      return installedTerminalFonts().map((name) => ({ name, monospace: true }));
+      return installedTerminalFonts().map((name) => ({ name, isMonospace: true }));
     })
     .then((fonts) => [...fonts].sort((left, right) => left.name.localeCompare(right.name)));
   return cached;

@@ -10,8 +10,8 @@ export function voiceSetLanguage(language: string): Promise<void> {
   return invokeCommand("voiceSetLanguage", { language });
 }
 
-export function voiceMicAvailable(): Promise<boolean> {
-  return invokeCommand("voiceMicAvailable");
+export function voiceIsMicAvailable(): Promise<boolean> {
+  return invokeCommand("voiceIsMicAvailable");
 }
 
 export function voiceListInputDevices(): Promise<string[]> {
@@ -89,7 +89,7 @@ export function onVoiceMicChanged(handler: (isAvailable: boolean) => void): Prom
 export const voiceApi = {
   voiceToggleRecording,
   voiceSetLanguage,
-  voiceMicAvailable,
+  voiceIsMicAvailable,
   voiceListInputDevices,
   voiceSetInputDevice,
   voiceTestMicStart,

@@ -165,10 +165,10 @@ function groupForId(groups: readonly WorkspaceGroup[], id: string): WorkspaceGro
     groups.find((group) => group.id === id) ?? {
       id: UNGROUPED_ID,
       name: UNGROUPED_NAME,
-      collapsed: false,
+      isCollapsed: false,
       projectIds: [],
       parentGroupId: null,
-      suspended: false,
+      isSuspended: false,
     }
   );
 }
@@ -184,7 +184,7 @@ function makeAgent(placement: AgentPlacement, input: FleetDerivationInput, trans
   const exited = input.exited ?? EMPTY_RECORD as Readonly<Record<string, number | null>>;
   const notifications = input.notifications ?? EMPTY_RECORD as Readonly<Record<string, number>>;
   const contextUsage = input.contextUsage ?? EMPTY_RECORD as Readonly<Record<string, number>>;
-  const isGroupSuspended = Boolean(group.suspended || workspace.terminals.length > 0 && workspace.terminals.every((item) => item.suspended));
+  const isGroupSuspended = Boolean(group.isSuspended || workspace.terminals.length > 0 && workspace.terminals.every((item) => item.isSuspended));
   const command = clean(terminal.command, "shell");
   const label = clean(mapValue(input.agentLabels, terminal.id), agentLabelFromCommand(command, translate));
   const title = clean(mapValue(input.titles, terminal.id));
@@ -203,7 +203,7 @@ function makeAgent(placement: AgentPlacement, input: FleetDerivationInput, trans
     cwd: workspace.cwd,
     branch: clean(mapValue(input.branches, workspace.id)),
     status: deriveAgentStatus({
-      isSuspended: isGroupSuspended || terminal.suspended,
+      isSuspended: isGroupSuspended || terminal.isSuspended,
       hasExited: terminal.id in exited,
       notifications: notifications[terminal.id],
       contextUsed: contextUsage[terminal.id],
@@ -256,7 +256,7 @@ function groupModelFromAgents(
   return {
     id: group.id,
     name: clean(group.name, group.id),
-    isSuspended: Boolean(group.suspended),
+    isSuspended: Boolean(group.isSuspended),
     status: projectStatus(projects.flatMap((project) => project.agents)),
     projects,
   };

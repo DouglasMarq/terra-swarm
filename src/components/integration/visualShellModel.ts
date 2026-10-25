@@ -134,7 +134,7 @@ export function containerVisibilityByWorkspace(
       workspaceId: workspace.id,
       focusedTerminalId: focusedId,
     });
-    return [workspace.id, containerId ? snapshot?.containers.find((container) => container.id === containerId)?.visible !== false : true];
+    return [workspace.id, containerId ? snapshot?.containers.find((container) => container.id === containerId)?.isVisible !== false : true];
   }));
 }
 

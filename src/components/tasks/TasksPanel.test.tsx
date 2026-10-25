@@ -45,7 +45,7 @@ function task(id: string, extra: Partial<McpTask> = {}): McpTask {
 }
 
 function info(extra: Partial<McpServerInfo> = {}): McpServerInfo {
-  return { enabled: true, available: true, running: true, url: "http://127.0.0.1:9/mcp", port: 9, db_path: "/tmp/mcp.db", error: null, ...extra };
+  return { isEnabled: true, isAvailable: true, isRunning: true, url: "http://127.0.0.1:9/mcp", port: 9, dbPath: "/tmp/mcp.db", error: null, ...extra };
 }
 
 const agents = [
@@ -143,7 +143,7 @@ describe("TasksPanel", () => {
   });
 
   it("Given the server is off or no project is open, when the panel renders, then it warns or handles the missing project", async () => {
-    api.mcpServerInfo.mockResolvedValue(info({ enabled: false }));
+    api.mcpServerInfo.mockResolvedValue(info({ isEnabled: false }));
     api.mcpListTasks.mockResolvedValue([]);
     const { rerender } = render(<TasksPanel workspaceId="ws-1" agents={[]} />);
     expect(await screen.findByText(/coordenação de agentes está desligada/)).toBeInTheDocument();
@@ -153,7 +153,7 @@ describe("TasksPanel", () => {
   });
 
   it("Given the database could not be opened, when the panel renders, then it explains why", async () => {
-    api.mcpServerInfo.mockResolvedValue(info({ available: false, enabled: false, error: "migration 1 failed" }));
+    api.mcpServerInfo.mockResolvedValue(info({ isAvailable: false, isEnabled: false, error: "migration 1 failed" }));
     api.mcpListTasks.mockRejectedValue("the Terra MCP database is unavailable: migration 1 failed");
     render(<TasksPanel workspaceId="ws-1" agents={[]} />);
     expect(await screen.findByText(/banco da coordenação/)).toBeInTheDocument();

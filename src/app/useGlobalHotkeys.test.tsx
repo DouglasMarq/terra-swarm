@@ -22,13 +22,13 @@ const workspaces: Workspace[] = [
 ];
 
 function metaKey(key: string): Hotkey {
-  return { key, meta: true, shift: false, ctrl: false, alt: false };
+  return { key, hasMeta: true, hasShift: false, hasCtrl: false, hasAlt: false };
 }
 
 const hotkeys: Record<HotkeyActionId, Hotkey> = {
   ...DEFAULT_HOTKEYS,
   selectWorkspace2: metaKey("2"),
-  selectTerminal2: { ...metaKey("2"), shift: true },
+  selectTerminal2: { ...metaKey("2"), hasShift: true },
   maximizeTerminal: metaKey("Enter"),
   newTerminal: metaKey("t"),
   renameWorkspace: metaKey("r"),

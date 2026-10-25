@@ -36,7 +36,7 @@ fn given_a_workspace_folder_when_listing_files_then_it_returns_bounded_relative_
     let listing = list_directory_entries(root, None, Some(1)).expect("listing");
     assert_eq!(listing.path, "");
     assert_eq!(listing.entries.len(), 1);
-    assert!(listing.truncated);
+    assert!(listing.is_truncated);
     assert_eq!(listing.entries[0].kind, "directory");
     assert_eq!(listing.entries[0].path, "src");
     assert!(safe_relative_path(Some("../outside")).is_err());
@@ -87,7 +87,7 @@ fn workspace(id: &str) -> Workspace {
             pane_id: None,
             tab_id: None,
             group_id: None,
-            suspended: false,
+            is_suspended: false,
             worktree: None,
             role: None,
         }],
@@ -96,8 +96,8 @@ fn workspace(id: &str) -> Workspace {
         containers: Vec::new(),
         active_pane_id: None,
         active_container_id: None,
-        collapsed: false,
-        archived: false,
+        is_collapsed: false,
+        is_archived: false,
         created_at: None,
         layout_mode: None,
         layout: None,
@@ -216,9 +216,9 @@ fn given_a_group_when_going_through_its_lifecycle_then_projects_and_terminal_met
     store.suspend_group(&group.id).expect("suspend");
     assert_eq!(suspended, vec!["ws-group-terminal"]);
     assert_eq!(store.groups[0].name, "Workers");
-    assert!(store.groups[0].suspended);
-    assert!(store.workspaces[0].terminals[0].suspended);
-    assert!(store.workspaces[0].panes[0].tabs[0].suspended);
+    assert!(store.groups[0].is_suspended);
+    assert!(store.workspaces[0].terminals[0].is_suspended);
+    assert!(store.workspaces[0].panes[0].tabs[0].is_suspended);
     assert_eq!(
         store.workspaces[0].group_id.as_deref(),
         Some(group.id.as_str())
@@ -226,7 +226,7 @@ fn given_a_group_when_going_through_its_lifecycle_then_projects_and_terminal_met
     assert_eq!(store.workspaces[0].terminals.len(), 1);
 
     store.resume_group(&group.id).expect("resume");
-    assert!(!store.groups[0].suspended);
+    assert!(!store.groups[0].is_suspended);
     store.remove_group(&group.id).expect("remove");
     assert!(store.groups.is_empty());
     assert!(store.workspaces[0].group_id.is_none());
@@ -243,12 +243,12 @@ fn given_a_workspace_when_assigning_it_to_a_group_then_both_sides_stay_consisten
                 name: "A".to_string(),
                 color: None,
                 icon_url: None,
-                collapsed: false,
+                is_collapsed: false,
                 project_ids: vec!["ws-assign".to_string(), "ws-assign".to_string()],
                 parent_group_id: None,
                 layout_mode: None,
-                suspended: false,
-                archived: false,
+                is_suspended: false,
+                is_archived: false,
                 created_at: None,
             },
             Group {
@@ -256,12 +256,12 @@ fn given_a_workspace_when_assigning_it_to_a_group_then_both_sides_stay_consisten
                 name: "B".to_string(),
                 color: None,
                 icon_url: None,
-                collapsed: false,
+                is_collapsed: false,
                 project_ids: vec!["ws-assign".to_string()],
                 parent_group_id: None,
                 layout_mode: None,
-                suspended: false,
-                archived: false,
+                is_suspended: false,
+                is_archived: false,
                 created_at: None,
             },
         ],
@@ -367,7 +367,7 @@ fn given_a_store_with_invalid_entries_when_loading_then_valid_entries_are_recove
         pane_id: None,
         tab_id: None,
         group_id: None,
-        suspended: false,
+        is_suspended: false,
         worktree: None,
         role: None,
     });
@@ -383,8 +383,8 @@ fn given_a_store_with_invalid_entries_when_loading_then_valid_entries_are_recove
         containers: Vec::new(),
         active_pane_id: None,
         active_container_id: None,
-        collapsed: false,
-        archived: false,
+        is_collapsed: false,
+        is_archived: false,
         created_at: None,
         layout_mode: None,
         layout: None,
@@ -546,7 +546,7 @@ fn given_visual_layout_operations_when_applying_them_then_they_persist_and_never
         pane_id: None,
         tab_id: None,
         group_id: None,
-        suspended: false,
+        is_suspended: false,
         worktree: None,
         role: None,
     });
@@ -607,8 +607,8 @@ fn given_visual_layout_operations_when_applying_them_then_they_persist_and_never
             ContainerStateChange {
                 container_id: "container-secondary",
                 patch: WorkspaceContainerPatch {
-                    collapsed: Some(true),
-                    fullscreen: Some(true),
+                    is_collapsed: Some(true),
+                    is_fullscreen: Some(true),
                     active_pane_id: Some("pane-two".to_string()),
                     internal_layout: Some("vertical".to_string()),
                     size: Some(42.0),
@@ -641,10 +641,10 @@ fn given_visual_layout_operations_when_applying_them_then_they_persist_and_never
     let workspace = &store.workspaces[0];
     assert_eq!(workspace.terminals.len(), 2);
     assert_eq!(workspace.layout_mode.as_deref(), Some("spotlight"));
-    assert!(workspace.collapsed);
+    assert!(workspace.is_collapsed);
     assert_eq!(workspace.containers[1].pane_ids, vec!["pane-two"]);
-    assert!(workspace.containers[1].collapsed);
-    assert!(workspace.containers[1].fullscreen);
+    assert!(workspace.containers[1].is_collapsed);
+    assert!(workspace.containers[1].is_fullscreen);
     assert_eq!(
         workspace.containers[1].active_pane_id.as_deref(),
         Some("pane-two")
@@ -789,8 +789,8 @@ fn given_an_exported_snapshot_when_importing_it_then_the_layout_is_preserved_and
     assert_eq!(imported.workspaces, original.workspaces);
     assert_eq!(imported.groups, original.groups);
     mark_imported_sessions_suspended(&mut imported);
-    assert!(imported.workspaces[0].terminals[0].suspended);
-    assert!(imported.workspaces[0].panes[0].tabs[0].suspended);
+    assert!(imported.workspaces[0].terminals[0].is_suspended);
+    assert!(imported.workspaces[0].panes[0].tabs[0].is_suspended);
     assert_eq!(
         imported.workspaces[0].panes[0].tabs[0].pty_id.as_deref(),
         Some("ws-transfer-terminal")
@@ -919,4 +919,61 @@ fn given_a_snapshot_with_an_invalid_worktree_when_importing_then_it_is_refused()
     .to_string();
 
     assert!(parse_import_snapshot(&raw).is_err());
+}
+
+const OLD_FLAG_NAMES_FIXTURE: &str = include_str!("fixtures/workspaces-old-flag-names.json");
+
+fn assert_old_flags_survived(store: &WorkspaceStore) {
+    let workspace = &store.workspaces[0];
+    assert!(workspace.is_collapsed);
+    assert!(workspace.is_archived);
+    assert!(workspace.terminals[0].is_suspended);
+    let pane = &workspace.panes[0];
+    assert!(pane.is_disabled);
+    assert!(pane.is_collapsed);
+    assert!(pane.tabs[0].has_unread_completion);
+    assert!(pane.tabs[0].is_suspended);
+    let container = &workspace.containers[0];
+    assert!(container.is_collapsed);
+    assert!(!container.is_visible);
+    assert!(container.is_closed);
+    assert!(container.is_fullscreen);
+    let group = &store.groups[0];
+    assert!(group.is_collapsed);
+    assert!(group.is_suspended);
+    assert!(group.is_archived);
+}
+
+#[test]
+fn given_a_store_written_with_the_old_flag_names_when_loading_then_every_flag_survives_and_saves_under_the_new_names(
+) {
+    let path = test_path("old-flag-names");
+    fs::write(&path, OLD_FLAG_NAMES_FIXTURE).expect("old store");
+
+    let store = WorkspaceStore::load(path.clone());
+
+    assert_old_flags_survived(&store);
+    store.save_now();
+    let saved: Value =
+        serde_json::from_str(&fs::read_to_string(&path).expect("saved store")).expect("saved JSON");
+    let saved_workspace = &saved["workspaces"][0];
+    assert_eq!(saved_workspace["isCollapsed"], Value::Bool(true));
+    assert!(saved_workspace.get("collapsed").is_none());
+    assert_eq!(
+        saved_workspace["panes"][0]["tabs"][0]["hasUnreadCompletion"],
+        Value::Bool(true)
+    );
+    assert_eq!(
+        saved_workspace["containers"][0]["isVisible"],
+        Value::Bool(false)
+    );
+    assert_eq!(saved["groups"][0]["isSuspended"], Value::Bool(true));
+    cleanup(&path);
+}
+
+#[test]
+fn given_a_snapshot_exported_with_the_old_flag_names_when_importing_then_every_flag_survives() {
+    let imported = parse_import_snapshot(OLD_FLAG_NAMES_FIXTURE).expect("old snapshot");
+
+    assert_old_flags_survived(&imported);
 }

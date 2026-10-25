@@ -23,9 +23,9 @@ describe("terminalFontStack", () => {
 
 describe("filterFonts", () => {
   const fonts = [
-    { name: "Helvetica", monospace: false },
-    { name: "JetBrains Mono", monospace: true },
-    { name: "Tapajós Sans", monospace: false },
+    { name: "Helvetica", isMonospace: false },
+    { name: "JetBrains Mono", isMonospace: true },
+    { name: "Tapajós Sans", isMonospace: false },
   ];
 
   it("Given an empty filter, when filtering fonts, then everything is shown", () => {

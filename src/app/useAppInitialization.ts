@@ -41,7 +41,7 @@ export function useAppInitialization({ workspaces, sessions, resumeQueue, agentC
     const liveIds = new Set(live.map((terminal) => terminal.id));
     sessions.track(list.flatMap((workspace) => workspace.terminals.map((terminal) => terminal.id)), live);
     const suspendedGroups = suspendedGroupIds(groups);
-    const suspendedProjects = new Set(groups.filter((group) => group.suspended === true).flatMap((group) => group.projectIds));
+    const suspendedProjects = new Set(groups.filter((group) => group.isSuspended === true).flatMap((group) => group.projectIds));
     const items: ResumeItem[] = [];
     for (const workspace of list) {
       for (const terminal of workspace.terminals) {

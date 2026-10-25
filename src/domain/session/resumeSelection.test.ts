@@ -6,18 +6,18 @@ const groups: WorkspaceGroup[] = [
   {
     id: "group-paused",
     name: "Paused",
-    collapsed: false,
+    isCollapsed: false,
     projectIds: [],
     parentGroupId: null,
-    suspended: true,
+    isSuspended: true,
   },
   {
     id: "group-live",
     name: "Live",
-    collapsed: false,
+    isCollapsed: false,
     projectIds: [],
     parentGroupId: null,
-    suspended: false,
+    isSuspended: false,
   },
 ];
 
@@ -27,14 +27,14 @@ describe("resume selection", () => {
     expect(
       isTerminalSuspended(
         { groupId: "group-live" },
-        { suspended: true },
+        { isSuspended: true },
         suspended,
       ),
     ).toBe(true);
     expect(
       isTerminalSuspended(
         { groupId: "group-paused" },
-        { suspended: false },
+        { isSuspended: false },
         suspended,
       ),
     ).toBe(true);
@@ -44,7 +44,7 @@ describe("resume selection", () => {
     expect(
       isTerminalSuspended(
         { groupId: "group-live" },
-        { suspended: false },
+        { isSuspended: false },
         suspendedGroupIds(groups),
       ),
     ).toBe(false);

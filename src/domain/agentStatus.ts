@@ -2,10 +2,10 @@ import type { McpAgentState } from "./mcp.model";
 import type { TerminalMeta } from "./terminal.model";
 
 export function isTerminalRunning(
-  terminal: Pick<TerminalMeta, "id" | "suspended">,
+  terminal: Pick<TerminalMeta, "id" | "isSuspended">,
   exited: Readonly<Record<string, unknown>>,
 ): boolean {
-  return !terminal.suspended && !(terminal.id in exited);
+  return !terminal.isSuspended && !(terminal.id in exited);
 }
 
 export const CONTEXT_ATTENTION_PERCENT = 85;

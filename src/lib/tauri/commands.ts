@@ -6,6 +6,7 @@ import type { VoiceModelInfo } from "../../domain/voice.model";
 import type { ActivePaneSelection, Workspace, WorkspaceGroup, WorkspaceSnapshotTransfer, WorkspaceContainerPatch, WorkspaceLayout, WorkspaceGitStatus } from "../../domain/workspace.model";
 import type { WorkspaceFileContent, WorkspaceFileListing, WorkspaceFileSaved } from "../../domain/workspaceFiles.model";
 import type { WorktreeDiff, WorktreeStatus } from "../../domain/worktree.model";
+import type { SystemFont } from "../terminalFonts";
 import { toIpcError } from "./errors";
 
 export interface IpcCommandContract {
@@ -103,7 +104,7 @@ export interface IpcCommandContract {
     result: void;
   };
   setWorkspaceCollapsed: {
-    args: { workspaceId: string; collapsed: boolean };
+    args: { workspaceId: string; isCollapsed: boolean };
     result: void;
   };
   spawnTerminal: {
@@ -124,7 +125,7 @@ export interface IpcCommandContract {
   };
   listSystemFonts: {
     args: undefined;
-    result: { name: string; monospace: boolean }[];
+    result: SystemFont[];
   };
   writeTerminal: {
     args: { id: string; data: string };
@@ -147,7 +148,7 @@ export interface IpcCommandContract {
     result: BacklogSnapshot;
   };
   setDurableScrollbackEnabled: {
-    args: { enabled: boolean };
+    args: { isEnabled: boolean };
     result: void;
   };
   runningTerminals: {
@@ -199,7 +200,7 @@ export interface IpcCommandContract {
     result: McpServerInfo;
   };
   mcpSetEnabled: {
-    args: { enabled: boolean };
+    args: { isEnabled: boolean };
     result: McpServerInfo;
   };
   mcpListTasks: {
@@ -237,7 +238,7 @@ export interface IpcCommandContract {
     result: WorktreeStatus | null;
   };
   worktreeRemove: {
-    args: { workspaceId: string; terminalId: string; deleteBranch: boolean };
+    args: { workspaceId: string; terminalId: string; shouldDeleteBranch: boolean };
     result: void;
   };
   worktreeDiff: {
@@ -264,8 +265,9 @@ export interface IpcCommandContract {
     args: { language: string };
     result: void;
   };
-  voiceMicAvailable: {
+  voiceIsMicAvailable: {
     args: undefined;
+    // eslint-disable-next-line @typescript-eslint/naming-convention -- `result` is the contract's slot for the command's return type, not a boolean flag name.
     result: boolean;
   };
   voiceListInputDevices: {
@@ -359,7 +361,7 @@ const IPC_COMMANDS = {
   worktreeOpenPr: "worktree_open_pr",
   voiceToggleRecording: "voice_toggle_recording",
   voiceSetLanguage: "voice_set_language",
-  voiceMicAvailable: "voice_mic_available",
+  voiceIsMicAvailable: "voice_is_mic_available",
   voiceListInputDevices: "voice_list_input_devices",
   voiceSetInputDevice: "voice_set_input_device",
   voiceTestMicStart: "voice_test_mic_start",

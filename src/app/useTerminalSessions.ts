@@ -133,7 +133,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
       .find((terminal) => terminal && terminal.cols > 0 && terminal.rows > 0);
     const extras = {
       ...launchExtras(command),
-      ...(options.shouldUseWorktree ? { worktree: true } : {}),
+      ...(options.shouldUseWorktree ? { shouldUseWorktree: true } : {}),
       ...(options.role ? { role: options.role } : {}),
     };
     const result = await api.spawnTerminal(workspaceId, command, undefined, sibling?.cols, sibling?.rows, defaultShell(), extras);

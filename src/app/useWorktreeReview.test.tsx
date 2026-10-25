@@ -19,10 +19,10 @@ const target: ReviewTarget = { workspaceId: "ws-1", terminalId: "t-1", label: "V
 
 function diff(ahead = 1): WorktreeDiff {
   return {
-    status: { branch: "terra/t-1", base: "main", path: "/Users/me/wt/t-1", dirty: [], ahead, behind: 0, exists: true },
+    status: { branch: "terra/t-1", base: "main", path: "/Users/me/wt/t-1", dirty: [], ahead, behind: 0, isPresent: true },
     files: [{ path: "src/a.ts", change: "modified", additions: 1, deletions: 1 }],
     patch: "",
-    truncated: false,
+    isTruncated: false,
   };
 }
 

@@ -11,10 +11,10 @@ import { defined } from "../../test/defined";
 const groups: WorkspaceGroup[] = [{
   id: "group-core",
   name: "Core",
-  collapsed: false,
+  isCollapsed: false,
   projectIds: ["ws-api"],
   parentGroupId: null,
-  suspended: false,
+  isSuspended: false,
 }];
 
 const workspaces: Workspace[] = [{
@@ -65,7 +65,7 @@ describe("NavigatorPanel", () => {
   });
 
   it("Given the three activity tabs, when they render, then they stay aligned and keyboard focusable", () => {
-    const loadFiles = vi.fn(async () => ({ path: "", entries: [], truncated: false, limit: 200 }));
+    const loadFiles = vi.fn(async () => ({ path: "", entries: [], isTruncated: false, limit: 200 }));
     const loadGitStatus = vi.fn(async () => ({
       branch: "main",
       ahead: 0,
@@ -194,7 +194,7 @@ describe("NavigatorPanel", () => {
         activePaneId: "pane-api",
         activeContainerId: "container-api",
         layout: { mode: "auto", itemIds: ["container-api"] },
-        collapsed: false,
+        isCollapsed: false,
       }],
       groups: [],
       containers: [{
@@ -202,10 +202,10 @@ describe("NavigatorPanel", () => {
         projectId: "ws-api",
         paneIds: ["pane-api"],
         layout: { mode: "auto", itemIds: ["pane-api"] },
-        visible: true,
-        collapsed: false,
-        closed: false,
-        fullscreen: false,
+        isVisible: true,
+        isCollapsed: false,
+        isClosed: false,
+        isFullscreen: false,
       }],
       panes: [{
         id: "pane-api",
@@ -223,7 +223,7 @@ describe("NavigatorPanel", () => {
         cwd: "/tmp/terra-api",
         width: 100,
         title: "Luna Max",
-        orphaned: false,
+        isOrphaned: false,
       }],
       orphanedTabIds: [],
       activeProjectId: "ws-api",
@@ -268,13 +268,13 @@ describe("NavigatorPanel", () => {
       ? {
           path: "",
           entries: [{ name: "src", path: "src", kind: "directory" as const, size: null }],
-          truncated: false,
+          isTruncated: false,
           limit: 200,
         }
       : {
           path: "src",
           entries: [{ name: "main.ts", path: "src/main.ts", kind: "file" as const, size: 42 }],
-          truncated: false,
+          isTruncated: false,
           limit: 200,
         });
     render(<NavigatorPanel activeActivity="files" activeWorkspaceId="ws-api" availableActivities={["projects", "files"]} loadFiles={loadFiles} onOpenWorkspace={onSelectWorkspace} workspaces={workspaces} />);

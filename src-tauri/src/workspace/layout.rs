@@ -13,11 +13,11 @@ impl WorkspaceStore {
             last_used_at: Some(crate::clock::now_epoch_millis()),
             size: 0.0,
             internal_layout: default_layout_mode(),
-            collapsed: false,
+            is_collapsed: false,
             active_pane_id: None,
-            visible: true,
-            closed: false,
-            fullscreen: false,
+            is_visible: true,
+            is_closed: false,
+            is_fullscreen: false,
             layout: Some(WorkspaceLayout::default()),
         }
     }
@@ -229,7 +229,7 @@ impl WorkspaceStore {
 
     pub fn set_collapsed(&mut self, workspace_id: &str, is_collapsed: bool) -> Result<(), String> {
         let workspace = self.workspace_mut(workspace_id)?;
-        workspace.collapsed = is_collapsed;
+        workspace.is_collapsed = is_collapsed;
         Ok(())
     }
 }
@@ -264,9 +264,9 @@ impl TerminalPlacement {
             pty_id: Some(self.terminal_id.clone()),
             session_id: None,
             last_used_at: Some(crate::clock::now_epoch_millis()),
-            completion_unread: false,
+            has_unread_completion: false,
             extra_args: Vec::new(),
-            suspended: terminal.suspended,
+            is_suspended: terminal.is_suspended,
         }
     }
 }
@@ -349,8 +349,8 @@ fn ensure_terminal_pane(workspace: &mut Workspace, pane_id: &str, command: &str)
         tabs: Vec::new(),
         active_tab_id: None,
         kind: Some(TERMINAL_PANE_KIND.to_string()),
-        disabled: false,
-        collapsed: false,
+        is_disabled: false,
+        is_collapsed: false,
         width: None,
         height: None,
         container_id: None,
@@ -403,14 +403,14 @@ fn resolve_container(workspace: &mut Workspace, container_id: &str) -> Result<us
 }
 
 fn apply_container_patch(container: &mut WorkspaceContainer, patch: WorkspaceContainerPatch) {
-    apply_visibility(container, patch.visible, patch.closed);
-    if let Some(is_collapsed) = patch.collapsed {
-        container.collapsed = is_collapsed;
+    apply_visibility(container, patch.is_visible, patch.is_closed);
+    if let Some(is_collapsed) = patch.is_collapsed {
+        container.is_collapsed = is_collapsed;
     }
-    if let Some(is_fullscreen) = patch.fullscreen {
-        container.fullscreen = is_fullscreen;
+    if let Some(is_fullscreen) = patch.is_fullscreen {
+        container.is_fullscreen = is_fullscreen;
     }
-    if patch.clear_active_pane {
+    if patch.should_clear_active_pane {
         container.active_pane_id = None;
     } else if let Some(active_pane_id) = patch.active_pane_id {
         container.active_pane_id = Some(active_pane_id);
@@ -432,15 +432,15 @@ fn apply_visibility(
     is_closed: Option<bool>,
 ) {
     if let Some(is_visible) = is_visible {
-        container.visible = is_visible;
+        container.is_visible = is_visible;
         if is_closed.is_none() {
-            container.closed = !is_visible;
+            container.is_closed = !is_visible;
         }
     }
     if let Some(is_closed) = is_closed {
-        container.closed = is_closed;
+        container.is_closed = is_closed;
         if is_visible.is_none() {
-            container.visible = !is_closed;
+            container.is_visible = !is_closed;
         }
     }
 }

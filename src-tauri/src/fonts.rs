@@ -2,9 +2,10 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct FontFamily {
     pub name: String,
-    pub monospace: bool,
+    pub is_monospace: bool,
 }
 
 fn families_from<'a>(faces: impl Iterator<Item = (&'a str, bool)>) -> Vec<FontFamily> {
@@ -21,10 +22,7 @@ fn families_from<'a>(faces: impl Iterator<Item = (&'a str, bool)>) -> Vec<FontFa
     }
     by_name
         .into_values()
-        .map(|(name, is_monospace)| FontFamily {
-            name,
-            monospace: is_monospace,
-        })
+        .map(|(name, is_monospace)| FontFamily { name, is_monospace })
         .collect()
 }
 
@@ -73,11 +71,11 @@ mod tests {
             vec![
                 FontFamily {
                     name: "Helvetica".into(),
-                    monospace: false
+                    is_monospace: false
                 },
                 FontFamily {
                     name: "JetBrains Mono".into(),
-                    monospace: true
+                    is_monospace: true
                 },
             ]
         );
@@ -86,6 +84,6 @@ mod tests {
     #[test]
     fn given_one_monospace_face_when_grouping_its_family_then_the_family_is_monospace() {
         let families = families_from([("Iosevka", false), ("Iosevka", true)].into_iter());
-        assert!(families[0].monospace);
+        assert!(families[0].is_monospace);
     }
 }

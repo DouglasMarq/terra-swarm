@@ -33,7 +33,7 @@ export function useWorkspaceNavigation({ workspaces, snapshot, activeId, focused
 
     const after = useOrchestrationStore.getState().snapshot;
     const visibleContainers = (after?.containers ?? []).filter(
-      (candidate) => candidate.visible && candidate.id !== containerId && candidate.projectId,
+      (candidate) => candidate.isVisible && candidate.id !== containerId && candidate.projectId,
     );
     const next =
       visibleContainers.find((candidate) => candidate.projectId !== container.projectId) ??

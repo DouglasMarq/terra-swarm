@@ -10,8 +10,8 @@ import { ResumeDialog } from "../../ResumeDialog";
 import { AgentPickerDialog, RenameDialog, WorkspaceDialog } from ".";
 
 const agents: AgentInfo[] = [
-  { id: "codex", label: "Codex", available: true },
-  { id: "claude", label: "Claude", available: false },
+  { id: "codex", label: "Codex", isAvailable: true },
+  { id: "claude", label: "Claude", isAvailable: false },
 ];
 
 const resumeItem: ResumeItem = {

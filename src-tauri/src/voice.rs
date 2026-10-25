@@ -42,13 +42,14 @@ impl Default for VoiceState {
 }
 
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VoiceModelInfo {
     id: String,
     display_name: String,
     size_label: String,
     description: String,
-    downloaded: bool,
-    active: bool,
+    is_downloaded: bool,
+    is_active: bool,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -175,7 +176,7 @@ pub fn voice_set_language(language: String, state: tauri::State<'_, VoiceState>)
 }
 
 #[tauri::command]
-pub async fn voice_mic_available() -> Result<bool, String> {
+pub async fn voice_is_mic_available() -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(audio::has_input_device)
         .await
         .map_err(|error| error.to_string())
@@ -313,10 +314,10 @@ pub fn voice_list_models(
             display_name: model.display_name.to_string(),
             size_label: model.size_label.to_string(),
             description: model.description.to_string(),
-            downloaded: downloaded
+            is_downloaded: downloaded
                 .iter()
                 .any(|downloaded_id| downloaded_id == model.id),
-            active: active.as_deref() == Some(model.id),
+            is_active: active.as_deref() == Some(model.id),
         })
         .collect())
 }

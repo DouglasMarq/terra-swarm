@@ -2,7 +2,7 @@ import type { TerminalMeta } from "../terminal.model";
 import type { Group, Pane, Project, TerminalTab, Workspace, WorkspaceContainer, WorkspaceLayout, WorkspaceSnapshotV2 } from "../workspace.model";
 import { asRecord } from "../../lib/records/records";
 import { uniqueStrings } from "../../lib/collections/uniqueStrings";
-import { DOMAIN_SNAPSHOT_VERSION, readArray, readFiniteNumber, readString, uniqueId, type RecordLike, type RuntimeTab } from "./snapshotReaders";
+import { DOMAIN_SNAPSHOT_VERSION, readArray, readFiniteNumber, readFlag, readString, uniqueId, type RecordLike, type RuntimeTab } from "./snapshotReaders";
 import { DEFAULT_WORKSPACE_LAYOUT, cloneLayout, mergeWorkspaceLayout, normalizeLayout } from "./workspaceLayout";
 
 export interface LegacyMigrationOptions {
@@ -22,7 +22,7 @@ function terminalMeta(raw: RecordLike, fallbackId: string): TerminalMeta {
   const paneId = readString(raw.paneId) || readString(raw.pane_id) || readString(nestedMeta.paneId);
   const tabId = readString(raw.tabId) || readString(raw.tab_id) || readString(nestedMeta.tabId);
   const groupId = readString(raw.groupId) || readString(raw.group_id) || readString(nestedMeta.groupId);
-  const rawSuspended = raw.suspended ?? nestedMeta.suspended;
+  const rawSuspended = readFlag(raw, "isSuspended", "suspended") ?? readFlag(nestedMeta, "isSuspended", "suspended");
   return {
     id,
     command,
@@ -31,7 +31,7 @@ function terminalMeta(raw: RecordLike, fallbackId: string): TerminalMeta {
     ...(tabId ? { tabId } : {}),
     ...(groupId ? { groupId } : {}),
     ...(rawSuspended !== undefined
-      ? { suspended: rawSuspended === true || rawSuspended === 1 }
+      ? { isSuspended: rawSuspended === true || rawSuspended === 1 }
       : {}),
   };
 }
@@ -146,7 +146,8 @@ function legacyWorkspaceLayout(rawWorkspace: RecordLike, layout: WorkspaceLayout
 }
 
 function legacyContainer(rawContainer: RecordLike, containerId: string, owner: ContainerOwner): WorkspaceContainer {
-  const isVisible = rawContainer.visible !== false && rawContainer.closed !== true;
+  const isVisible =
+    readFlag(rawContainer, "isVisible", "visible") !== false && readFlag(rawContainer, "isClosed", "closed") !== true;
   return {
     id: containerId,
     projectId: owner.projectId,
@@ -155,10 +156,10 @@ function legacyContainer(rawContainer: RecordLike, containerId: string, owner: C
     activePaneId: null,
     internalLayout: readString(rawContainer.internalLayout) || undefined,
     size: readFiniteNumber(rawContainer.size) ?? undefined,
-    visible: isVisible,
-    collapsed: Boolean(rawContainer.collapsed),
-    closed: !isVisible,
-    fullscreen: Boolean(rawContainer.fullscreen),
+    isVisible,
+    isCollapsed: Boolean(readFlag(rawContainer, "isCollapsed", "collapsed")),
+    isClosed: !isVisible,
+    isFullscreen: Boolean(readFlag(rawContainer, "isFullscreen", "fullscreen")),
   };
 }
 
@@ -203,7 +204,7 @@ function startWorkspaceMigration(
     activeContainerId:
       containerIdsBySource.get(readString(rawWorkspace.activeContainerId)) || containers[0]?.id || null,
     layout: cloneLayout(layout),
-    collapsed: Boolean(rawWorkspace.collapsed),
+    isCollapsed: Boolean(readFlag(rawWorkspace, "isCollapsed", "collapsed")),
   };
   return {
     raw: rawWorkspace,
@@ -309,12 +310,12 @@ function legacyTab(
     cwd: workspace.project.cwd,
     width: meta.width,
     title: meta.command || "Terminal",
-    ...(meta.suspended !== undefined ? { suspended: meta.suspended } : {}),
+    ...(meta.isSuspended !== undefined ? { isSuspended: meta.isSuspended } : {}),
     ...(meta.groupId ? { groupId: meta.groupId } : {}),
-    ...(terminal.sourcePaneId ? { placementExplicit: true } : {}),
+    ...(terminal.sourcePaneId ? { isPlacementExplicit: true } : {}),
     ...(terminal.rawId && terminal.ptyId === null ? { legacyTerminalId: terminal.rawId } : {}),
     ...(workspace.rawId ? { legacyWorkspaceId: workspace.rawId } : {}),
-    orphaned: terminal.ptyId === null,
+    isOrphaned: terminal.ptyId === null,
   };
 }
 
@@ -360,7 +361,7 @@ function migrateLegacyTerminal(
   pane.activeTabId ??= tabId;
   state.tabs.push(tab);
   workspace.project.activePaneId ??= paneId;
-  if (tab.orphaned) state.orphanedTabIds.push(tabId);
+  if (tab.isOrphaned) state.orphanedTabIds.push(tabId);
 }
 
 function applyRequestedActivePane(workspace: WorkspaceMigration): void {

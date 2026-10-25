@@ -22,9 +22,9 @@ function ContainerItem({
   return (
     <div
       className="terra-workbench__container"
-      data-visible={projection.container.visible && !projection.container.closed}
-      data-collapsed={projection.container.collapsed}
-      data-fullscreen={projection.container.fullscreen}
+      data-visible={projection.container.isVisible && !projection.container.isClosed}
+      data-collapsed={projection.container.isCollapsed}
+      data-fullscreen={projection.container.isFullscreen}
     >
       <ProjectContainer
         projection={projection}

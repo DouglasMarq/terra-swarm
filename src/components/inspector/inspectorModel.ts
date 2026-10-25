@@ -78,11 +78,11 @@ export function resolveInspectorTarget(
   const profile = profileForCommand(terminal.command);
   const isTabSuspended = tab !== null
     && typeof tab === "object"
-    && "suspended" in tab
-    && Boolean((tab as { suspended?: unknown }).suspended);
+    && "isSuspended" in tab
+    && Boolean((tab as { isSuspended?: unknown }).isSuspended);
   const state: InspectorRuntimeState = terminal.id in exited
     ? "encerrado"
-    : terminal.suspended || isTabSuspended || group?.suspended
+    : terminal.isSuspended || isTabSuspended || group?.isSuspended
       ? "suspenso"
       : "ativo";
   const usage = contextUsage[terminal.id];

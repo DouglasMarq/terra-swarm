@@ -78,7 +78,7 @@ It forwards every message to the HTTP endpoint with the terminal's token, so it 
 | `update_task`   | Change status and/or add a note to the task's history                       |
 | `complete_task` | Hand your task in for review with a summary (moves it to `review`)          |
 | `send_message`  | Message a teammate by terminal id, or `"all"`                               |
-| `read_inbox`    | Your messages, oldest first; marks them read (`unread_only` defaults to true, `limit` to 50) |
+| `read_inbox`    | Your messages, oldest first; marks them read (`is_unread_only` defaults to true, `limit` to 50) |
 | `add_note`      | Save a project note; a note with the same `key` is replaced                  |
 | `search_notes`  | Full-text search (SQLite FTS5) over note keys and text, best matches first (`limit` defaults to 20) |
 | `report_status` | Set your state and a one-line summary                                        |

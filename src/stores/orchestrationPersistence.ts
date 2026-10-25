@@ -33,7 +33,7 @@ function backendContainerVisibility(workspaces: readonly Workspace[]): Record<st
   for (const workspace of workspaces) {
     for (const container of workspace.containers ?? []) {
       backendVisibility[container.id] =
-        container.visible !== false && container.closed !== true;
+        container.isVisible !== false && container.isClosed !== true;
     }
   }
   return backendVisibility;
@@ -42,7 +42,7 @@ function backendContainerVisibility(workspaces: readonly Workspace[]): Record<st
 function snapshotContainerVisibility(snapshot: WorkspaceSnapshotV2): Record<string, boolean> {
   const containerVisibility: Record<string, boolean> = {};
   for (const container of snapshot.containers) {
-    containerVisibility[container.id] = container.visible;
+    containerVisibility[container.id] = container.isVisible;
   }
   return containerVisibility;
 }

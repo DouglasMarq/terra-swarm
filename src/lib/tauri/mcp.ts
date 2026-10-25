@@ -31,7 +31,7 @@ export function mcpServerInfo(): Promise<McpServerInfo> {
 }
 
 export function mcpSetEnabled(isEnabled: boolean): Promise<McpServerInfo> {
-  return invokeCommand("mcpSetEnabled", { enabled: isEnabled });
+  return invokeCommand("mcpSetEnabled", { isEnabled });
 }
 
 export function mcpListTasks(workspaceId: string): Promise<McpTask[]> {

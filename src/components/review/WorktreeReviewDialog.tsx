@@ -126,7 +126,7 @@ export function WorktreeReviewDialog() {
           </ul>
         </nav>
         <div className="terra-review-diff" role="region" aria-label={translate("review.diff")}>
-          {diff?.truncated ? <p className="terra-review-empty">{translate("review.truncated")}</p> : null}
+          {diff?.isTruncated ? <p className="terra-review-empty">{translate("review.truncated")}</p> : null}
           {section ? (
             section.isBinary ? (
               <p className="terra-review-empty">{translate("review.binaryFile")}</p>

@@ -211,7 +211,7 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
 
   const shown = useMemo(() => filterFonts(fonts ?? [], query, isMonospaceOnly), [fonts, query, isMonospaceOnly]);
   const isMissing = fonts !== null && family !== "" && !fonts.some((font) => font.name === family);
-  const monoCount = fonts?.filter((font) => font.monospace).length ?? 0;
+  const monoCount = fonts?.filter((font) => font.isMonospace).length ?? 0;
 
   const row = ({ name, label, isMonospace, note }: FontOptionRow) => {
     const isSelected = family === name;
@@ -264,7 +264,7 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
       <div className={styles.fontList} role="listbox" aria-label={translate("settingsPanels.fontFamily")}>
         {!query ? row({ name: "", label: translate("settingsPanels.fontDefault"), isMonospace: true }) : null}
         {isMissing ? row({ name: family, label: family, isMonospace: false, note: translate("settingsPanels.fontMissing") }) : null}
-        {shown.map((font) => row({ name: font.name, label: font.name, isMonospace: font.monospace }))}
+        {shown.map((font) => row({ name: font.name, label: font.name, isMonospace: font.isMonospace }))}
         {fonts !== null && shown.length === 0 ? <div className={styles.fontEmpty}>{translate("settingsPanels.fontNoMatch")}</div> : null}
       </div>
       <div
@@ -393,18 +393,18 @@ function McpCard() {
           <span className={styles.rowHint}>{translate("settingsPanels.mcpExposeHint")}</span>
         </div>
         <Toggle
-          isChecked={server ? server.available && server.enabled : true}
-          isDisabled={!server || !server.available}
+          isChecked={server ? server.isAvailable && server.isEnabled : true}
+          isDisabled={!server || !server.isAvailable}
           label={translate("settingsPanels.mcpExpose")}
           onChange={(isEnabled) => void setEnabled(isEnabled)}
         />
       </div>
-      {server && !server.available ? (
+      {server && !server.isAvailable ? (
         <p className={styles.hint} role="alert">
           {translate("settingsPanels.mcpUnavailable", { error: server.error ?? "" })}
         </p>
       ) : server ? (
-        server.running && server.url ? (
+        server.isRunning && server.url ? (
           <p className={styles.hint}>
             {server.port ? translate("settingsPanels.mcpUrlWithPort", { url: server.url, port: server.port }) : translate("settingsPanels.mcpUrl", { url: server.url })}
           </p>
@@ -412,9 +412,9 @@ function McpCard() {
           <p className={styles.hint}>{translate("settingsPanels.mcpNotRunning")}</p>
         )
       ) : null}
-      {server?.db_path ? (
+      {server?.dbPath ? (
         <p className={styles.hint}>
-          {translate("settingsPanels.mcpDbPath")}: <code className={styles.agentCommand}>{server.db_path}</code>
+          {translate("settingsPanels.mcpDbPath")}: <code className={styles.agentCommand}>{server.dbPath}</code>
         </p>
       ) : null}
     </div>
@@ -534,7 +534,7 @@ function AgentPanel({
             onChange={(event) => onDefaultAgentChange(event.target.value || null)}
           >
             <option value="">{translate("settingsPanels.askEachTime")}</option>
-            {agents.filter((agent) => agent.available).map((agent) => (
+            {agents.filter((agent) => agent.isAvailable).map((agent) => (
               <option key={agent.id} value={agent.id}>
                 {agent.label} ({agent.id})
               </option>
@@ -552,7 +552,7 @@ function AgentPanel({
           <div className={styles.agentList}>
             {profiles.map((profile) => {
               const detected = agents.find((agent) => agent.id === profile.id);
-              const isAvailable = detected?.available ?? true;
+              const isAvailable = detected?.isAvailable ?? true;
               return (
                 <div className={styles.agentEntry} key={profile.id}>
                   <div className={styles.agentRow}>
@@ -770,15 +770,15 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
                 {onRetryVoiceModels ? <button className={styles.chip} onClick={onRetryVoiceModels}>{translate("nav.retry")}</button> : null}
               </div>
             ) : null}
-            {voiceModels.length > 0 && !voiceModels.some((model) => model.downloaded) ? <p className={styles.hint}>{translate("settingsPanels.modelsNone")}</p> : null}
+            {voiceModels.length > 0 && !voiceModels.some((model) => model.isDownloaded) ? <p className={styles.hint}>{translate("settingsPanels.modelsNone")}</p> : null}
             <div className={styles.modelList}>
               {voiceModels.map((model) => (
                 <div className={styles.modelRow} key={model.id}>
                   <div className={styles.modelIdentity}>
-                    <span className={styles.modelName} title={model.description}>{model.display_name}</span>
-                    <span className={styles.modelMeta}>{model.size_label}</span>
+                    <span className={styles.modelName} title={model.description}>{model.displayName}</span>
+                    <span className={styles.modelMeta}>{model.sizeLabel}</span>
                   </div>
-                  {voiceDownload?.id === model.id ? <span className={styles.status}>{Math.floor(voiceDownload.percent)}%</span> : model.active ? <span className={`${styles.chip} ${styles.chipActive}`}>{translate("settingsPanels.active")}</span> : model.downloaded ? <button className={styles.chip} onClick={() => onVoiceModelSelect(model.id)}>{translate("settingsPanels.use")}</button> : <button className={styles.chip} disabled={voiceDownload !== null} onClick={() => onVoiceModelDownload(model.id)}>{translate("settingsPanels.download")}</button>}
+                  {voiceDownload?.id === model.id ? <span className={styles.status}>{Math.floor(voiceDownload.percent)}%</span> : model.isActive ? <span className={`${styles.chip} ${styles.chipActive}`}>{translate("settingsPanels.active")}</span> : model.isDownloaded ? <button className={styles.chip} onClick={() => onVoiceModelSelect(model.id)}>{translate("settingsPanels.use")}</button> : <button className={styles.chip} disabled={voiceDownload !== null} onClick={() => onVoiceModelDownload(model.id)}>{translate("settingsPanels.download")}</button>}
                 </div>
               ))}
             </div>

@@ -95,11 +95,11 @@ pub(crate) fn parse_import_snapshot(raw: &str) -> Result<WorkspaceStore, String>
 pub(crate) fn mark_imported_sessions_suspended(store: &mut WorkspaceStore) {
     for workspace in &mut store.workspaces {
         for terminal in &mut workspace.terminals {
-            terminal.suspended = true;
+            terminal.is_suspended = true;
         }
         for pane in &mut workspace.panes {
             for tab in &mut pane.tabs {
-                tab.suspended = true;
+                tab.is_suspended = true;
             }
         }
     }
@@ -119,7 +119,7 @@ pub(crate) fn transfer_summary(store: &WorkspaceStore, path: &Path) -> Workspace
         workspace_count: store.workspaces.len(),
         group_count: store.groups.len(),
         terminal_count: terminals().count(),
-        suspended_terminal_count: terminals().filter(|terminal| terminal.suspended).count(),
+        suspended_terminal_count: terminals().filter(|terminal| terminal.is_suspended).count(),
     }
 }
 

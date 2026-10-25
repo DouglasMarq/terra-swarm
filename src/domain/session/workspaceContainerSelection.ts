@@ -49,12 +49,12 @@ export function selectWorkspaceContainerId(
   add(project?.activeContainerId);
 
   const available = options.isVisibleOnly
-    ? containers.filter((container) => container.visible)
+    ? containers.filter((container) => container.isVisible)
     : containers;
   for (const container of available) add(container.id);
 
   if (options.isVisibleOnly) {
-    return candidates.find((id) => byId.get(id)?.visible) ?? null;
+    return candidates.find((id) => byId.get(id)?.isVisible) ?? null;
   }
-  return candidates.find((id) => byId.get(id)?.visible) ?? candidates[0] ?? null;
+  return candidates.find((id) => byId.get(id)?.isVisible) ?? candidates[0] ?? null;
 }

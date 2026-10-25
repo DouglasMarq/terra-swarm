@@ -20,7 +20,7 @@ import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useGroupActions } from "./useGroupActions";
 
 const groups: WorkspaceGroup[] = [
-  { id: "grp-core", name: "Core", collapsed: false, projectIds: ["ws-alpha"], parentGroupId: null, suspended: false },
+  { id: "grp-core", name: "Core", isCollapsed: false, projectIds: ["ws-alpha"], parentGroupId: null, isSuspended: false },
 ];
 
 const workspaces: Workspace[] = [
@@ -72,9 +72,9 @@ describe("useGroupActions", () => {
     await actions.suspendGroup("grp-core");
 
     expect(apiMock.suspendGroup).toHaveBeenCalledWith("grp-core");
-    const suspended = workspacesNow().flatMap((workspace) => workspace.terminals).filter((terminal) => terminal.suspended);
+    const suspended = workspacesNow().flatMap((workspace) => workspace.terminals).filter((terminal) => terminal.isSuspended);
     expect(suspended.map((terminal) => terminal.id)).toEqual(["term-one", "term-two"]);
-    expect(useOrchestrationStore.getState().groups[0]?.suspended).toBe(true);
+    expect(useOrchestrationStore.getState().groups[0]?.isSuspended).toBe(true);
   });
 
   it("Given a failing backend, when a group is suspended, then no agent is marked suspended", async () => {
@@ -96,7 +96,7 @@ describe("useGroupActions", () => {
       expect.objectContaining({ terminalId: "term-two", wsId: "ws-beta" }),
     ]));
     expect(apiMock.resumeGroup).toHaveBeenCalledWith("grp-core");
-    expect(useOrchestrationStore.getState().groups[0]?.suspended).toBe(false);
+    expect(useOrchestrationStore.getState().groups[0]?.isSuspended).toBe(false);
   });
 
   it("Given one agent fails to resume, when the group is resumed, then the group is suspended again with a notice", async () => {
@@ -106,7 +106,7 @@ describe("useGroupActions", () => {
 
     expect(apiMock.resumeGroup).not.toHaveBeenCalled();
     expect(apiMock.suspendGroup).toHaveBeenCalledWith("grp-core");
-    expect(useOrchestrationStore.getState().groups[0]?.suspended).toBe(true);
+    expect(useOrchestrationStore.getState().groups[0]?.isSuspended).toBe(true);
     expect(useTerminalRuntimeStore.getState().notifItems).toHaveLength(1);
   });
 
@@ -117,7 +117,7 @@ describe("useGroupActions", () => {
     await actions.resumeGroup("grp-core");
 
     expect(apiMock.suspendGroup).toHaveBeenCalledWith("grp-core");
-    expect(useOrchestrationStore.getState().groups[0]?.suspended).toBe(true);
+    expect(useOrchestrationStore.getState().groups[0]?.isSuspended).toBe(true);
     expect(useTerminalRuntimeStore.getState().notifItems).toHaveLength(1);
   });
 });

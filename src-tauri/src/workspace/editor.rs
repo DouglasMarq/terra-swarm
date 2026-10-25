@@ -17,7 +17,7 @@ const BYTES_PER_KB: u64 = 1024;
 pub struct WorkspaceFileContent {
     pub path: String,
     pub content: String,
-    pub binary: bool,
+    pub is_binary: bool,
     pub size: u64,
     pub modified: u64,
 }
@@ -84,7 +84,7 @@ pub(crate) fn read_file(root: &Path, relative: &str) -> Result<WorkspaceFileCont
     };
     Ok(WorkspaceFileContent {
         path: relative.trim().replace('\\', "/"),
-        binary: text.is_none(),
+        is_binary: text.is_none(),
         content: text.unwrap_or_default(),
         size,
         modified: modified_millis(&target)?,
@@ -186,7 +186,7 @@ mod tests {
         std::fs::write(root.join("src/main.ts"), "let a = 1;\n").unwrap();
         let file = read_file(&root, "src/main.ts").unwrap();
         assert_eq!(file.content, "let a = 1;\n");
-        assert!(!file.binary);
+        assert!(!file.is_binary);
         let saved = write_file(
             &root,
             FileSave {
@@ -320,7 +320,7 @@ mod tests {
         }
         std::fs::write(root.join("logo.png"), [0x89, b'P', b'N', b'G', 0, 1, 2]).unwrap();
         let binary = read_file(&root, "logo.png").unwrap();
-        assert!(binary.binary);
+        assert!(binary.is_binary);
         assert!(binary.content.is_empty());
         let _ = std::fs::remove_dir_all(&root);
         let _ = std::fs::remove_file(outside);

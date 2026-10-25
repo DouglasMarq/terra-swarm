@@ -55,7 +55,7 @@ function task(id: string, extra: Partial<McpTask> = {}): McpTask {
 }
 
 function info(extra: Partial<McpServerInfo> = {}): McpServerInfo {
-  return { enabled: true, available: true, running: true, url: "http://127.0.0.1:9/mcp", port: 9, db_path: "/tmp/mcp.db", error: null, ...extra };
+  return { isEnabled: true, isAvailable: true, isRunning: true, url: "http://127.0.0.1:9/mcp", port: 9, dbPath: "/tmp/mcp.db", error: null, ...extra };
 }
 
 const agents = [

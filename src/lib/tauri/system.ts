@@ -1,5 +1,6 @@
 import { open, save, type OpenDialogOptions, type SaveDialogOptions } from "@tauri-apps/plugin-dialog";
 import type { AgentInfo } from "../../domain/agent.model";
+import type { SystemFont } from "../terminalFonts";
 import type { WorkspaceGitStatus } from "../../domain/workspace.model";
 import { invokeCommand } from "./commands";
 
@@ -19,7 +20,7 @@ export function listShells(): Promise<string[]> {
   return invokeCommand("listShells");
 }
 
-export function listSystemFonts(): Promise<{ name: string; monospace: boolean }[]> {
+export function listSystemFonts(): Promise<SystemFont[]> {
   return invokeCommand("listSystemFonts");
 }
 

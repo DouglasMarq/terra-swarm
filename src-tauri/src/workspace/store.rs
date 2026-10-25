@@ -42,8 +42,8 @@ impl WorkspaceStore {
             containers: vec![Self::new_container(&id, Self::default_container_id(&id))],
             active_pane_id: None,
             active_container_id: None,
-            collapsed: false,
-            archived: false,
+            is_collapsed: false,
+            is_archived: false,
             created_at: Some(crate::clock::now_epoch_millis()),
             layout_mode: Some(default_layout_mode()),
             layout: Some(WorkspaceLayout::default()),
@@ -154,7 +154,7 @@ impl WorkspaceStore {
 
 fn refresh_terminal(existing: &mut TerminalMeta, meta: TerminalMeta) {
     existing.command = meta.command;
-    existing.suspended = false;
+    existing.is_suspended = false;
     if meta.worktree.is_some() {
         existing.worktree = meta.worktree;
     }

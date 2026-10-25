@@ -9,7 +9,7 @@ vi.mock("../lib/tauri/pty", () => ({ ptyApi: pty }));
 
 import { INSPECTOR_RUNTIME_POLL_MS, useInspectorRuntime } from "./useInspectorRuntime";
 
-const info: TerminalRuntimeInfo = { id: "t-1", pid: 42, cols: 120, rows: 40, running: true, reaped: false, generation: 1 };
+const info: TerminalRuntimeInfo = { id: "t-1", pid: 42, cols: 120, rows: 40, isRunning: true, isReaped: false, generation: 1 };
 
 describe("useInspectorRuntime", () => {
   beforeEach(() => {

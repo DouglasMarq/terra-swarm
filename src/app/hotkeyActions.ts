@@ -114,21 +114,21 @@ export function recordedHotkey(event: KeyboardEvent): Hotkey | null {
   if (MODIFIER_KEYS.includes(event.key)) return null;
   const hotkey: Hotkey = {
     key: event.key,
-    meta: event.metaKey,
-    shift: event.shiftKey,
-    ctrl: event.ctrlKey,
-    alt: event.altKey,
+    hasMeta: event.metaKey,
+    hasShift: event.shiftKey,
+    hasCtrl: event.ctrlKey,
+    hasAlt: event.altKey,
   };
-  if (!hotkey.meta && !hotkey.ctrl && !hotkey.alt) return null;
+  if (!hotkey.hasMeta && !hotkey.hasCtrl && !hotkey.hasAlt) return null;
   return hotkey;
 }
 
 function sameHotkey(left: Hotkey, right: Hotkey): boolean {
   return left.key === right.key
-    && left.meta === right.meta
-    && left.shift === right.shift
-    && left.ctrl === right.ctrl
-    && left.alt === right.alt;
+    && left.hasMeta === right.hasMeta
+    && left.hasShift === right.hasShift
+    && left.hasCtrl === right.hasCtrl
+    && left.hasAlt === right.hasAlt;
 }
 
 export interface HotkeyCapture {

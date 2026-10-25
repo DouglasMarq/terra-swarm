@@ -423,12 +423,12 @@ function createInGroupCommand(group: WorkspaceGroup): CommandDescriptor {
 
 function startAgentLabel(agent: AgentInfo, hasAgentWorkspace: boolean): string {
   const name = agent.label.trim() || agent.id;
-  if (!agent.available) return translateNow("palette.agentUnavailable", { name });
+  if (!agent.isAvailable) return translateNow("palette.agentUnavailable", { name });
   return hasAgentWorkspace ? translateNow("palette.startAgent", { name }) : translateNow("palette.startAgentNoProject", { name });
 }
 
 function startAgentDescription(agent: AgentInfo, hasAgentWorkspace: boolean): string {
-  if (!agent.available) return translateNow("palette.agentUnavailableDesc");
+  if (!agent.isAvailable) return translateNow("palette.agentUnavailableDesc");
   return hasAgentWorkspace ? translateNow("palette.startAgentDesc") : translateNow("palette.pickProjectFirst");
 }
 
@@ -442,7 +442,7 @@ function startAgentCommand(agent: AgentInfo, focusedWorkspaceId: string | null):
     group: "create",
     keywords: [agentName, agent.id, "agente", "iniciar", "disponível", "disponivel"],
     icon: "agent",
-    isDisabled: !(agent.available && hasAgentWorkspace),
+    isDisabled: !(agent.isAvailable && hasAgentWorkspace),
     intent: {
       kind: "create-agent",
       workspaceId: focusedWorkspaceId,

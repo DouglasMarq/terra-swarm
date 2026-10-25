@@ -40,10 +40,10 @@ pub fn worktree_remove(
     store: State<'_, Mutex<WorkspaceStore>>,
     workspace_id: String,
     terminal_id: String,
-    delete_branch: bool,
+    should_delete_branch: bool,
 ) -> Result<(), String> {
     let info = recorded(&store, &workspace_id, &terminal_id)?;
-    worktree::remove(&info, delete_branch)
+    worktree::remove(&info, should_delete_branch)
 }
 
 #[tauri::command(async)]

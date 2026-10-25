@@ -8,10 +8,11 @@ use super::shell::find_on_path;
 use super::shell::user_shell;
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentInfo {
     pub id: String,
     pub label: String,
-    pub available: bool,
+    pub is_available: bool,
 }
 
 pub(super) fn is_command_available(id: &str) -> bool {
@@ -75,14 +76,14 @@ pub fn detect_agents() -> Vec<AgentInfo> {
         .map(|agent| AgentInfo {
             id: agent.id.clone(),
             label: agent.label.clone(),
-            available: found.contains(&agent.id),
+            is_available: found.contains(&agent.id),
         })
         .collect();
-    agents.sort_by_key(|agent| !agent.available);
+    agents.sort_by_key(|agent| !agent.is_available);
     agents.push(AgentInfo {
         id: "shell".into(),
         label: "Shell".into(),
-        available: true,
+        is_available: true,
     });
     agents
 }

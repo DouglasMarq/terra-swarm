@@ -33,15 +33,15 @@ const snapshot: WorkspaceSnapshotV2 = {
     activePaneId: "pane-one",
     activeContainerId: "container-one",
     layout: { mode: "grid" },
-    collapsed: false,
+    isCollapsed: false,
   }],
   groups: [{
     id: "group-agents",
     name: "Agentes",
     projectIds: ["project-one"],
     parentGroupId: null,
-    collapsed: false,
-    suspended: false,
+    isCollapsed: false,
+    isSuspended: false,
     layout: { mode: "grid" },
   }],
   containers: [{
@@ -49,10 +49,10 @@ const snapshot: WorkspaceSnapshotV2 = {
     projectId: "project-one",
     paneIds: ["pane-one"],
     layout: { mode: "grid" },
-    visible: true,
-    collapsed: false,
-    closed: false,
-    fullscreen: false,
+    isVisible: true,
+    isCollapsed: false,
+    isClosed: false,
+    isFullscreen: false,
   }],
   panes: [{
     id: "pane-one",
@@ -70,7 +70,7 @@ const snapshot: WorkspaceSnapshotV2 = {
     cwd: "/work/terra",
     width: 120,
     title: "Codex executor",
-    orphaned: false,
+    isOrphaned: false,
   }],
   orphanedTabIds: [],
   activeProjectId: "project-one",
@@ -126,7 +126,7 @@ describe("resolveInspectorTarget", () => {
   it("Given an observed exit and a stale suspended flag, when resolving the target, then the exit wins", () => {
     const suspended = {
       ...workspace,
-      terminals: [{ ...defined(workspace.terminals[0]), suspended: true }],
+      terminals: [{ ...defined(workspace.terminals[0]), isSuspended: true }],
     };
     expect(resolveInspectorTarget({
       focusedId: "pty-codex",

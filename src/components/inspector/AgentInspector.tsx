@@ -41,7 +41,7 @@ export function AgentInspector({ target, label, status, request, activity, runti
   const runtimeText = runtime.status === "loading"
     ? translate("inspector.loading")
     : info
-      ? info.running ? translate("inspector.running") : info.reaped ? translate("status.exited") : translate("status.idle")
+      ? info.isRunning ? translate("inspector.running") : info.isReaped ? translate("status.exited") : translate("status.idle")
       : translate("inspector.unavailable");
 
   return (

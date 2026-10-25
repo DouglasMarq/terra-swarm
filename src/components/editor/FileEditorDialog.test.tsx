@@ -20,7 +20,7 @@ describe("FileEditorDialog", () => {
   beforeEach(() => {
     api.readWorkspaceFile.mockReset();
     api.writeWorkspaceFile.mockReset();
-    api.readWorkspaceFile.mockResolvedValue({ path: "src/a.ts", content: "one", binary: false, size: 3, modified: 10 });
+    api.readWorkspaceFile.mockResolvedValue({ path: "src/a.ts", content: "one", isBinary: false, size: 3, modified: 10 });
   });
 
   afterEach(() => act(() => useEditorStore.getState().close()));
@@ -51,7 +51,7 @@ describe("FileEditorDialog", () => {
   });
 
   it("Given a binary file, when opening it, then the editor does not open it", async () => {
-    api.readWorkspaceFile.mockResolvedValue({ path: "logo.png", content: "", binary: true, size: 9, modified: 1 });
+    api.readWorkspaceFile.mockResolvedValue({ path: "logo.png", content: "", isBinary: true, size: 9, modified: 1 });
     render(<FileEditorDialog />);
     act(() => useEditorStore.getState().open({ workspaceId: "ws", path: "logo.png" }));
     expect(await screen.findByText(/binário/i)).toBeTruthy();

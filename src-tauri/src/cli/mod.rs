@@ -141,4 +141,53 @@ mod tests {
         assert_eq!(status.summary, "Allow Bash?");
         assert!(post_hook(&url, "nope", &body).unwrap_err().contains("401"));
     }
+
+    fn answering_once(response: &'static [u8]) -> String {
+        use std::io::Write;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0u8; 4096];
+            let _ = stream.read(&mut request);
+            let _ = stream.write_all(response);
+        });
+        format!("http://127.0.0.1:{}/mcp", port)
+    }
+
+    #[test]
+    fn given_servers_that_refuse_or_say_nothing_when_posting_a_hook_then_the_failure_is_described()
+    {
+        let refused = answering_once(b"HTTP/1.1 503 Service Unavailable\r\n\r\n");
+        let silent = answering_once(b"");
+
+        assert_eq!(
+            post_hook(&refused, "token", "{}"),
+            Err("server answered 503".to_string())
+        );
+        assert_eq!(
+            post_hook(&silent, "token", "{}"),
+            Err("server answered nothing".to_string())
+        );
+        assert_eq!(
+            post_hook("http://example.com:80/mcp", "token", "{}"),
+            Err("TERRA_MCP_URL is not a loopback address".to_string())
+        );
+    }
+
+    #[test]
+    fn given_a_hook_without_an_agent_or_event_when_running_then_it_exits_cleanly() {
+        assert_eq!(
+            run(&["terra-swarm".to_string(), "hook".to_string()]),
+            Some(0)
+        );
+        assert_eq!(
+            run(&[
+                "terra-swarm".to_string(),
+                "hook".to_string(),
+                "claude".to_string()
+            ]),
+            Some(0)
+        );
+    }
 }

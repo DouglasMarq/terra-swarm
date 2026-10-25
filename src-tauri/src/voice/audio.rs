@@ -1020,3 +1020,101 @@ mod stderr_tests {
         assert_eq!(stderr_identity(), original);
     }
 }
+
+#[cfg(test)]
+mod processing_tests {
+    use super::*;
+    use std::time::Duration;
+    use tauri::test::{mock_app, MockRuntime};
+    use tauri::{App, Listener};
+
+    const EVENT_DEADLINE: Duration = Duration::from_secs(5);
+    const SOURCE_RATE: u32 = 48000;
+    const STEREO: u16 = 2;
+
+    fn context(
+        app: &App<MockRuntime>,
+        resampler: Option<Arc<Mutex<Fft<f32>>>>,
+    ) -> StreamContext<MockRuntime> {
+        StreamContext {
+            channels: STEREO,
+            resampler,
+            resample_pending: Arc::new(Mutex::new(Vec::new())),
+            buffer: Arc::new(Mutex::new(Vec::new())),
+            sample_counter: Arc::new(Mutex::new(0)),
+            silence_counter: Arc::new(Mutex::new(0)),
+            total_checks: Arc::new(Mutex::new(0)),
+            app: app.handle().clone(),
+        }
+    }
+
+    fn events_of(app: &App<MockRuntime>, event: &str) -> mpsc::Receiver<String> {
+        let (event_tx, event_rx) = mpsc::channel();
+        app.listen(event.to_string(), move |event| {
+            let _ = event_tx.send(event.payload().to_string());
+        });
+        event_rx
+    }
+
+    fn stereo_frames(frames: usize, sample: f32) -> Vec<f32> {
+        vec![sample; frames * usize::from(STEREO)]
+    }
+
+    #[test]
+    fn given_input_at_the_target_rate_when_processing_then_it_is_downmixed_and_its_level_reported()
+    {
+        let app = mock_app();
+        let levels = events_of(&app, AUDIO_LEVEL_EVENT);
+        let ctx = context(&app, resampler_for(TARGET_SAMPLE_RATE).unwrap());
+
+        process_audio(&stereo_frames(LEVEL_EMIT_INTERVAL, 0.5), &ctx);
+
+        assert_eq!(ctx.buffer.lock_or_recover().len(), LEVEL_EMIT_INTERVAL);
+        assert!(ctx
+            .buffer
+            .lock_or_recover()
+            .iter()
+            .all(|sample| (sample - 0.5).abs() < f32::EPSILON));
+        assert_eq!(levels.recv_timeout(EVENT_DEADLINE), Ok("0.5".to_string()));
+    }
+
+    #[test]
+    fn given_input_at_another_rate_when_processing_then_whole_chunks_are_resampled_and_the_rest_waits(
+    ) {
+        let app = mock_app();
+        let resampler = resampler_for(SOURCE_RATE).unwrap();
+        assert!(resampler.is_some());
+        let ctx = context(&app, resampler);
+
+        process_audio(&stereo_frames(RESAMPLE_CHUNK_SIZE + 10, 0.25), &ctx);
+
+        assert_eq!(ctx.resample_pending.lock_or_recover().len(), 10);
+        let resampled = ctx.buffer.lock_or_recover().len();
+        assert!(resampled > 0 && resampled < RESAMPLE_CHUNK_SIZE);
+    }
+
+    #[test]
+    fn given_a_long_run_of_silence_when_checking_levels_then_silence_is_reported_once_per_run() {
+        let app = mock_app();
+        let silences = events_of(&app, "voice-silence-detected");
+        let ctx = context(&app, None);
+        let checks = SILENCE_FRAME_COUNT.max(MIN_RECORDING_CHECKS + 1);
+
+        for _ in 0..checks {
+            check_silence(0.0, &ctx);
+        }
+
+        assert!(silences.recv_timeout(EVENT_DEADLINE).is_ok());
+        assert_eq!(*ctx.silence_counter.lock_or_recover(), 0);
+        check_silence(1.0, &ctx);
+        assert_eq!(*ctx.silence_counter.lock_or_recover(), 0);
+        assert_eq!(*ctx.total_checks.lock_or_recover(), checks + 1);
+    }
+
+    #[test]
+    fn given_an_idle_controller_when_stopping_then_it_accepts_the_command() {
+        let controller = AudioController::<MockRuntime>::new();
+
+        assert_eq!(controller.stop(), Ok(()));
+    }
+}

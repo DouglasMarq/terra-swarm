@@ -30,7 +30,7 @@ use crate::mcp::{McpHub, McpLease};
 use crate::roles::Role;
 use crate::scrollback::ScrollbackStore;
 use crate::sync::LockExt;
-use crate::workspace::{TerminalMeta, WorkspaceStore};
+use crate::workspace::{change_and_save, TerminalMeta, WorkspaceStore};
 use crate::worktree::{NewWorktree, WorktreeInfo};
 
 static NEXT_TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
@@ -431,20 +431,22 @@ fn record_terminal(
     workspace_id: &str,
     meta: &TerminalMeta,
 ) -> Result<(), String> {
-    let added = registries
-        .store
-        .lock_or_recover()
-        .add_terminal(workspace_id, meta.clone());
-    if added {
-        return Ok(());
+    let recorded = change_and_save(registries.store, |store| {
+        if !store.can_add_terminal(workspace_id, &meta.id) {
+            return Err(format!(
+                "workspace {} unavailable or terminal {} belongs to another workspace",
+                workspace_id, meta.id
+            ));
+        }
+        store.record_terminal(workspace_id, meta.clone());
+        Ok(())
+    });
+    if recorded.is_err() {
+        // The workspace was closed while we were spawning; don't leak the
+        // process or leave it running untracked.
+        kill_terminal_inner(registries.manager, &meta.id);
     }
-    // The workspace was closed while we were spawning; don't leak the
-    // process or leave it running untracked.
-    kill_terminal_inner(registries.manager, &meta.id);
-    Err(format!(
-        "workspace {} unavailable or terminal {} belongs to another workspace",
-        workspace_id, meta.id
-    ))
+    recorded
 }
 
 fn workspace_cwd(store: &Mutex<WorkspaceStore>, workspace_id: &str) -> Result<String, String> {
@@ -1066,7 +1068,9 @@ pub fn kill_terminal(app: AppHandle, id: String) -> Result<(), String> {
         eprintln!("failed to remove durable scrollback for {}: {}", id, error);
     }
     let store = app.state::<Mutex<WorkspaceStore>>();
-    store.lock_or_recover().remove_terminal(&id);
+    let mut workspaces = store.lock_or_recover();
+    workspaces.forget_terminal(&id);
+    workspaces.save();
     Ok(())
 }
 

@@ -15,6 +15,7 @@ import type {
   WorkbenchPaneProjection,
 } from "./types";
 import { useT } from "../../i18n";
+import { FULL_PERCENT } from "../../lib/math/percent";
 
 /** Share of the row the focused pane takes in spotlight mode, in percent. */
 const SPOTLIGHT_ACTIVE_PERCENT = 72;
@@ -55,7 +56,7 @@ function panelSizes(
     if (activeId) {
       const remaining = ordered.filter((id) => id !== activeId);
       sizes[activeId] = SPOTLIGHT_ACTIVE_PERCENT;
-      const remainder = remaining.length > 0 ? (100 - SPOTLIGHT_ACTIVE_PERCENT) / remaining.length : 0;
+      const remainder = remaining.length > 0 ? (FULL_PERCENT - SPOTLIGHT_ACTIVE_PERCENT) / remaining.length : 0;
       remaining.forEach((id) => {
         sizes[id] = remainder;
       });
@@ -64,7 +65,7 @@ function panelSizes(
   if (mode === "sidebar" && ordered.length > 1) {
     const sidebarId = ordered[0];
     sizes[sidebarId] = SIDEBAR_PANE_PERCENT;
-    const remainder = (100 - SIDEBAR_PANE_PERCENT) / (ordered.length - 1);
+    const remainder = (FULL_PERCENT - SIDEBAR_PANE_PERCENT) / (ordered.length - 1);
     ordered.slice(1).forEach((id) => {
       sizes[id] = remainder;
     });
@@ -136,7 +137,7 @@ export function PaneGrid({
     const gridStyle = isSpotlight
       ? {
           gridTemplateColumns: sideCount > 0
-            ? `minmax(0, ${SPOTLIGHT_ACTIVE_PERCENT}fr) minmax(0, ${100 - SPOTLIGHT_ACTIVE_PERCENT}fr)`
+            ? `minmax(0, ${SPOTLIGHT_ACTIVE_PERCENT}fr) minmax(0, ${FULL_PERCENT - SPOTLIGHT_ACTIVE_PERCENT}fr)`
             : "minmax(0, 1fr)",
           gridTemplateRows: `repeat(${Math.max(1, sideCount)}, minmax(0, 1fr))`,
         }

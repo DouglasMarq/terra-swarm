@@ -29,6 +29,7 @@ import { onFileDrop } from "../lib/tauri/fileDrop";
 import { PaneActionsMenu, type PaneMenuGroups } from "./workbench/PaneActionsMenu";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal-pane.css";
+import { FULL_PERCENT } from "../lib/math/percent";
 
 const SCROLLBACK_LINES = 10_000;
 /** Minimum gap between console warnings for one terminal's failed IPC calls. */
@@ -382,7 +383,7 @@ export function TerminalPane(props: Props) {
             title={t("pane.contextUsed", { count: contextUsed })}
           >
             <span className="pane-ctx-bar">
-              <span style={{ transform: `scaleX(${contextUsed / 100})` }} />
+              <span style={{ transform: `scaleX(${contextUsed / FULL_PERCENT})` }} />
             </span>
             {contextUsed}%
           </span>

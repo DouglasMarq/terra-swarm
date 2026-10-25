@@ -7,6 +7,8 @@ import type { NotificationItem } from "../../domain/notification.model";
 import { intlLocale, useT, type Translate } from "../../i18n";
 import "./notifications.css";
 
+const MAX_EARLIER_NOTIFICATIONS = 12;
+
 export interface NotificationCenterProps {
   items: readonly NotificationItem[];
   labels: Readonly<Record<string, AgentLabel | undefined>>;
@@ -54,7 +56,7 @@ export function NotificationCenter({
   const attentionCount = pending.length + contextOnly.length;
   const [filter, setFilter] = useState<Filter>(attentionCount > 0 ? "attention" : "all");
   const earlier = useMemo(
-    () => [...items].filter((item) => filter === "all" || item.read || item.system).sort((a, b) => b.ts - a.ts).slice(0, 12),
+    () => [...items].filter((item) => filter === "all" || item.read || item.system).sort((a, b) => b.ts - a.ts).slice(0, MAX_EARLIER_NOTIFICATIONS),
     [filter, items],
   );
   const pendingKeys = new Set(pending.map((item) => item.key));

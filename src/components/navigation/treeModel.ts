@@ -70,21 +70,16 @@ function agentNodeStatus(
   });
 }
 
+const STATUS_RANK: Readonly<Record<NavigatorStatus, number>> = {
+  attention: 4,
+  working: 3,
+  idle: 2.5,
+  suspended: 2,
+  exited: 1,
+};
+
 function statusRank(status: NavigatorStatus): number {
-  switch (status) {
-    case "attention":
-      return 4;
-    case "working":
-      return 3;
-    case "idle":
-      return 2.5;
-    case "suspended":
-      return 2;
-    case "exited":
-      return 1;
-    default:
-      return 0;
-  }
+  return STATUS_RANK[status];
 }
 
 function statusForProject(

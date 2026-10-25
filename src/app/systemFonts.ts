@@ -7,6 +7,8 @@
 import { api } from "../api";
 import { quoteFontFamily, type SystemFont } from "../lib/terminalFonts";
 
+const PROBE_FONT_SIZE = "72px";
+
 const KNOWN_TERMINAL_FONTS: readonly string[] = [
   "SF Mono",
   "Menlo",
@@ -51,9 +53,9 @@ function isFontInstalled(name: string): boolean {
   if (!context) return false;
   const sample = "mmmmmmmmmmlli10OWw@#{}";
   return ["monospace", "serif"].some((fallback) => {
-    context.font = `72px ${fallback}`;
+    context.font = `${PROBE_FONT_SIZE} ${fallback}`;
     const base = context.measureText(sample).width;
-    context.font = `72px ${quoteFontFamily(name)}, ${fallback}`;
+    context.font = `${PROBE_FONT_SIZE} ${quoteFontFamily(name)}, ${fallback}`;
     return context.measureText(sample).width !== base;
   });
 }

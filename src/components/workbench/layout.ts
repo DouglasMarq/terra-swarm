@@ -1,5 +1,6 @@
 import type { WorkspaceLayout } from "../../domain/workspace.model";
 import type { WorkbenchLayoutMode } from "./types";
+import { FULL_PERCENT } from "../../lib/math/percent";
 
 const WORKBENCH_LAYOUT_MODES: readonly WorkbenchLayoutMode[] = [
   "auto",
@@ -162,13 +163,19 @@ export function orderedIds(
   return result;
 }
 
+const HUNDREDTHS = 100;
+
+function roundToHundredths(value: number): number {
+  return Math.round(value * HUNDREDTHS) / HUNDREDTHS;
+}
+
 export function defaultPanelSizes(ids: readonly string[]): Record<string, number> {
   if (ids.length === 0) return {};
-  const size = Math.round((100 / ids.length) * 100) / 100;
+  const size = roundToHundredths(FULL_PERCENT / ids.length);
   const sizes = Object.fromEntries(ids.map((id) => [id, size]));
   const total = Object.values(sizes).reduce((sum, value) => sum + value, 0);
-  if (ids.length > 0 && total !== 100) {
-    sizes[ids[ids.length - 1]] += Math.round((100 - total) * 100) / 100;
+  if (ids.length > 0 && total !== FULL_PERCENT) {
+    sizes[ids[ids.length - 1]] += roundToHundredths(FULL_PERCENT - total);
   }
   return sizes;
 }
@@ -191,7 +198,7 @@ export function layoutForPanelIds(
     total += value;
   }
   if (total <= 0) return defaults;
-  for (const id of ordered) sizes[id] = (sizes[id] / total) * 100;
+  for (const id of ordered) sizes[id] = (sizes[id] / total) * FULL_PERCENT;
   return sizes;
 }
 

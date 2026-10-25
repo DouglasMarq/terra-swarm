@@ -5,6 +5,7 @@ import { DEFAULT_AGENT_PROFILES } from "../../domain/agentProfiles";
 import type { Translate } from "../../i18n";
 import { elapsedTime } from "../../domain/elapsedTime";
 import { clamp } from "../../lib/math/clamp";
+import { MS_PER_SECOND, SECONDS_PER_HOUR, SECONDS_PER_MINUTE } from "../../lib/time/durations";
 import type { TerminalMeta } from "../../domain/terminal.model";
 import type { Workspace, WorkspaceGroup } from "../../domain/workspace.model";
 
@@ -349,11 +350,11 @@ export function formatFleetDuration(value: FleetValue | undefined, now: number, 
   if (typeof value === "string") return value;
   if (value instanceof Date) return formatFleetRelativeTime(value.getTime(), now, t);
   if (!Number.isFinite(value)) return null;
-  const milliseconds = value < DURATION_SECONDS_LIMIT ? value * 1000 : value;
-  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
+  const milliseconds = value < DURATION_SECONDS_LIMIT ? value * MS_PER_SECOND : value;
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / MS_PER_SECOND));
+  const hours = Math.floor(totalSeconds / SECONDS_PER_HOUR);
+  const minutes = Math.floor((totalSeconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+  const seconds = totalSeconds % SECONDS_PER_MINUTE;
   if (hours > 0) return t("time.durationHours", { hours, minutes: String(minutes).padStart(2, "0") });
   if (minutes > 0) return t("time.durationMinutes", { minutes, seconds: String(seconds).padStart(2, "0") });
   return t("time.durationSeconds", { seconds });

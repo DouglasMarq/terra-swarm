@@ -55,6 +55,16 @@ const FALLBACK_SAMPLES = [
 
 const MIN_AMPLITUDE = 0;
 const MAX_AMPLITUDE = 1;
+const RESTING_BAR_SCALE = 0.28;
+const LEVEL_BAR_SCALE = MAX_AMPLITUDE - RESTING_BAR_SCALE;
+const WAVEFORM_WIDTH = 220;
+const WAVEFORM_HEIGHT = 44;
+const MIN_BAR_HEIGHT = 4;
+const BAR_HEIGHT_RANGE = 32;
+const BAR_OFFSET = 1;
+const MIN_BAR_WIDTH = 2;
+const BAR_GAP = 3;
+const BAR_DELAY_STEP_MS = 18;
 
 function clampAmplitude(value: number): number {
   return clamp(Number.isFinite(value) ? value : MIN_AMPLITUDE, MIN_AMPLITUDE, MAX_AMPLITUDE);
@@ -68,26 +78,26 @@ function Waveform({ level = 0, samples = FALLBACK_SAMPLES }: Pick<VoiceCapsulePr
   return (
     <svg
       className={styles.waveform}
-      viewBox="0 0 220 44"
+      viewBox={`0 0 ${WAVEFORM_WIDTH} ${WAVEFORM_HEIGHT}`}
       role="img"
       aria-label={t("settingsPanels.micLevel")}
       preserveAspectRatio="none"
     >
       {values.map((sample, index) => {
-        const value = clampAmplitude(sample) * (0.28 + amplitude * 0.72);
-        const height = 4 + value * 32;
-        const x = (index / values.length) * 220 + 1;
-        const width = Math.max(2, 220 / values.length - 3);
+        const value = clampAmplitude(sample) * (RESTING_BAR_SCALE + amplitude * LEVEL_BAR_SCALE);
+        const height = MIN_BAR_HEIGHT + value * BAR_HEIGHT_RANGE;
+        const x = (index / values.length) * WAVEFORM_WIDTH + BAR_OFFSET;
+        const width = Math.max(MIN_BAR_WIDTH, WAVEFORM_WIDTH / values.length - BAR_GAP);
         return (
           <rect
             className={styles.waveformBar}
             key={`${index}-${sample}`}
             x={x}
-            y={(44 - height) / 2}
+            y={(WAVEFORM_HEIGHT - height) / 2}
             width={width}
             height={height}
             rx="2"
-            style={{ "--bar-delay": `${index * 18}ms` } as CSSProperties}
+            style={{ "--bar-delay": `${index * BAR_DELAY_STEP_MS}ms` } as CSSProperties}
           />
         );
       })}

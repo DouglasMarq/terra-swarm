@@ -138,7 +138,9 @@ export function normalizeHotkeyForPlatform(
 export const MIN_FONT_SIZE = 8;
 export const MAX_FONT_SIZE = 32;
 const DEFAULT_FONT_SIZE = 13;
-export const GRID_COL_OPTIONS = [2, 3, 4, 5, 6, 7, 8] as const;
+const MIN_GRID_COLS = 2;
+const MAX_GRID_COLS = 8;
+export const GRID_COL_OPTIONS: readonly number[] = [...Array(MAX_GRID_COLS - MIN_GRID_COLS + 1).keys()].map((offset) => MIN_GRID_COLS + offset);
 const DEFAULT_GRID_COLS = 2;
 
 function loadNameSet(): NameSetId {
@@ -260,7 +262,7 @@ function loadFontSize(): number {
 
 function loadGridCols(): number {
   const raw = Number(storageGet("gridCols"));
-  return GRID_COL_OPTIONS.includes(raw as (typeof GRID_COL_OPTIONS)[number])
+  return GRID_COL_OPTIONS.includes(raw)
     ? raw
     : DEFAULT_GRID_COLS;
 }
@@ -476,7 +478,7 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   },
 
   setGridCols: (gridCols) => {
-    if (!GRID_COL_OPTIONS.includes(gridCols as (typeof GRID_COL_OPTIONS)[number])) return;
+    if (!GRID_COL_OPTIONS.includes(gridCols)) return;
     storageSet("gridCols", String(gridCols));
     set({ gridCols });
   },

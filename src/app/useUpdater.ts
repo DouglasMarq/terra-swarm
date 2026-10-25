@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { appVersion as readAppVersion, checkForUpdate, installUpdate as installAppUpdate, type Update, type UpdateCheckResult } from "../lib/tauri/updater";
 import { t } from "../i18n";
+import { MS_PER_HOUR } from "../lib/time/durations";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 
-const UPDATE_CHECK_MS = 60 * 60 * 1000;
+const UPDATE_CHECK_MS = MS_PER_HOUR;
 
 export type UpdateCheckState = "idle" | "checking" | "uptodate" | "error";
 

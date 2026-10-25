@@ -7,6 +7,7 @@ import { useT } from "../../i18n";
 import { RightDock, type RightDockProps } from "./RightDock";
 import { WindowChrome, type WindowChromeProps } from "./WindowChrome";
 import "./shell.css";
+import { FULL_PERCENT } from "../../lib/math/percent";
 
 /** The content panel never shrinks below this share of the window, in percent. */
 const MIN_CONTENT_PERCENT = 35;
@@ -53,7 +54,7 @@ function useCompactShell(): boolean {
 function layoutFor(stored: Layout | undefined, withSidebar: boolean, withDock: boolean): Layout {
   const sidebar = withSidebar ? stored?.navigator ?? DEFAULT_NAVIGATOR_PERCENT : 0;
   const dock = withDock ? stored?.dock ?? DEFAULT_DOCK_PERCENT : 0;
-  const layout: Layout = { content: Math.max(MIN_CONTENT_PERCENT, 100 - sidebar - dock) };
+  const layout: Layout = { content: Math.max(MIN_CONTENT_PERCENT, FULL_PERCENT - sidebar - dock) };
   if (withSidebar) layout.navigator = sidebar;
   if (withDock) layout.dock = dock;
   return layout;

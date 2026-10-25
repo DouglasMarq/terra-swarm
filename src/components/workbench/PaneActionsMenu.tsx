@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as Rea
 import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
 
+const MENU_TRIGGER_GAP_PX = 4;
+
 export interface PaneMenuItem {
   id: string;
   label: string;
@@ -48,8 +50,8 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
       const width = menu.offsetWidth;
       const height = menu.offsetHeight;
       const left = Math.min(Math.max(margin, trigger.right - width), window.innerWidth - width - margin);
-      let top = trigger.bottom + 4;
-      if (top + height > window.innerHeight - margin) top = Math.max(margin, trigger.top - 4 - height);
+      let top = trigger.bottom + MENU_TRIGGER_GAP_PX;
+      if (top + height > window.innerHeight - margin) top = Math.max(margin, trigger.top - MENU_TRIGGER_GAP_PX - height);
       setPosition({ top, left });
     };
     place();

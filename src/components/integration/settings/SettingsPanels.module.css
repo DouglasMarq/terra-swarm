@@ -82,7 +82,6 @@
 
 .rowLabel {
   display: grid;
-  /* Takes the free space, so a long hint wraps instead of the control. */
   flex: 1 1 240px;
   min-width: 0;
   gap: 3px;
@@ -509,7 +508,6 @@
   }
 }
 
-/* Agent names card */
 .nameChips {
   display: flex;
   flex-wrap: wrap;

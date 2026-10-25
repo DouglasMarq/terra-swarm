@@ -1,14 +1,6 @@
-/*
- * Terra Swarm visual foundation
- *
- * Quiet Console: zinc neutrals carry the interface; signal colours only
- * communicate running, attention, or failure. The --terra-* namespace keeps
- * these tokens composable while the existing shell is migrated incrementally.
- */
 :root {
   color-scheme: dark;
 
-  /* surfaces */
   --terra-bg: #101013;
   --terra-bg-sidebar: #131316;
   --terra-bg-panel: #17171b;
@@ -20,7 +12,6 @@
   --terra-scrim: rgb(0 0 0 / 66%);
   --terra-scrim-soft: rgb(0 0 0 / 32%);
 
-  /* borders and ink */
   --terra-border: #26262c;
   --terra-border-strong: #34343c;
   --terra-border-hover: #40404a;
@@ -33,7 +24,6 @@
   --terra-accent-soft: #d4d4d8;
   --terra-text-secondary: #a1a1aa;
 
-  /* status vocabulary: green = running, amber = attention, red = failure */
   --terra-green: #4ade80;
   --terra-green-dim: rgb(74 222 128 / 10%);
   --terra-amber: #e0b45c;
@@ -48,10 +38,6 @@
   --terra-red-line-strong: rgb(229 99 111 / 55%);
   --terra-red-surface: #2b1c20;
 
-  /*
-   * Conventional meanings outside the status vocabulary keep their hue through
-   * these aliases; components reference the alias, never the status token.
-   */
   --terra-success: var(--terra-green);
   --terra-danger: var(--terra-red);
   --terra-danger-ink: var(--terra-red-ink);
@@ -70,13 +56,9 @@
   --terra-priority-high-ink: var(--terra-amber-ink);
   --terra-priority-high-dim: var(--terra-amber-dim);
 
-  /* typography */
-  /* Geist ships with the app (@fontsource-variable/geist), no network needed. */
   --terra-font-sans: "Geist Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-  /* JetBrains Mono ships with the app too (@fontsource-variable/jetbrains-mono). */
   --terra-font-mono: "JetBrains Mono Variable", "SF Mono", Menlo, Monaco, Consolas, "DejaVu Sans Mono", "Courier New", monospace;
   --font-mono: var(--terra-font-mono);
-  /* 11 · 12 · 13 · 15 · 20 · 28 — screen titles carry the hierarchy, body stays 13 */
   --terra-font-size-micro: 11px;
   --terra-font-size-label: 12px;
   --terra-font-size-body: 13px;
@@ -84,7 +66,6 @@
   --terra-font-size-heading: 20px;
   --terra-font-size-display: 28px;
 
-  /* spacing */
   --terra-space-1: 4px;
   --terra-space-2: 8px;
   --terra-space-3: 12px;
@@ -92,7 +73,6 @@
   --terra-space-5: 24px;
   --terra-space-6: 32px;
 
-  /* radii */
   --terra-radius-sm: 4px;
   --terra-radius-md: 6px;
   --terra-radius-lg: 8px;
@@ -100,7 +80,6 @@
   --terra-radius-modal: 14px;
   --terra-radius-pill: 999px;
 
-  /* motion */
   --terra-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --terra-duration-press: 80ms;
   --terra-duration-hover: 140ms;
@@ -108,13 +87,11 @@
   --terra-focus-ring: 0 0 0 3px rgb(113 113 122 / 18%);
   --terra-pane-focus-ring: 0 0 0 1px #52525b;
 
-  /* elevation */
   --terra-shadow-pane: 0 1px 4px rgb(0 0 0 / 35%);
   --terra-shadow-dropdown: 0 8px 24px rgb(0 0 0 / 45%);
   --terra-shadow-popover: 0 12px 32px rgb(0 0 0 / 50%);
   --terra-shadow-modal: 0 24px 64px rgb(0 0 0 / 55%);
 
-  /* layers */
   --terra-z-dropdown: 100;
   --terra-z-popover: 200;
   --terra-z-sticky: 300;
@@ -123,7 +100,6 @@
   --terra-z-toast: 600;
   --terra-z-tooltip: 700;
 
-  /* scrollbar */
   --terra-scrollbar-thumb: #2c2c33;
   --terra-scrollbar-thumb-hover: #3a3a42;
 }

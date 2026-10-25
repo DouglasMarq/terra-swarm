@@ -95,9 +95,6 @@ body,
   background: transparent;
 }
 
-/* Neutral reset only. Buttons get their look from a class (.terra-button,
- * .pane-btn, …); the old global padding/background/border leaked into every
- * icon button and pushed icons off-centre. */
 button {
   font: inherit;
   color: inherit;
@@ -111,18 +108,11 @@ button:disabled {
   cursor: default;
 }
 
-/* Form controls use the system UI font by default; keep them on Geist. */
 input,
 select,
 textarea {
   font-family: inherit;
 }
-
-/* ---------- top bar ---------- */
-
-/* ---------- sidebar ---------- */
-
-/* ---------- main ---------- */
 
 @keyframes fade-in {
   from {
@@ -133,9 +123,6 @@ textarea {
   }
 }
 
-/* ---------- modal ---------- */
-
-/* ---------- agent picker ---------- */
 .agent-list {
   display: flex;
   flex-direction: column;
@@ -190,9 +177,6 @@ textarea {
   margin: 0;
 }
 
-/* ---------- resume dialog ---------- */
-
-/* ---------- settings ---------- */
 .settings-dialog-done {
   min-height: 30px;
   border: 1px solid var(--terra-accent);
@@ -217,19 +201,6 @@ textarea {
   box-shadow: var(--terra-focus-ring);
 }
 
-/* ---------- voice input ---------- */
-
-/* Selects behave like text inputs: focus (mouse or keyboard) gets the zinc
-   halo, matching `.modal input:focus`. */
-
-/* ---------- detached sessions ---------- */
-
-/* ---------- focus visibility ---------- */
-/* Keyboard-first: the zinc halo appears on :focus-visible only, so mouse
-   clicks never flash a ring. Text inputs keep their :focus treatment
-   (border + halo) since typing is always a keyboard context. */
-
-/* ---------- reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

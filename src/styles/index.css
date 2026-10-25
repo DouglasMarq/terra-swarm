@@ -1,4 +1,3 @@
-/* Import this once from the application entrypoint before view-specific CSS. */
 @import "./tokens.css";
 @import "./reset.css";
 @import "./layout.css";

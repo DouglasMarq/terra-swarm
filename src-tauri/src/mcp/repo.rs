@@ -37,6 +37,10 @@ static LIST_TASKS_SQL: LazyLock<String> = LazyLock::new(|| {
     )
 });
 
+fn sql_limit(limit: usize) -> i64 {
+    i64::try_from(limit).unwrap_or(i64::MAX)
+}
+
 fn status_rank_sql() -> String {
     let cases: String = STATUS_ORDER
         .iter()
@@ -314,7 +318,7 @@ impl Queries<'_> {
              ) WHERE recency <= ?2 ORDER BY id",
         )?;
         let ids = json_list(tasks.iter().map(|task| task.id.as_str()));
-        let rows = stmt.query_map(params![ids, limit as i64], |row| {
+        let rows = stmt.query_map(params![ids, sql_limit(limit)], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 TaskEvent {
@@ -466,8 +470,8 @@ impl Queries<'_> {
             params![
                 query.workspace_id,
                 query.reader,
-                query.unread_only as i64,
-                query.limit as i64
+                query.unread_only,
+                sql_limit(query.limit)
             ],
             message_from_row,
         )?;
@@ -517,7 +521,8 @@ impl Queries<'_> {
             params![workspace_id, reader],
             |row| row.get(0),
         )?;
-        Ok(count as usize)
+        Ok(usize::try_from(count)
+            .map_err(|_| rusqlite::Error::IntegralValueOutOfRange(0, count))?)
     }
 
     // ----- notes ----------------------------------------------------------
@@ -557,7 +562,6 @@ impl Queries<'_> {
         query: &str,
         limit: usize,
     ) -> StoreResult<Vec<Note>> {
-        let limit = limit as i64;
         let notes: Vec<Note> = match fts_query(query) {
             Some(fts) => {
                 let mut stmt = self.conn.prepare_cached(
@@ -567,7 +571,13 @@ impl Queries<'_> {
                      ORDER BY bm25(notes_fts, ?4, ?5), n.updated_at DESC LIMIT ?3",
                 )?;
                 let rows = stmt.query_map(
-                    params![fts, workspace_id, limit, NOTE_KEY_WEIGHT, NOTE_BODY_WEIGHT],
+                    params![
+                        fts,
+                        workspace_id,
+                        sql_limit(limit),
+                        NOTE_KEY_WEIGHT,
+                        NOTE_BODY_WEIGHT
+                    ],
                     note_from_row,
                 )?;
                 rows.collect::<Result<_, _>>()?
@@ -578,7 +588,8 @@ impl Queries<'_> {
                      FROM notes WHERE workspace_id = ?1
                      ORDER BY updated_at DESC, id DESC LIMIT ?2",
                 )?;
-                let rows = stmt.query_map(params![workspace_id, limit], note_from_row)?;
+                let rows =
+                    stmt.query_map(params![workspace_id, sql_limit(limit)], note_from_row)?;
                 rows.collect::<Result<_, _>>()?
             }
         };

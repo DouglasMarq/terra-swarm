@@ -110,6 +110,7 @@ CREATE INDEX idx_task_deps_depends_on ON task_deps(depends_on);
 const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2];
 
 pub fn schema_version() -> u32 {
+    // MIGRATIONS is a short compile-time list, so its length always fits in a u32.
     MIGRATIONS.len() as u32
 }
 
@@ -138,8 +139,9 @@ pub fn migrate(conn: &mut Connection) -> Result<u32, String> {
     if current == target {
         return Ok(current);
     }
+    let applied = usize::try_from(current).map_err(|error| error.to_string())?;
     let tx = conn.transaction().map_err(|error| error.to_string())?;
-    for (index, sql) in MIGRATIONS.iter().enumerate().skip(current as usize) {
+    for (index, sql) in MIGRATIONS.iter().enumerate().skip(applied) {
         tx.execute_batch(sql)
             .map_err(|error| format!("migration {} failed: {}", index + 1, error))?;
     }

@@ -93,8 +93,10 @@ impl TaskPriority {
     }
 
     pub fn from_rank(rank: i64) -> Self {
-        Self::ALL
-            .get(rank.clamp(TaskPriority::Urgent.rank(), TaskPriority::Low.rank()) as usize)
+        let rank = rank.clamp(TaskPriority::Urgent.rank(), TaskPriority::Low.rank());
+        usize::try_from(rank)
+            .ok()
+            .and_then(|index| Self::ALL.get(index))
             .copied()
             .unwrap_or(TaskPriority::Medium)
     }

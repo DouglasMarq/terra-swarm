@@ -1,7 +1,7 @@
 import { agentKind } from "../../domain/agentLabels";
 import { deriveAgentStatus, type AgentRunStatus } from "../../domain/agentStatus";
 import type { McpAgentState } from "../../types";
-import { DEFAULT_AGENT_PROFILES } from "../../lib/features/agentProfiles";
+import { DEFAULT_AGENT_PROFILES } from "../../domain/agentProfiles";
 import type { Translate } from "../../i18n";
 import { elapsedTime } from "../../domain/elapsedTime";
 import { clamp } from "../../lib/math/clamp";

@@ -1,4 +1,4 @@
-import { normalizeSearchText } from "./text/normalizeSearchText";
+import { normalizeSearchText } from "../lib/text/normalizeSearchText";
 
 /**
  * Commands understood by the voice orchestration layer.  This module only

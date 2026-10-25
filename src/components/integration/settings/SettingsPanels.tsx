@@ -10,7 +10,7 @@ import {
   DEFAULT_AGENT_PROFILES,
   fallbackProfile,
   type AgentProfile,
-} from "../../../lib/features/agentProfiles";
+} from "../../../domain/agentProfiles";
 import {
   type FeatureFlagId,
   type FeatureFlags,

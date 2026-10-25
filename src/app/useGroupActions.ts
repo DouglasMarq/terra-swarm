@@ -3,7 +3,7 @@ import { api } from "../api";
 import type { ResumeItem, Workspace, WorkspaceGroup } from "../types";
 import { t } from "../i18n";
 import { agentKind } from "../domain/agentLabels";
-import { planResume } from "../lib/session/resumePlanner";
+import { planResume } from "../domain/session/resumePlanner";
 import { useOrchestrationStore } from "../stores/orchestrationStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { resumeCommandFor, type TerminalSessions } from "./useTerminalSessions";

@@ -2,7 +2,7 @@ import { useT } from "../../i18n";
 import { AlertCircle, Check, ChevronUp, CircleStop, LoaderCircle, Mic, X } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
-import type { VoiceIntent } from "../../lib/voiceCommands";
+import type { VoiceIntent } from "../../domain/voiceCommands";
 import { Button } from "../ui/Button";
 import { clamp } from "../../lib/math/clamp";
 import { VoiceButton } from "./VoiceButton";

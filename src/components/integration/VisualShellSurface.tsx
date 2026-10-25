@@ -13,7 +13,7 @@ import {
   Square,
 } from "lucide-react";
 import type { PaneMenuGroups } from "../workbench/PaneActionsMenu";
-import { profileForCommand, resolveResumeCommand } from "../../lib/features/agentProfiles";
+import { profileForCommand, resolveResumeCommand } from "../../domain/agentProfiles";
 import { ApplicationShell } from "../shell/ApplicationShell";
 import { CollapsedSidebar, Sidebar, SurfaceSwitch, type CollapsedSidebarProject } from "../shell/Sidebar";
 import { NotificationCenter } from "../notifications/NotificationCenter";
@@ -55,7 +55,7 @@ import { useShellStore, type ShellSurface } from "../../stores/shellStore";
 import { useOrchestrationStore } from "../../stores/orchestrationStore";
 import { DEFAULT_HOTKEYS, formatHotkey, usePreferencesStore } from "../../stores/preferencesStore";
 import { useShallow as useOrchestrationShallow } from "zustand/react/shallow";
-import { selectWorkspaceContainerId } from "../../lib/session/workspaceContainerSelection";
+import { selectWorkspaceContainerId } from "../../domain/session/workspaceContainerSelection";
 import { formatShortcut, type ShortcutDefinition, type ShortcutPlatform } from "../../lib/platform/shortcuts";
 import {
   inspectorActionRequiresConfirmation,

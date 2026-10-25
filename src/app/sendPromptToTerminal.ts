@@ -1,6 +1,6 @@
 import { getTerminal } from "../terminalRegistry";
 import { writeTerminal } from "../lib/tauri/pty";
-import { promptPayload } from "../lib/session/sendPrompt";
+import { promptPayload } from "../domain/session/sendPrompt";
 import type { McpNudgePayload } from "../lib/tauri/mcp";
 
 /** Gap between the paste and Enter, so TUIs treat the text as one paste. */

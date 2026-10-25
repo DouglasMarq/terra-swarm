@@ -1,5 +1,5 @@
 import type { Translate } from "../../i18n";
-import type { VoiceIntent } from "../../lib/voiceCommands";
+import type { VoiceIntent } from "../../domain/voiceCommands";
 
 /**
  * Visual states intentionally describe the lifecycle of a voice capture, not

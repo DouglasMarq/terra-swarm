@@ -4,7 +4,7 @@ import type {
   Workspace,
   WorkspaceSnapshotV2,
 } from "../../types";
-import { profileForCommand } from "../../lib/features/agentProfiles";
+import { profileForCommand } from "../../domain/agentProfiles";
 
 export type InspectorRuntimeState = "ativo" | "suspenso" | "encerrado";
 export type InspectorActionKind = "focus" | "restart" | "detach" | "reattach" | "kill";

@@ -1,5 +1,5 @@
 /** Files dropped on a terminal: how their paths are typed and where the drop landed. */
-import { detectShortcutPlatform, type PlatformSignals } from "./platform/shortcuts";
+import { detectShortcutPlatform, type PlatformSignals } from "../lib/platform/shortcuts";
 
 export type DropPlatform = "mac" | "linux" | "windows";
 

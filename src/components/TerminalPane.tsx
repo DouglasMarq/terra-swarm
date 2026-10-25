@@ -18,7 +18,7 @@ import { Maximize2, Minimize2, GitBranch } from "lucide-react";
 import { t as translateNow, useT } from "../i18n";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { terminalFontStack } from "../lib/terminalFonts";
-import { detectDropPlatform, dropPointToClient, formatDroppedPaths } from "../lib/terminalDrop";
+import { detectDropPlatform, dropPointToClient, formatDroppedPaths } from "../domain/terminalDrop";
 import { onFileDrop } from "../lib/tauri/fileDrop";
 import { PaneActionsMenu, type PaneMenuGroups } from "./workbench/PaneActionsMenu";
 import "@xterm/xterm/css/xterm.css";

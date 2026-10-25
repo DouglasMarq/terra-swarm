@@ -60,7 +60,7 @@ const snapshot: WorkspaceSnapshotV2 = {
 };
 
 describe("WorkspaceWorkbench", () => {
-  it("keeps the height contract across the workbench and pane boundaries", () => {
+  it("Given the workbench, when it renders, then the height contract holds across the workbench and pane boundaries", () => {
     render(
       <WorkspaceWorkbench
         renderTab={({ tab }) => <div>Terminal {tab.title}</div>}
@@ -84,7 +84,7 @@ describe("WorkspaceWorkbench", () => {
     expect(document.querySelector(".terra-project-container__meta")).not.toBeInTheDocument();
   });
 
-  it("offers direct agent creation in an empty pane with its exact location", async () => {
+  it("Given an empty pane, when it renders, then it offers direct agent creation with its exact location", async () => {
     const user = userEvent.setup();
     const onNewTab = vi.fn();
     const emptyPaneSource: WorkspaceSnapshotV2 = {
@@ -127,7 +127,7 @@ describe("WorkspaceWorkbench", () => {
     });
   });
 
-  it("offers first-agent creation when a container has no panes", async () => {
+  it("Given a container with no panes, when it renders, then it offers first-agent creation", async () => {
     const user = userEvent.setup();
     const onNewTab = vi.fn();
     const emptyContainerSource: WorkspaceSnapshotV2 = {
@@ -170,7 +170,7 @@ describe("WorkspaceWorkbench", () => {
     });
   });
 
-  it("keeps every workbench boundary flexing to the available height", () => {
+  it("Given the workbench, when it renders, then every boundary flexes to the available height", () => {
     render(
       <WorkspaceWorkbench
         renderTab={({ tab }) => <div className="pane">Terminal {tab.title}</div>}
@@ -204,7 +204,7 @@ describe("WorkspaceWorkbench", () => {
     );
   });
 
-  it("keeps collapsed and hidden containers out of the active height split", () => {
+  it("Given collapsed and hidden containers, when splitting the height, then they stay out of the active split", () => {
     const secondProject = {
       ...snapshot.projects[0],
       id: "project-2",
@@ -258,7 +258,7 @@ describe("WorkspaceWorkbench", () => {
     expect(wrappers[1]).toContainElement(screen.getByText("Terminal Luna Max 2"));
   });
 
-  it("hides a visual container without dispatching a kill action", async () => {
+  it("Given a visual container, when hiding it, then no kill action is dispatched", async () => {
     const user = userEvent.setup();
     const onHideContainer = vi.fn();
     const onKillTab = vi.fn();
@@ -277,12 +277,12 @@ describe("WorkspaceWorkbench", () => {
     expect(onKillTab).not.toHaveBeenCalled();
   });
 
-  it("hides the tab lane for a single-agent pane", () => {
+  it("Given a single-agent pane, when it renders, then the tab lane is hidden", () => {
     render(<WorkspaceWorkbench renderTab={({ tab }) => <div>Terminal {tab.title}</div>} source={snapshot} />);
     expect(document.querySelector('button[aria-label="Encerrar Luna Max"]')).toBeNull();
   });
 
-  it("keeps tab termination owned by the lane without a duplicate toolbar action", async () => {
+  it("Given a tab lane, when terminating a tab, then the lane owns it without a duplicate toolbar action", async () => {
     const user = userEvent.setup();
     const onKillTab = vi.fn();
     const twoTabs: WorkspaceSnapshotV2 = {
@@ -314,7 +314,7 @@ describe("WorkspaceWorkbench", () => {
     });
   });
 
-  it("switches between Grade and Foco from the container header", async () => {
+  it("Given the container header, when switching modes, then it toggles between Grade and Foco", async () => {
     const user = userEvent.setup();
     const onWorkspaceLayoutChange = vi.fn();
     render(
@@ -337,7 +337,7 @@ describe("WorkspaceWorkbench", () => {
     );
   });
 
-  it("keeps collapse and fullscreen as visual callbacks", async () => {
+  it("Given a container, when collapsing it or making it fullscreen, then only visual callbacks run", async () => {
     const user = userEvent.setup();
     const onCollapseContainer = vi.fn();
     const onFullscreenContainer = vi.fn();
@@ -356,7 +356,7 @@ describe("WorkspaceWorkbench", () => {
     expect(onFullscreenContainer).toHaveBeenCalledWith("container-1", true);
   });
 
-  it("renders Grid as a real mounted CSS layout instead of a placeholder", () => {
+  it("Given Grid mode, when it renders, then a real mounted CSS layout is used instead of a placeholder", () => {
     const gridSource: WorkspaceSnapshotV2 = {
       ...snapshot,
       projects: [{
@@ -401,7 +401,7 @@ describe("WorkspaceWorkbench", () => {
     expect(screen.queryByText(/Custom grid/)).not.toBeInTheDocument();
   });
 
-  it("fixes the grid size from the 8×8 picker through the existing layout callback", async () => {
+  it("Given the 8×8 picker, when fixing the grid size, then the existing layout callback receives it", async () => {
     const user = userEvent.setup();
     const onLayoutChange = vi.fn();
     const gridSource: WorkspaceSnapshotV2 = {
@@ -456,7 +456,7 @@ describe("WorkspaceWorkbench", () => {
     });
   });
 
-  it("keeps agent tabs focusable without any reorder affordance", async () => {
+  it("Given agent tabs, when they render, then they stay focusable without any reorder affordance", async () => {
     const source: WorkspaceSnapshotV2 = {
       ...snapshot,
       panes: [{
@@ -488,7 +488,7 @@ describe("WorkspaceWorkbench", () => {
     expect(screen.queryByRole("button", { name: /Reordenar/ })).not.toBeInTheDocument();
   });
 
-  it("does not expose pane drag handles or cross-project drop state", () => {
+  it("Given panes, when they render, then no drag handle or cross-project drop state is exposed", () => {
     const secondProject = {
       ...snapshot.projects[0],
       id: "project-2",
@@ -541,7 +541,7 @@ describe("WorkspaceWorkbench", () => {
   });
 
 
-  it("returns a fixed grid to automatic sizing", async () => {
+  it("Given a fixed grid, when returning to automatic, then it sizes automatically again", async () => {
     const user = userEvent.setup();
     const onLayoutChange = vi.fn();
     const source: WorkspaceSnapshotV2 = {

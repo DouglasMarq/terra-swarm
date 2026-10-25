@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PaneActionsMenu } from "./PaneActionsMenu";
 
 describe("PaneActionsMenu", () => {
-  it("opens grouped actions, runs one and closes", async () => {
+  it("Given the pane menu, when an action is picked, then the grouped actions open, the action runs and the menu closes", async () => {
     const user = userEvent.setup();
     const restart = vi.fn();
     const kill = vi.fn();
@@ -32,7 +32,7 @@ describe("PaneActionsMenu", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
-  it("closes on Escape", async () => {
+  it("Given an open pane menu, when pressing Escape, then it closes", async () => {
     const user = userEvent.setup();
     render(<PaneActionsMenu label="Mais ações" groups={[[{ id: "a", label: "A", onSelect: vi.fn() }]]} />);
     await user.click(screen.getByRole("button", { name: "Mais ações" }));

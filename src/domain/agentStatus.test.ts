@@ -13,19 +13,19 @@ describe("isTerminalRunning", () => {
 });
 
 describe("deriveAgentStatus", () => {
-  it("lets the process state win", () => {
+  it("Given a suspended or exited process, when deriving the status, then the process state wins", () => {
     expect(deriveAgentStatus({ isSuspended: true, reported: "needs_input" })).toBe("suspended");
     expect(deriveAgentStatus({ hasExited: true, notifications: 3 })).toBe("exited");
   });
 
-  it("puts anything that needs a human first", () => {
+  it("Given anything that needs a human, when deriving the status, then it comes first", () => {
     expect(deriveAgentStatus({ reported: "needs_input" })).toBe("attention");
     expect(deriveAgentStatus({ reported: "blocked" })).toBe("attention");
     expect(deriveAgentStatus({ reported: "idle", notifications: 1 })).toBe("attention");
     expect(deriveAgentStatus({ reported: "working", contextUsed: 90 })).toBe("attention");
   });
 
-  it("uses the reported state, else assumes a live agent is working", () => {
+  it("Given a reported state or none, when deriving the status, then the reported state is used, else a live agent is working", () => {
     expect(deriveAgentStatus({ reported: "idle" })).toBe("idle");
     expect(deriveAgentStatus({ reported: "working" })).toBe("working");
     expect(deriveAgentStatus({})).toBe("working");

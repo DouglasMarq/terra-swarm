@@ -11,14 +11,14 @@ function task(id: string, status: McpTask["status"], position: number): McpTask 
 }
 
 describe("board model", () => {
-  it("orders each column by its manual position", () => {
+  it("Given tasks in a column, when ordering it, then they follow their manual position", () => {
     const columns = boardColumns([task("T-3", "todo", 2), task("T-1", "todo", 5), task("T-2", "done", 1)]);
     expect(columns.todo.map((columnTask) => columnTask.id)).toEqual(["T-3", "T-1"]);
     expect(columns.done.map((columnTask) => columnTask.id)).toEqual(["T-2"]);
     expect(columns.review).toEqual([]);
   });
 
-  it("drops between neighbours, at the top or at the end", () => {
+  it("Given a drop between neighbours, at the top or at the end, when computing the position, then it lands there", () => {
     const column = [task("a", "todo", 1), task("b", "todo", 2), task("c", "todo", 4)];
     expect(dropPosition(column, "c")).toBe(3);
     expect(dropPosition(column, "a")).toBe(0.5);
@@ -26,7 +26,7 @@ describe("board model", () => {
     expect(dropPosition([], null)).toBe(1);
   });
 
-  it("decodes drop targets", () => {
+  it("Given droppable ids, when decoding them, then the drop targets are recovered", () => {
     const tasks = [task("T-1", "review", 1)];
     expect(parseDropTarget("column:done", tasks)).toEqual({ kind: "column", status: "done", beforeId: null });
     expect(parseDropTarget("card:T-1", tasks)).toEqual({ kind: "column", status: "review", beforeId: "T-1" });
@@ -35,7 +35,7 @@ describe("board model", () => {
     expect(parseDropTarget("card:T-9", tasks)).toBeNull();
   });
 
-  it("plans a drop: move, reorder, hand off or nothing", () => {
+  it("Given a drop, when planning it, then it is a move, a reorder, a hand-off or nothing", () => {
     const tasks = [task("T-1", "todo", 1), task("T-2", "todo", 2), task("T-3", "review", 1)];
     const running = new Set(["t-1"]);
     expect(planDrop(tasks[0], "column:review", { tasks, runningAgents: running })).toEqual({ kind: "update", patch: { status: "review", position: 2 } });
@@ -55,27 +55,27 @@ function event(kind: McpTaskEvent["kind"], body = ""): McpTaskEvent {
 const agentLabel = (terminalId: string) => (terminalId === "t-2" ? "Lyra" : terminalId);
 
 describe("taskStatusLabel", () => {
-  it("given a task status, names it in the reader's language", () => {
+  it("Given a task status, when labelling it, then it is named in the reader's language", () => {
     expect(taskStatusLabel("in_progress", translateNow)).toBe("Em andamento");
   });
 
-  it("given text that is not a status, keeps it", () => {
+  it("Given text that is not a status, when labelling it, then it is kept", () => {
     expect(taskStatusLabel("archived", translateNow)).toBe("archived");
   });
 });
 
 describe("describeTaskEvent", () => {
-  it("given a status change from the backend, names both statuses", () => {
+  it("Given a status change from the backend, when describing the event, then both statuses are named", () => {
     expect(describeTaskEvent(event("status", "todo → in_progress"), translateNow, agentLabel)).toBe("moveu de A fazer para Em andamento");
   });
 
-  it("given an assignment, names the agent or the user, or says it was cleared", () => {
+  it("Given an assignment, when describing the event, then it names the agent or the user, or says it was cleared", () => {
     expect(describeTaskEvent(event("assigned", "t-2"), translateNow, agentLabel)).toBe("atribuiu a Lyra");
     expect(describeTaskEvent(event("assigned", "user"), translateNow, agentLabel)).toBe("atribuiu a você");
     expect(describeTaskEvent(event("assigned"), translateNow, agentLabel)).toBe("removeu o responsável");
   });
 
-  it("given the other kinds, describes them, and keeps a note's text", () => {
+  it("Given the other event kinds, when describing them, then they are described and a note's text is kept", () => {
     expect(describeTaskEvent(event("created"), translateNow, agentLabel)).toBe("criou a tarefa");
     expect(describeTaskEvent(event("claimed"), translateNow, agentLabel)).toBe("pegou a tarefa");
     expect(describeTaskEvent(event("completed", "tests pass"), translateNow, agentLabel)).toBe("entregou: tests pass");

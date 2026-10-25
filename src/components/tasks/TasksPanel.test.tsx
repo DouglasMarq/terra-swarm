@@ -63,7 +63,7 @@ describe("TasksPanel", () => {
   });
   afterEach(() => useMcpStore.getState().reset());
 
-  it("groups the board by status with the assignee and its state", async () => {
+  it("Given tasks, when the panel renders, then the board is grouped by status with the assignee and its state", async () => {
     api.mcpListTasks.mockResolvedValue([
       task("T-1", { status: "in_progress", assignee: "t-2", priority: "high" }),
       task("T-2"),
@@ -83,7 +83,7 @@ describe("TasksPanel", () => {
     expect(api.mcpListTasks).toHaveBeenCalledWith("ws-1");
   });
 
-  it("creates, moves, assigns and deletes tasks", async () => {
+  it("Given the panel, when creating, moving, assigning and deleting tasks, then each action reaches the store", async () => {
     const user = userEvent.setup();
     api.mcpListTasks.mockResolvedValue([task("T-1")]);
     render(<TasksPanel workspaceId="ws-1" agents={agents} />);
@@ -111,7 +111,7 @@ describe("TasksPanel", () => {
     expect(screen.queryByText("Write docs")).not.toBeInTheDocument();
   });
 
-  it("shows details and the progress log on demand", async () => {
+  it("Given a task, when asking for details, then the details and the progress log are shown", async () => {
     const user = userEvent.setup();
     api.mcpListTasks.mockResolvedValue([
       task("T-1", {
@@ -142,7 +142,7 @@ describe("TasksPanel", () => {
     ]);
   });
 
-  it("warns when the server is off and handles no project", async () => {
+  it("Given the server is off or no project is open, when the panel renders, then it warns or handles the missing project", async () => {
     api.mcpServerInfo.mockResolvedValue(info({ enabled: false }));
     api.mcpListTasks.mockResolvedValue([]);
     const { rerender } = render(<TasksPanel workspaceId="ws-1" agents={[]} />);
@@ -152,7 +152,7 @@ describe("TasksPanel", () => {
     expect(screen.getByText("Abra um projeto para ver as tarefas dele.")).toBeInTheDocument();
   });
 
-  it("explains when the database could not be opened", async () => {
+  it("Given the database could not be opened, when the panel renders, then it explains why", async () => {
     api.mcpServerInfo.mockResolvedValue(info({ available: false, enabled: false, error: "migration 1 failed" }));
     api.mcpListTasks.mockRejectedValue("the Terra MCP database is unavailable: migration 1 failed");
     render(<TasksPanel workspaceId="ws-1" agents={[]} />);

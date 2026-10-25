@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { dismissResumeItems } from "./resumeDismiss";
 
 describe("resume dismissal", () => {
-  it("keeps failed kills separate so only confirmed deletions can be removed", async () => {
+  it("Given failed kills, when dismissing resume items, then they stay separate so only confirmed deletions are removed", async () => {
     const kill = vi.fn(async (item: { terminalId: string }) => {
       if (item.terminalId === "term-fail") throw new Error("PTY ocupado");
     });
@@ -16,7 +16,7 @@ describe("resume dismissal", () => {
     expect(results.find((result) => result.status === "failed")).toMatchObject({ error: new Error("PTY ocupado") });
   });
 
-  it("supports retrying the failed item after a later backend success", async () => {
+  it("Given a failed item, when the backend later succeeds, then the retry removes it", async () => {
     const kill = vi.fn()
       .mockRejectedValueOnce(new Error("temporário"))
       .mockResolvedValueOnce(undefined);

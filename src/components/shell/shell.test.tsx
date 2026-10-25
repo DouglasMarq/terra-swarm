@@ -10,7 +10,7 @@ import { WindowChrome } from "./WindowChrome";
 import shellStyles from "./shell.css?raw";
 
 describe("ApplicationShell", () => {
-  it("reserves the native traffic-light area on macOS", () => {
+  it("Given macOS, when the shell renders, then the native traffic-light area is reserved", () => {
     render(
       <ApplicationShell sidebar={<div>Sidebar</div>}>
         <div>Content</div>
@@ -23,7 +23,7 @@ describe("ApplicationShell", () => {
     );
   });
 
-  it("renders the sidebar, content and the inspector when it is open", async () => {
+  it("Given an open inspector, when the shell renders, then the sidebar, content and inspector are rendered", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     render(
@@ -43,7 +43,7 @@ describe("ApplicationShell", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("swaps the sidebar for the rail when collapsed", () => {
+  it("Given a collapsed sidebar, when the shell renders, then the rail replaces the sidebar", () => {
     render(
       <ApplicationShell sidebar={<div>Full sidebar</div>} collapsedSidebar={<div>Rail</div>} isSidebarCollapsed>
         <div>Content</div>
@@ -54,7 +54,7 @@ describe("ApplicationShell", () => {
     expect(document.querySelector(".terra-shell")).toHaveAttribute("data-sidebar", "collapsed");
   });
 
-  it("renders floating overlays inside the body", () => {
+  it("Given floating overlays, when the shell renders, then they are rendered inside the body", () => {
     render(
       <ApplicationShell sidebar={<div />} overlay={<div>Voice capsule</div>}>
         <div>Content</div>
@@ -65,7 +65,7 @@ describe("ApplicationShell", () => {
 });
 
 describe("WindowChrome", () => {
-  it("shows where you are, search, attention, voice and inspector", async () => {
+  it("Given the window chrome, when it renders, then it shows where you are, search, attention, voice and inspector", async () => {
     const user = userEvent.setup();
     const onOpenLauncher = vi.fn();
     const onToggleVoice = vi.fn();
@@ -104,18 +104,18 @@ describe("WindowChrome", () => {
     expect(onToggleSidebar).toHaveBeenCalledOnce();
   });
 
-  it("uses a plain bell when nothing needs the user", () => {
+  it("Given nothing needs the user, when the chrome renders, then it uses a plain bell", () => {
     render(<WindowChrome attentionCount={0} />);
     expect(screen.getByRole("button", { name: "Notificações" })).toHaveAttribute("data-attention", "false");
   });
 
-  it("keeps the chrome itself draggable on Tauri and text pass-through", () => {
+  it("Given Tauri, when the chrome renders, then the chrome itself stays draggable and its text passes drags through", () => {
     render(<WindowChrome breadcrumb={{ project: "terra-swarm" }} />);
     expect(screen.getByRole("banner")).toHaveAttribute("data-tauri-drag-region", "true");
     expect(shellStyles).toMatch(/\.terra-window-breadcrumb\s*>\s*\*,[\s\S]*?pointer-events:\s*none/);
   });
 
-  it("closes the notification popover on Escape", async () => {
+  it("Given an open notification popover, when pressing Escape, then it closes", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(<WindowChrome isNotificationsOpen onNotificationsOpenChange={onChange} notificationsPanel={<div>Panel</div>} />);
@@ -126,7 +126,7 @@ describe("WindowChrome", () => {
 });
 
 describe("Sidebar", () => {
-  it("switches between Workbench and Frota and shows the attention count", async () => {
+  it("Given the sidebar, when switching between Workbench and Frota, then the attention count is shown", async () => {
     const user = userEvent.setup();
     const onNavigate = vi.fn();
     render(<SurfaceSwitch surface="workbench" attentionCount={3} onNavigate={onNavigate} />);
@@ -136,7 +136,7 @@ describe("Sidebar", () => {
     expect(screen.getByLabelText("3 precisam de você")).toBeInTheDocument();
   });
 
-  it("puts settings and the active agent count in the footer", async () => {
+  it("Given the sidebar, when it renders, then settings and the active agent count sit in the footer", async () => {
     const user = userEvent.setup();
     const onOpenSettings = vi.fn();
     render(
@@ -149,7 +149,7 @@ describe("Sidebar", () => {
     expect(onOpenSettings).toHaveBeenCalledOnce();
   });
 
-  it("collapses to project initials and one dot per agent of the active project", async () => {
+  it("Given a collapsed sidebar, when it renders, then it shows project initials and one dot per agent of the active project", async () => {
     const user = userEvent.setup();
     const onFocusAgent = vi.fn();
     const onExpand = vi.fn();

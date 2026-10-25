@@ -4,7 +4,7 @@ import { translateNow } from "../../i18n";
 import { getSafeErrorDetails, haveResetKeysChanged } from "./errorModel";
 
 describe("error model", () => {
-  it("bounds and redacts report content before it can be copied", () => {
+  it("Given report content, when building the report, then it is bounded and redacted before it can be copied", () => {
     const details = getSafeErrorDetails(
       new Error("falha em /home/dev/workspace/.env usando ghp_12345678901234567890"),
       { componentStack: "\n at App (/Users/dev/terra/src/App.tsx:1:1)" },
@@ -17,13 +17,13 @@ describe("error model", () => {
     expect(details.text).not.toContain("ghp_12345678901234567890");
   });
 
-  it("falls back to a safe generic message for unknown thrown values", () => {
+  it("Given an unknown thrown value, when building the report, then it falls back to a safe generic message", () => {
     const details = getSafeErrorDetails({ surprise: true }, undefined, translateNow);
     expect(details.name).toBe("UnknownError");
     expect(details.message).toContain("erro inesperado");
   });
 
-  it("detects reset key changes by shallow identity", () => {
+  it("Given reset keys, when checking for changes, then they are compared by shallow identity", () => {
     expect(haveResetKeysChanged(["a", 1], ["a", 1])).toBe(false);
     expect(haveResetKeysChanged(["a"], ["b"])).toBe(true);
     expect(haveResetKeysChanged(undefined, [])).toBe(true);

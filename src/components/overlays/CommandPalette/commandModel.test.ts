@@ -41,24 +41,24 @@ const agents: AgentInfo[] = [
 ];
 
 describe("command palette model", () => {
-  it("normalizes Portuguese accents and whitespace", () => {
+  it("Given Portuguese accents and extra whitespace, when normalizing a query, then they are folded", () => {
     expect(normalizeSearchText("  Configurações  ")).toBe("configuracoes");
     expect(normalizeSearchText("AÇÃO rápida")).toBe("acao rapida");
   });
 
-  it("matches all normalized query tokens across labels and keywords", () => {
+  it("Given a multi-word query, when matching, then every normalized token must match across labels and keywords", () => {
     const commands = buildCommandModel({ workspaces, groups, agents });
     const result = filterCommands(commands, "coracao agente");
     expect(result.some((command) => command.id.startsWith("open-terminal:ws-terra:pty-1"))).toBe(true);
     expect(filterCommands(commands, "não existe")).toHaveLength(0);
   });
 
-  it("offers resume only for an agent that has exited", () => {
+  it("Given agents, when building commands, then resume is offered only for one that has exited", () => {
     const live = buildCommandModel({ workspaces, focusedWorkspaceId: "ws-terra", focusedTerminalId: "pty-1" });
     expect(live.some((item) => item.id === "agent:resume-focused")).toBe(false);
   });
 
-  it("builds navigation, create, agent and settings groups from current state", () => {
+  it("Given the current state, when building commands, then navigation, create, agent and settings groups are built", () => {
     const commands = buildCommandModel({
       workspaces,
       groups,
@@ -77,7 +77,7 @@ describe("command palette model", () => {
     expect(grouped.find((group) => group.id === "settings")?.commands.some((item) => item.id === "settings:reopen-tab")).toBe(true);
   });
 
-  it("does not offer agent spawning without a valid workspace target", () => {
+  it("Given no valid workspace target, when building commands, then agent spawning is not offered", () => {
     const commands = buildCommandModel({ workspaces, agents });
     const generic = commands.find((command) => command.id === "create:agent");
     const codex = commands.find((command) => command.id === "create-agent:codex");
@@ -90,7 +90,7 @@ describe("command palette model", () => {
     expect(createAgent).not.toHaveBeenCalled();
   });
 
-  it("marks stop/restart/import actions as destructive and returns confirmation", () => {
+  it("Given stop, restart and import actions, when executing them, then they are marked destructive and return a confirmation", () => {
     const commands = buildCommandModel({
       workspaces,
       groups,
@@ -113,7 +113,7 @@ describe("command palette model", () => {
     expect(action).not.toHaveBeenCalled();
   });
 
-  it("dispatches safe commands through host callbacks", () => {
+  it("Given safe commands, when executing them, then they are dispatched through host callbacks", () => {
     const commands = buildCommandModel({ workspaces, groups, agents });
     const navigate = vi.fn();
     const createGroup = vi.fn();
@@ -131,7 +131,7 @@ describe("command palette model", () => {
     expect(openTerminal).toHaveBeenCalledWith("ws-terra", "pty-1");
   });
 
-  it("keeps voice preference, start and stop actions semantically separate", () => {
+  it("Given voice commands, when building commands, then the preference, start and stop actions stay separate", () => {
     const settings = vi.fn();
     const start = vi.fn();
     const stop = vi.fn();

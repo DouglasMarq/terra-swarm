@@ -31,13 +31,13 @@ describe("useWorktreeReview", () => {
     for (const fn of Object.values(api)) fn.mockReset();
   });
 
-  it("given no target, loads nothing", () => {
+  it("Given no target, when the hook runs, then it loads nothing", () => {
     const { result } = renderHook(() => useWorktreeReview(null));
     expect(api.worktreeDiff).not.toHaveBeenCalled();
     expect(result.current.diff).toBeNull();
   });
 
-  it("given a target, loads its diff", async () => {
+  it("Given a target, when the hook runs, then it loads its diff", async () => {
     api.worktreeDiff.mockResolvedValue(diff());
     const { result } = renderHook(() => useWorktreeReview(target));
     await waitFor(() => expect(result.current.diff).toEqual(diff()));
@@ -45,14 +45,14 @@ describe("useWorktreeReview", () => {
     expect(result.current.busy).toBeNull();
   });
 
-  it("given the diff can't be read, reports the error", async () => {
+  it("Given the diff can't be read, when loading, then it reports the error", async () => {
     api.worktreeDiff.mockRejectedValue("not a git repository");
     const { result } = renderHook(() => useWorktreeReview(target));
     await waitFor(() => expect(result.current.error).toBe("not a git repository"));
     expect(result.current.diff).toBeNull();
   });
 
-  it("given a merge that succeeds, tells the user and reloads the diff", async () => {
+  it("Given a merge that succeeds, when merging, then it tells the user and reloads the diff", async () => {
     api.worktreeDiff.mockResolvedValueOnce(diff(1)).mockResolvedValue(diff(0));
     api.worktreeMerge.mockResolvedValue(diff(0).status);
     const { result } = renderHook(() => useWorktreeReview(target));
@@ -69,7 +69,7 @@ describe("useWorktreeReview", () => {
     expect(result.current.diff?.status.ahead).toBe(0);
   });
 
-  it("given a commit that fails, reports the error and resolves to false", async () => {
+  it("Given a commit that fails, when committing, then it reports the error and resolves to false", async () => {
     api.worktreeDiff.mockResolvedValue(diff());
     api.worktreeCommit.mockRejectedValue("nothing to commit");
     const { result } = renderHook(() => useWorktreeReview(target));
@@ -86,7 +86,7 @@ describe("useWorktreeReview", () => {
     expect(result.current.notice).toBeNull();
   });
 
-  it("given a pull request is opened, keeps its URL", async () => {
+  it("Given a pull request is opened, when the action finishes, then its URL is kept", async () => {
     api.worktreeDiff.mockResolvedValue(diff());
     api.worktreeOpenPr.mockResolvedValue("https://example.test/pr/1");
     const { result } = renderHook(() => useWorktreeReview(target));

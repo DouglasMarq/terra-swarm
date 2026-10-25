@@ -91,13 +91,13 @@ const snapshot: WorkspaceSnapshotV2 = {
 };
 
 describe("selectWorkspaceContainerId", () => {
-  it("uses the persisted active container instead of the first split", () => {
+  it("Given a persisted active container, when selecting the container, then it is used instead of the first split", () => {
     expect(selectWorkspaceContainerId(snapshot, [workspace], { workspaceId: "workspace-a" })).toBe(
       "container-b",
     );
   });
 
-  it("uses the focused terminal's pane when workspace metadata is stale", () => {
+  it("Given stale workspace metadata, when selecting the container, then the focused terminal's pane is used", () => {
     expect(
       selectWorkspaceContainerId(
         {

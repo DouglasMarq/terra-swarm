@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createInitializationGate } from "./initializationGate";
 
 describe("initialization gate", () => {
-  it("coalesces StrictMode/concurrent attempts and allows retry after failure", async () => {
+  it("Given StrictMode or concurrent attempts, when initializing, then they are coalesced and a retry is allowed after a failure", async () => {
     const gate = createInitializationGate();
     const firstTask = vi.fn(async () => {
       throw new Error("backend indisponível");
@@ -19,7 +19,7 @@ describe("initialization gate", () => {
     expect(retryTask).toHaveBeenCalledOnce();
   });
 
-  it("does not start a second attempt while the first is still pending", async () => {
+  it("Given a pending first attempt, when another one starts, then no second attempt runs", async () => {
     const gate = createInitializationGate();
     let release!: () => void;
     const task = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));

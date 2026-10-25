@@ -5,7 +5,7 @@ import { defined } from "../test/defined";
 const feature = defined(TEAM_TEMPLATES.find((template) => template.id === "feature"));
 
 describe("planTeam", () => {
-  it("uses the template's agents when they are installed", () => {
+  it("Given the template's agents are installed, when planning the team, then they are used", () => {
     const plan = planTeam(feature, {
       agents: [
         { id: "claude", label: "Claude", available: true },
@@ -24,7 +24,7 @@ describe("planTeam", () => {
     ]);
   });
 
-  it("stands in the default agent and skips worktrees outside git", () => {
+  it("Given a missing agent outside git, when planning the team, then the default agent stands in and worktrees are skipped", () => {
     const plan = planTeam(feature, {
       agents: [
         { id: "claude", label: "Claude", available: true },
@@ -38,7 +38,7 @@ describe("planTeam", () => {
     expect(plan.members.every((member) => !member.shouldUseWorktree)).toBe(true);
   });
 
-  it("is blocked when no agent is installed", () => {
+  it("Given no agent is installed, when planning the team, then it is blocked", () => {
     expect(planTeam(feature, { agents: [{ id: "shell", label: "Shell", available: true }], defaultAgent: null, canIsolate: true }).isBlocked).toBe(true);
   });
 });

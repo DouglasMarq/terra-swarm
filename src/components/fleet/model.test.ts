@@ -54,7 +54,7 @@ const workspaces: Workspace[] = [
 ];
 
 describe("fleet model", () => {
-  it("normalizes agents into groups, projects, and semantic statuses", () => {
+  it("Given workspaces with agents, when building the model, then agents are normalized into groups, projects and semantic statuses", () => {
     const model = deriveFleetModel({
       workspaces,
       groups,
@@ -79,7 +79,7 @@ describe("fleet model", () => {
     expect(model.groups[2]?.projects[0]?.agents[0]?.status).toBe("attention");
   });
 
-  it("supports status, group, agent, and text filters without mutating the source", () => {
+  it("Given a fleet model, when filtering by status, group, agent or text, then the source is not mutated", () => {
     const source = deriveFleetModel({ workspaces, groups }, translateNow);
     const filtered = filterFleetModel(
       deriveFleetModel({ workspaces, groups, notifications: { "codex-1": 1 }, titles: { "codex-1": "Planning" } }, translateNow),
@@ -95,14 +95,14 @@ describe("fleet model", () => {
     expect(byPath.agents.map((agent) => agent.id)).toEqual(["aider-1"]);
   });
 
-  it("aggregates a group with attention above working and suspension above exit", () => {
+  it("Given a group, when aggregating its status, then attention ranks above working and suspension above exit", () => {
     expect(fleetAggregateStatus(["exited", "suspended"])).toBe("suspended");
     expect(fleetAggregateStatus(["working", "exited"])).toBe("working");
     expect(fleetAggregateStatus(["attention", "working"])).toBe("attention");
     expect(fleetAggregateStatus([])).toBe("working");
   });
 
-  it("formats optional duration and activity telemetry", () => {
+  it("Given optional duration and activity telemetry, when building the model, then they are formatted", () => {
     const now = Date.UTC(2026, 0, 1, 12, 1, 0);
     expect(formatFleetDuration(90_000, now, translateNow)).toBe("1m 30s");
     expect(formatFleetDuration("queued", now, translateNow)).toBe("queued");
@@ -110,7 +110,7 @@ describe("fleet model", () => {
     expect(formatFleetRelativeTime("agora", now, translateNow)).toBe("agora");
   });
 
-  it("uses the state agents report through their hooks", () => {
+  it("Given states reported through hooks, when building the model, then they are used", () => {
     const model = deriveFleetModel({
       workspaces: [{ id: "ws", name: "ws", cwd: "/", terminals: [
         { id: "a", command: "claude", width: null },

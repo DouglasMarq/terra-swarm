@@ -9,7 +9,7 @@ import {
 } from "./voiceModel";
 
 describe("voice intent confirmation", () => {
-  it("protects suspend-group and stop intents", () => {
+  it("Given suspend-group and stop intents, when checking them, then they are protected", () => {
     expect(isDestructiveVoiceIntent({ type: "suspend-group", group: "ops" })).toBe(true);
     expect(isDestructiveVoiceIntent({ type: "stop", target: "luna-1" })).toBe(true);
     expect(requiresVoiceConfirmation({ type: "resume-group", group: "ops" })).toBe(false);
@@ -17,7 +17,7 @@ describe("voice intent confirmation", () => {
     expect(isDestructiveVoiceIntent(null)).toBe(false);
   });
 
-  it("keeps destructive intents blocked until the capsule confirms", () => {
+  it("Given a destructive intent, when the capsule has not confirmed it, then it stays blocked", () => {
     const suspend = { type: "suspend-group" as const, group: "ops" };
     const stop = { type: "stop" as const, target: "luna-1" };
 
@@ -30,7 +30,7 @@ describe("voice intent confirmation", () => {
 });
 
 describe("reduceVoiceCapsuleModel", () => {
-  it("moves through capture and transcription into a preview", () => {
+  it("Given an idle capsule, when capture and transcription finish, then it moves into a preview", () => {
     const idle = createInitialVoiceCapsuleModel();
     const listening = reduceVoiceCapsuleModel(idle, { type: "start-listening" });
     const transcribing = reduceVoiceCapsuleModel(listening, { type: "stop-listening" });
@@ -49,7 +49,7 @@ describe("reduceVoiceCapsuleModel", () => {
     });
   });
 
-  it("never completes a destructive preview through send", () => {
+  it("Given a destructive preview, when pressing send, then it never completes", () => {
     const preview = reduceVoiceCapsuleModel(createInitialVoiceCapsuleModel(), {
       type: "transcription-ready",
       transcript: "suspender grupo ops",
@@ -63,7 +63,7 @@ describe("reduceVoiceCapsuleModel", () => {
     expect(afterConfirm).toMatchObject({ state: "idle", isAwaitingConfirmation: false });
   });
 
-  it("clears a failed capture on retry and cancel", () => {
+  it("Given a failed capture, when retrying or cancelling, then it is cleared", () => {
     const failed = reduceVoiceCapsuleModel(createInitialVoiceCapsuleModel(), {
       type: "fail",
       message: "microphone unavailable",

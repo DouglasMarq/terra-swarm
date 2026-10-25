@@ -6,7 +6,7 @@ vi.mock("../terminalRegistry", () => ({ getTerminal: () => undefined }));
 vi.mock("../lib/tauri/pty", () => ({ writeTerminal: vi.fn(async () => undefined) }));
 
 describe("sendPromptToTerminal", () => {
-  it("pastes, then presses Enter", async () => {
+  it("Given a prompt, when it is sent, then it is pasted and Enter is pressed", async () => {
     const write = vi.fn(async () => undefined);
     await sendPromptToTerminal("t-1", "do T-2", { write });
     expect(write.mock.calls).toEqual([
@@ -15,7 +15,7 @@ describe("sendPromptToTerminal", () => {
     ]);
   });
 
-  it("given submit is false, pastes without pressing Enter", async () => {
+  it("Given submit is false, when the prompt is sent, then it is pasted without pressing Enter", async () => {
     const write = vi.fn(async () => undefined);
     await sendPromptToTerminal("t-1", "draft", { shouldSubmit: false, write });
     expect(write.mock.calls).toEqual([["t-1", "\u001b[200~draft\u001b[201~"]]);
@@ -23,7 +23,7 @@ describe("sendPromptToTerminal", () => {
 });
 
 describe("nudgeAgent", () => {
-  it("given the terminal refuses the prompt, warns instead of failing", async () => {
+  it("Given the terminal refuses the prompt, when nudging the agent, then it warns instead of failing", async () => {
     vi.mocked(writeTerminal).mockRejectedValueOnce(new Error("closed"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     nudgeAgent({ workspace_id: "ws-1", terminal_id: "t-1", prompt: "do T-2" });

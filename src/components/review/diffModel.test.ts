@@ -23,7 +23,7 @@ Binary files /dev/null and b/logo.png differ
 `;
 
 describe("parsePatch", () => {
-  it("splits a patch into numbered lines per file", () => {
+  it("Given a patch, when parsing it, then it is split into numbered lines per file", () => {
     const [readme, notes, logo] = parsePatch(PATCH);
     expect(readme.path).toBe("app/readme.txt");
     expect(readme.lines.map((line) => [line.kind, line.text, line.oldLine, line.newLine])).toEqual([
@@ -39,13 +39,13 @@ describe("parsePatch", () => {
     expect(logo.isBinary).toBe(true);
   });
 
-  it("handles an empty patch", () => {
+  it("Given an empty patch, when parsing it, then no section is returned", () => {
     expect(parsePatch("")).toEqual([]);
   });
 });
 
 describe("suggestTitle", () => {
-  it("uses the agent's summary, else the branch", () => {
+  it("Given an agent summary or only a branch, when suggesting a title, then the summary is used, else the branch", () => {
     expect(suggestTitle("terra/t-1", "  Fix the\nlogin bug ")).toBe("Fix the login bug");
     expect(suggestTitle("terra/t-1", "")).toBe("Changes from terra/t-1");
     expect(suggestTitle("b", "x".repeat(100))).toHaveLength(72);

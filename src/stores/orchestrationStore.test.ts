@@ -45,7 +45,7 @@ afterEach(() => {
 });
 
 describe("orchestration store", () => {
-  it("derives a v2 snapshot from legacy workspaces and preserves group membership", () => {
+  it("Given legacy workspaces, when hydrating, then a v2 snapshot is derived and group membership is kept", () => {
     useOrchestrationStore.getState().sync(workspaces, [
       {
         id: "group-a",
@@ -66,7 +66,7 @@ describe("orchestration store", () => {
     });
   });
 
-  it("closes a container without removing its PTY tab", () => {
+  it("Given a container, when closing it, then its PTY tab is not removed", () => {
     useOrchestrationStore.getState().sync(workspaces);
     const containerId = useOrchestrationStore.getState().snapshot?.containers[0]?.id;
     expect(containerId).toBeTruthy();
@@ -81,7 +81,7 @@ describe("orchestration store", () => {
     expect(useOrchestrationStore.getState().snapshot?.containers[0]?.visible).toBe(true);
   });
 
-  it("persists feature flags and group suspension metadata", () => {
+  it("Given feature flags and group suspension, when persisting, then both are kept", () => {
     useOrchestrationStore.getState().sync(workspaces, [
       {
         id: "group-a",
@@ -101,7 +101,7 @@ describe("orchestration store", () => {
     expect(state.snapshot?.groups[0]?.suspended).toBe(true);
   });
 
-  it("persists visual detachments without removing the terminal identity", () => {
+  it("Given a visual detachment, when persisting, then the terminal identity is not removed", () => {
     useOrchestrationStore.getState().sync(workspaces);
     useOrchestrationStore.getState().detachTerminal("pty-a");
 
@@ -112,7 +112,7 @@ describe("orchestration store", () => {
     expect(useOrchestrationStore.getState().detachedTerminalIds).toEqual([]);
   });
 
-  it("persists visual layout mutations through the backend contract", () => {
+  it("Given visual layout mutations, when persisting, then they go through the backend contract", () => {
     const source: Workspace[] = [
       {
         id: "workspace-layout",
@@ -179,7 +179,7 @@ describe("orchestration store", () => {
     );
   });
 
-  it("rejects a pane move across projects before IPC or optimistic state", () => {
+  it("Given a pane move across projects, when moving, then it is rejected before IPC or optimistic state", () => {
     const source: Workspace[] = [
       {
         id: "workspace-a",
@@ -204,7 +204,7 @@ describe("orchestration store", () => {
     expect(workspaceApiMock.moveWorkspacePane).not.toHaveBeenCalled();
   });
 
-  it("persists tab order inside its pane and restores it on refresh", () => {
+  it("Given a tab order inside a pane, when refreshing, then it is persisted and restored", () => {
     const source: Workspace[] = [
       {
         id: "workspace-tab-order",
@@ -237,7 +237,7 @@ describe("orchestration store", () => {
     }
   });
 
-  it("reconciles a rejected persistence command with the authoritative backend state", async () => {
+  it("Given a rejected persistence command, when reconciling, then the authoritative backend state wins", async () => {
     const source: Workspace[] = [
       {
         id: "workspace-persist-error",
@@ -270,7 +270,7 @@ describe("orchestration store", () => {
     expect(useOrchestrationStore.getState().persistenceError).toBeNull();
   });
 
-  it("does not let a stale rejection reconcile over a newer successful mutation", async () => {
+  it("Given a stale rejection and a newer successful mutation, when reconciling, then the stale rejection does not win", async () => {
     const source: Workspace[] = [
       {
         id: "workspace-stale-persist",
@@ -311,7 +311,7 @@ describe("orchestration store", () => {
     });
   });
 
-  it("does not rebuild visual state on an idempotent refresh", () => {
+  it("Given an idempotent refresh, when it arrives, then visual state is not rebuilt", () => {
     const source: Workspace[] = [
       {
         id: "workspace-tabs",
@@ -351,7 +351,7 @@ describe("orchestration store", () => {
     expect(afterRefresh?.panes[0]?.layout.mode).toBe("horizontal");
   });
 
-  it("keeps group suspension metadata and drops only stale backend terminals", () => {
+  it("Given group suspension metadata and stale backend terminals, when refreshing, then the metadata is kept and only stale terminals are dropped", () => {
     const source: Workspace[] = [
       {
         id: "workspace-grouped",

@@ -25,7 +25,7 @@ describe("FileEditorDialog", () => {
 
   afterEach(() => act(() => useEditorStore.getState().close()));
 
-  it("saves with the read time, and offers overwrite when an agent changed the file", async () => {
+  it("Given a file an agent changed, when saving, then it saves with the read time and offers an overwrite", async () => {
     api.writeWorkspaceFile.mockRejectedValueOnce(new IpcError({ code: "changedOnDisk", message: "the file changed on disk since it was opened" }));
     api.writeWorkspaceFile.mockResolvedValueOnce({ size: 3, modified: 20 });
     render(<FileEditorDialog />);
@@ -39,7 +39,7 @@ describe("FileEditorDialog", () => {
     expect(await screen.findByRole("button", { name: /salvar/i })).toBeTruthy();
   });
 
-  it("given a save that fails for another reason, shows the error without offering overwrite", async () => {
+  it("Given a save that fails for another reason, when saving, then it shows the error without offering an overwrite", async () => {
     api.writeWorkspaceFile.mockRejectedValueOnce(new IpcError({ code: "other", message: "cannot save the file: disk full" }));
     render(<FileEditorDialog />);
     act(() => useEditorStore.getState().open({ workspaceId: "ws", path: "src/a.ts" }));
@@ -50,7 +50,7 @@ describe("FileEditorDialog", () => {
     expect(screen.queryByRole("button", { name: /sobrescrever/i })).toBeNull();
   });
 
-  it("does not open binary files", async () => {
+  it("Given a binary file, when opening it, then the editor does not open it", async () => {
     api.readWorkspaceFile.mockResolvedValue({ path: "logo.png", content: "", binary: true, size: 9, modified: 1 });
     render(<FileEditorDialog />);
     act(() => useEditorStore.getState().open({ workspaceId: "ws", path: "logo.png" }));

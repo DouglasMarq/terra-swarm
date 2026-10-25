@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { VoiceCapsule } from "./VoiceCapsule";
 
 describe("VoiceCapsule", () => {
-  it("requires explicit confirmation for destructive voice intents", async () => {
+  it("Given a destructive voice intent, when sending it, then explicit confirmation is required", async () => {
     const user = userEvent.setup();
     const onConfirm = vi.fn();
     const onSend = vi.fn();
@@ -31,7 +31,7 @@ describe("VoiceCapsule", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("exposes the listening control as a pressed state", async () => {
+  it("Given the capsule is listening, when it renders, then the listening control is exposed as pressed", async () => {
     const user = userEvent.setup();
     const onStartListening = vi.fn();
     render(<VoiceCapsule onStartListening={onStartListening} state="idle" />);

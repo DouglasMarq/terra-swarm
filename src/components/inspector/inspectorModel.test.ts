@@ -82,7 +82,7 @@ const snapshot: WorkspaceSnapshotV2 = {
 };
 
 describe("resolveInspectorTarget", () => {
-  it("requires explicit confirmation before lifecycle mutations can execute", () => {
+  it("Given a lifecycle mutation, when resolving the target, then it requires explicit confirmation before it can execute", () => {
     expect(inspectorActionRequiresConfirmation("kill")).toBe(true);
     expect(inspectorActionRequiresConfirmation("restart")).toBe(true);
     expect(inspectorActionRequiresConfirmation("focus")).toBe(false);
@@ -90,7 +90,7 @@ describe("resolveInspectorTarget", () => {
     expect(inspectorActionRequiresConfirmation("reattach")).toBe(false);
   });
 
-  it("resolves the complete focused project hierarchy from real metadata", () => {
+  it("Given real metadata, when resolving the focused terminal, then the complete project hierarchy is resolved", () => {
     expect(resolveInspectorTarget({
       focusedId: "pty-codex",
       workspaces: [workspace],
@@ -115,7 +115,7 @@ describe("resolveInspectorTarget", () => {
     }));
   });
 
-  it("does not fabricate process metrics when the PTY API has no value", () => {
+  it("Given the PTY API has no value, when resolving the target, then no process metrics are fabricated", () => {
     const target = resolveInspectorTarget({ focusedId: "pty-codex", workspaces: [workspace] });
     expect(target).toEqual(expect.objectContaining({ state: "ativo", contextUsage: null }));
     expect(target).not.toHaveProperty("pid");
@@ -123,7 +123,7 @@ describe("resolveInspectorTarget", () => {
     expect(target).not.toHaveProperty("memory");
   });
 
-  it("prioritizes an observed exit over a stale suspended flag", () => {
+  it("Given an observed exit and a stale suspended flag, when resolving the target, then the exit wins", () => {
     const suspended = {
       ...workspace,
       terminals: [{ ...defined(workspace.terminals[0]), suspended: true }],
@@ -138,7 +138,7 @@ describe("resolveInspectorTarget", () => {
 });
 
 describe("totalTokens", () => {
-  it("given a session's usage, adds input, output and both cache directions", () => {
+  it("Given a session's usage, when totalling tokens, then input, output and both cache directions are added", () => {
     expect(totalTokens({
       terminal_id: "t-1",
       agent: "claude",

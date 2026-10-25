@@ -7,7 +7,7 @@ import {
 } from "./featureFlags";
 
 describe("versioned feature flags", () => {
-  it("fails closed by default and accepts the legacy flat shape", () => {
+  it("Given no or legacy flat settings, when reading the flags, then they fail closed by default and the legacy flat shape is accepted", () => {
     expect(normalizeFeatureFlags(undefined)).toEqual({
       durableScrollback: false,
       voiceCommands: false,
@@ -22,7 +22,7 @@ describe("versioned feature flags", () => {
     });
   });
 
-  it("normalizes current envelopes and rejects future versions", () => {
+  it("Given current and future envelopes, when reading the flags, then current ones are normalized and future versions are rejected", () => {
     const document = createFeatureFlagsDocument({ durableScrollback: true, voiceCommands: true });
     expect(document.version).toBe(FEATURE_FLAGS_VERSION);
     expect(normalizeFeatureFlags(serializeFeatureFlags({ voiceCommands: true }).toString()).voiceCommands).toBe(true);

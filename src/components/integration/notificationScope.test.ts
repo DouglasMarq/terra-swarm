@@ -29,11 +29,11 @@ const snapshot: WorkspaceSnapshotV2 = {
 };
 
 describe("notification scope", () => {
-  it("prefers the focused terminal over sibling project events", () => {
+  it("Given a focused terminal, when scoping notifications, then it wins over sibling project events", () => {
     expect(filterNotificationItemsForTarget(items, { workspaceId: "project-a", terminalId: "term-a" }).map((item) => item.key)).toEqual([1]);
   });
 
-  it("projects active tab/pane/container targets back to their PTYs", () => {
+  it("Given active tab, pane or container targets, when scoping notifications, then they are projected back to their PTYs", () => {
     expect(filterNotificationItemsForTarget(items, { workspaceId: "project-a", snapshot }).map((item) => item.key)).toEqual([2]);
     expect(filterNotificationItemsForTarget(items, {
       workspaceId: "project-a",
@@ -41,7 +41,7 @@ describe("notification scope", () => {
     }).map((item) => item.key)).toEqual([1, 2]);
   });
 
-  it("falls back to project scope and stays empty without a target", () => {
+  it("Given no visual target, when scoping notifications, then it falls back to the project scope or stays empty", () => {
     expect(filterNotificationItemsForTarget(items, { workspaceId: "project-a" }).map((item) => item.key)).toEqual([1, 2]);
     expect(filterNotificationItemsForTarget(items, {}).map((item) => item.key)).toEqual([]);
   });

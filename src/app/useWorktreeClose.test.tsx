@@ -38,7 +38,7 @@ describe("useWorktreeClose", () => {
     useTerminalRuntimeStore.setState({ notifItems: [] });
   });
 
-  it("given the worktree status can't be read, notifies and keeps the agent open", async () => {
+  it("Given the worktree status can't be read, when closing the agent, then it notifies and keeps the agent open", async () => {
     api.worktreeStatus.mockRejectedValue(new Error("status unavailable"));
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const { result } = renderHook(() => useWorktreeClose(workspaces, sessions));
@@ -51,14 +51,14 @@ describe("useWorktreeClose", () => {
     consoleError.mockRestore();
   });
 
-  it("closes a plain agent directly", async () => {
+  it("Given a plain agent, when closing it, then it closes directly", async () => {
     const { result } = renderHook(() => useWorktreeClose(workspaces, sessions));
     await act(() => result.current.request("t-2"));
     expect(sessions.close).toHaveBeenCalledWith("t-2");
     expect(api.worktreeStatus).not.toHaveBeenCalled();
   });
 
-  it("removes a clean worktree and its branch without asking", async () => {
+  it("Given a clean worktree, when closing its agent, then the worktree and its branch are removed without asking", async () => {
     api.worktreeStatus.mockResolvedValue(status());
     const { result } = renderHook(() => useWorktreeClose(workspaces, sessions));
     await act(() => result.current.request("t-1"));
@@ -68,7 +68,7 @@ describe("useWorktreeClose", () => {
     expect(result.current.dialog.target).toBeNull();
   });
 
-  it("asks before losing work, then keeps or deletes as chosen", async () => {
+  it("Given a worktree with work to lose, when closing its agent, then it asks first and keeps or deletes as chosen", async () => {
     api.worktreeStatus.mockResolvedValue(status({ dirty: ["app/a.ts"], ahead: 2 }));
     const { result } = renderHook(() => useWorktreeClose(workspaces, sessions));
     await act(() => result.current.request("t-1"));

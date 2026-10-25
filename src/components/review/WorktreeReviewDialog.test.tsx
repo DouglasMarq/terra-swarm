@@ -33,7 +33,7 @@ describe("WorktreeReviewDialog", () => {
 
   afterEach(() => act(() => useReviewStore.getState().close()));
 
-  it("shows the diff and merges only after a second click", async () => {
+  it("Given a diff, when merging, then the merge runs only after a second click", async () => {
     api.worktreeDiff.mockResolvedValue(diff());
     api.worktreeMerge.mockResolvedValue(diff({ ahead: 0 }).status);
     render(<WorktreeReviewDialog />);
@@ -49,7 +49,7 @@ describe("WorktreeReviewDialog", () => {
     expect(await screen.findByRole("status")).toBeTruthy();
   });
 
-  it("asks for a commit before merging uncommitted work", async () => {
+  it("Given uncommitted work, when merging, then a commit is asked for first", async () => {
     api.worktreeDiff.mockResolvedValue(diff({ dirty: ["src/a.ts"] }));
     api.worktreeCommit.mockResolvedValue(diff().status);
     render(<WorktreeReviewDialog />);
@@ -61,7 +61,7 @@ describe("WorktreeReviewDialog", () => {
     expect(api.worktreeCommit).toHaveBeenCalledWith("ws", "t-1", "Changes from Vega");
   });
 
-  it("given the clipboard refuses the pull request link, warns instead of failing silently", async () => {
+  it("Given the clipboard refuses the pull request link, when copying it, then it warns instead of failing silently", async () => {
     api.worktreeDiff.mockResolvedValue(diff());
     api.worktreeOpenPr.mockResolvedValue("https://example.test/pr/1");
     render(<WorktreeReviewDialog />);

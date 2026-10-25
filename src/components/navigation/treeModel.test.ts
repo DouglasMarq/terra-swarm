@@ -31,7 +31,7 @@ describe("navigator tree model", () => {
   const groups = [group("g-core", "Núcleo", { projectIds: ["p-one"] }), group("g-labs", "Labs", { parentGroupId: "g-core", projectIds: ["p-two"] })] satisfies WorkspaceGroup[];
   const workspaces = [workspace("p-one", "Aplicação", { terminalIds: ["a-one"], groupId: "g-core" }), workspace("p-two", "Dados", { terminalIds: ["a-two"], groupId: "g-labs" }), workspace("p-three", "Sem grupo", { terminalIds: ["a-three"] })] satisfies Workspace[];
 
-  it("builds group/subgroup/project/agent hierarchy and preserves ungrouped projects", () => {
+  it("Given groups, subgroups and ungrouped projects, when building the tree, then the hierarchy is built and ungrouped projects are kept", () => {
     const tree = buildNavigatorTree(workspaces, { groups });
     expect(tree.roots.map((node) => node.id)).toEqual(["g-core", "p-three"]);
     expect(tree.byId["g-core"]?.children.map((node) => node.id)).toEqual(["g-labs", "p-one"]);
@@ -40,7 +40,7 @@ describe("navigator tree model", () => {
     expect(tree.ungrouped.map((node) => node.id)).toEqual(["p-three"]);
   });
 
-  it("flattens only expanded branches while retaining accessible depths", () => {
+  it("Given a tree, when flattening it, then only expanded branches are kept with accessible depths", () => {
     const tree = buildNavigatorTree(workspaces, { groups });
     const flat = flattenNavigatorTree(tree, new Set(["g-core", "g-labs", "p-two"]));
     expect(flat.map((node) => [node.id, node.depth])).toEqual([
@@ -48,7 +48,7 @@ describe("navigator tree model", () => {
     ]);
   });
 
-  it("normalizes accents and keeps ancestors when filtering descendants", () => {
+  it("Given a filter with accents, when filtering descendants, then accents are normalized and ancestors are kept", () => {
     expect(normalizeSearchText("  NúClÊo  ")).toBe("nucleo");
     const tree = filterNavigatorTree(buildNavigatorTree(workspaces, { groups }), "açãO");
     expect(tree.roots.map((node) => node.id)).toEqual(["g-core"]);
@@ -56,7 +56,7 @@ describe("navigator tree model", () => {
     expect(tree.byId["p-one"]?.children.map((node) => node.id)).toEqual(["a-one"]);
   });
 
-  it("derives semantic status precedence from exited, notifications and context", () => {
+  it("Given exited, notification and context signals, when deriving the status, then the semantic precedence applies", () => {
     const tree = buildNavigatorTree(workspaces, {
       groups,
       exited: { "a-two": 1 },
@@ -68,7 +68,7 @@ describe("navigator tree model", () => {
     expect(tree.byId["a-three"]?.status).toBe("attention");
   });
 
-  it("projects v2 containers and panes before terminal agents", () => {
+  it("Given v2 containers and panes, when building the tree, then they are projected before terminal agents", () => {
     const snapshot: WorkspaceSnapshotV2 = {
       version: 2,
       projects: [{

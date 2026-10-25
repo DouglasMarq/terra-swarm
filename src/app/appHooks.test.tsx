@@ -52,7 +52,7 @@ describe("useResumeQueue", () => {
   });
   afterEach(() => useTerminalRuntimeStore.getState().reset());
 
-  it("offers sessions, then resumes all and keeps only the failures", async () => {
+  it("Given sessions found at startup, when resuming all, then only the failures stay queued", async () => {
     const sessions = fakeSessions(["t-2"]);
     const refresh = vi.fn(async () => {});
     const { result } = renderHook(() => useResumeQueue(sessions, refresh));
@@ -63,7 +63,7 @@ describe("useResumeQueue", () => {
     expect(refresh).toHaveBeenCalled();
   });
 
-  it("resumes automatically when the user chose it", async () => {
+  it("Given the user chose to always resume, when the queue loads, then it resumes automatically", async () => {
     usePreferencesStore.setState({ shouldAutoResume: true });
     const sessions = fakeSessions();
     const { result } = renderHook(() => useResumeQueue(sessions, vi.fn(async () => {})));
@@ -72,7 +72,7 @@ describe("useResumeQueue", () => {
     expect(result.current.isOpen).toBe(false);
   });
 
-  it("only forgets a dismissed session after the backend deleted it", async () => {
+  it("Given a dismissed session, when the backend first refuses and then confirms the deletion, then it is forgotten only after the confirmation", async () => {
     const sessions = fakeSessions();
     const { result } = renderHook(() => useResumeQueue(sessions, vi.fn(async () => {})));
     act(() => result.current.offer([item("t-1")]));
@@ -87,7 +87,7 @@ describe("useResumeQueue", () => {
 });
 
 describe("useWorkspaces", () => {
-  it("loads projects and keeps a visible active one", async () => {
+  it("Given a visible active project, when the projects load, then they are listed and that project stays active", async () => {
     const list: Workspace[] = [
       { id: "ws-1", name: "one", cwd: "/a", terminals: [] },
       { id: "ws-2", name: "two", cwd: "/b", terminals: [] },

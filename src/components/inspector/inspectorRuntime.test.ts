@@ -15,7 +15,7 @@ const liveInfo = {
 };
 
 describe("reduceInspectorRuntime", () => {
-  it("represents a live focused PTY with its runtime facts", () => {
+  it("Given a live focused PTY, when its runtime info arrives, then its runtime facts are represented", () => {
     const requested = reduceInspectorRuntime(INITIAL_INSPECTOR_RUNTIME_STATE, {
       type: "request",
       terminalId: "pty-one",
@@ -30,7 +30,7 @@ describe("reduceInspectorRuntime", () => {
     expect(ready).toMatchObject({ status: "ready", info: liveInfo });
   });
 
-  it("distinguishes an ended or unavailable runtime from a request error", () => {
+  it("Given an ended or unavailable runtime, when it is reduced, then it is told apart from a request error", () => {
     const requested = reduceInspectorRuntime(INITIAL_INSPECTOR_RUNTIME_STATE, {
       type: "request",
       terminalId: "pty-ended",
@@ -55,7 +55,7 @@ describe("reduceInspectorRuntime", () => {
     expect(error).toMatchObject({ status: "error", error: "offline" });
   });
 
-  it("ignores a stale response after focus changes quickly", () => {
+  it("Given focus changes quickly, when a stale response arrives, then it is ignored", () => {
     const focusedOne = reduceInspectorRuntime(INITIAL_INSPECTOR_RUNTIME_STATE, {
       type: "request",
       terminalId: "pty-one",

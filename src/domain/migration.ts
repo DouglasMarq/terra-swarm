@@ -1173,119 +1173,200 @@ function rawTabsFromSnapshot(source: RecordLike): unknown[] {
   return Array.isArray(source.tabs) ? source.tabs : readArray(source.terminalTabs);
 }
 
-function normalizeSnapshotObject(source: RecordLike): WorkspaceSnapshotV2 {
-  const projectRows = rowsFor(source.projects, "project");
-  const groupRows = rowsFor(source.groups, "group");
-  const containerRows = rowsFor(source.containers, "container");
-  const paneRows = rowsFor(source.panes, "pane");
-  const tabRows = rowsFor(rawTabsFromSnapshot(source), "tab");
-  const projectIds = idMap(projectRows);
-  const groupIds = idMap(groupRows);
-  const containerIds = idMap(containerRows);
-  const paneIds = idMap(paneRows);
-  const tabIds = idMap(tabRows);
-  const sourceOrphanedTabIds = new Set(resolveIds(source.orphanedTabIds, tabIds));
-  const fallbackLayout = normalizeLayout(source.layout);
+interface SnapshotRows {
+  projects: IdRow[];
+  groups: IdRow[];
+  containers: IdRow[];
+  panes: IdRow[];
+  tabs: IdRow[];
+}
 
-  const projects: Project[] = projectRows.map(({ id, raw }) => ({
+interface SnapshotIdMaps {
+  projectIds: Map<string, string>;
+  groupIds: Map<string, string>;
+  containerIds: Map<string, string>;
+  paneIds: Map<string, string>;
+  tabIds: Map<string, string>;
+}
+
+interface SnapshotEntities {
+  projects: Project[];
+  groups: Group[];
+  containers: WorkspaceContainer[];
+  panes: Pane[];
+  tabs: TerminalTab[];
+}
+
+interface SnapshotIndex {
+  projectById: Map<string, Project>;
+  containerById: Map<string, WorkspaceContainer>;
+  paneById: Map<string, Pane>;
+  tabById: Map<string, TerminalTab>;
+}
+
+interface IndexedSnapshot {
+  entities: SnapshotEntities;
+  index: SnapshotIndex;
+}
+
+interface TabReadContext {
+  ids: SnapshotIdMaps;
+  sourceOrphanedTabIds: ReadonlySet<string>;
+}
+
+function snapshotRows(source: RecordLike): SnapshotRows {
+  return {
+    projects: rowsFor(source.projects, "project"),
+    groups: rowsFor(source.groups, "group"),
+    containers: rowsFor(source.containers, "container"),
+    panes: rowsFor(source.panes, "pane"),
+    tabs: rowsFor(rawTabsFromSnapshot(source), "tab"),
+  };
+}
+
+function snapshotIdMaps(rows: SnapshotRows): SnapshotIdMaps {
+  return {
+    projectIds: idMap(rows.projects),
+    groupIds: idMap(rows.groups),
+    containerIds: idMap(rows.containers),
+    paneIds: idMap(rows.panes),
+    tabIds: idMap(rows.tabs),
+  };
+}
+
+function readSnapshotProject({ id, raw }: IdRow, ids: SnapshotIdMaps, fallbackLayout: WorkspaceLayout): Project {
+  return {
     id,
     name: readString(raw.name) || id,
     cwd: readString(raw.cwd),
-    groupId: resolveId(raw.groupId, groupIds),
-    paneIds: resolveIds(raw.paneIds, paneIds),
-    containerIds: resolveIds(raw.containerIds, containerIds),
-    activePaneId: resolveId(raw.activePaneId, paneIds),
-    activeContainerId: resolveId(raw.activeContainerId, containerIds),
+    groupId: resolveId(raw.groupId, ids.groupIds),
+    paneIds: resolveIds(raw.paneIds, ids.paneIds),
+    containerIds: resolveIds(raw.containerIds, ids.containerIds),
+    activePaneId: resolveId(raw.activePaneId, ids.paneIds),
+    activeContainerId: resolveId(raw.activeContainerId, ids.containerIds),
     layout: normalizeLayout(raw.layout, fallbackLayout),
     collapsed: Boolean(raw.collapsed),
     ...(Boolean(raw.archived) ? { archived: true } : {}),
-  }));
+  };
+}
 
-  const groups: Group[] = groupRows.map(({ id, raw }) => {
-    const parentGroupId = resolveId(raw.parentGroupId, groupIds);
-    return {
-      id,
-      name: readString(raw.name) || id,
-      projectIds: resolveIds(raw.projectIds, projectIds),
-      parentGroupId: parentGroupId === id ? null : parentGroupId,
-      collapsed: Boolean(raw.collapsed),
-      suspended: Boolean(raw.suspended),
-      layout: normalizeLayout(raw.layout, fallbackLayout),
-    };
-  });
-
-  const containers: WorkspaceContainer[] = containerRows.map(({ id, raw }) => {
-    const closed = raw.closed === true || raw.visible === false;
-    return {
-      id,
-      projectId: resolveId(raw.projectId, projectIds),
-      paneIds: resolveIds(raw.paneIds, paneIds),
-      layout: normalizeLayout(raw.layout, fallbackLayout),
-      activePaneId: resolveId(raw.activePaneId, paneIds),
-      internalLayout: readString(raw.internalLayout) || undefined,
-      size: readFiniteNumber(raw.size) ?? undefined,
-      visible: !closed,
-      collapsed: Boolean(raw.collapsed),
-      closed,
-      fullscreen: Boolean(raw.fullscreen),
-    };
-  });
-
-  const panes: Pane[] = paneRows.map(({ id, raw }) => ({
+function readSnapshotGroup({ id, raw }: IdRow, ids: SnapshotIdMaps, fallbackLayout: WorkspaceLayout): Group {
+  const parentGroupId = resolveId(raw.parentGroupId, ids.groupIds);
+  return {
     id,
-    projectId: resolveId(raw.projectId, projectIds),
-    containerId: resolveId(raw.containerId, containerIds),
-    tabIds: resolveIds(raw.tabIds, tabIds),
-    activeTabId: resolveId(raw.activeTabId, tabIds),
+    name: readString(raw.name) || id,
+    projectIds: resolveIds(raw.projectIds, ids.projectIds),
+    parentGroupId: parentGroupId === id ? null : parentGroupId,
+    collapsed: Boolean(raw.collapsed),
+    suspended: Boolean(raw.suspended),
     layout: normalizeLayout(raw.layout, fallbackLayout),
-  }));
+  };
+}
 
+function readSnapshotContainer(
+  { id, raw }: IdRow,
+  ids: SnapshotIdMaps,
+  fallbackLayout: WorkspaceLayout,
+): WorkspaceContainer {
+  const closed = raw.closed === true || raw.visible === false;
+  return {
+    id,
+    projectId: resolveId(raw.projectId, ids.projectIds),
+    paneIds: resolveIds(raw.paneIds, ids.paneIds),
+    layout: normalizeLayout(raw.layout, fallbackLayout),
+    activePaneId: resolveId(raw.activePaneId, ids.paneIds),
+    internalLayout: readString(raw.internalLayout) || undefined,
+    size: readFiniteNumber(raw.size) ?? undefined,
+    visible: !closed,
+    collapsed: Boolean(raw.collapsed),
+    closed,
+    fullscreen: Boolean(raw.fullscreen),
+  };
+}
+
+function readSnapshotPane({ id, raw }: IdRow, ids: SnapshotIdMaps, fallbackLayout: WorkspaceLayout): Pane {
+  return {
+    id,
+    projectId: resolveId(raw.projectId, ids.projectIds),
+    containerId: resolveId(raw.containerId, ids.containerIds),
+    tabIds: resolveIds(raw.tabIds, ids.tabIds),
+    activeTabId: resolveId(raw.activeTabId, ids.tabIds),
+    layout: normalizeLayout(raw.layout, fallbackLayout),
+  };
+}
+
+function claimPtyId(raw: RecordLike, usedPtyIds: Set<string>): string | null {
+  const nestedMeta = asRecord(raw.meta);
+  const ptySource =
+    readString(raw.ptyId) || readString(raw.terminalId) || readString(nestedMeta.id);
+  const hasUniquePtyId = ptySource.length > 0 && !usedPtyIds.has(ptySource);
+  const ptyId = hasUniquePtyId ? ptySource : null;
+  if (ptyId) usedPtyIds.add(ptyId);
+  return ptyId;
+}
+
+function readSnapshotTab({ id, sourceId, raw }: IdRow, ptyId: string | null, context: TabReadContext): RuntimeTab {
+  const nestedMeta = asRecord(raw.meta);
+  const paneId = resolveId(raw.paneId, context.ids.paneIds);
+  const orphaned =
+    paneId === null ||
+    ptyId === null ||
+    raw.orphaned === true ||
+    context.sourceOrphanedTabIds.has(id);
+  return {
+    id,
+    paneId,
+    ptyId,
+    command: readString(raw.command) || readString(nestedMeta.command),
+    cwd: readString(raw.cwd),
+    width: readFiniteNumber(raw.width ?? nestedMeta.width),
+    title: readString(raw.title) || readString(raw.name) || readString(raw.command) || "Terminal",
+    ...(sourceId && sourceId !== id ? { legacyTerminalId: sourceId } : {}),
+    ...(readString(raw.legacyTerminalId)
+      ? { legacyTerminalId: readString(raw.legacyTerminalId) }
+      : {}),
+    ...(readString(raw.legacyWorkspaceId)
+      ? { legacyWorkspaceId: readString(raw.legacyWorkspaceId) }
+      : {}),
+    ...(readString(raw.groupId) ? { groupId: readString(raw.groupId) } : {}),
+    ...(raw.suspended === true ? { suspended: true } : {}),
+    orphaned,
+  };
+}
+
+function readSnapshotTabs(rows: readonly IdRow[], context: TabReadContext): TerminalTab[] {
   const usedPtyIds = new Set<string>();
-  const tabs: TerminalTab[] = tabRows.map(({ id, sourceId, raw }) => {
-    const nestedMeta = asRecord(raw.meta);
-    const ptySource =
-      readString(raw.ptyId) || readString(raw.terminalId) || readString(nestedMeta.id);
-    const hasUniquePtyId = ptySource.length > 0 && !usedPtyIds.has(ptySource);
-    const ptyId = hasUniquePtyId ? ptySource : null;
-    if (ptyId) usedPtyIds.add(ptyId);
-    const paneId = resolveId(raw.paneId, paneIds);
-    const orphaned =
-      paneId === null ||
-      ptyId === null ||
-      raw.orphaned === true ||
-      sourceOrphanedTabIds.has(id);
-    return {
-      id,
-      paneId,
-      ptyId,
-      command: readString(raw.command) || readString(nestedMeta.command),
-      cwd: readString(raw.cwd),
-      width: readFiniteNumber(raw.width ?? nestedMeta.width),
-      title: readString(raw.title) || readString(raw.name) || readString(raw.command) || "Terminal",
-      ...(sourceId && sourceId !== id ? { legacyTerminalId: sourceId } : {}),
-      ...(readString(raw.legacyTerminalId)
-        ? { legacyTerminalId: readString(raw.legacyTerminalId) }
-        : {}),
-      ...(readString(raw.legacyWorkspaceId)
-        ? { legacyWorkspaceId: readString(raw.legacyWorkspaceId) }
-        : {}),
-      ...(readString(raw.groupId) ? { groupId: readString(raw.groupId) } : {}),
-      ...(raw.suspended === true ? { suspended: true } : {}),
-      orphaned,
-    };
-  });
+  return rows.map((row) => readSnapshotTab(row, claimPtyId(row.raw, usedPtyIds), context));
+}
 
-  const projectById = new Map(projects.map((project) => [project.id, project]));
-  const containerById = new Map(containers.map((container) => [container.id, container]));
-  const paneById = new Map(panes.map((pane) => [pane.id, pane]));
-  const tabById = new Map(tabs.map((tab) => [tab.id, tab]));
+function readSnapshotEntities(rows: SnapshotRows, ids: SnapshotIdMaps, source: RecordLike): SnapshotEntities {
+  const fallbackLayout = normalizeLayout(source.layout);
+  const sourceOrphanedTabIds = new Set(resolveIds(source.orphanedTabIds, ids.tabIds));
+  return {
+    projects: rows.projects.map((row) => readSnapshotProject(row, ids, fallbackLayout)),
+    groups: rows.groups.map((row) => readSnapshotGroup(row, ids, fallbackLayout)),
+    containers: rows.containers.map((row) => readSnapshotContainer(row, ids, fallbackLayout)),
+    panes: rows.panes.map((row) => readSnapshotPane(row, ids, fallbackLayout)),
+    tabs: readSnapshotTabs(rows.tabs, { ids, sourceOrphanedTabIds }),
+  };
+}
 
-  // A pane can be recovered from either side of a malformed reference. The
-  // first deterministic owner wins, and all other references are deduplicated.
+function indexSnapshotEntities(entities: SnapshotEntities): SnapshotIndex {
+  return {
+    projectById: new Map(entities.projects.map((project) => [project.id, project])),
+    containerById: new Map(entities.containers.map((container) => [container.id, container])),
+    paneById: new Map(entities.panes.map((pane) => [pane.id, pane])),
+    tabById: new Map(entities.tabs.map((tab) => [tab.id, tab])),
+  };
+}
+
+// A pane can be recovered from either side of a malformed reference. The
+// first deterministic owner wins, and all other references are deduplicated.
+function repairContainerPanes(containers: readonly WorkspaceContainer[], index: SnapshotIndex): void {
   for (const container of containers) {
     const validPaneIds: string[] = [];
     for (const paneId of container.paneIds) {
-      const pane = paneById.get(paneId);
+      const pane = index.paneById.get(paneId);
       if (!pane || validPaneIds.includes(paneId)) continue;
       if (pane.containerId && pane.containerId !== container.id) continue;
       pane.containerId = container.id;
@@ -1298,20 +1379,24 @@ function normalizeSnapshotObject(source: RecordLike): WorkspaceSnapshotV2 {
         ? container.activePaneId
         : (validPaneIds[0] ?? null);
   }
+}
+
+function attachPanesToContainers(panes: readonly Pane[], index: SnapshotIndex): void {
   for (const pane of panes) {
-    if (pane.containerId) {
-      const container = containerById.get(pane.containerId);
-      if (container && !container.paneIds.includes(pane.id)) {
-        container.paneIds.push(pane.id);
-        if (!pane.projectId && container.projectId) pane.projectId = container.projectId;
-      }
+    if (!pane.containerId) continue;
+    const container = index.containerById.get(pane.containerId);
+    if (container && !container.paneIds.includes(pane.id)) {
+      container.paneIds.push(pane.id);
+      if (!pane.projectId && container.projectId) pane.projectId = container.projectId;
     }
   }
+}
 
+function repairPaneTabs(panes: readonly Pane[], index: SnapshotIndex): void {
   for (const pane of panes) {
     const validTabIds: string[] = [];
     for (const tabId of pane.tabIds) {
-      const tab = tabById.get(tabId);
+      const tab = index.tabById.get(tabId);
       if (!tab || validTabIds.includes(tabId)) continue;
       if (tab.paneId && tab.paneId !== pane.id) continue;
       tab.paneId = pane.id;
@@ -1319,36 +1404,43 @@ function normalizeSnapshotObject(source: RecordLike): WorkspaceSnapshotV2 {
     }
     pane.tabIds = validTabIds;
   }
-  for (const tab of tabs) {
-    if (tab.paneId) {
-      const pane = paneById.get(tab.paneId);
-      if (pane && !pane.tabIds.includes(tab.id)) pane.tabIds.push(tab.id);
-    }
-  }
+}
 
-  // Infer ownership from project/container references when a pane lost its
-  // direct project id. This keeps a valid terminal reachable by group selectors.
-  for (const project of projects) {
-    const validPaneIds = project.paneIds.filter((paneId) => paneById.has(paneId));
-    for (const pane of panes) {
+function attachTabsToPanes(tabs: readonly TerminalTab[], index: SnapshotIndex): void {
+  for (const tab of tabs) {
+    if (!tab.paneId) continue;
+    const pane = index.paneById.get(tab.paneId);
+    if (pane && !pane.tabIds.includes(tab.id)) pane.tabIds.push(tab.id);
+  }
+}
+
+// Infer ownership from project/container references when a pane lost its
+// direct project id. This keeps a valid terminal reachable by group selectors.
+function repairProjectOwnership(snapshot: IndexedSnapshot): void {
+  const { entities, index } = snapshot;
+  for (const project of entities.projects) {
+    const validPaneIds = project.paneIds.filter((paneId) => index.paneById.has(paneId));
+    for (const pane of entities.panes) {
       if (!pane.projectId && project.paneIds.includes(pane.id)) pane.projectId = project.id;
       if (pane.projectId === project.id && !validPaneIds.includes(pane.id)) validPaneIds.push(pane.id);
     }
     project.paneIds = validPaneIds;
 
     const validContainerIds = project.containerIds.filter((containerId) => {
-      const container = containerById.get(containerId);
+      const container = index.containerById.get(containerId);
       return container?.projectId === project.id;
     });
-    for (const container of containers) {
+    for (const container of entities.containers) {
       if (container.projectId === project.id && !validContainerIds.includes(container.id)) {
         validContainerIds.push(container.id);
       }
     }
     project.containerIds = validContainerIds;
   }
+}
 
-  for (const project of projects) {
+function repairActiveIds(entities: SnapshotEntities): void {
+  for (const project of entities.projects) {
     project.activePaneId =
       project.activePaneId && project.paneIds.includes(project.activePaneId)
         ? project.activePaneId
@@ -1358,42 +1450,63 @@ function normalizeSnapshotObject(source: RecordLike): WorkspaceSnapshotV2 {
         ? project.activeContainerId
         : (project.containerIds[0] ?? null);
   }
-  for (const pane of panes) {
+  for (const pane of entities.panes) {
     pane.activeTabId =
       pane.activeTabId && pane.tabIds.includes(pane.activeTabId)
         ? pane.activeTabId
         : (pane.tabIds[0] ?? null);
   }
+}
 
+function orphanUnownedPaneTabs(panes: readonly Pane[], index: SnapshotIndex): void {
   for (const pane of panes) {
-    if (!pane.projectId) {
-      for (const tabId of pane.tabIds) {
-        const tab = tabById.get(tabId);
-        if (tab) tab.orphaned = true;
-      }
+    if (pane.projectId) continue;
+    for (const tabId of pane.tabIds) {
+      const tab = index.tabById.get(tabId);
+      if (tab) tab.orphaned = true;
     }
   }
+}
 
-  const allContainerIds = new Set(containers.map((container) => container.id));
-  for (const project of projects) {
+function restrictEntityLayouts(entities: SnapshotEntities): void {
+  for (const project of entities.projects) {
     project.layout = restrictLayoutItems(
       project.layout,
       new Set([...project.paneIds, ...project.containerIds]),
     );
   }
-  for (const group of groups) {
+  for (const group of entities.groups) {
     group.layout = restrictLayoutItems(group.layout, new Set(group.projectIds));
   }
-  for (const container of containers) {
+  for (const container of entities.containers) {
     container.layout = restrictLayoutItems(container.layout, new Set(container.paneIds));
   }
-  for (const pane of panes) {
+  for (const pane of entities.panes) {
     pane.layout = restrictLayoutItems(pane.layout, new Set(pane.tabIds));
   }
+}
 
-  const projectId = resolveId(source.activeProjectId, projectIds);
-  const activeProject = projectById.get(projectId ?? "") ?? projects[0] ?? null;
-  const activeContainerId = resolveId(source.activeContainerId, containerIds);
+function repairSnapshotReferences(snapshot: IndexedSnapshot): void {
+  const { entities, index } = snapshot;
+  repairContainerPanes(entities.containers, index);
+  attachPanesToContainers(entities.panes, index);
+  repairPaneTabs(entities.panes, index);
+  attachTabsToPanes(entities.tabs, index);
+  repairProjectOwnership(snapshot);
+  repairActiveIds(entities);
+  orphanUnownedPaneTabs(entities.panes, index);
+  restrictEntityLayouts(entities);
+}
+
+function selectSnapshotActiveIds(
+  source: RecordLike,
+  ids: SnapshotIdMaps,
+  snapshot: IndexedSnapshot,
+): ActiveSelection {
+  const { projectById, containerById, paneById, tabById } = snapshot.index;
+  const projectId = resolveId(source.activeProjectId, ids.projectIds);
+  const activeProject = projectById.get(projectId ?? "") ?? snapshot.entities.projects[0] ?? null;
+  const activeContainerId = resolveId(source.activeContainerId, ids.containerIds);
   const activeContainer =
     (activeContainerId &&
       containerById.get(activeContainerId)?.projectId === activeProject?.id &&
@@ -1403,7 +1516,7 @@ function normalizeSnapshotObject(source: RecordLike): WorkspaceSnapshotV2 {
       : undefined) ||
     (activeProject?.containerIds[0] ? containerById.get(activeProject.containerIds[0]) : undefined) ||
     null;
-  const activePaneId = resolveId(source.activePaneId, paneIds);
+  const activePaneId = resolveId(source.activePaneId, ids.paneIds);
   const activePane =
     (activePaneId && paneById.get(activePaneId)?.projectId === activeProject?.id
       ? paneById.get(activePaneId)
@@ -1411,27 +1524,38 @@ function normalizeSnapshotObject(source: RecordLike): WorkspaceSnapshotV2 {
     (activeContainer?.paneIds[0] ? paneById.get(activeContainer.paneIds[0]) : undefined) ||
     (activeProject?.activePaneId ? paneById.get(activeProject.activePaneId) : undefined) ||
     null;
-  const activeTabId = resolveId(source.activeTabId, tabIds);
+  const activeTabId = resolveId(source.activeTabId, ids.tabIds);
   const activeTab =
     (activeTabId && activePane?.tabIds.includes(activeTabId) ? tabById.get(activeTabId) : undefined) ||
     (activePane?.activeTabId ? tabById.get(activePane.activeTabId) : undefined) ||
     null;
-  const activeGroupId = resolveId(source.activeGroupId, groupIds);
-
   return {
-    version: DOMAIN_SNAPSHOT_VERSION,
-    projects,
-    groups,
-    containers,
-    panes,
-    tabs,
-    orphanedTabIds: tabs.filter((tab) => tab.orphaned).map((tab) => tab.id),
     activeProjectId: activeProject?.id ?? null,
-    activeGroupId,
     activeContainerId: activeContainer?.id ?? null,
     activePaneId: activePane?.id ?? null,
     activeTabId: activeTab?.id ?? null,
-    layout: restrictLayoutItems(fallbackLayout, allContainerIds),
+  };
+}
+
+function normalizeSnapshotObject(source: RecordLike): WorkspaceSnapshotV2 {
+  const rows = snapshotRows(source);
+  const ids = snapshotIdMaps(rows);
+  const entities = readSnapshotEntities(rows, ids, source);
+  const snapshot: IndexedSnapshot = { entities, index: indexSnapshotEntities(entities) };
+  repairSnapshotReferences(snapshot);
+  const activeSelection = selectSnapshotActiveIds(source, ids, snapshot);
+  const allContainerIds = new Set(entities.containers.map((container) => container.id));
+
+  return {
+    version: DOMAIN_SNAPSHOT_VERSION,
+    ...entities,
+    orphanedTabIds: entities.tabs.filter((tab) => tab.orphaned).map((tab) => tab.id),
+    activeProjectId: activeSelection.activeProjectId,
+    activeGroupId: resolveId(source.activeGroupId, ids.groupIds),
+    activeContainerId: activeSelection.activeContainerId,
+    activePaneId: activeSelection.activePaneId,
+    activeTabId: activeSelection.activeTabId,
+    layout: restrictLayoutItems(normalizeLayout(source.layout), allContainerIds),
   };
 }
 

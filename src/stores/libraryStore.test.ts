@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { fillPrompt, useLibraryStore } from "./libraryStore";
+import { useLibraryStore } from "./libraryStore";
 
 describe("prompt library", () => {
   beforeEach(() => {
@@ -16,10 +16,5 @@ describe("prompt library", () => {
     expect(useLibraryStore.getState().prompts.find((prompt) => prompt.id === added.id)?.title).toBe("Flaky");
     useLibraryStore.getState().deletePrompt(added.id);
     expect(useLibraryStore.getState().prompts.some((prompt) => prompt.id === added.id)).toBe(false);
-  });
-
-  it("fills the project placeholder", () => {
-    expect(fillPrompt("Review {project} now", { project: "api" })).toBe("Review api now");
-    expect(fillPrompt("Review {project}", {})).toBe("Review this project");
   });
 });

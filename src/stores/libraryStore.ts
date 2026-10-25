@@ -1,12 +1,7 @@
 import { create } from "zustand";
 import { t } from "../i18n";
 import { storageGet, storageSet } from "../lib/storage/safeStorage";
-
-export interface SavedPrompt {
-  id: string;
-  title: string;
-  body: string;
-}
+import { promptTitle, type SavedPrompt } from "../domain/prompts";
 
 const STORAGE_KEY = "terra-prompt-library";
 
@@ -38,11 +33,6 @@ function persist(prompts: readonly SavedPrompt[]) {
   storageSet(STORAGE_KEY, JSON.stringify(prompts));
 }
 
-/** `{project}` becomes the active project's name. */
-export function fillPrompt(body: string, values: { project?: string | null }): string {
-  return body.replace(/\{project\}/g, values.project?.trim() || "this project");
-}
-
 export type LibraryDialog = "prompts" | "team" | null;
 
 interface LibraryState {
@@ -62,7 +52,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   savePrompt: ({ id, title, body }) => {
     const saved: SavedPrompt = {
       id: id ?? `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      title: title.trim() || body.trim().split(/\s+/).slice(0, 6).join(" ") || "Prompt",
+      title: promptTitle(title, body),
       body,
     };
     const exists = get().prompts.some((prompt) => prompt.id === saved.id);

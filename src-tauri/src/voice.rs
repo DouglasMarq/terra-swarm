@@ -246,19 +246,25 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
     use std::ffi::CString;
 
     std::thread::spawn(move || {
+        // SAFETY: `inotify_init1` has no memory preconditions; a negative
+        // result is handled right below.
         let fd = unsafe { libc::inotify_init1(libc::IN_CLOEXEC) };
         if fd < 0 {
             return;
         }
 
         let Ok(path) = CString::new("/dev/snd") else {
+            // SAFETY: `fd` is the open inotify descriptor this thread owns.
             unsafe { libc::close(fd) };
             return;
         };
+        // SAFETY: `fd` is open and `path` is a NUL-terminated string that
+        // outlives the call.
         let wd = unsafe {
             libc::inotify_add_watch(fd, path.as_ptr(), libc::IN_CREATE | libc::IN_DELETE)
         };
         if wd < 0 {
+            // SAFETY: `fd` is the open inotify descriptor this thread owns.
             unsafe { libc::close(fd) };
             return;
         }
@@ -266,6 +272,7 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
         let mut last: Option<bool> = None;
         let mut buf = [0u8; INOTIFY_BUFFER_BYTES];
         loop {
+            // SAFETY: `buf` is writable for `buf.len()` bytes and `fd` is open.
             let len = unsafe { libc::read(fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) };
             if len <= 0 {
                 break;
@@ -273,6 +280,8 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
 
             std::thread::sleep(DEVICE_SETTLE_DELAY);
 
+            // SAFETY: `fd` is open; the reads write at most `buf.len()` bytes
+            // into `buf`, and the original flags are restored afterwards.
             unsafe {
                 let flags = libc::fcntl(fd, libc::F_GETFL);
                 libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
@@ -283,6 +292,8 @@ pub fn watch_input_devices(app: tauri::AppHandle) {
             emit_if_mic_changed(&app, &mut last);
         }
 
+        // SAFETY: `fd` is the open inotify descriptor this thread owns, closed
+        // once on the way out.
         unsafe { libc::close(fd) };
     });
 }

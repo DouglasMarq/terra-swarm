@@ -15,11 +15,13 @@ const RESAMPLE_CHUNK_SIZE: usize = 1024;
 /// Wrapper to pass a mono `&[f32]` slice as a single-channel `Adapter` for rubato.
 struct MonoSlice<'a>(&'a [f32]);
 
-/// Safety: `MonoSlice` reports a fixed channel count of 1 and a frame count
-/// equal to the slice length, both immutable for the lifetime of the buffer.
+// SAFETY: `MonoSlice` reports a fixed channel count of 1 and a frame count
+// equal to the slice length, both immutable for the lifetime of the buffer.
 unsafe impl Adapter<f32> for MonoSlice<'_> {
     unsafe fn read_sample_unchecked(&self, _channel: usize, frame: usize) -> f32 {
-        *self.0.get_unchecked(frame)
+        // SAFETY: rubato only calls this with `frame < self.frames()`, which
+        // is the slice length, so the index is in bounds.
+        unsafe { *self.0.get_unchecked(frame) }
     }
     fn channels(&self) -> usize {
         1

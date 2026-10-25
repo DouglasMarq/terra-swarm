@@ -52,7 +52,7 @@
   gap: 10px;
   padding: 10px;
   border-radius: var(--terra-radius-lg);
-  background: rgb(224 180 92 / 7%);
+  background: var(--terra-amber-wash);
 }
 
 .terra-notification-card > .terra-dot {

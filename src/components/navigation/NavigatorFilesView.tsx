@@ -1,11 +1,12 @@
-import { t } from "../../i18n";
+import { useT } from "../../i18n";
+import { errorMessage } from "../../lib/errors/errorMessage";
+import { DEFAULT_FILE_LIST_LIMIT } from "../../lib/tauri/workspace";
 import { AlertCircle, ChevronDown, ChevronRight, FileText, Folder, Link2, LoaderCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Workspace, WorkspaceFileEntry, WorkspaceFileListing } from "../../types";
 import type { NavigatorFilesLoader } from "./types";
 import styles from "./Navigator.module.css";
 
-const FILE_LIST_LIMIT = 200;
 
 interface DirectoryState {
   listing: WorkspaceFileListing | null;
@@ -18,12 +19,8 @@ export interface NavigatorFilesViewProps {
   activeWorkspaceId?: string | null;
   loadFiles: NavigatorFilesLoader;
   onSelectWorkspace?: (workspaceId: string) => void;
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  if (typeof error === "string" && error.trim()) return error;
-  return t("nav.filesView.error");
+  /** Open a file in the editor; files stay static rows without it. */
+  onOpenFile?: (workspaceId: string, path: string) => void;
 }
 
 function FileIcon({ entry }: { entry: WorkspaceFileEntry }) {
@@ -38,13 +35,16 @@ function FileRow({
   loading,
   depth,
   onToggle,
+  onOpen,
 }: {
   entry: WorkspaceFileEntry;
   expanded: boolean;
   loading: boolean;
   depth: number;
   onToggle: () => void;
+  onOpen?: () => void;
 }) {
+  const t = useT();
   const directory = entry.kind === "directory";
   const rowContent = (
     <>
@@ -53,14 +53,27 @@ function FileRow({
       </span>
       <span className={styles.integrationIcon}><FileIcon entry={entry} /></span>
       <span className={styles.integrationName}>{entry.name}</span>
-      {loading ? <LoaderCircle aria-label="Carregando" className={styles.spin} size={12} /> : null}
-      {entry.kind === "file" && entry.size !== null ? <span className={styles.integrationMeta}>{entry.size} B</span> : null}
+      {loading ? <LoaderCircle aria-label={t("nav.filesView.loadingEntry")} className={styles.spin} size={12} /> : null}
+      {entry.kind === "file" && entry.size !== null ? <span className={styles.integrationMeta}>{t("nav.filesView.sizeBytes", { size: entry.size })}</span> : null}
     </>
   );
+  if (!directory && entry.kind === "file" && onOpen) {
+    return (
+      <button
+        aria-label={t("editor.open", { name: entry.name })}
+        className={styles.integrationRow}
+        onClick={onOpen}
+        style={{ paddingInlineStart: `${8 + depth * 16}px` }}
+        type="button"
+      >
+        {rowContent}
+      </button>
+    );
+  }
   if (!directory) {
     return (
       <div
-        aria-label={`Arquivo ${entry.name}`}
+        aria-label={t("nav.filesView.fileRow", { name: entry.name })}
         className={styles.integrationRow}
         data-file-static="true"
         role="listitem"
@@ -88,7 +101,9 @@ export function NavigatorFilesView({
   activeWorkspaceId = null,
   loadFiles,
   onSelectWorkspace,
+  onOpenFile,
 }: NavigatorFilesViewProps) {
+  const t = useT();
   const workspace = workspaces.find((candidate) => candidate.id === activeWorkspaceId) ?? null;
   const [directories, setDirectories] = useState<Record<string, DirectoryState>>({});
   const directoriesRef = useRef<Record<string, DirectoryState>>({});
@@ -110,7 +125,7 @@ export function NavigatorFilesView({
       return next;
     });
     try {
-      const listing = await loadFiles(workspaceId, relativePath, FILE_LIST_LIMIT);
+      const listing = await loadFiles(workspaceId, relativePath, DEFAULT_FILE_LIST_LIMIT);
       if (currentGeneration !== generation.current) return;
       setDirectories((current) => {
         const next = { ...current, [relativePath]: { listing, loading: false, error: null } };
@@ -122,7 +137,7 @@ export function NavigatorFilesView({
       setDirectories((current) => {
         const next = {
           ...current,
-          [relativePath]: { listing: current[relativePath]?.listing ?? null, loading: false, error: errorMessage(error) },
+          [relativePath]: { listing: current[relativePath]?.listing ?? null, loading: false, error: errorMessage(error, "") },
         };
         directoriesRef.current = next;
         return next;
@@ -153,11 +168,11 @@ export function NavigatorFilesView({
   const renderDirectory = (relativePath: string, depth: number): ReactNode => {
     const state = directories[relativePath];
     if (!state) return null;
-    if (state.error && !state.listing) {
+    if (state.error !== null && !state.listing) {
       return (
         <div className={styles.integrationError} style={{ paddingInlineStart: `${12 + depth * 16}px` }}>
           <AlertCircle aria-hidden="true" size={13} />
-          <span>{state.error}</span>
+          <span>{state.error || t("nav.filesView.error")}</span>
           <button aria-label={t("nav.retry")} onClick={() => void loadDirectory(relativePath, true)} type="button"><RefreshCw size={12} /></button>
         </div>
       );
@@ -174,13 +189,13 @@ export function NavigatorFilesView({
           const expanded = expandedPaths.has(entry.path);
           return (
             <div key={entry.path}>
-              <FileRow depth={depth} entry={entry} expanded={expanded} loading={Boolean(directories[entry.path]?.loading)} onToggle={() => toggleDirectory(entry)} />
+              <FileRow depth={depth} entry={entry} expanded={expanded} loading={Boolean(directories[entry.path]?.loading)} onToggle={() => toggleDirectory(entry)} onOpen={onOpenFile && workspaceId ? () => onOpenFile(workspaceId, entry.path) : undefined} />
               {entry.kind === "directory" && expanded ? renderDirectory(entry.path, depth + 1) : null}
             </div>
           );
         })}
         {state.listing.truncated ? <div className={styles.integrationNotice}>{t("nav.filesView.truncated", { count: state.listing.limit })}</div> : null}
-        {state.error ? <div className={styles.integrationNotice}>{state.error}</div> : null}
+        {state.error !== null ? <div className={styles.integrationNotice}>{state.error || t("nav.filesView.error")}</div> : null}
       </>
     );
   };

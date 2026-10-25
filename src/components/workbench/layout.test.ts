@@ -7,7 +7,6 @@ import {
   defaultGridDimensions,
   gridDimensionsForLayout,
   layoutForPanelIds,
-  modeLabel,
   nextLayout,
   orderedIds,
   resolveLayoutMode,
@@ -35,7 +34,6 @@ describe("workbench layout projection", () => {
     expect(Object.values(normalized).reduce((sum, value) => sum + value, 0)).toBe(100);
     expect(resolveLayoutMode({ mode: "spotlight" })).toBe("spotlight");
     expect(resolveLayoutMode({ mode: "grid" }, "sidebar")).toBe("sidebar");
-    expect(modeLabel("grid")).toBe("Custom grid");
     expect(workbenchModeForLayout({ mode: "auto", metadata: { workbenchMode: "sidebar" } })).toBe("sidebar");
     expect(workspaceLayoutForMode({ mode: "auto" }, "sidebar")).toMatchObject({
       mode: "auto",

@@ -1,9 +1,11 @@
-import { t } from "../../i18n";
+import { useReportedStates } from "../../stores/mcpStore";
+import { useT, type MessageKey } from "../../i18n";
 import { Folder, GitBranch, Plus, Search } from "../../components/icons";
 import { Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type ChangeEvent, type MouseEvent } from "react";
 import { ProjectTree } from "./ProjectTree";
 import { NavigatorFilesView } from "./NavigatorFilesView";
+import { useEditorStore } from "../../stores/editorStore";
 import { NavigatorGitView } from "./NavigatorGitView";
 import {
   buildNavigatorTree,
@@ -12,10 +14,22 @@ import {
 import type { ActivityTab, NavigatorNode, NavigatorNodeRef, NavigatorPanelProps } from "./types";
 import styles from "./Navigator.module.css";
 
-const ACTIVITY_TABS: readonly { id: ActivityTab; label: string }[] = [
-  { id: "projects", get label() { return t("nav.projects"); } },
-  { id: "files", get label() { return t("nav.files"); } },
-  { id: "git", label: "Git" },
+/** The agent menu is wider and taller than the single "Delete project" item. */
+const AGENT_MENU_WIDTH_PX = 272;
+const AGENT_MENU_HEIGHT_PX = 360;
+const PROJECT_MENU_WIDTH_PX = 196;
+const PROJECT_MENU_HEIGHT_PX = 52;
+/** Keeps context menus clear of the 48px window chrome and the macOS traffic lights. */
+const MENU_MIN_TOP_PX = 56;
+const MENU_MIN_LEFT_PX = 8;
+/** Viewport assumed when there is no window (tests, prerender). */
+const FALLBACK_VIEWPORT_WIDTH_PX = 1024;
+const FALLBACK_VIEWPORT_HEIGHT_PX = 768;
+
+const ACTIVITY_TABS: readonly { id: ActivityTab; label: MessageKey }[] = [
+  { id: "projects", label: "nav.projects" },
+  { id: "files", label: "nav.files" },
+  { id: "git", label: "nav.gitTab" },
 ];
 
 const DEFAULT_ACTIVITIES: readonly ActivityTab[] = ["projects"];
@@ -86,6 +100,7 @@ export function NavigatorPanel({
   headerSlot,
   agentMenu,
 }: NavigatorPanelProps) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [localCollapsed, setLocalCollapsed] = useState<Set<string>>(() => new Set(defaultCollapsedIds));
   const [contextMenu, setContextMenu] = useState<{
@@ -109,9 +124,10 @@ export function NavigatorPanel({
   }, [availableActivities, capabilities, loadFiles, loadGitStatus, workspaces.length]);
   const selectedActivity = enabledActivities.includes(activeActivity) ? activeActivity : "projects";
   const collapsed = useMemo(() => new Set(collapsedIds ?? localCollapsed), [collapsedIds, localCollapsed]);
+  const reported = useReportedStates();
   const tree = useMemo(
-    () => buildNavigatorTree(workspaces, { snapshot, groups, exited, notifications, contextUsage, statuses, branches, containerVisibility, agentLabels, flatten }),
-    [agentLabels, branches, containerVisibility, contextUsage, exited, flatten, groups, notifications, snapshot, statuses, workspaces],
+    () => buildNavigatorTree(workspaces, { snapshot, groups, exited, notifications, contextUsage, statuses, branches, containerVisibility, agentLabels, flatten, reported }),
+    [agentLabels, branches, containerVisibility, contextUsage, exited, flatten, groups, notifications, snapshot, statuses, workspaces, reported],
   );
   const filteredTree = useMemo(() => filterNavigatorTree(tree, query), [query, tree]);
   const expandableIds = useMemo(() => collectExpandable(filteredTree), [filteredTree]);
@@ -162,11 +178,10 @@ export function NavigatorPanel({
     onContextMenu?.(event, node);
     const isAgentMenu = node.kind === "agent" && Boolean(agentMenu);
     if (!isAgentMenu && (node.kind !== "project" || !onDeleteWorkspace)) return;
-    const width = typeof window === "undefined" ? 1024 : window.innerWidth;
-    const height = typeof window === "undefined" ? 768 : window.innerHeight;
-    // The agent menu is wider and taller than the single "Delete project" item.
-    const menuWidth = isAgentMenu ? 272 : 196;
-    const menuHeight = isAgentMenu ? 360 : 52;
+    const width = typeof window === "undefined" ? FALLBACK_VIEWPORT_WIDTH_PX : window.innerWidth;
+    const height = typeof window === "undefined" ? FALLBACK_VIEWPORT_HEIGHT_PX : window.innerHeight;
+    const menuWidth = isAgentMenu ? AGENT_MENU_WIDTH_PX : PROJECT_MENU_WIDTH_PX;
+    const menuHeight = isAgentMenu ? AGENT_MENU_HEIGHT_PX : PROJECT_MENU_HEIGHT_PX;
     // Opened from the keyboard (ContextMenu key, Shift+F10, Enter on "…")
     // there is no pointer position: anchor to the row or button instead.
     let anchorX = event.clientX;
@@ -176,11 +191,10 @@ export function NavigatorPanel({
       anchorX = rect.left;
       anchorY = rect.bottom;
     }
-    // 56px keeps it clear of the 48px window chrome and the macOS traffic lights.
     setContextMenu({
       node,
-      x: Math.max(8, Math.min(anchorX, width - menuWidth)),
-      y: Math.max(56, Math.min(anchorY, height - menuHeight)),
+      x: Math.max(MENU_MIN_LEFT_PX, Math.min(anchorX, width - menuWidth)),
+      y: Math.max(MENU_MIN_TOP_PX, Math.min(anchorY, height - menuHeight)),
     });
   }
 
@@ -209,7 +223,7 @@ export function NavigatorPanel({
               type="button"
             >
               {tab.id === "git" ? <GitBranch aria-hidden="true" size={12} /> : null}
-              <span className={styles.tabLabel}>{tab.label}</span>
+              <span className={styles.tabLabel}>{t(tab.label)}</span>
             </button>
           ))}
         </nav>
@@ -310,7 +324,7 @@ export function NavigatorPanel({
           </div>
         ) : null}
         {emptyState && workspaces.length === 0 ? emptyState : null}
-      </div> : selectedActivity === "files" && loadFiles ? <NavigatorFilesView activeWorkspaceId={activeWorkspaceId} loadFiles={loadFiles} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} /> : selectedActivity === "git" && loadGitStatus ? <NavigatorGitView activeWorkspaceId={activeWorkspaceId} loadGitStatus={loadGitStatus} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} /> : <div className={styles.integrationView}><div className={styles.integrationEmpty}>{t("nav.unavailable")}</div></div>}
+      </div> : selectedActivity === "files" && loadFiles ? <NavigatorFilesView activeWorkspaceId={activeWorkspaceId} loadFiles={loadFiles} onSelectWorkspace={onOpenWorkspace} onOpenFile={(workspaceId, path) => useEditorStore.getState().open({ workspaceId, path })} workspaces={workspaces} /> : selectedActivity === "git" && loadGitStatus ? <NavigatorGitView activeWorkspaceId={activeWorkspaceId} loadGitStatus={loadGitStatus} onSelectWorkspace={onOpenWorkspace} workspaces={workspaces} /> : <div className={styles.integrationView}><div className={styles.integrationEmpty}>{t("nav.unavailable")}</div></div>}
       <footer className={styles.footer}>
         <span>{t("nav.projectCount", { count: projectCount })}</span>
         {createProject ? <button className={styles.footerAction} onClick={() => createProject(null)} type="button"><Plus aria-hidden="true" size={12} /> {t("palette.newProject")}</button> : null}

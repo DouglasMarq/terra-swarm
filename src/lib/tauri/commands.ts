@@ -1,8 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AgentInfo,
+  AgentTokenUsage,
+  AgentLaunchExtras,
   ActivePaneSelection,
   BacklogSnapshot,
+  McpAgentStatus,
+  McpServerInfo,
+  McpTask,
+  McpTaskPatch,
+  McpTaskPriority,
   RunningTerminal,
   SpawnedTerminal,
   TerminalRuntimeInfo,
@@ -13,9 +20,14 @@ import type {
   WorkspaceSnapshotTransfer,
   WorkspaceContainerPatch,
   WorkspaceLayout,
+  WorkspaceFileContent,
   WorkspaceFileListing,
+  WorkspaceFileSaved,
   WorkspaceGitStatus,
+  WorktreeDiff,
+  WorktreeStatus,
 } from "../../types";
+import { toIpcError } from "./errors";
 
 /**
  * The frontend half of the Tauri IPC contract.
@@ -131,6 +143,7 @@ export interface IpcCommandContract {
       rows: number;
       terminalId: string | null;
       shell: string | null;
+      launch: AgentLaunchExtras | null;
     };
     result: SpawnedTerminal;
   };
@@ -186,6 +199,10 @@ export interface IpcCommandContract {
     args: undefined;
     result: AgentInfo[];
   };
+  probeDevServers: {
+    args: { ports: number[] };
+    result: number[];
+  };
   gitBranch: {
     args: { cwd: string };
     result: string | null;
@@ -194,9 +211,79 @@ export interface IpcCommandContract {
     args: { workspaceId: string; relativePath?: string; limit?: number };
     result: WorkspaceFileListing;
   };
+  readWorkspaceFile: {
+    args: { workspaceId: string; relativePath: string };
+    result: WorkspaceFileContent;
+  };
+  writeWorkspaceFile: {
+    args: { workspaceId: string; relativePath: string; content: string; expectedModified: number | null };
+    result: WorkspaceFileSaved;
+  };
   gitStatus: {
     args: { workspaceId: string };
     result: WorkspaceGitStatus;
+  };
+  mcpServerInfo: {
+    args: undefined;
+    result: McpServerInfo;
+  };
+  mcpSetEnabled: {
+    args: { enabled: boolean };
+    result: McpServerInfo;
+  };
+  mcpListTasks: {
+    args: { workspaceId: string };
+    result: McpTask[];
+  };
+  mcpCreateTask: {
+    args: {
+      workspaceId: string;
+      title: string;
+      description: string | null;
+      priority: McpTaskPriority | null;
+      assignee: string | null;
+    };
+    result: McpTask;
+  };
+  mcpUpdateTask: {
+    args: { workspaceId: string; id: string; patch: McpTaskPatch };
+    result: McpTask;
+  };
+  mcpDeleteTask: {
+    args: { workspaceId: string; id: string };
+    result: void;
+  };
+  agentUsage: {
+    args: { workspaceId: string };
+    result: AgentTokenUsage[];
+  };
+  mcpAgentStatuses: {
+    args: { workspaceId: string };
+    result: McpAgentStatus[];
+  };
+  worktreeStatus: {
+    args: { workspaceId: string; terminalId: string };
+    result: WorktreeStatus | null;
+  };
+  worktreeRemove: {
+    args: { workspaceId: string; terminalId: string; deleteBranch: boolean };
+    result: void;
+  };
+  worktreeDiff: {
+    args: { workspaceId: string; terminalId: string };
+    result: WorktreeDiff;
+  };
+  worktreeCommit: {
+    args: { workspaceId: string; terminalId: string; message: string };
+    result: WorktreeStatus;
+  };
+  worktreeMerge: {
+    args: { workspaceId: string; terminalId: string };
+    result: WorktreeStatus;
+  };
+  worktreeOpenPr: {
+    args: { workspaceId: string; terminalId: string; title: string; body: string };
+    result: string;
   };
   voiceToggleRecording: {
     args: undefined;
@@ -243,7 +330,7 @@ export interface IpcCommandContract {
 type CommandKey = keyof IpcCommandContract;
 
 /** Command identifiers are declared once and checked against the contract. */
-export const IPC_COMMANDS = {
+const IPC_COMMANDS = {
   listWorkspaces: "list_workspaces",
   storeSavedAt: "store_saved_at",
   exportWorkspaceSnapshot: "export_workspace_snapshot",
@@ -280,9 +367,26 @@ export const IPC_COMMANDS = {
   reorderWorkspaces: "reorder_workspaces",
   setTerminalWidth: "set_terminal_width",
   detectAgents: "detect_agents",
+  probeDevServers: "probe_dev_servers",
   gitBranch: "git_branch",
   listWorkspaceFiles: "list_workspace_files",
+  readWorkspaceFile: "read_workspace_file",
+  writeWorkspaceFile: "write_workspace_file",
   gitStatus: "git_status",
+  mcpServerInfo: "mcp_server_info",
+  agentUsage: "agent_usage",
+  mcpSetEnabled: "mcp_set_enabled",
+  mcpListTasks: "mcp_list_tasks",
+  mcpCreateTask: "mcp_create_task",
+  mcpUpdateTask: "mcp_update_task",
+  mcpDeleteTask: "mcp_delete_task",
+  mcpAgentStatuses: "mcp_agent_statuses",
+  worktreeStatus: "worktree_status",
+  worktreeRemove: "worktree_remove",
+  worktreeDiff: "worktree_diff",
+  worktreeCommit: "worktree_commit",
+  worktreeMerge: "worktree_merge",
+  worktreeOpenPr: "worktree_open_pr",
   voiceToggleRecording: "voice_toggle_recording",
   voiceSetLanguage: "voice_set_language",
   voiceMicAvailable: "voice_mic_available",
@@ -298,7 +402,15 @@ export const IPC_COMMANDS = {
 type CommandArgs<K extends CommandKey> = IpcCommandContract[K]["args"];
 type CommandResult<K extends CommandKey> = IpcCommandContract[K]["result"];
 
-/** Invoke one of the commands declared in {@link IpcCommandContract}. */
+function rejectTyped(error: unknown): never {
+  throw toIpcError(error);
+}
+
+/**
+ * Invoke one of the commands declared in {@link IpcCommandContract}. A command
+ * that rejects with a coded error rejects here with an `IpcError`; plain
+ * messages are passed through.
+ */
 export function invokeCommand<K extends CommandKey>(
   key: K,
   ...args: CommandArgs<K> extends undefined ? [] : [args: CommandArgs<K>]
@@ -307,7 +419,7 @@ export function invokeCommand<K extends CommandKey>(
   const command = IPC_COMMANDS[key];
 
   if (payload === undefined) {
-    return invoke<CommandResult<K>>(command);
+    return invoke<CommandResult<K>>(command).catch(rejectTyped);
   }
 
   // Tauri's generic IPC payload is structurally a record at runtime. The
@@ -316,5 +428,5 @@ export function invokeCommand<K extends CommandKey>(
   return invoke<CommandResult<K>>(
     command,
     payload as Record<string, unknown>,
-  );
+  ).catch(rejectTyped);
 }

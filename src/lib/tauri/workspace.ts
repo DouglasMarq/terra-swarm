@@ -6,7 +6,9 @@ import type {
   WorkspaceGroup,
   WorkspaceLayout,
   WorkspaceSnapshotTransfer,
+  WorkspaceFileContent,
   WorkspaceFileListing,
+  WorkspaceFileSaved,
 } from "../../types";
 import { invokeCommand } from "./commands";
 
@@ -14,17 +16,35 @@ export function listWorkspaces(): Promise<Workspace[]> {
   return invokeCommand("listWorkspaces");
 }
 
+/** Entries listed per directory unless asked otherwise; mirrors `DEFAULT_FILE_LIST_LIMIT` in `src-tauri/src/workspace/files.rs`. */
+export const DEFAULT_FILE_LIST_LIMIT = 200;
+
 /** Load one workspace-relative directory without reading file contents. */
 export function listWorkspaceFiles(
   workspaceId: string,
   relativePath = "",
-  limit = 200,
+  limit = DEFAULT_FILE_LIST_LIMIT,
 ): Promise<WorkspaceFileListing> {
   return invokeCommand("listWorkspaceFiles", {
     workspaceId,
     relativePath,
     limit,
   });
+}
+
+/** One text file for the editor (at most 2 MB). */
+export function readWorkspaceFile(workspaceId: string, relativePath: string): Promise<WorkspaceFileContent> {
+  return invokeCommand("readWorkspaceFile", { workspaceId, relativePath });
+}
+
+/** Save the editor's text; fails with a `changedOnDisk` `IpcError` when the file changed since `expectedModified` (pass null to overwrite). */
+export function writeWorkspaceFile(
+  workspaceId: string,
+  relativePath: string,
+  content: string,
+  expectedModified: number | null,
+): Promise<WorkspaceFileSaved> {
+  return invokeCommand("writeWorkspaceFile", { workspaceId, relativePath, content, expectedModified });
 }
 
 export function exportWorkspaceSnapshot(
@@ -156,6 +176,8 @@ export function setTerminalWidth(
 export const workspaceApi = {
   listWorkspaces,
   listWorkspaceFiles,
+  readWorkspaceFile,
+  writeWorkspaceFile,
   exportWorkspaceSnapshot,
   importWorkspaceSnapshot,
   createWorkspace,

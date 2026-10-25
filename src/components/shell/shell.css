@@ -7,7 +7,7 @@
   --terra-shell-border-strong: var(--terra-border-strong);
   --terra-shell-text: var(--terra-text);
   --terra-shell-muted: var(--terra-text-secondary);
-  --terra-shell-faint: #71717a;
+  --terra-shell-faint: var(--terra-text-muted);
   --terra-shell-green: var(--terra-green);
   --terra-shell-amber: var(--terra-amber);
   --terra-shell-red: var(--terra-red);
@@ -348,7 +348,7 @@
   flex-direction: column;
   border: 1px solid var(--terra-shell-border);
   background: var(--terra-shell-panel);
-  box-shadow: var(--terra-shell-popover, 0 18px 46px rgb(0 0 0 / 38%));
+  box-shadow: var(--terra-shadow-popover);
 }
 
 .terra-shell-compact-drawer > * {
@@ -369,7 +369,7 @@
   z-index: 2;
   inset: 0;
   border: 0;
-  background: rgb(0 0 0 / 32%);
+  background: var(--terra-scrim-soft);
   cursor: pointer;
 }
 
@@ -398,6 +398,36 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--terra-shell-muted);
+}
+
+.terra-right-dock-tabs {
+  display: flex;
+  gap: 2px;
+  margin-left: -8px;
+}
+
+.terra-right-dock-tab {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-shell-muted);
+  background: transparent;
+  font: inherit;
+  font-size: var(--terra-font-size-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.terra-right-dock-tab:hover {
+  color: var(--terra-shell-text);
+  background: var(--terra-bg-hover);
+}
+
+.terra-right-dock-tab[aria-selected="true"] {
+  color: var(--terra-shell-text);
+  background: var(--terra-bg-hover);
 }
 
 .terra-right-dock-close {

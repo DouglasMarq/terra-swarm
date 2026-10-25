@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseVoiceCommand } from "./voiceCommands";
+import { normalizeVoiceText, parseVoiceCommand } from "./voiceCommands";
 
 describe("parseVoiceCommand", () => {
   it.each([
@@ -36,5 +36,15 @@ describe("parseVoiceCommand", () => {
     expect(parseVoiceCommand("focus $(rm -rf /)")).toBeNull();
     expect(parseVoiceCommand("suspender grupo")).toBeNull();
     expect(parseVoiceCommand("")).toBeNull();
+  });
+});
+
+describe("normalizeVoiceText", () => {
+  it("given spoken text with accents, extra spaces and trailing marks, folds it for matching", () => {
+    expect(normalizeVoiceText("  O Claude   das Animações?!")).toBe("o claude das animacoes");
+  });
+
+  it("given punctuation inside the text, keeps it", () => {
+    expect(normalizeVoiceText("codex-2, por favor")).toBe("codex-2, por favor");
   });
 });

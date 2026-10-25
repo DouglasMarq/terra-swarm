@@ -1,0 +1,475 @@
+.terra-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.terra-tasks-empty {
+  display: flex;
+  min-height: 220px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--terra-text-secondary);
+  text-align: center;
+}
+
+.terra-tasks-notice,
+.terra-tasks-hint,
+.terra-tasks-error {
+  margin: 0;
+  font-size: var(--terra-font-size-label);
+  color: var(--terra-text-secondary);
+}
+
+.terra-tasks-notice {
+  padding: 8px 10px;
+  border: 1px solid var(--terra-amber-line);
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-amber-ink);
+  background: var(--terra-amber-dim);
+}
+
+.terra-tasks-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--terra-red-ink);
+}
+
+.terra-tasks-error button {
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.terra-tasks-new {
+  display: flex;
+  gap: 6px;
+}
+
+.terra-tasks-input {
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text);
+  background: var(--terra-bg);
+  font: inherit;
+  font-size: var(--terra-font-size-body);
+}
+
+.terra-tasks-input:focus-visible {
+  outline: none;
+  border-color: var(--terra-border-focus);
+  box-shadow: var(--terra-focus-ring);
+}
+
+.terra-tasks-add,
+.terra-task-delete {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text-secondary);
+  background: var(--terra-bg-elevated);
+  cursor: pointer;
+}
+
+.terra-tasks-add:hover:not(:disabled),
+.terra-task-delete:hover {
+  color: var(--terra-text);
+  background: var(--terra-bg-hover);
+}
+
+.terra-tasks-add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.terra-tasks-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.terra-tasks-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  border: 0;
+  color: var(--terra-text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: var(--terra-font-size-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.terra-tasks-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.terra-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.terra-task {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-lg);
+  background: var(--terra-bg-panel);
+}
+
+.terra-task[data-priority="urgent"] {
+  border-left: 2px solid var(--terra-priority-urgent);
+}
+
+.terra-task[data-priority="high"] {
+  border-left: 2px solid var(--terra-priority-high);
+}
+
+.terra-task-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  color: var(--terra-text);
+  background: transparent;
+  font: inherit;
+  font-size: var(--terra-font-size-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.terra-task-id {
+  flex: 0 0 auto;
+  color: var(--terra-text-faint);
+  font-family: var(--terra-font-mono);
+  font-size: var(--terra-font-size-micro);
+}
+
+.terra-task-text {
+  overflow-wrap: anywhere;
+}
+
+.terra-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: var(--terra-font-size-label);
+  color: var(--terra-text-secondary);
+}
+
+.terra-task-meta:empty {
+  display: none;
+}
+
+.terra-task-chip {
+  padding: 0 6px;
+  border-radius: var(--terra-radius-pill);
+  background: var(--terra-bg-hover);
+  font-size: var(--terra-font-size-micro);
+  line-height: 18px;
+}
+
+.terra-task-chip[data-priority="urgent"] {
+  color: var(--terra-priority-urgent-ink);
+  background: var(--terra-priority-urgent-dim);
+}
+
+.terra-task-chip[data-blocked="true"] {
+  color: var(--terra-text-secondary);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--terra-border-strong);
+}
+
+.terra-task-chip[data-priority="high"] {
+  color: var(--terra-priority-high-ink);
+  background: var(--terra-priority-high-dim);
+}
+
+.terra-task-assignee {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.terra-task-state {
+  color: var(--terra-text-muted);
+}
+
+.terra-task-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--terra-text-faint);
+}
+
+.terra-task-dot[data-state="working"] {
+  background: var(--terra-green);
+}
+
+.terra-task-dot[data-state="needs_input"],
+.terra-task-dot[data-state="blocked"] {
+  background: var(--terra-amber);
+}
+
+.terra-task-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.terra-task-select {
+  min-width: 0;
+  flex: 1 1 0;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-sm);
+  color: var(--terra-text);
+  background: var(--terra-bg);
+  font: inherit;
+  font-size: var(--terra-font-size-label);
+}
+
+.terra-task-controls .terra-task-delete {
+  width: 26px;
+  height: 26px;
+}
+
+.terra-task-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--terra-border);
+  font-size: var(--terra-font-size-label);
+  color: var(--terra-text-secondary);
+}
+
+.terra-task-description {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.terra-task-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+}
+
+.terra-task-facts dt {
+  color: var(--terra-text-muted);
+}
+
+.terra-task-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.terra-task-log {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.terra-task-log-author {
+  color: var(--terra-text);
+}
+
+/* Kanban board surface */
+.terra-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.terra-board-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 520px;
+}
+
+.terra-board-notice {
+  margin: 0;
+  color: var(--terra-success);
+  font-size: var(--terra-font-size-label);
+}
+
+.terra-board-body {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+}
+
+.terra-board-columns {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  gap: 10px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.terra-board-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-lg);
+  background: var(--terra-bg-panel);
+  transition: border-color var(--terra-duration-hover) ease;
+}
+
+.terra-board-column[data-over="true"],
+.terra-board-agent[data-over="true"] {
+  border-color: var(--terra-accent);
+  background: var(--terra-bg-hover);
+}
+
+.terra-board-column-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: 2px 4px;
+  color: var(--terra-text-secondary);
+  font-size: var(--terra-font-size-label);
+  font-weight: 600;
+}
+
+.terra-board-card {
+  list-style: none;
+  border-radius: var(--terra-radius-md);
+  cursor: grab;
+  touch-action: none;
+}
+
+.terra-board-card[data-dragging="true"] {
+  opacity: 0.35;
+}
+
+.terra-board-card[data-over="true"] {
+  box-shadow: 0 -2px 0 var(--terra-accent);
+}
+
+.terra-board-ghost {
+  cursor: grabbing;
+  box-shadow: var(--terra-shadow-dropdown);
+}
+
+.terra-board-agents {
+  display: flex;
+  flex: 0 0 180px;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.terra-board-agents h3 {
+  margin: 0;
+  color: var(--terra-text-secondary);
+  font-size: var(--terra-font-size-label);
+}
+
+.terra-board-agents ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.terra-board-agent {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  border: 1px dashed var(--terra-border-strong);
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text);
+  font-size: var(--terra-font-size-label);
+}
+
+.terra-board-agent-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .terra-board-body {
+    flex-direction: column;
+  }
+
+  .terra-board-agents {
+    flex-basis: auto;
+  }
+}
+
+.terra-board-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--terra-border-strong);
+  border-radius: var(--terra-radius-md);
+  color: var(--terra-text-secondary);
+  background: transparent;
+  font-size: var(--terra-font-size-label);
+  cursor: pointer;
+}
+
+.terra-board-team:hover {
+  color: var(--terra-text);
+  background: var(--terra-bg-hover);
+}
+
+/* The state goes under the name so long agent names stay readable. */
+.terra-board-agent .terra-task-state {
+  flex-basis: 100%;
+  padding-left: 20px;
+}

@@ -1,7 +1,8 @@
-import { t } from "../../../i18n";
+import { useT } from "../../../i18n";
 import { Check, CircleAlert } from "lucide-react";
 
-import type { AgentInfo } from "../../../types";
+import { AGENT_ROLES, isAgentRole } from "../../../domain/agentRoles";
+import type { AgentInfo, AgentRole } from "../../../types";
 import { DialogFooter, TerraDialog } from "../../overlays/Dialog";
 import { Button } from "../../ui/Button";
 import styles from "./ModalForms.module.css";
@@ -15,6 +16,13 @@ export interface AgentPickerDialogProps {
   saveDefault: boolean;
   onSaveDefaultChange: (save: boolean) => void;
   onChoose: (agentId: string) => void | Promise<void>;
+  /** The project is a git repository, so the agent can get its own worktree. */
+  canIsolate?: boolean;
+  isolate?: boolean;
+  onIsolateChange?: (isolate: boolean) => void;
+  /** Team role for the new agent; the select shows when this is handled. */
+  role?: AgentRole | null;
+  onRoleChange?: (role: AgentRole | null) => void;
 }
 
 /** Agent profile picker; unavailable profiles remain visible and explain why. */
@@ -26,7 +34,13 @@ export function AgentPickerDialog({
   open,
   saveDefault,
   defaultAgent = null,
+  canIsolate = false,
+  isolate = false,
+  onIsolateChange,
+  role = null,
+  onRoleChange,
 }: AgentPickerDialogProps) {
+  const t = useT();
   return (
     <TerraDialog
       className={styles.dialog}
@@ -76,6 +90,34 @@ export function AgentPickerDialog({
         />
         <span>{t("dialogs.picker.saveDefault")}</span>
       </label>
+      {canIsolate && onIsolateChange ? (
+        <label className={styles.pickerDefault}>
+          <input checked={isolate} onChange={(event) => onIsolateChange(event.target.checked)} type="checkbox" />
+          <span>
+            {t("dialogs.picker.isolate")}
+            <small className={styles.pickerHint}>{t("dialogs.picker.isolateHint")}</small>
+          </span>
+        </label>
+      ) : null}
+      {onRoleChange ? (
+        <label className={styles.pickerDefault}>
+          <span>
+            {t("dialogs.picker.role")}
+            <small className={styles.pickerHint}>{t("dialogs.picker.roleHint")}</small>
+          </span>
+          <select
+            className={styles.pickerRole}
+            aria-label={t("dialogs.picker.role")}
+            value={role ?? ""}
+            onChange={(event) => onRoleChange(isAgentRole(event.target.value) ? event.target.value : null)}
+          >
+            <option value="">{t("roles.none")}</option>
+            {AGENT_ROLES.map((value) => (
+              <option key={value} value={value}>{t(`roles.${value}`)}</option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <DialogFooter>
         <Button onClick={() => onOpenChange(false)} type="button" variant="ghost">
           {t("common.cancel")}

@@ -1,3 +1,6 @@
+import { deriveAgentStatus } from "../../domain/agentStatus";
+import { normalizeSearchText } from "../../lib/text/normalizeSearchText";
+import type { McpAgentState } from "../../types";
 import type {
   Pane,
   PersistedWorkspaceContainer,
@@ -17,7 +20,6 @@ import {
   type NavigatorContainerNode,
   type NavigatorGroupNode,
   type NavigatorNode,
-  type NavigatorNodeKind,
   type NavigatorPaneNode,
   type NavigatorProjectNode,
   type NavigatorStatus,
@@ -38,6 +40,8 @@ export interface BuildNavigatorTreeOptions {
   agentLabels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
   /** Put agents directly under their project, skipping container and pane levels. */
   flatten?: boolean;
+  /** State the agents reported through their hooks, by terminal id. */
+  reported?: Readonly<Record<string, McpAgentState>>;
 }
 
 const EMPTY_GROUPS: readonly WorkspaceGroup[] = [];
@@ -60,20 +64,20 @@ function branchMatches(branch: NavigatorBranch, workspaceId: string, terminalId?
   );
 }
 
-function deriveAgentStatus(
-  workspaceId: string,
+function agentNodeStatus(
   terminalId: string,
   source: { suspended?: boolean },
   options: BuildNavigatorTreeOptions,
 ): NavigatorStatus {
   const explicit = options.statuses?.agents?.[terminalId];
   if (explicit) return explicit;
-  if (source.suspended) return "suspended";
-  if (terminalId in (options.exited ?? {})) return "exited";
-  const count = notificationCount(options.notifications ?? {}, terminalId);
-  if (count > 0 || (options.contextUsage?.[terminalId] ?? 0) >= 85) return "attention";
-  void workspaceId;
-  return "working";
+  return deriveAgentStatus({
+    suspended: source.suspended,
+    exited: terminalId in (options.exited ?? {}),
+    notifications: notificationCount(options.notifications ?? {}, terminalId),
+    contextUsed: options.contextUsage?.[terminalId],
+    reported: options.reported?.[terminalId],
+  });
 }
 
 function statusRank(status: NavigatorStatus): number {
@@ -82,6 +86,8 @@ function statusRank(status: NavigatorStatus): number {
       return 4;
     case "working":
       return 3;
+    case "idle":
+      return 2.5;
     case "suspended":
       return 2;
     case "exited":
@@ -315,7 +321,7 @@ export function buildNavigatorTree(
       parentId,
       depth: 2,
       children: [],
-      status: deriveAgentStatus(workspace.id, terminal.id, terminal, options),
+      status: agentNodeStatus(terminal.id, terminal, options),
       count: 0,
       source: terminal,
       workspaceId: workspace.id,
@@ -488,10 +494,6 @@ export function buildNavigatorTree(
   return indexTree(roots);
 }
 
-export function normalizeSearchText(value: string): string {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
-}
-
 function searchableText(node: NavigatorNode): string {
   if (node.kind === "agent") return [node.name, node.source.id, ...node.branchIds].join(" ");
   if (node.kind === "project") return [node.name, node.source.cwd, node.source.id].join(" ");
@@ -537,9 +539,4 @@ export function flattenNavigatorTree(
   };
   roots.forEach(visit);
   return result;
-}
-
-export function nodeRefFromId(tree: NavigatorTree, id: string): { id: string; kind: NavigatorNodeKind } | null {
-  const node = tree.byId[id];
-  return node ? { id: node.id, kind: node.kind } : null;
 }

@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { Mic, Pause, Play, Search } from "lucide-react";
 import type { AgentLabel } from "../../domain/agentLabels";
+import { CONTEXT_ATTENTION_PERCENT } from "../../domain/agentStatus";
 import { useT } from "../../i18n";
 import {
   DEFAULT_FLEET_FILTERS,
   deriveFleetModel,
   filterFleetModel,
+  FLEET_STATUS_PRIORITY,
   formatFleetRelativeTime,
   type FleetAgentModel,
   type FleetDerivationInput,
@@ -29,10 +31,8 @@ export interface FleetCommandCenterProps extends Omit<FleetDerivationInput, "age
   className?: string;
 }
 
-const STATUS_ORDER: readonly FleetStatus[] = ["attention", "working", "suspended", "exited"];
-
 function statusRank(status: FleetStatus): number {
-  return STATUS_ORDER.indexOf(status);
+  return FLEET_STATUS_PRIORITY.indexOf(status);
 }
 
 /**
@@ -56,7 +56,7 @@ export function FleetCommandCenter({
     () => Object.fromEntries(Object.entries(labels).map(([id, label]) => [id, label?.primary ?? id])),
     [labels],
   );
-  const model = useMemo(() => deriveFleetModel({ ...input, agentLabels }), [agentLabels, input]);
+  const model = useMemo(() => deriveFleetModel({ ...input, agentLabels }, t), [agentLabels, input, t]);
   const visible = useMemo(() => filterFleetModel(model, filters), [filters, model]);
   const rows = useMemo(
     () => [...visible.agents].sort((a, b) => statusRank(a.status) - statusRank(b.status)),
@@ -90,7 +90,7 @@ export function FleetCommandCenter({
           <span>{t("fleet.summary", { count: model.agents.length, projects: t("fleet.projectCount", { count: projectCount }) })}</span>
         </div>
         <div className="terra-fleet-chips" role="group" aria-label={t("fleet.filterByState")}>
-          {STATUS_ORDER.map((status) => (
+          {FLEET_STATUS_PRIORITY.map((status) => (
             <button
               type="button"
               key={status}
@@ -100,7 +100,7 @@ export function FleetCommandCenter({
               onClick={() => setStatus(status)}
             >
               <span className="terra-dot" data-status={status} aria-hidden="true" />
-              {t(`status.${status}` as const)} · {model.summary[status]}
+              {t("fleet.statusCount", { status: t(`status.${status}` as const), count: model.summary[status] })}
             </button>
           ))}
         </div>
@@ -112,7 +112,7 @@ export function FleetCommandCenter({
           <div className="terra-fleet-cards terra-stagger">
             {needsYou.map((agent) => {
               const message = attentionMessages[agent.terminalId];
-              const contextHigh = (agent.contextUsage ?? 0) >= 85;
+              const contextHigh = (agent.contextUsage ?? 0) >= CONTEXT_ATTENTION_PERCENT;
               return (
                 <article className="terra-fleet-card" key={agent.terminalId}>
                   <div className="terra-fleet-card-meta">
@@ -229,10 +229,10 @@ export function FleetCommandCenter({
                             : t(`status.${agent.status}` as const)}
                         </span>
                       </td>
-                      <td className="terra-fleet-number" data-high={(agent.contextUsage ?? 0) >= 85}>
+                      <td className="terra-fleet-number" data-high={(agent.contextUsage ?? 0) >= CONTEXT_ATTENTION_PERCENT}>
                         {agent.contextUsage === null ? "—" : `${agent.contextUsage}%`}
                       </td>
-                      <td className="terra-fleet-muted">{formatFleetRelativeTime(agent.lastActivity, now) ?? "—"}</td>
+                      <td className="terra-fleet-muted">{formatFleetRelativeTime(agent.lastActivity, now, t) ?? "—"}</td>
                     </tr>
                   );
                 })}

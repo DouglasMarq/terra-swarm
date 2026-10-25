@@ -34,6 +34,11 @@ describe("i18n", () => {
     expect(t("common.fleet")).toBe("Frota");
   });
 
+  it("given a label with a shortcut or a path, formats them in one message per locale", () => {
+    expect(translate("en", "common.withShortcut", { label: "Close inspector", shortcut: "⌘I" })).toBe("Close inspector (⌘I)");
+    expect(translate("pt-BR", "settingsPanels.filePath", { path: "/Users/me/terra.json" })).toBe("Arquivo: /Users/me/terra.json");
+  });
+
   it("falls back to the key when a message is missing", () => {
     expect(translate("en", "missing.key" as never)).toBe("missing.key");
   });

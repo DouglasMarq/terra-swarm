@@ -1,4 +1,5 @@
-import { t } from "../../i18n";
+import type { Translate } from "../../i18n";
+import { errorMessage } from "../../lib/errors/errorMessage";
 import type { ErrorInfo } from "react";
 
 const MAX_NAME_LENGTH = 100;
@@ -28,26 +29,21 @@ function errorName(error: unknown) {
   return "UnknownError";
 }
 
-function errorMessage(error: unknown) {
-  if (error instanceof Error && error.message.trim()) {
-    return sanitizeText(error.message, MAX_MESSAGE_LENGTH);
-  }
-  if (typeof error === "string" && error.trim()) {
-    return sanitizeText(error, MAX_MESSAGE_LENGTH);
-  }
-  return "O aplicativo encontrou um erro inesperado.";
+function safeErrorMessage(error: unknown, t: Translate) {
+  const message = errorMessage(error, "");
+  return message ? sanitizeText(message, MAX_MESSAGE_LENGTH) : t("system.unexpectedError");
 }
 
 /** Convert React's error payload into a bounded, path/token-redacted report. */
-export function getSafeErrorDetails(error: unknown, info?: ErrorInfo | null): SafeErrorDetails {
+export function getSafeErrorDetails(error: unknown, info: ErrorInfo | null | undefined, t: Translate): SafeErrorDetails {
   const name = errorName(error);
-  const message = errorMessage(error);
+  const message = safeErrorMessage(error, t);
   const componentStack = sanitizeText(info?.componentStack?.trim() ?? "", MAX_STACK_LENGTH);
   const text = [
     t("system.reportTitle"),
-    `${t("system.reportType")}: ${name}`,
-    `${t("system.reportMessage")}: ${message}`,
-    componentStack ? `${t("system.reportTree")}:\n${componentStack}` : "",
+    t("system.reportType", { name }),
+    t("system.reportMessage", { message }),
+    componentStack ? t("system.reportTree", { stack: componentStack }) : "",
   ]
     .filter(Boolean)
     .join("\n");

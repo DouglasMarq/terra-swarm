@@ -1,0 +1,42 @@
+.terra-editor {
+  width: min(1100px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+}
+
+.terra-editor-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--terra-font-mono);
+  word-break: break-all;
+}
+
+.terra-editor-dirty {
+  color: var(--terra-accent);
+  font-size: 10px;
+}
+
+.terra-editor-body {
+  height: min(66vh, 720px);
+  margin: 0 24px;
+  overflow: hidden;
+  border: 1px solid var(--terra-border);
+  border-radius: var(--terra-radius-md);
+  background: var(--terra-terminal-bg);
+}
+
+.terra-editor-host {
+  height: 100%;
+}
+
+.terra-editor-message {
+  margin: 16px;
+  color: var(--terra-text-muted);
+  font-size: var(--terra-font-size-label);
+}
+
+.terra-editor-error {
+  margin: 10px 24px 0;
+  color: var(--terra-red-ink);
+  font-size: var(--terra-font-size-label);
+}

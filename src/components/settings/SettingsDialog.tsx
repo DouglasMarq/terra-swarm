@@ -1,6 +1,17 @@
 import * as TabsPrimitive from "@radix-ui/react-tabs";
-import { useT } from "../../i18n";
-import { Search, X } from "lucide-react";
+import { useLocale, useT } from "../../i18n";
+import {
+  Bot,
+  Database,
+  Info,
+  Keyboard,
+  Mic2,
+  Search,
+  SlidersHorizontal,
+  SquareTerminal,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -33,6 +44,16 @@ import styles from "./SettingsDialog.module.css";
 
 const cx = (...classes: Array<string | undefined | false>) => classes.filter(Boolean).join(" ");
 const SEARCH_HOTKEY = { key: "k", meta: true, shift: false, ctrl: false, alt: false } as const;
+
+const SECTION_ICONS: Record<SettingsSectionId, LucideIcon> = {
+  general: SlidersHorizontal,
+  terminal: SquareTerminal,
+  agents: Bot,
+  voice: Mic2,
+  shortcuts: Keyboard,
+  data: Database,
+  about: Info,
+};
 
 export interface SettingsConfirmationRequest {
   title: ReactNode;
@@ -82,16 +103,18 @@ function renderSlot(
 }
 
 function DefaultSectionContent({ section }: { section: SettingsSectionDefinition }) {
+  const t = useT();
+  const locale = useLocale();
   return (
     <div className={styles.defaultSection}>
       <div className={styles.sectionKicker}>{section.label}</div>
-      <h3 className={styles.defaultTitle}>Configure o {section.label.toLocaleLowerCase("pt-BR")}</h3>
+      <h3 className={styles.defaultTitle}>{t("settings.defaultSectionTitle", { section: section.label.toLocaleLowerCase(locale) })}</h3>
       <p className={styles.defaultDescription}>{section.description}</p>
       <div className={styles.placeholderCard}>
         <span className={styles.placeholderDot} aria-hidden="true" />
         <div>
-          <strong>Pronto para receber o módulo Terra</strong>
-          <span>O host pode injetar o formulário desta seção via <code>slots</code> ou <code>renderSection</code>.</span>
+          <strong>{t("settings.defaultSectionReady")}</strong>
+          <span>{t("settings.defaultSectionHost")}</span>
         </div>
       </div>
     </div>
@@ -247,7 +270,7 @@ export function SettingsDialog({
                 </div>
                 <TabsPrimitive.List className={styles.sectionList} aria-label={t("settings.sectionsLabel")}>
                   {visibleSections.map((section) => {
-                    const Icon = section.icon;
+                    const Icon = SECTION_ICONS[section.id];
                     return (
                       <TabsPrimitive.Trigger
                         className={styles.sectionTrigger}

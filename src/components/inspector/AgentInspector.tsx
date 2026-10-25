@@ -1,13 +1,15 @@
 import { Gauge, Power, RotateCcw, SquareArrowOutUpRight } from "lucide-react";
 import type { AgentLabel } from "../../domain/agentLabels";
+import { CONTEXT_ATTENTION_PERCENT, type AgentRunStatus } from "../../domain/agentStatus";
 import { useT } from "../../i18n";
-import type { NotificationItem } from "../../types";
-import type { InspectorActionKind, InspectorTarget } from "../integration/inspectorModel";
-import type { InspectorRuntimeState } from "../integration/inspectorRuntime";
+import { formatTokens } from "../../domain/formatTokens";
+import type { AgentTokenUsage, NotificationItem } from "../../types";
+import { totalTokens, type InspectorActionKind, type InspectorTarget } from "./inspectorModel";
+import type { InspectorRuntimeState } from "./inspectorRuntime";
 import { relativeTime } from "../notifications/NotificationCenter";
 import "./inspector.css";
 
-export type InspectorStatus = "working" | "attention" | "exited" | "suspended";
+export type InspectorStatus = AgentRunStatus;
 
 export interface AgentInspectorProps {
   target: InspectorTarget | null;
@@ -18,6 +20,8 @@ export interface AgentInspectorProps {
   /** Most recent signals for this agent, newest first. */
   activity: readonly NotificationItem[];
   runtime: InspectorRuntimeState;
+  /** Tokens from the agent's own session log, when its hooks reported one. */
+  usage?: AgentTokenUsage | null;
   onAction: (action: InspectorActionKind, target: InspectorTarget) => void;
   now?: number;
 }
@@ -27,7 +31,7 @@ export interface AgentInspectorProps {
  * asked. Container, pane, tab and PTY identifiers wait behind "Technical
  * details".
  */
-export function AgentInspector({ target, label, status, request, activity, runtime, onAction, now = Date.now() }: AgentInspectorProps) {
+export function AgentInspector({ target, label, status, request, activity, runtime, usage = null, onAction, now = Date.now() }: AgentInspectorProps) {
   const t = useT();
   if (!target) {
     return (
@@ -63,16 +67,34 @@ export function AgentInspector({ target, label, status, request, activity, runti
           <b>{context === null ? "—" : `${context}%`}</b>
         </div>
         <span className="terra-meter" aria-hidden="true">
-          <span className="terra-meter-fill" data-high={(context ?? 0) >= 85} style={{ width: `${context ?? 0}%` }} />
+          <span className="terra-meter-fill" data-high={(context ?? 0) >= CONTEXT_ATTENTION_PERCENT} style={{ width: `${context ?? 0}%` }} />
         </span>
         <span className="terra-inspector-hint">{t("inspector.contextHint")}</span>
       </section>
+
+      {usage ? (
+        <section className="terra-inspector-block" aria-label={t("inspector.tokens")}>
+          <div className="terra-inspector-row">
+            <span>{t("inspector.tokens")}</span>
+            <b>{formatTokens(totalTokens(usage))}</b>
+          </div>
+          <span className="terra-inspector-hint">
+            {t("inspector.tokensDetail", {
+              input: formatTokens(usage.input_tokens + usage.cache_write_tokens),
+              output: formatTokens(usage.output_tokens),
+              cached: formatTokens(usage.cache_read_tokens),
+              turns: usage.turns,
+            })}
+            {usage.model ? ` · ${usage.model}` : ""}
+          </span>
+        </section>
+      ) : null}
 
       {request ? (
         <section className="terra-inspector-request" aria-label={t("inspector.request")}>
           <span className="terra-inspector-kicker">{t("inspector.request")}</span>
           <p>{request.message}</p>
-          <span className="terra-inspector-hint">{relativeTime(request.ts, now)}</span>
+          <span className="terra-inspector-hint">{relativeTime(request.ts, t, now)}</span>
         </section>
       ) : null}
 
@@ -84,7 +106,7 @@ export function AgentInspector({ target, label, status, request, activity, runti
           <ul className="terra-inspector-activity">
             {activity.map((item) => (
               <li key={item.key}>
-                <span className="terra-inspector-time">{relativeTime(item.ts, now)}</span>
+                <span className="terra-inspector-time">{relativeTime(item.ts, t, now)}</span>
                 <span>{item.message}</span>
               </li>
             ))}
@@ -111,14 +133,14 @@ export function AgentInspector({ target, label, status, request, activity, runti
         <summary>{t("inspector.technical")}</summary>
         <dl>
           <div><dt>{t("inspector.runtime")}</dt><dd>{runtimeText}</dd></div>
-          <div><dt>PID</dt><dd><code>{info?.pid ?? "—"}</code></dd></div>
+          <div><dt>{t("inspector.pid")}</dt><dd><code>{info?.pid ?? "—"}</code></dd></div>
           <div><dt>{t("inspector.size")}</dt><dd><code>{info ? `${info.cols} × ${info.rows}` : "—"}</code></dd></div>
           <div><dt>{t("inspector.command")}</dt><dd><code>{target.command}</code></dd></div>
           <div><dt>{t("inspector.directory")}</dt><dd><code>{target.cwd || "—"}</code></dd></div>
           <div><dt>{t("inspector.group")}</dt><dd>{target.groupName ?? "—"}</dd></div>
-          <div><dt>PTY</dt><dd><code>{target.terminalId}</code></dd></div>
-          <div><dt>Pane</dt><dd><code>{target.paneId ?? "—"}</code></dd></div>
-          <div><dt>Container</dt><dd><code>{target.containerId ?? "—"}</code></dd></div>
+          <div><dt>{t("inspector.pty")}</dt><dd><code>{target.terminalId}</code></dd></div>
+          <div><dt>{t("inspector.pane")}</dt><dd><code>{target.paneId ?? "—"}</code></dd></div>
+          <div><dt>{t("inspector.container")}</dt><dd><code>{target.containerId ?? "—"}</code></dd></div>
         </dl>
       </details>
     </div>

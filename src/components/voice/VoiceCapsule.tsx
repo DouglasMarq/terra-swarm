@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { useT } from "../../i18n";
 import { AlertCircle, Check, ChevronUp, CircleStop, LoaderCircle, Mic, X } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
@@ -11,14 +11,9 @@ import {
   voiceStateLabel,
   type VoiceCapsuleIntent,
   type VoiceCapsuleState,
+  type VoiceSendPayload,
 } from "./voiceModel";
 import styles from "./voice.module.css";
-
-export interface VoiceSendPayload {
-  transcript: string;
-  intent: VoiceCapsuleIntent | null;
-  agent: string | null;
-}
 
 export interface VoiceCapsuleProps {
   state: VoiceCapsuleState;
@@ -62,6 +57,7 @@ function clamp(value: number, min = 0, max = 1): number {
 }
 
 function Waveform({ level = 0, samples = FALLBACK_SAMPLES }: Pick<VoiceCapsuleProps, "level" | "samples">) {
+  const t = useT();
   const amplitude = clamp(level);
   const values = samples.length > 0 ? samples : FALLBACK_SAMPLES;
 
@@ -132,6 +128,7 @@ export function VoiceCapsule({
   transcript,
   finalTranscript,
 }: VoiceCapsuleProps) {
+  const t = useT();
   const safeIntent = intentPayload(intent);
   const currentTranscript = resolvedTranscript({ transcript, finalTranscript, partialTranscript });
   const destructive = isDestructiveVoiceIntent(safeIntent);
@@ -140,7 +137,7 @@ export function VoiceCapsule({
     intent: safeIntent,
     agent: targetAgent ?? null,
   };
-  const statusText = error || voiceStateLabel(state);
+  const statusText = error || voiceStateLabel(state, t);
   const isCapturing = state === "listening";
   const isBusy = state === "transcribing";
   const canSubmit = currentTranscript.length > 0 && !disabled && !isBusy;
@@ -234,7 +231,7 @@ export function VoiceCapsule({
           </span>
           <div className={styles.intentCopy}>
             <span className={styles.intentLabel}>{t("voiceCapsule.recognized")}</span>
-            <strong>{voiceIntentLabel(safeIntent)}</strong>
+            <strong>{voiceIntentLabel(safeIntent, t)}</strong>
             {destructive ? <small>{t("voiceCapsule.needsConfirm")}</small> : null}
           </div>
         </div>

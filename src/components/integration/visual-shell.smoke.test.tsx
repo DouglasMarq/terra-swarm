@@ -8,10 +8,15 @@ import { useShellStore, SHELL_STORAGE_KEY } from "../../stores/shellStore";
 import { useOrchestrationStore } from "../../stores/orchestrationStore";
 import { ptyApi } from "../../lib/tauri/pty";
 import {
+  shellShortcutLabels,
   shouldOpenCommandPaletteShortcut,
   VisualShellSurface,
   type VisualShellSurfaceProps,
 } from "./VisualShellSurface";
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async () => vi.fn()),
+}));
 
 const workspace: Workspace = {
   id: "ws-api",
@@ -183,12 +188,12 @@ describe("VisualShellSurface smoke flow", () => {
 
     render(<VisualShellSurface {...shellProps()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Mostrar inspetor (⌘I)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar inspetor (Ctrl+I)" }));
     await vi.advanceTimersByTimeAsync(0);
     expect(runtimeInfo).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("complementary", { name: "Inspetor do agente" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Fechar inspetor (⌘I)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fechar inspetor (Ctrl+I)" }));
     expect(screen.queryByRole("complementary", { name: "Inspetor do agente" })).not.toBeInTheDocument();
     await vi.advanceTimersByTimeAsync(1500);
     expect(runtimeInfo).toHaveBeenCalledTimes(1);
@@ -208,4 +213,14 @@ describe("VisualShellSurface smoke flow", () => {
     expect(shouldOpenCommandPaletteShortcut(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))).toBe(true);
   });
 
+});
+
+describe("shellShortcutLabels", () => {
+  it("given macOS, writes the shell shortcuts with the Mac glyphs", () => {
+    expect(shellShortcutLabels("mac")).toEqual({ interrupt: "⌃C", inspector: "⌘I", sidebar: "⌘B" });
+  });
+
+  it("given Windows or Linux, writes the shell shortcuts with Ctrl", () => {
+    expect(shellShortcutLabels("other")).toEqual({ interrupt: "Ctrl+C", inspector: "Ctrl+I", sidebar: "Ctrl+B" });
+  });
 });

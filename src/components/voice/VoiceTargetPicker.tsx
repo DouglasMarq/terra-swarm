@@ -3,7 +3,7 @@ import { Check, ChevronDown } from "lucide-react";
 import { useT } from "../../i18n";
 import { agentLabelText } from "../../domain/agentLabels";
 
-export type VoiceTargetStatus = "working" | "attention" | "exited" | "suspended";
+export type VoiceTargetStatus = "working" | "idle" | "attention" | "exited" | "suspended";
 
 export interface VoiceTargetAgent {
   id: string;

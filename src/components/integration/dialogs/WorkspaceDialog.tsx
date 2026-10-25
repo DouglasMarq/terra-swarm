@@ -1,4 +1,4 @@
-import { t } from "../../../i18n";
+import { useT } from "../../../i18n";
 import { FolderOpen } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
@@ -34,6 +34,7 @@ export function WorkspaceDialog({
   onSubmit,
   open,
 }: WorkspaceDialogProps) {
+  const t = useT();
   const [submitted, setSubmitted] = useState(false);
   const nameIsValid = name.trim().length > 0;
 

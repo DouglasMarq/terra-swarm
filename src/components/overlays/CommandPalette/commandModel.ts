@@ -1,10 +1,11 @@
 import { t } from "../../../i18n";
 import type { AgentInfo, TerminalMeta, Workspace, WorkspaceGroup } from "../../../types";
 import { agentLabelText } from "../../../domain/agentLabels";
+import { normalizeSearchText } from "../../../lib/text/normalizeSearchText";
 
 export type CommandGroupId = "recent" | "navigation" | "create" | "agent" | "settings";
 
-export type CommandRoute = "workbench" | "fleet" | "settings";
+export type CommandRoute = "workbench" | "fleet" | "board" | "settings";
 
 export type FocusedAgentAction =
   | "resume"
@@ -82,6 +83,8 @@ export interface CommandPaletteCallbacks {
   onReattachTerminal?: () => void;
   onReopenTab?: () => void;
   onOpenResume?: () => void;
+  /** The prompt library or the team templates. */
+  onOpenLibrary?: (dialog: "prompts" | "team") => void;
   onFocusedAgentAction?: (action: FocusedAgentAction, context: FocusedAgentContext) => void;
 }
 
@@ -89,6 +92,7 @@ export type CommandIconName =
   | "home"
   | "workbench"
   | "fleet"
+  | "board"
   | "settings"
   | "folder"
   | "group"
@@ -122,6 +126,7 @@ export type CommandIntent =
   | { kind: "reattach-terminal" }
   | { kind: "reopen-tab" }
   | { kind: "open-resume" }
+  | { kind: "open-library"; dialog: "prompts" | "team" }
   | { kind: "focused-agent-action"; action: FocusedAgentAction; context: FocusedAgentContext };
 
 export interface CommandDescriptor {
@@ -152,7 +157,7 @@ export type CommandRunResult =
   | { kind: "requestConfirm"; commandId: string; request: CommandConfirmRequest }
   | { kind: "unavailable"; commandId: string };
 
-export const COMMAND_GROUP_ORDER: readonly CommandGroupId[] = [
+const COMMAND_GROUP_ORDER: readonly CommandGroupId[] = [
   "recent",
   "navigation",
   "create",
@@ -161,7 +166,7 @@ export const COMMAND_GROUP_ORDER: readonly CommandGroupId[] = [
 ];
 
 /** Group headings, translated on read so the palette follows the locale. */
-export const COMMAND_GROUP_LABELS: Readonly<Record<CommandGroupId, string>> = {
+const COMMAND_GROUP_LABELS: Readonly<Record<CommandGroupId, string>> = {
   get recent() { return t("palette.groups.recent"); },
   get navigation() { return t("palette.groups.navigation"); },
   get create() { return t("palette.groups.create"); },
@@ -169,28 +174,13 @@ export const COMMAND_GROUP_LABELS: Readonly<Record<CommandGroupId, string>> = {
   get settings() { return t("palette.groups.settings"); },
 };
 
-function normalizeText(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("pt-BR")
-    .trim();
-}
-
-/**
- * Normalize Portuguese input so `configuracoes` also finds `Configurações`.
- * Keeping this function pure makes it usable by the host's quick search too.
- */
-export function normalizeCommandQuery(value: string): string {
-  return normalizeText(value);
-}
 
 function commandSearchText(
   label: string,
   description: string,
   keywords: readonly string[],
 ): string {
-  return normalizeText([label, description, ...keywords].join(" "));
+  return normalizeSearchText([label, description, ...keywords].join(" "));
 }
 
 function command(
@@ -307,6 +297,15 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       intent: { kind: "navigate", route: "fleet" },
     }),
     command({
+      id: "navigate:board",
+      label: t("palette.openBoard"),
+      description: t("palette.openBoardDesc"),
+      group: "navigation",
+      keywords: ["board", "kanban", "quadro", "tarefas", "tasks"],
+      icon: "board",
+      intent: { kind: "navigate", route: "board" },
+    }),
+    command({
       id: "navigate:settings",
       label: t("palette.openSettings"),
       description: t("palette.openSettingsDesc"),
@@ -354,7 +353,7 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
         command({
           id: `open-terminal:${safeIdPart(workspace.id)}:${safeIdPart(terminal.id)}`,
           label: agentLabel ? `${primary} · ${name}` : t("palette.openAgent", { name: terminalName, project: name }),
-          description: agentLabel ? `${tag} · ${t("palette.openAgentDesc")}` : t("palette.openAgentDesc"),
+          description: agentLabel ? t("palette.openAgentDescTagged", { tag }) : t("palette.openAgentDesc"),
           group: "navigation",
           keywords: [terminalName, primary, tag, name, workspace.cwd, "agente", "terminal", "focar"],
           icon: "terminal",
@@ -394,6 +393,25 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       icon: "agent",
       disabled: !hasAgentWorkspace,
       intent: { kind: "create-agent", workspaceId: focusedWorkspaceId },
+    }),
+    command({
+      id: "create:team",
+      label: t("palette.startTeam"),
+      description: hasAgentWorkspace ? t("palette.startTeamDesc") : t("palette.pickProjectFirst"),
+      group: "create",
+      keywords: ["time", "team", "orquestrador", "orchestrator", "papéis", "roles", "template"],
+      icon: "agent",
+      disabled: !hasAgentWorkspace,
+      intent: { kind: "open-library", dialog: "team" },
+    }),
+    command({
+      id: "agent:prompts",
+      label: t("palette.promptLibrary"),
+      description: t("palette.promptLibraryDesc"),
+      group: "agent",
+      keywords: ["prompt", "biblioteca", "library", "salvos", "snippets", "enviar"],
+      icon: "agent",
+      intent: { kind: "open-library", dialog: "prompts" },
     }),
   );
 
@@ -533,7 +551,7 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
             candidate.id,
             candidate.kind,
             candidate.title,
-            `${candidate.description}. ${t("palette.needsConfirm")}`,
+            t("palette.descriptionNeedsConfirm", { description: candidate.description }),
             context,
             candidate.action,
           ),
@@ -653,8 +671,8 @@ export function groupCommands(commands: readonly CommandDescriptor[]): CommandGr
   }));
 }
 
-export function commandMatches(command: CommandDescriptor, query: string): boolean {
-  const normalized = normalizeCommandQuery(query);
+function commandMatches(command: CommandDescriptor, query: string): boolean {
+  const normalized = normalizeSearchText(query);
   if (!normalized) return true;
   return normalized
     .split(/\s+/)
@@ -747,6 +765,10 @@ export function executeCommand(
     case "reattach-terminal":
       if (!callbacks.onReattachTerminal) return unavailable(command.id);
       callbacks.onReattachTerminal();
+      return { kind: "executed", commandId: command.id };
+    case "open-library":
+      if (!callbacks.onOpenLibrary) return unavailable(command.id);
+      callbacks.onOpenLibrary(intent.dialog);
       return { kind: "executed", commandId: command.id };
     case "open-resume":
       if (!callbacks.onOpenResume) return unavailable(command.id);

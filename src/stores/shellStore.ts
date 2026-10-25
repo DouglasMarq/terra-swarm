@@ -3,16 +3,19 @@ import { persist, createJSONStorage } from "zustand/middleware";
 
 export const SHELL_STORAGE_KEY = "terra-shell-state";
 export const SHELL_STATE_VERSION = 3;
+/** Back/forward navigation entries kept. */
+const MAX_HISTORY_ENTRIES = 100;
 
 export type ShellPanelLayout = Record<string, number>;
 
 export type ShellSurface =
   | "workbench"
   | "fleet"
+  | "board"
   | "settings";
 
-/** The right dock only hosts the agent inspector since the v3 shell. */
-export type DockTab = "inspector";
+/** The right dock hosts the agent inspector, the shared tasks and the dev server preview. */
+export type DockTab = "inspector" | "tasks" | "preview";
 
 export interface ShellWorkspaceTab {
   id: string;
@@ -82,6 +85,7 @@ const DEFAULT_SURFACE: ShellSurface = "workbench";
 const SURFACES: readonly ShellSurface[] = [
   "workbench",
   "fleet",
+  "board",
   "settings",
 ];
 
@@ -91,7 +95,7 @@ const LEGACY_SURFACES: Readonly<Record<string, ShellSurface>> = {
   events: "fleet",
 };
 
-const DOCK_TABS: readonly DockTab[] = ["inspector"];
+const DOCK_TABS: readonly DockTab[] = ["inspector", "tasks", "preview"];
 
 const NOOP_STORAGE: Storage = {
   getItem: () => null,
@@ -302,8 +306,8 @@ export const useShellStore = create<ShellState>()(
           return {
             activeSurface: surface,
             activeWorkspaceId: safeWorkspaceId,
-            history: [...branch, nextEntry].slice(-100),
-            historyIndex: Math.min(branch.length, 99),
+            history: [...branch, nextEntry].slice(-MAX_HISTORY_ENTRIES),
+            historyIndex: Math.min(branch.length, MAX_HISTORY_ENTRIES - 1),
           };
         });
       },

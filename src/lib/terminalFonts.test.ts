@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TERMINAL_FONT_STACK, filterFonts, terminalFontStack } from "./terminalFonts";
+import { BUNDLED_TERMINAL_FONT, DEFAULT_TERMINAL_FONT_STACK, filterFonts, quoteFontFamily, terminalFontStack } from "./terminalFonts";
 
 describe("terminalFontStack", () => {
   it("uses the default stack when no font is chosen", () => {
     expect(terminalFontStack("")).toBe(DEFAULT_TERMINAL_FONT_STACK);
     expect(terminalFontStack("  ")).toBe(DEFAULT_TERMINAL_FONT_STACK);
     expect(terminalFontStack(null)).toBe(DEFAULT_TERMINAL_FONT_STACK);
+  });
+
+  it("given no font is chosen, uses the bundled JetBrains Mono first", () => {
+    expect(terminalFontStack(null).startsWith(`'${BUNDLED_TERMINAL_FONT}',`)).toBe(true);
   });
 
   it("puts the chosen font first and keeps the fallbacks", () => {
@@ -35,5 +39,15 @@ describe("filterFonts", () => {
 
   it("can keep only monospace fonts", () => {
     expect(filterFonts(fonts, "", true).map((f) => f.name)).toEqual(["JetBrains Mono"]);
+  });
+});
+
+describe("quoteFontFamily", () => {
+  it("given a plain family name, wraps it in single quotes", () => {
+    expect(quoteFontFamily("Fira Code")).toBe("'Fira Code'");
+  });
+
+  it("given quotes or backslashes in the name, drops them", () => {
+    expect(quoteFontFamily("Fi'r\"a\\ Code")).toBe("'Fira Code'");
   });
 });

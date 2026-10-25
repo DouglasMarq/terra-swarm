@@ -109,7 +109,6 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
           onKeyDown={onMenuKeyDown}
           onMouseDown={(event) => event.stopPropagation()}
           onBlur={(event) => {
-            // Tabbing out of the menu closes it.
             const next = event.relatedTarget as Node | null;
             if (next && !menuRef.current?.contains(next)) setOpen(false);
           }}

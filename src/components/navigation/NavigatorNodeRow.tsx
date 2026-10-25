@@ -1,7 +1,8 @@
-import { t } from "../../i18n";
+import { useT, type Translate } from "../../i18n";
 import { Bot, ChevronDown, ChevronRight, Folder, FolderOpen, GitBranch, MoreHorizontal, Pause, Play, Plus, SquareTerminal, Workflow } from "../../components/icons";
 import { Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { CONTEXT_ATTENTION_PERCENT } from "../../domain/agentStatus";
 import type { NavigatorAgentNode, NavigatorGroupNode, NavigatorNode, NavigatorNodeActions, NavigatorProjectNode, NavigatorRowProps } from "./types";
 import { navigatorRef } from "./types";
 import styles from "./Navigator.module.css";
@@ -20,7 +21,7 @@ function IconForNode({ node, expanded }: { node: NavigatorNode; expanded: boolea
   return <Folder aria-hidden="true" size={15} strokeWidth={1.8} />;
 }
 
-function labelFor(node: NavigatorNode): string {
+function labelFor(node: NavigatorNode, t: Translate): string {
   if (node.kind === "agent") return t("nav.agentNode", { name: node.name });
   if (node.kind === "project") return t("nav.projectNode", { name: node.name });
   if (node.kind === "container") return t("nav.containerNode", { name: node.name });
@@ -28,7 +29,7 @@ function labelFor(node: NavigatorNode): string {
   return t("nav.groupNode", { name: node.name });
 }
 
-function countLabel(node: NavigatorNode): string {
+function countLabel(node: NavigatorNode, t: Translate): string {
   if (node.kind === "agent") return "";
   return t("nav.agentCount", { count: node.count });
 }
@@ -46,7 +47,7 @@ function actionButton(
   );
 }
 
-function rowActions(node: NavigatorNode, actions: NavigatorNodeActions): ReactNode[] {
+function rowActions(node: NavigatorNode, actions: NavigatorNodeActions, t: Translate): ReactNode[] {
   const ref = navigatorRef(node);
   const result: ReactNode[] = [];
   if ((node.kind === "group" || node.kind === "project") && actions.onCreate) {
@@ -111,6 +112,7 @@ export function NavigatorNodeRow({
   onSelect,
   style,
 }: NavigatorRowProps) {
+  const t = useT();
   const canToggle = node.children.length > 0;
   const ref = navigatorRef(node);
   const className = [
@@ -142,7 +144,7 @@ export function NavigatorNodeRow({
   return (
     <div
       aria-expanded={canToggle ? expanded : undefined}
-      aria-label={labelFor(node)}
+      aria-label={labelFor(node, t)}
       aria-level={node.depth + 1}
       aria-selected={selected}
       className={className}
@@ -180,7 +182,7 @@ export function NavigatorNodeRow({
       >
         {canToggle ? (expanded ? <ChevronDown aria-hidden="true" size={13} /> : <ChevronRight aria-hidden="true" size={13} />) : <span className={styles.disclosureSpacer} />}
       </button>
-      <span className={`${styles.statusDot} ${styles[`status${node.status}`]}`} title={t(`status.${node.status}` as never)} aria-label={t(`status.${node.status}` as never)} role="img" />
+      <span className={`${styles.statusDot} ${styles[`status${node.status}`]}`} title={t(`status.${node.status}` as const)} aria-label={t(`status.${node.status}` as const)} role="img" />
       <span className={styles.nodeIcon}><IconForNode expanded={expanded} node={node} /></span>
       <span className={styles.nodeMain}>
         <span className={styles.nodeName}>{node.name}</span>
@@ -193,12 +195,12 @@ export function NavigatorNodeRow({
       {!visible && node.kind === "project" ? <EyeOff aria-label={t("nav.hidden")} className={styles.visibilityIcon} size={12} /> : null}
       {node.kind === "agent" && (node as NavigatorAgentNode).notifications > 0 ? <span className={styles.notificationBadge}>{(node as NavigatorAgentNode).notifications}</span> : null}
       {node.kind === "agent" && (node as NavigatorAgentNode).contextUsage !== null ? (
-        <span className={((node as NavigatorAgentNode).contextUsage ?? 0) >= 85 ? styles.contextBadge : styles.contextValue} title={t("inspector.context")}>
+        <span className={((node as NavigatorAgentNode).contextUsage ?? 0) >= CONTEXT_ATTENTION_PERCENT ? styles.contextBadge : styles.contextValue} title={t("inspector.context")}>
           {(node as NavigatorAgentNode).contextUsage}%
         </span>
       ) : null}
-      <span className={styles.nodeCount}>{countLabel(node)}</span>
-      <span className={styles.actions} onClick={(event) => event.stopPropagation()}>{rowActions(node, actions)}</span>
+      <span className={styles.nodeCount}>{countLabel(node, t)}</span>
+      <span className={styles.actions} onClick={(event) => event.stopPropagation()}>{rowActions(node, actions, t)}</span>
     </div>
   );
 }

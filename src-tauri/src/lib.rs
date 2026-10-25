@@ -71,9 +71,7 @@ pub fn run() {
             let hub = Arc::new(mcp::McpHub::open(
                 dir.join(mcp::db::DB_FILE),
                 Some(dir.join("mcp")),
-                Box::new(mcp::TauriHost {
-                    app: app.handle().clone(),
-                }),
+                app.handle().clone(),
             ));
             let known_workspaces = store
                 .workspaces

@@ -1,6 +1,7 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager};
 
+use crate::mcp::McpHub;
 use crate::pty::{bump_next_terminal_id, kill_all, kill_terminal_inner, PtyManager};
 use crate::sync::LockExt;
 use crate::workspace::{
@@ -8,6 +9,14 @@ use crate::workspace::{
     parse_import_snapshot, replace_store_file, transfer_counts, validate_explicit_path,
     WorkspaceSnapshotTransfer, WorkspaceStore, WORKSPACE_FILE_VERSION,
 };
+
+/// Called by `close_workspace`: workspaces live in `workspaces.json`, so
+/// their MCP data has no foreign key to cascade from.
+fn purge_workspace(app: &AppHandle, workspace_id: &str) {
+    if let Some(hub) = app.try_state::<Arc<McpHub>>() {
+        hub.purge_workspace(workspace_id);
+    }
+}
 
 /// Mark a group suspended and stop its PTYs without deleting terminal
 /// metadata or durable scrollback. Resume remains a metadata-only operation;
@@ -34,7 +43,7 @@ pub fn close_workspace(app: AppHandle, id: String) -> Result<(), String> {
         let mut store = store.lock_or_recover();
         store.remove(&id).map(|ws| ws.terminals)
     };
-    crate::mcp::purge_workspace(&app, &id);
+    purge_workspace(&app, &id);
     if let Some(terminals) = terminals {
         let manager = app.state::<Mutex<PtyManager>>();
         for t in terminals {

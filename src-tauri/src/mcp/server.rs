@@ -20,6 +20,7 @@ use rmcp::service::RequestContext;
 use rmcp::transport::streamable_http_server::session::never::NeverSessionManager;
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
 use rmcp::{ErrorData, RoleServer, ServerHandler};
+use tauri::Runtime;
 
 use super::tools::{self, ToolError};
 use super::{AgentIdentity, McpHub};
@@ -30,9 +31,16 @@ const MAX_BODY_BYTES: usize = 256 * 1024;
 /// blocking work runs on `spawn_blocking` threads.
 const SERVER_WORKER_THREADS: usize = 2;
 
-#[derive(Clone)]
-struct TerraServer {
-    hub: Arc<McpHub>,
+struct TerraServer<R: Runtime> {
+    hub: Arc<McpHub<R>>,
+}
+
+impl<R: Runtime> Clone for TerraServer<R> {
+    fn clone(&self) -> Self {
+        Self {
+            hub: Arc::clone(&self.hub),
+        }
+    }
 }
 
 fn tool_list() -> Vec<Tool> {
@@ -57,7 +65,7 @@ fn tool_list() -> Vec<Tool> {
         .collect()
 }
 
-impl ServerHandler for TerraServer {
+impl<R: Runtime> ServerHandler for TerraServer<R> {
     fn get_info(&self) -> ServerConfig {
         let mut implementation = Implementation::default();
         implementation.name = "terra-swarm".into();
@@ -145,8 +153,8 @@ fn unauthorized() -> Response {
 
 /// Resolve the token to an identity and attach it to the request; rmcp
 /// hands the request parts (with this extension) to `call_tool`.
-async fn authenticate(
-    State(hub): State<Arc<McpHub>>,
+async fn authenticate<R: Runtime>(
+    State(hub): State<Arc<McpHub<R>>>,
     mut request: Request,
     next: Next,
 ) -> Response {
@@ -157,7 +165,7 @@ async fn authenticate(
     next.run(request).await
 }
 
-pub fn router(hub: Arc<McpHub>) -> axum::Router {
+pub fn router<R: Runtime>(hub: Arc<McpHub<R>>) -> axum::Router {
     let factory_hub = Arc::clone(&hub);
     let service = StreamableHttpService::new(
         move || {
@@ -177,18 +185,21 @@ pub fn router(hub: Arc<McpHub>) -> axum::Router {
         .nest_service(MCP_PATH, service)
         .route(
             super::hooks::HOOKS_PATH,
-            axum::routing::post(super::hooks::handle),
+            axum::routing::post(super::hooks::handle::<R>),
         )
         .route(
             super::hooks::CLAUDE_HOOKS_PATH,
-            axum::routing::post(super::hooks::handle_claude),
+            axum::routing::post(super::hooks::handle_claude::<R>),
         )
         .with_state(Arc::clone(&hub))
-        .layer(middleware::from_fn_with_state(hub, authenticate))
+        .layer(middleware::from_fn_with_state(hub, authenticate::<R>))
 }
 
 /// Serve on an already bound listener until the runtime shuts down.
-pub async fn serve(listener: std::net::TcpListener, hub: Arc<McpHub>) -> std::io::Result<()> {
+pub async fn serve<R: Runtime>(
+    listener: std::net::TcpListener,
+    hub: Arc<McpHub<R>>,
+) -> std::io::Result<()> {
     listener.set_nonblocking(true)?;
     let listener = tokio::net::TcpListener::from_std(listener)?;
     axum::serve(listener, router(hub)).await
@@ -197,7 +208,7 @@ pub async fn serve(listener: std::net::TcpListener, hub: Arc<McpHub>) -> std::io
 /// Bind 127.0.0.1 on a free port and run the server on its own tokio
 /// runtime thread. The port is recorded on the hub before this returns, so
 /// terminals spawned right after startup already get the URL.
-pub fn start(hub: Arc<McpHub>) -> std::io::Result<u16> {
+pub fn start<R: Runtime>(hub: Arc<McpHub<R>>) -> std::io::Result<u16> {
     let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
     let port = listener.local_addr()?.port();
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -230,7 +241,7 @@ mod tests {
     }
 
     impl TestServer {
-        fn start(hub: Arc<McpHub>) -> Self {
+        fn start(hub: Arc<McpHub<tauri::test::MockRuntime>>) -> Self {
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
                 .enable_all()

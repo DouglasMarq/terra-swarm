@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
 use super::McpHub;
+use tauri::{Runtime, Wry};
 
 /// Who is calling: resolved from the bearer token, never from the request.
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -98,13 +99,13 @@ impl TokenRegistry {
 /// Revokes its token when dropped. A PTY entry owns one, so every way a
 /// terminal goes away (kill, stop, exit, app shutdown) also closes its
 /// access to the MCP server.
-pub struct McpLease {
-    hub: Weak<McpHub>,
+pub struct McpLease<R: Runtime = Wry> {
+    hub: Weak<McpHub<R>>,
     token: String,
 }
 
-impl McpLease {
-    pub fn new(hub: &Arc<McpHub>, token: String) -> Self {
+impl<R: Runtime> McpLease<R> {
+    pub fn new(hub: &Arc<McpHub<R>>, token: String) -> Self {
         Self {
             hub: Arc::downgrade(hub),
             token,
@@ -112,7 +113,7 @@ impl McpLease {
     }
 }
 
-impl Drop for McpLease {
+impl<R: Runtime> Drop for McpLease<R> {
     fn drop(&mut self) {
         if let Some(hub) = self.hub.upgrade() {
             hub.revoke_token(&self.token);

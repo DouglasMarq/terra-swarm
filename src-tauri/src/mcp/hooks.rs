@@ -10,6 +10,7 @@ use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tauri::Runtime;
 
 use super::repo::AgentState;
 use super::{AgentIdentity, McpHub};
@@ -118,7 +119,11 @@ pub fn session_log(call: &HookCall) -> Option<SessionLog> {
 }
 
 /// Apply a hook call for `who`. Returns the state it set, if any.
-pub fn apply(hub: &McpHub, who: &AgentIdentity, call: &HookCall) -> Option<AgentState> {
+pub fn apply<R: Runtime>(
+    hub: &McpHub<R>,
+    who: &AgentIdentity,
+    call: &HookCall,
+) -> Option<AgentState> {
     if let Some(log) = session_log(call) {
         hub.set_session_log(&who.terminal_id, log);
     }
@@ -144,7 +149,7 @@ pub fn apply(hub: &McpHub, who: &AgentIdentity, call: &HookCall) -> Option<Agent
 }
 
 /// `POST /hooks`: `terra-swarm hook` sends `{ agent, event, payload }`.
-pub async fn handle(State(hub): State<Arc<McpHub>>, request: Request) -> Response {
+pub async fn handle<R: Runtime>(State(hub): State<Arc<McpHub<R>>>, request: Request) -> Response {
     receive(hub, request, |body| {
         serde_json::from_slice::<HookCall>(body).ok()
     })
@@ -152,7 +157,10 @@ pub async fn handle(State(hub): State<Arc<McpHub>>, request: Request) -> Respons
 }
 
 /// `POST /hooks/claude`: a Claude Code HTTP hook posts its event JSON as is.
-pub async fn handle_claude(State(hub): State<Arc<McpHub>>, request: Request) -> Response {
+pub async fn handle_claude<R: Runtime>(
+    State(hub): State<Arc<McpHub<R>>>,
+    request: Request,
+) -> Response {
     receive(hub, request, |body| {
         let payload: Value = serde_json::from_slice(body).ok()?;
         let event = payload.get("hook_event_name")?.as_str()?.to_string();
@@ -166,8 +174,8 @@ pub async fn handle_claude(State(hub): State<Arc<McpHub>>, request: Request) -> 
 }
 
 /// Both routes sit behind the same token check as the MCP endpoint.
-async fn receive(
-    hub: Arc<McpHub>,
+async fn receive<R: Runtime>(
+    hub: Arc<McpHub<R>>,
     request: Request,
     parse: impl FnOnce(&[u8]) -> Option<HookCall>,
 ) -> Response {
@@ -199,7 +207,7 @@ async fn receive(
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{hub, identity, RecordingHost};
+    use super::super::test_support::{app, hub, identity};
     use super::super::EVENT_AGENT_STATUS;
     use super::*;
     use serde_json::json;
@@ -348,7 +356,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(super::super::db::DB_FILE);
         std::fs::write(&path, b"not a sqlite database").unwrap();
-        let hub = McpHub::open(path, None, Box::new(RecordingHost::default()));
+        let hub = McpHub::open(path, None, app());
         let state = apply(
             &hub,
             &identity("t-1", "ws-1", "claude"),

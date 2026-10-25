@@ -5,6 +5,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tauri::{Runtime, Wry};
 
 use super::{AgentIdentity, McpHub, McpLease};
 use crate::roles::Role;
@@ -34,10 +35,10 @@ pub enum Quoting {
     Windows,
 }
 
-pub struct McpLaunch {
+pub struct McpLaunch<R: Runtime = Wry> {
     pub env: Vec<(String, String)>,
     pub command: String,
-    pub lease: McpLease,
+    pub lease: McpLease<R>,
 }
 
 /// The agent id of a command line: its executable's file name.
@@ -265,7 +266,7 @@ pub fn write_claude_settings(
     Ok(path)
 }
 
-impl McpHub {
+impl<R: Runtime> McpHub<R> {
     /// Everything a terminal needs to talk to the server, or `None` when the
     /// server is off or not running (the terminal then starts unchanged).
     pub fn launch(
@@ -275,7 +276,7 @@ impl McpHub {
         command: &str,
         role: Option<Role>,
         quoting: Quoting,
-    ) -> Option<McpLaunch> {
+    ) -> Option<McpLaunch<R>> {
         if !self.enabled() {
             return None;
         }

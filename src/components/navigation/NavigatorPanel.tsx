@@ -1,17 +1,17 @@
 import { useReportedStates } from "../../stores/mcpStore";
 import { useT, type MessageKey } from "../../i18n";
 import { Folder, GitBranch, Plus, Search } from "../../components/icons";
-import { Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState, type ChangeEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type MouseEvent } from "react";
 import { ProjectTree } from "./ProjectTree";
 import { NavigatorFilesView } from "./NavigatorFilesView";
 import { useEditorStore } from "../../stores/editorStore";
 import { NavigatorGitView } from "./NavigatorGitView";
+import { AgentContextMenu, ProjectContextMenu, type MenuPosition } from "./NavigatorContextMenus";
 import {
   buildNavigatorTree,
   filterNavigatorTree,
 } from "./treeModel";
-import type { ActivityTab, NavigatorNode, NavigatorNodeRef, NavigatorPanelProps } from "./types";
+import type { ActivityTab, NavigatorActivityCapabilities, NavigatorNode, NavigatorNodeRef, NavigatorPanelProps } from "./types";
 import styles from "./Navigator.module.css";
 
 /** The agent menu is wider and taller than the single "Delete project" item. */
@@ -49,6 +49,74 @@ function classes(...values: Array<string | undefined | false>): string {
 }
 
 const EMPTY_COLLAPSED_IDS: readonly string[] = [];
+
+interface ContextMenuState extends MenuPosition {
+  node: NavigatorNodeRef;
+}
+
+interface ActivitySources {
+  availableActivities?: readonly ActivityTab[];
+  capabilities?: NavigatorActivityCapabilities;
+  hasFiles: boolean;
+  hasGit: boolean;
+}
+
+function isActivityEnabled(tab: ActivityTab, sources: ActivitySources): boolean {
+  if (sources.capabilities && sources.capabilities[tab] === false) return false;
+  if (tab === "files") return sources.hasFiles;
+  if (tab === "git") return sources.hasGit;
+  return true;
+}
+
+function enabledActivityTabs(sources: ActivitySources): readonly ActivityTab[] {
+  const { availableActivities, capabilities } = sources;
+  const source = availableActivities ?? (capabilities
+    ? ACTIVITY_TABS.filter((tab) => capabilities[tab.id]).map((tab) => tab.id)
+    : DEFAULT_ACTIVITIES);
+  const result = ACTIVITY_TABS
+    .filter((tab) => source.includes(tab.id) && isActivityEnabled(tab.id, sources))
+    .map((tab) => tab.id);
+  return result.length > 0 ? result : DEFAULT_ACTIVITIES;
+}
+
+function viewportSize(): { width: number; height: number } {
+  if (typeof window === "undefined") return { width: FALLBACK_VIEWPORT_WIDTH_PX, height: FALLBACK_VIEWPORT_HEIGHT_PX };
+  return { width: window.innerWidth, height: window.innerHeight };
+}
+
+function menuAnchor(event: MouseEvent<HTMLElement>): MenuPosition {
+  // Opened from the keyboard (ContextMenu key, Shift+F10, Enter on "…")
+  // there is no pointer position: anchor to the row or button instead.
+  if (event.clientX !== 0 || event.clientY !== 0) return { x: event.clientX, y: event.clientY };
+  const rect = event.currentTarget.getBoundingClientRect();
+  return { x: rect.left, y: rect.bottom };
+}
+
+function contextMenuPosition(event: MouseEvent<HTMLElement>, isAgentMenu: boolean): MenuPosition {
+  const { width, height } = viewportSize();
+  const menuWidth = isAgentMenu ? AGENT_MENU_WIDTH_PX : PROJECT_MENU_WIDTH_PX;
+  const menuHeight = isAgentMenu ? AGENT_MENU_HEIGHT_PX : PROJECT_MENU_HEIGHT_PX;
+  const anchor = menuAnchor(event);
+  return {
+    x: Math.max(MENU_MIN_LEFT_PX, Math.min(anchor.x, width - menuWidth)),
+    y: Math.max(MENU_MIN_TOP_PX, Math.min(anchor.y, height - menuHeight)),
+  };
+}
+
+function useMenuDismiss(isOpen: boolean, onDismiss: () => void): void {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onDismiss();
+    };
+    document.addEventListener("pointerdown", onDismiss);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onDismiss);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isOpen, onDismiss]);
+}
 
 /**
  * Full navigator surface. Project ordering is intentionally static; the
@@ -103,25 +171,19 @@ export function NavigatorPanel({
   const t = useT();
   const [query, setQuery] = useState("");
   const [localCollapsed, setLocalCollapsed] = useState<Set<string>>(() => new Set(defaultCollapsedIds));
-  const [contextMenu, setContextMenu] = useState<{
-    node: NavigatorNodeRef;
-    x: number;
-    y: number;
-  } | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
   const controlledCollapsed = collapsedIds !== undefined;
-  const enabledActivities = useMemo(() => {
-    const source = availableActivities ?? (capabilities
-      ? ACTIVITY_TABS.filter((tab) => capabilities[tab.id]).map((tab) => tab.id)
-      : DEFAULT_ACTIVITIES);
-    const result = ACTIVITY_TABS.filter((tab) => {
-      if (!source.includes(tab.id)) return false;
-      if (capabilities && capabilities[tab.id] === false) return false;
-      if (tab.id === "files") return Boolean(loadFiles && workspaces.length > 0);
-      if (tab.id === "git") return Boolean(loadGitStatus && workspaces.length > 0);
-      return true;
-    }).map((tab) => tab.id);
-    return result.length > 0 ? result : DEFAULT_ACTIVITIES;
-  }, [availableActivities, capabilities, loadFiles, loadGitStatus, workspaces.length]);
+  const hasWorkspaces = workspaces.length > 0;
+  const enabledActivities = useMemo(
+    () => enabledActivityTabs({
+      availableActivities,
+      capabilities,
+      hasFiles: Boolean(loadFiles) && hasWorkspaces,
+      hasGit: Boolean(loadGitStatus) && hasWorkspaces,
+    }),
+    [availableActivities, capabilities, loadFiles, loadGitStatus, hasWorkspaces],
+  );
   const selectedActivity = enabledActivities.includes(activeActivity) ? activeActivity : "projects";
   const collapsed = useMemo(() => new Set(collapsedIds ?? localCollapsed), [collapsedIds, localCollapsed]);
   const reported = useReportedStates();
@@ -146,19 +208,7 @@ export function NavigatorPanel({
     });
   }, [controlledCollapsed, defaultCollapsedIds]);
 
-  useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
-    };
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [contextMenu]);
+  useMenuDismiss(contextMenu !== null, closeContextMenu);
 
   function toggleNode(id: string) {
     const next = new Set(collapsed);
@@ -178,24 +228,7 @@ export function NavigatorPanel({
     onContextMenu?.(event, node);
     const isAgentMenu = node.kind === "agent" && Boolean(agentMenu);
     if (!isAgentMenu && (node.kind !== "project" || !onDeleteWorkspace)) return;
-    const width = typeof window === "undefined" ? FALLBACK_VIEWPORT_WIDTH_PX : window.innerWidth;
-    const height = typeof window === "undefined" ? FALLBACK_VIEWPORT_HEIGHT_PX : window.innerHeight;
-    const menuWidth = isAgentMenu ? AGENT_MENU_WIDTH_PX : PROJECT_MENU_WIDTH_PX;
-    const menuHeight = isAgentMenu ? AGENT_MENU_HEIGHT_PX : PROJECT_MENU_HEIGHT_PX;
-    // Opened from the keyboard (ContextMenu key, Shift+F10, Enter on "…")
-    // there is no pointer position: anchor to the row or button instead.
-    let anchorX = event.clientX;
-    let anchorY = event.clientY;
-    if (anchorX === 0 && anchorY === 0) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      anchorX = rect.left;
-      anchorY = rect.bottom;
-    }
-    setContextMenu({
-      node,
-      x: Math.max(MENU_MIN_LEFT_PX, Math.min(anchorX, width - menuWidth)),
-      y: Math.max(MENU_MIN_TOP_PX, Math.min(anchorY, height - menuHeight)),
-    });
+    setContextMenu({ node, ...contextMenuPosition(event, isAgentMenu) });
   }
 
   const projectCount = workspaces.length;
@@ -206,65 +239,13 @@ export function NavigatorPanel({
     const agent = tree.byId[contextMenu.node.id];
     if (!agent || agent.kind !== "agent") return null;
     const groupsForAgent = agentMenu(agent.terminalId, agent.source.command).filter((group) => group.length > 0);
-    return (
-      <div
-        aria-label={t("nav.agentMenu", { name: agent.name })}
-        className={`${styles.contextMenu} ${styles.agentMenu}`}
-        onPointerDown={(event) => event.stopPropagation()}
-        role="menu"
-        style={{ left: contextMenu.x, top: contextMenu.y }}
-      >
-        {groupsForAgent.map((group, index) => (
-          <div className={styles.agentMenuGroup} role="group" key={group[0]?.id ?? index}>
-            {group.map((item) => (
-              <button
-                className={styles.agentMenuItem}
-                data-danger={item.danger}
-                disabled={item.disabled}
-                key={item.id}
-                onClick={() => {
-                  setContextMenu(null);
-                  item.onSelect();
-                }}
-                role="menuitem"
-                type="button"
-              >
-                <span className={styles.agentMenuIcon} aria-hidden="true">{item.icon}</span>
-                <span className={styles.agentMenuLabel}>{item.label}</span>
-                {item.shortcut ? <kbd>{item.shortcut}</kbd> : null}
-              </button>
-            ))}
-          </div>
-        ))}
-      </div>
-    );
+    return <AgentContextMenu agent={agent} groups={groupsForAgent} onClose={closeContextMenu} position={contextMenu} />;
   }
 
   function renderProjectMenu() {
     if (!contextMenu || contextMenu.node.kind !== "project") return null;
     const projectId = contextMenu.node.id;
-    return (
-      <div
-        aria-label={t("nav.projectMenu")}
-        className={styles.contextMenu}
-        onPointerDown={(event) => event.stopPropagation()}
-        role="menu"
-        style={{ left: contextMenu.x, top: contextMenu.y }}
-      >
-        <button
-          className={styles.contextMenuItem}
-          onClick={() => {
-            setContextMenu(null);
-            onDeleteWorkspace?.(projectId);
-          }}
-          role="menuitem"
-          type="button"
-        >
-          <Trash2 aria-hidden="true" size={14} />
-          <span>{t("nav.deleteProject")}</span>
-        </button>
-      </div>
-    );
+    return <ProjectContextMenu onClose={closeContextMenu} onDelete={() => onDeleteWorkspace?.(projectId)} position={contextMenu} />;
   }
 
   function renderProjectsView() {

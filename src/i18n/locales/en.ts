@@ -287,7 +287,7 @@ export const en = {
     fontFamily: "Font",
     fontFamilyHint: { zero: "No fonts found.", one: "{count} font installed.", other: "{count} fonts installed · {mono} monospace." },
     fontLoading: "Reading installed fonts…",
-    fontDefault: "Default (SF Mono)",
+    fontDefault: "Default (JetBrains Mono)",
     fontSearch: "Filter fonts",
     fontMonoOnly: "Monospace only",
     fontMono: "mono",

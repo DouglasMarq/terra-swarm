@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TERMINAL_FONT_STACK, filterFonts, quoteFontFamily, terminalFontStack } from "./terminalFonts";
+import { BUNDLED_TERMINAL_FONT, DEFAULT_TERMINAL_FONT_STACK, filterFonts, quoteFontFamily, terminalFontStack } from "./terminalFonts";
 
 describe("terminalFontStack", () => {
   it("uses the default stack when no font is chosen", () => {
     expect(terminalFontStack("")).toBe(DEFAULT_TERMINAL_FONT_STACK);
     expect(terminalFontStack("  ")).toBe(DEFAULT_TERMINAL_FONT_STACK);
     expect(terminalFontStack(null)).toBe(DEFAULT_TERMINAL_FONT_STACK);
+  });
+
+  it("given no font is chosen, uses the bundled JetBrains Mono first", () => {
+    expect(terminalFontStack(null).startsWith(`'${BUNDLED_TERMINAL_FONT}',`)).toBe(true);
   });
 
   it("puts the chosen font first and keeps the fallbacks", () => {

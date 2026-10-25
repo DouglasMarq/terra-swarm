@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 
 import { act, render } from "@testing-library/react";
+import { PhysicalPosition } from "@tauri-apps/api/dpi";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IpcError } from "../lib/tauri/errors";
+import type { FileDropEvent } from "../lib/tauri/fileDrop";
 import { TerminalPane } from "./TerminalPane";
 
 interface TerminalMock {
@@ -13,6 +15,8 @@ interface TerminalMock {
   dataHandler?: (data: string) => void;
   keyHandler?: (event: KeyboardEvent) => boolean;
   dispose: ReturnType<typeof vi.fn>;
+  paste: ReturnType<typeof vi.fn>;
+  focus: ReturnType<typeof vi.fn>;
 }
 
 interface ResizeObserverMock {
@@ -33,12 +37,21 @@ const mocks = vi.hoisted(() => ({
   nextFrameId: 0,
   geometry: { width: 800, height: 480 },
   fitDimensions: { cols: 100, rows: 24 },
+  fileDropHandlers: [] as Array<(event: FileDropEvent) => void>,
+  fileDropUnlisten: vi.fn(),
 }));
 
 vi.mock("../api", () => ({ api: mocks.api }));
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(async () => vi.fn()),
+}));
+
+vi.mock("../lib/tauri/fileDrop", () => ({
+  onFileDrop: vi.fn(async (handler: (event: FileDropEvent) => void) => {
+    mocks.fileDropHandlers.push(handler);
+    return mocks.fileDropUnlisten;
+  }),
 }));
 
 vi.mock("@xterm/xterm", () => ({
@@ -49,6 +62,8 @@ vi.mock("@xterm/xterm", () => ({
     dataHandler?: (data: string) => void;
     keyHandler?: (event: KeyboardEvent) => boolean;
     dispose = vi.fn();
+    paste = vi.fn();
+    focus = vi.fn();
 
     constructor(options: { fontSize?: number }) {
       this.options = { fontSize: options.fontSize ?? 14 };
@@ -166,6 +181,8 @@ beforeEach(() => {
   mocks.geometry.height = 480;
   mocks.fitDimensions.cols = 100;
   mocks.fitDimensions.rows = 24;
+  mocks.fileDropHandlers.length = 0;
+  mocks.fileDropUnlisten.mockReset();
 
   Object.defineProperty(window, "requestAnimationFrame", {
     configurable: true,
@@ -347,5 +364,67 @@ describe("TerminalPane input", () => {
     await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
     expect(warn.mock.calls[0]).toContain(failure);
     expect(mocks.api.writeTerminal).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("TerminalPane file drop", () => {
+  const position = new PhysicalPosition(120, 80);
+
+  function pointAt(element: Element | null) {
+    Object.defineProperty(document, "elementFromPoint", { configurable: true, value: vi.fn(() => element) });
+  }
+
+  async function dropOnPane(overrides: Partial<PaneProps> = {}, target: "pane" | "outside" = "pane") {
+    const onFocus = vi.fn();
+    const view = pane({ onFocus, ...overrides });
+    await vi.waitFor(() => expect(mocks.fileDropHandlers).toHaveLength(1));
+    pointAt(target === "pane" ? view.container.querySelector(".pane-body") : document.body);
+    const send = (event: FileDropEvent) => act(() => mocks.fileDropHandlers[0]?.(event));
+    return { view, onFocus, send, terminal: mocks.terminals[0] };
+  }
+
+  it("given a file dropped on a running pane, pastes its escaped path and focuses the pane", async () => {
+    const { onFocus, send, terminal } = await dropOnPane();
+
+    send({ type: "drop", paths: ["/Users/me/Screen Shot.png"], position });
+
+    expect(terminal?.paste).toHaveBeenCalledWith("/Users/me/Screen\\ Shot.png ");
+    expect(terminal?.focus).toHaveBeenCalled();
+    expect(onFocus).toHaveBeenCalled();
+  });
+
+  it("given a drop outside the pane, pastes nothing", async () => {
+    const { send, terminal } = await dropOnPane({}, "outside");
+
+    send({ type: "drop", paths: ["/Users/me/shot.png"], position });
+
+    expect(terminal?.paste).not.toHaveBeenCalled();
+  });
+
+  it("given an exited pane, pastes nothing", async () => {
+    const { send, terminal } = await dropOnPane({ exited: true });
+
+    send({ type: "drop", paths: ["/Users/me/shot.png"], position });
+
+    expect(terminal?.paste).not.toHaveBeenCalled();
+  });
+
+  it("given a drag over the pane, highlights it until the drag leaves", async () => {
+    const { view, send } = await dropOnPane();
+    const root = view.container.querySelector(".pane");
+
+    send({ type: "enter", paths: ["/Users/me/shot.png"], position });
+    expect(root?.classList.contains("drop-target")).toBe(true);
+
+    send({ type: "leave" });
+    expect(root?.classList.contains("drop-target")).toBe(false);
+  });
+
+  it("given the pane unmounts, stops listening for drops", async () => {
+    const { view } = await dropOnPane();
+
+    view.unmount();
+
+    expect(mocks.fileDropUnlisten).toHaveBeenCalledTimes(1);
   });
 });

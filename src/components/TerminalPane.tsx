@@ -1,7 +1,7 @@
 import { agentKind } from "../domain/agentLabels";
 import { CONTEXT_ATTENTION_PERCENT, CONTEXT_WARNING_PERCENT, deriveAgentStatus } from "../domain/agentStatus";
 import { useMcpStore } from "../stores/mcpStore";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -17,6 +17,8 @@ import { Maximize2, Minimize2, GitBranch } from "lucide-react";
 import { t as translateNow, useT } from "../i18n";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { terminalFontStack } from "../lib/terminalFonts";
+import { detectDropPlatform, dropPointToClient, formatDroppedPaths } from "../lib/terminalDrop";
+import { onFileDrop } from "../lib/tauri/fileDrop";
 import { PaneActionsMenu, type PaneMenuGroups } from "./workbench/PaneActionsMenu";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal-pane.css";
@@ -108,6 +110,11 @@ export function TerminalPane(props: Props) {
   // that no longer exists.
   const exitedRef = useRef(exited);
   exitedRef.current = exited;
+  const hiddenRef = useRef(hidden);
+  hiddenRef.current = hidden;
+  const onFocusRef = useRef(props.onFocus);
+  onFocusRef.current = props.onFocus;
+  const [isDropTarget, setIsDropTarget] = useState(false);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -336,6 +343,49 @@ export function TerminalPane(props: Props) {
     };
   }, [id]);
 
+  // Every pane hears every drop; only the one under the cursor takes it, and
+  // the paths are pasted as a native terminal does so agents see the file.
+  useEffect(() => {
+    const platform = detectDropPlatform();
+    const isUnderCursor = (position: { x: number; y: number }): boolean => {
+      if (exitedRef.current || hiddenRef.current) return false;
+      const point = dropPointToClient(position, platform, window.devicePixelRatio);
+      const target = document.elementFromPoint(point.x, point.y);
+      return Boolean(target && rootRef.current?.contains(target));
+    };
+    let disposed = false;
+    let unlisten: UnlistenFn | null = null;
+    onFileDrop((event) => {
+      if (disposed) return;
+      if (event.type === "leave") {
+        setIsDropTarget(false);
+        return;
+      }
+      const isTarget = isUnderCursor(event.position);
+      if (event.type !== "drop") {
+        setIsDropTarget(isTarget);
+        return;
+      }
+      setIsDropTarget(false);
+      const text = formatDroppedPaths(event.paths, platform);
+      const term = getTerminal(id);
+      if (!isTarget || !text || !term) return;
+      onFocusRef.current();
+      term.focus();
+      term.paste(text);
+    })
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      })
+      .catch((err) => console.warn(`[terminal ${id}] file drop unavailable:`, err));
+    return () => {
+      disposed = true;
+      unlisten?.();
+      setIsDropTarget(false);
+    };
+  }, [id]);
+
   const previousExited = useRef(exited);
 
   useEffect(() => {
@@ -380,7 +430,7 @@ export function TerminalPane(props: Props) {
       data-term-id={id}
       className={`pane ${expanded ? "expanded" : ""} ${entering ? "pane-enter" : ""} ${
         dragOver ? "drag-over" : ""
-      } ${focused ? "focused" : ""}`}
+      } ${focused ? "focused" : ""} ${isDropTarget ? "drop-target" : ""}`}
       data-status={status}
       style={{
         flex: `1 1 calc(${basis}% - 12px)`,

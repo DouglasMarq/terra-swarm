@@ -12,6 +12,8 @@ Terra Swarm is a desktop app for working with multiple AI coding agents at once.
 
 - **Workspaces** — one workspace per project folder. Switch instantly, reorder via drag & drop, and see the git branch of each workspace at a glance.
 - **Agent grid** — spawn `claude`, `codex`, `opencode`, `kimi` or any shell into a resizable, drag-to-reorder grid. Installed agents are auto-detected on your PATH.
+- **Drop files on an agent** — drag images or other files from Finder or your file manager onto a terminal and their paths are pasted into it, as a native terminal does, so Claude Code and Codex attach the image.
+- **Terminal font** — terminals use JetBrains Mono, bundled with the app; pick any installed font in Settings → Terminal.
 - **Session resume** — when you reopen the app, Terra Swarm offers to bring back every terminal that was running when you quit, using agent-native continuation (`claude --continue`, `codex resume --last`, …) so agents pick up exactly where they left off.
 - **Voice input** — dictate prompts straight into the focused terminal. Powered by local Whisper models: fully offline, GPU-accelerated on macOS, with per-model downloads and 16 languages.
 - **Notifications** — get badged when an agent finishes or needs input, and jump straight to the right terminal from the notification center. With the app in the background, a system notification and the app icon badge tell you an agent is waiting (Settings → Notifications).

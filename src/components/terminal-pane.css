@@ -35,6 +35,11 @@
   box-shadow: var(--terra-pane-focus-ring), var(--terra-shadow-pane);
 }
 
+.pane.drop-target {
+  outline: 2px dashed var(--terra-border-focus);
+  outline-offset: -2px;
+}
+
 .pane.focused .pane-header {
   background: var(--terra-bg-elevated);
 }
@@ -169,11 +174,14 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: 6px 4px 4px 10px;
 }
 
+/* The padding sits on .xterm, not on .pane-body: FitAddon subtracts the
+ * padding of this element only, so padding on the parent made xterm wider
+ * and taller than its box and the last column and row were cut off. */
 .pane-body .xterm {
   height: 100%;
+  padding: var(--terra-space-2) var(--terra-space-2) var(--terra-space-2) var(--terra-space-3);
 }
 
 .pane-attention {

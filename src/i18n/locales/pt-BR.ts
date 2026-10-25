@@ -290,7 +290,7 @@ export const ptBR: Dictionary<typeof en> = {
     fontFamily: "Fonte",
     fontFamilyHint: { zero: "Nenhuma fonte encontrada.", one: "{count} fonte instalada.", other: "{count} fontes instaladas · {mono} monoespaçadas." },
     fontLoading: "Lendo as fontes instaladas…",
-    fontDefault: "Padrão (SF Mono)",
+    fontDefault: "Padrão (JetBrains Mono)",
     fontSearch: "Filtrar fontes",
     fontMonoOnly: "Só monoespaçadas",
     fontMono: "mono",

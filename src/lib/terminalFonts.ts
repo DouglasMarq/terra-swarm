@@ -6,8 +6,15 @@ export interface SystemFont {
   monospace: boolean;
 }
 
-/** Used when no font is chosen, and as the fallback after a chosen one. */
-export const DEFAULT_TERMINAL_FONT_STACK = "'SF Mono', Menlo, Monaco, 'Courier New', monospace";
+/** Ships with the app (@fontsource-variable/jetbrains-mono), the same on every platform. */
+export const BUNDLED_TERMINAL_FONT = "JetBrains Mono Variable";
+
+/**
+ * Used when no font is chosen, and as the fallback after a chosen one. The
+ * bundled subsets have no box-drawing characters, so those come from the
+ * platform monospace fonts that follow it.
+ */
+export const DEFAULT_TERMINAL_FONT_STACK = `'${BUNDLED_TERMINAL_FONT}', 'SF Mono', Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Courier New', monospace`;
 
 /** A font family name quoted for CSS, without characters that could break out of the quotes. */
 export function quoteFontFamily(name: string): string {

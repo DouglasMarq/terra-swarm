@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  mergeWorkspaceSnapshot,
-  migrateLegacyWorkspaces,
-  migrateWorkspacesToSnapshotV2,
-  normalizeSnapshotV2,
-} from "./migration";
+import { migrateLegacyWorkspaces, migrateWorkspacesToSnapshotV2 } from "./legacyMigration";
+import { mergeWorkspaceSnapshot } from "./snapshotMerge";
+import { normalizeSnapshotV2 } from "./snapshotNormalize";
 
 describe("migrateLegacyWorkspaces", () => {
   it("maps each legacy workspace terminal to one project, container, pane, and tab", () => {

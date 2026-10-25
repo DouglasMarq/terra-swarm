@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { migrateLegacyWorkspaces, normalizeSnapshotV2 } from "./migration";
+import { migrateLegacyWorkspaces } from "./migration/legacyMigration";
+import { normalizeSnapshotV2 } from "./migration/snapshotNormalize";
 import {
   getActiveContainer,
   getActivePane,

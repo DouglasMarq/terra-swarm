@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { migrateLegacyWorkspaces } from "../../domain/migration";
+import { migrateLegacyWorkspaces } from "../../domain/migration/legacyMigration";
 import type { Workspace, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import { projectWorkbench, toWorkbenchSnapshot } from "./projection";
 

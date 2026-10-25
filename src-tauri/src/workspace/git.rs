@@ -30,58 +30,101 @@ pub(crate) fn parse_git_status(output: &[u8]) -> Result<WorkspaceGitStatus, Stri
     let header = records
         .next()
         .ok_or_else(|| "git status returned no branch header".to_string())?;
-    let header = String::from_utf8_lossy(header);
-    let details = header
-        .strip_prefix("## ")
-        .ok_or_else(|| "git status returned an invalid branch header".to_string())?;
-    let branch_details = details.split(" [").next().unwrap_or(details);
-    let branch = if branch_details == "HEAD (no branch)" {
-        None
-    } else if let Some(name) = branch_details.strip_prefix("No commits yet on ") {
-        Some(name.to_string())
-    } else if let Some(name) = branch_details.strip_prefix("Initial commit on ") {
-        Some(name.to_string())
-    } else {
-        let name = branch_details
-            .split("...")
-            .next()
-            .unwrap_or(branch_details)
-            .trim();
-        (!name.is_empty()).then_some(name.to_string())
-    };
-    let mut status = WorkspaceGitStatus {
-        branch,
-        ..WorkspaceGitStatus::default()
-    };
-    if let Some(summary) = details
-        .split_once(" [")
-        .and_then(|(_, value)| value.strip_suffix(']'))
-    {
-        for item in summary.split(',').map(str::trim) {
-            if let Some(value) = item.strip_prefix("ahead ") {
-                status.ahead = value.parse().unwrap_or(0);
-            } else if let Some(value) = item.strip_prefix("behind ") {
-                status.behind = value.parse().unwrap_or(0);
-            }
-        }
-    }
-
+    let mut status = parse_branch_header(&String::from_utf8_lossy(header))?;
     while let Some(record) = records.next() {
         if record.is_empty() {
             continue;
         }
-        if record.len() < 4 || record[2] != b' ' {
-            return Err("git status returned a malformed file record".to_string());
+        let file = FileRecord::parse(record)?;
+        if file.has_original_path() {
+            // `-z` emits the original rename/copy path as the following
+            // record. Consume it so it cannot be mistaken for a new status.
+            let _ = records.next();
         }
-        let index = record[0] as char;
-        let worktree = record[1] as char;
-        let path = String::from_utf8_lossy(&record[3..]).into_owned();
-        if index == '?' && worktree == '?' {
-            add_unique(&mut status.untracked, path);
-            continue;
+        record_file(&mut status, file);
+    }
+    status.staged.sort_unstable();
+    status.modified.sort_unstable();
+    status.untracked.sort_unstable();
+    status.conflicted.sort_unstable();
+    Ok(status)
+}
+
+fn parse_branch_header(header: &str) -> Result<WorkspaceGitStatus, String> {
+    let details = header
+        .strip_prefix("## ")
+        .ok_or_else(|| "git status returned an invalid branch header".to_string())?;
+    let mut status = WorkspaceGitStatus {
+        branch: branch_name(details),
+        ..WorkspaceGitStatus::default()
+    };
+    apply_tracking(&mut status, details);
+    Ok(status)
+}
+
+fn branch_name(details: &str) -> Option<String> {
+    let branch_details = details.split(" [").next().unwrap_or(details);
+    if branch_details == "HEAD (no branch)" {
+        return None;
+    }
+    let unborn = branch_details
+        .strip_prefix("No commits yet on ")
+        .or_else(|| branch_details.strip_prefix("Initial commit on "));
+    if let Some(name) = unborn {
+        return Some(name.to_string());
+    }
+    let name = branch_details
+        .split("...")
+        .next()
+        .unwrap_or(branch_details)
+        .trim();
+    (!name.is_empty()).then_some(name.to_string())
+}
+
+fn apply_tracking(status: &mut WorkspaceGitStatus, details: &str) {
+    let Some(summary) = details
+        .split_once(" [")
+        .and_then(|(_, value)| value.strip_suffix(']'))
+    else {
+        return;
+    };
+    for item in summary.split(',').map(str::trim) {
+        if let Some(value) = item.strip_prefix("ahead ") {
+            status.ahead = value.parse().unwrap_or(0);
+        } else if let Some(value) = item.strip_prefix("behind ") {
+            status.behind = value.parse().unwrap_or(0);
         }
-        if matches!(
-            (index, worktree),
+    }
+}
+
+struct FileRecord {
+    index: char,
+    worktree: char,
+    path: String,
+}
+
+impl FileRecord {
+    fn parse(record: &[u8]) -> Result<Self, String> {
+        let [index, worktree, b' ', path @ ..] = record else {
+            return Err(MALFORMED_FILE_RECORD.to_string());
+        };
+        if path.is_empty() {
+            return Err(MALFORMED_FILE_RECORD.to_string());
+        }
+        Ok(Self {
+            index: char::from(*index),
+            worktree: char::from(*worktree),
+            path: String::from_utf8_lossy(path).into_owned(),
+        })
+    }
+
+    fn is_untracked(&self) -> bool {
+        self.index == '?' && self.worktree == '?'
+    }
+
+    fn is_conflicted(&self) -> bool {
+        matches!(
+            (self.index, self.worktree),
             ('D', 'D')
                 | ('A', 'U')
                 | ('U', 'D')
@@ -89,29 +132,33 @@ pub(crate) fn parse_git_status(output: &[u8]) -> Result<WorkspaceGitStatus, Stri
                 | ('D', 'U')
                 | ('A', 'A')
                 | ('U', 'U')
-        ) {
-            add_unique(&mut status.conflicted, path.clone());
-            // Unmerged entries form their own category. Keeping them out of
-            // staged/modified avoids double-counting a conflict in the UI.
-            continue;
-        }
-        if index != ' ' && index != '?' {
-            add_unique(&mut status.staged, path.clone());
-        }
-        if worktree != ' ' && worktree != '?' {
-            add_unique(&mut status.modified, path.clone());
-        }
-        if matches!(index, 'R' | 'C') || matches!(worktree, 'R' | 'C') {
-            // `-z` emits the original rename/copy path as the following
-            // record. Consume it so it cannot be mistaken for a new status.
-            let _ = records.next();
-        }
+        )
     }
-    status.staged.sort_unstable();
-    status.modified.sort_unstable();
-    status.untracked.sort_unstable();
-    status.conflicted.sort_unstable();
-    Ok(status)
+
+    fn has_original_path(&self) -> bool {
+        matches!(self.index, 'R' | 'C') || matches!(self.worktree, 'R' | 'C')
+    }
+}
+
+const MALFORMED_FILE_RECORD: &str = "git status returned a malformed file record";
+
+fn record_file(status: &mut WorkspaceGitStatus, file: FileRecord) {
+    if file.is_untracked() {
+        add_unique(&mut status.untracked, file.path);
+        return;
+    }
+    if file.is_conflicted() {
+        add_unique(&mut status.conflicted, file.path);
+        // Unmerged entries form their own category. Keeping them out of
+        // staged/modified avoids double-counting a conflict in the UI.
+        return;
+    }
+    if file.index != ' ' && file.index != '?' {
+        add_unique(&mut status.staged, file.path.clone());
+    }
+    if file.worktree != ' ' && file.worktree != '?' {
+        add_unique(&mut status.modified, file.path);
+    }
 }
 
 pub(crate) fn git_status_for_directory(cwd: &Path) -> Result<WorkspaceGitStatus, String> {

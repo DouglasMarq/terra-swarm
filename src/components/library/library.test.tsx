@@ -84,7 +84,7 @@ describe("PromptLibraryDialog", () => {
     await user.type(screen.getByRole("textbox", { name: "Prompt" }), "Refactor the router module");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    const added = useLibraryStore.getState().prompts.at(-1);
+    const [added] = useLibraryStore.getState().prompts.slice(-1);
     expect(added?.body).toBe("Refactor the router module");
     expect(screen.getByRole("textbox", { name: "Title" })).toHaveValue(added?.title);
     expect(screen.getByRole("button", { name: added?.title })).toBeInTheDocument();

@@ -472,7 +472,7 @@ describe("SettingsSectionPanel agents", () => {
     expect(input).toHaveValue("");
     await user.type(input, "Tietê");
     await user.click(screen.getByRole("button", { name: "Add" }));
-    expect(usePreferencesStore.getState().agentNameList.at(-1)).toBe("Tietê");
+    expect(usePreferencesStore.getState().agentNameList.slice(-1)).toEqual(["Tietê"]);
 
     await user.click(screen.getByRole("button", { name: "Remove Xingu" }));
     expect(usePreferencesStore.getState().agentNameList).not.toContain("Xingu");

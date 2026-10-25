@@ -492,4 +492,99 @@ mod tests {
         assert!(store.read("t-pump").expect("read scrollback").is_empty());
         let _ = std::fs::remove_dir_all(root);
     }
+
+    struct FailingReader;
+
+    impl Read for FailingReader {
+        fn read(&mut self, _buffer: &mut [u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("pty closed"))
+        }
+    }
+
+    fn due_scanner(app: &tauri::App<MockRuntime>) -> SideChannelScanner<MockRuntime> {
+        let mut scanner = SideChannelScanner::new(app.handle().clone(), TERMINAL);
+        scanner.last_scan = Instant::now()
+            .checked_sub(SCAN_INTERVAL)
+            .unwrap_or_else(Instant::now);
+        scanner
+    }
+
+    #[test]
+    fn given_a_reader_that_fails_when_reading_then_the_channel_closes_without_chunks() {
+        let chunk_rx = spawn_reader(Box::new(FailingReader), "t-failing".into());
+
+        assert!(chunk_rx.recv_timeout(EVENT_DEADLINE).is_err());
+    }
+
+    #[test]
+    fn given_a_dev_server_banner_and_a_context_footer_when_scanning_then_each_is_announced_once() {
+        let app = tauri::test::mock_app();
+        let servers = payloads_of(&app, "terminal-dev-server");
+        let contexts = payloads_of(&app, "terminal-context");
+        let mut scanner = due_scanner(&app);
+
+        scanner.scan("  Local:   http://localhost:5173/\n12.3K (42%) $0.05\n");
+        scanner.last_scan = Instant::now()
+            .checked_sub(SCAN_INTERVAL)
+            .unwrap_or_else(Instant::now);
+        scanner.scan("again\n");
+
+        let server = servers.recv_timeout(EVENT_DEADLINE).expect("dev server");
+        assert_eq!(server["url"], json!("http://localhost:5173/"));
+        assert_eq!(server["workspace_id"], json!("w-pump"));
+        let context = contexts.recv_timeout(EVENT_DEADLINE).expect("context");
+        assert_eq!(context["used"], json!(42));
+        assert_eq!(scanner.dev_servers_seen, vec!["http://localhost:5173/"]);
+        assert_eq!(scanner.ctx_last, Some(42));
+        assert!(servers.try_recv().is_err());
+        assert!(contexts.try_recv().is_err());
+    }
+
+    #[test]
+    fn given_more_output_than_the_tail_when_scanning_then_only_the_latest_bytes_are_kept() {
+        let app = tauri::test::mock_app();
+        let mut scanner = SideChannelScanner::new(app.handle().clone(), TERMINAL);
+
+        scanner.scan(&"x".repeat(RAW_TAIL_BYTES + 10));
+
+        assert_eq!(scanner.raw_tail.len(), RAW_TAIL_BYTES);
+    }
+
+    #[test]
+    fn given_the_same_title_twice_when_scanning_then_it_is_announced_once() {
+        let app = tauri::test::mock_app();
+        let titles = payloads_of(&app, "terminal-title");
+        let mut scanner = SideChannelScanner::new(app.handle().clone(), TERMINAL);
+
+        scanner.scan("\u{1b}]0;Build\u{7}");
+        scanner.scan("\u{1b}]0;Build\u{7}");
+
+        let title = titles.recv_timeout(EVENT_DEADLINE).expect("title");
+        assert_eq!(title["title"], json!("Build"));
+        assert!(titles.try_recv().is_err());
+    }
+
+    #[test]
+    fn given_a_scrollback_store_that_cannot_write_when_emitting_then_the_output_still_reaches_the_window(
+    ) {
+        let blocker = std::env::temp_dir().join(format!(
+            "terra-output-blocked-{}-{}",
+            std::process::id(),
+            crate::clock::now_millis()
+        ));
+        std::fs::write(&blocker, "not a directory").expect("blocking file");
+        let app = tauri::test::mock_app();
+        let outputs = payloads_of(&app, "pty-output-t-pump");
+
+        let backlog = pump(
+            &app,
+            b"still shown",
+            scrollback(ScrollbackStore::from_root(blocker.clone()), true),
+        );
+
+        let output = outputs.recv_timeout(EVENT_DEADLINE).expect("output event");
+        assert_eq!(output["data"], json!("still shown"));
+        assert_eq!(backlog.lock_or_recover().total, 11);
+        let _ = std::fs::remove_file(blocker);
+    }
 }

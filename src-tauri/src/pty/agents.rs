@@ -103,4 +103,30 @@ mod tests {
         assert!(!is_command_available(installed));
         assert!(!is_command_available("claude; exit 0"));
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn given_installed_and_missing_commands_when_detecting_them_then_only_the_installed_ones_are_found(
+    ) {
+        let found = available_commands(&["sh", "terra-swarm-missing-command"]);
+
+        assert_eq!(found, std::collections::HashSet::from(["sh".to_string()]));
+    }
+
+    #[test]
+    fn given_the_agent_catalog_when_detecting_agents_then_every_agent_is_listed_and_the_shell_comes_last(
+    ) {
+        let agents = detect_agents();
+
+        assert_eq!(agents.len(), catalog().len() + 1);
+        let shell = agents.last().expect("shell entry");
+        assert_eq!((shell.id.as_str(), shell.is_available), ("shell", true));
+        let first_missing = agents[..catalog().len()]
+            .iter()
+            .position(|agent| !agent.is_available)
+            .unwrap_or(catalog().len());
+        assert!(agents[first_missing..catalog().len()]
+            .iter()
+            .all(|agent| !agent.is_available));
+    }
 }

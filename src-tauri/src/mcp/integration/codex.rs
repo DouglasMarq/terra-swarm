@@ -292,4 +292,61 @@ mod tests {
         assert_eq!(usage.model.as_deref(), Some("gpt-test"));
         let _ = std::fs::remove_dir_all(sessions);
     }
+
+    #[test]
+    fn given_a_codex_launch_context_when_building_the_command_then_it_registers_the_server_and_keeps_the_arguments(
+    ) {
+        let program = Path::new("/opt/terra-swarm");
+        let context = LaunchContext {
+            url: URL,
+            hook_url: "http://127.0.0.1:4100/hooks",
+            hook_program: Some(program),
+            config_dir: None,
+            system_prompt: None,
+            quoting: Quoting::Posix,
+        };
+
+        let command = Codex.launch_command("codex --full-auto", &context);
+
+        assert_eq!(Codex.id(), "codex");
+        assert!(command.starts_with("codex -c 'mcp_servers.terra.url="));
+        assert!(command.ends_with(" --full-auto"));
+        assert_eq!(
+            command.contains("/opt/terra-swarm"),
+            !has_user_codex_notify()
+        );
+    }
+
+    #[test]
+    fn given_codex_notify_payloads_when_interpreting_then_only_finished_turns_set_the_agent_idle() {
+        let finished = serde_json::json!({
+            "type": "agent-turn-complete",
+            "last-assistant-message": "  All   tests pass ",
+            "thread-id": "abc-123",
+        });
+        let other = serde_json::json!({ "type": "approval-requested" });
+
+        assert_eq!(
+            Codex.interpret("notify", &finished),
+            Some((AgentState::Idle, "All tests pass".to_string()))
+        );
+        assert_eq!(
+            Codex.interpret("agent-turn-complete", &serde_json::json!({})),
+            Some((AgentState::Idle, String::new()))
+        );
+        assert_eq!(Codex.interpret("notify", &other), None);
+        let log = Codex.session_log(&finished).expect("session log");
+        assert_eq!(
+            (log.integration, log.locator.to_str()),
+            ("codex", Some("abc-123"))
+        );
+        assert!(Codex
+            .session_log(&serde_json::json!({ "thread_id": "" }))
+            .is_none());
+    }
+
+    #[test]
+    fn given_a_thread_id_that_is_not_a_plain_name_when_reading_usage_then_no_log_is_searched() {
+        assert!(Codex.usage(OsStr::new("../outside")).is_none());
+    }
 }

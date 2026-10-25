@@ -1654,3 +1654,295 @@ mod kill_tests {
         }
     }
 }
+
+#[cfg(test)]
+#[cfg(unix)]
+mod command_tests {
+    use super::*;
+    use crate::workspace::TerminalMeta;
+    use std::path::PathBuf;
+    use std::time::{Duration, Instant};
+    use tauri::test::{mock_app, MockRuntime};
+    use tauri::App;
+
+    const DEADLINE: Duration = Duration::from_secs(5);
+    const POLL: Duration = Duration::from_millis(20);
+    static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+    fn scrollback_root(label: &str) -> PathBuf {
+        let id = TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "terra-swarm-pty-commands-{label}-{}-{id}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    fn app_with(manager: PtyManager) -> App<MockRuntime> {
+        let app = mock_app();
+        assert!(app.manage(Mutex::new(manager)));
+        assert!(app.manage(Mutex::new(WorkspaceStore::default())));
+        app
+    }
+
+    fn workspace(app: &App<MockRuntime>, name: &str) -> String {
+        app.state::<Mutex<WorkspaceStore>>()
+            .lock_or_recover()
+            .create(
+                name.into(),
+                std::env::temp_dir().to_string_lossy().into_owned(),
+            )
+            .id
+    }
+
+    fn manager(app: &App<MockRuntime>) -> State<'_, Mutex<PtyManager>> {
+        app.state::<Mutex<PtyManager>>()
+    }
+
+    fn spawn(
+        app: &App<MockRuntime>,
+        workspace_id: &str,
+        terminal_id: Option<&str>,
+    ) -> Result<SpawnedTerminal, String> {
+        let store = app.state::<Mutex<WorkspaceStore>>();
+        spawn_terminal_inner(
+            app.handle(),
+            Registries {
+                manager: manager(app).inner(),
+                store: store.inner(),
+            },
+            SpawnRequest {
+                workspace_id,
+                command: "cat",
+                cols: 80,
+                rows: 24,
+                terminal_id,
+                options: &SpawnOptions {
+                    shell: Some("/bin/sh".into()),
+                    ..SpawnOptions::default()
+                },
+            },
+        )
+    }
+
+    fn wait_for_backlog(app: &App<MockRuntime>, id: &str, needle: &str) -> BacklogSnapshot {
+        let deadline = Instant::now() + DEADLINE;
+        loop {
+            let snapshot = terminal_backlog(manager(app), id.into()).unwrap();
+            if snapshot.data.contains(needle) {
+                return snapshot;
+            }
+            assert!(Instant::now() < deadline, "{needle} never reached {id}");
+            std::thread::sleep(POLL);
+        }
+    }
+
+    fn stored_terminal_meta(id: &str, worktree: Option<WorktreeInfo>) -> TerminalMeta {
+        TerminalMeta {
+            id: id.into(),
+            command: "claude".into(),
+            width: None,
+            pane_id: None,
+            tab_id: None,
+            group_id: None,
+            is_suspended: false,
+            worktree,
+            role: None,
+        }
+    }
+
+    #[test]
+    fn given_a_running_terminal_when_writing_input_then_its_echo_reaches_the_backlog() {
+        let app = app_with(PtyManager::default());
+        let workspace_id = workspace(&app, "echo");
+        let spawned = spawn(&app, &workspace_id, None).unwrap();
+
+        write_terminal(manager(&app), spawned.meta.id.clone(), "ping-echo\n".into()).unwrap();
+
+        let snapshot = wait_for_backlog(&app, &spawned.meta.id, "ping-echo");
+        assert!(snapshot.total >= byte_count(snapshot.data.as_bytes()));
+        kill_all(manager(&app).inner());
+    }
+
+    #[test]
+    fn given_an_unknown_terminal_when_writing_or_resizing_then_it_is_not_found() {
+        let app = app_with(PtyManager::default());
+
+        let written = write_terminal(manager(&app), "t-missing".into(), "x".into());
+        let resized = resize_terminal(
+            manager(&app),
+            TerminalSizeRequest {
+                id: "t-missing".into(),
+                cols: 80,
+                rows: 24,
+            },
+        );
+
+        assert!(written.is_err_and(|error| error.message.contains("not found")));
+        assert!(resized.is_err_and(|error| error.contains("not found")));
+    }
+
+    #[test]
+    fn given_a_running_terminal_when_resizing_then_its_runtime_info_reports_the_clamped_size() {
+        let app = app_with(PtyManager::default());
+        let workspace_id = workspace(&app, "resize");
+        let spawned = spawn(&app, &workspace_id, None).unwrap();
+        let id = spawned.meta.id.clone();
+        let resize = |cols, rows| {
+            resize_terminal(
+                manager(&app),
+                TerminalSizeRequest {
+                    id: id.clone(),
+                    cols,
+                    rows,
+                },
+            )
+        };
+
+        resize(0, 0).unwrap();
+        resize(1, 1).unwrap();
+        let info = terminal_runtime_info(manager(&app), id.clone())
+            .unwrap()
+            .expect("runtime info");
+        let running = running_terminals(manager(&app)).unwrap();
+
+        assert_eq!(
+            (info.cols, info.rows),
+            (MIN_PTY_DIMENSION, MIN_PTY_DIMENSION)
+        );
+        assert!(info.is_running);
+        assert!(info.pid.is_some());
+        assert_eq!(info.generation, spawned.seq);
+        assert!(running
+            .iter()
+            .any(|terminal| terminal.id == id && terminal.seq == spawned.seq));
+        kill_all(manager(&app).inner());
+    }
+
+    #[test]
+    fn given_durable_scrollback_when_reading_a_stopped_terminal_then_it_is_served_only_once_enabled(
+    ) {
+        let root = scrollback_root("stopped");
+        let app = app_with(PtyManager::with_scrollback_dir(root.clone()));
+        manager(&app)
+            .lock_or_recover()
+            .scrollback()
+            .append("t-gone", b"old output")
+            .unwrap();
+
+        let hidden = terminal_backlog(manager(&app), "t-gone".into()).unwrap();
+        set_durable_scrollback_enabled(manager(&app), true).unwrap();
+        let restored = terminal_backlog(manager(&app), "t-gone".into()).unwrap();
+
+        assert_eq!((hidden.data.as_str(), hidden.total), ("", 0));
+        assert_eq!(restored.data, "old output");
+        assert_eq!(restored.total, 10);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn given_stored_scrollback_when_respawning_a_terminal_then_its_backlog_starts_from_it() {
+        let root = scrollback_root("respawn");
+        let app = app_with(PtyManager::with_scrollback_dir(root.clone()));
+        let workspace_id = workspace(&app, "respawn");
+        manager(&app)
+            .lock_or_recover()
+            .set_durable_scrollback_enabled(true);
+        manager(&app)
+            .lock_or_recover()
+            .scrollback()
+            .append("t-restored", b"earlier session\n")
+            .unwrap();
+
+        spawn(&app, &workspace_id, Some("t-restored")).unwrap();
+        write_terminal(manager(&app), "t-restored".into(), "later\n".into()).unwrap();
+
+        let snapshot = wait_for_backlog(&app, "t-restored", "later");
+        assert!(snapshot.data.starts_with("earlier session\n"));
+        kill_all(manager(&app).inner());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn given_several_running_terminals_when_killing_all_then_none_stay_registered() {
+        let app = app_with(PtyManager::default());
+        let workspace_id = workspace(&app, "kill-all");
+        spawn(&app, &workspace_id, None).unwrap();
+        spawn(&app, &workspace_id, None).unwrap();
+
+        kill_all(manager(&app).inner());
+
+        assert!(running_terminals(manager(&app)).unwrap().is_empty());
+    }
+
+    #[test]
+    fn given_an_unknown_workspace_when_spawning_then_it_is_refused() {
+        let app = app_with(PtyManager::default());
+
+        let result = spawn(&app, "ws-missing", None);
+
+        assert!(result.is_err_and(|error| error.contains("workspace ws-missing not found")));
+    }
+
+    #[test]
+    fn given_a_terminal_id_owned_by_another_workspace_when_spawning_it_then_it_is_refused() {
+        let app = app_with(PtyManager::default());
+        let owner = workspace(&app, "owner");
+        let other = workspace(&app, "other");
+        app.state::<Mutex<WorkspaceStore>>()
+            .lock_or_recover()
+            .record_terminal(&owner, stored_terminal_meta("t-owned", None));
+
+        let result = spawn(&app, &other, Some("t-owned"));
+
+        assert!(result.is_err_and(|error| error.contains("already belongs to workspace")));
+        assert!(!manager(&app)
+            .lock_or_recover()
+            .terminals
+            .contains_key("t-owned"));
+    }
+
+    #[test]
+    fn given_a_stored_worktree_that_was_deleted_when_respawning_then_it_is_refused() {
+        let app = app_with(PtyManager::default());
+        let workspace_id = workspace(&app, "gone-worktree");
+        let missing = std::env::temp_dir()
+            .join(format!(
+                "terra-swarm-missing-worktree-{}",
+                std::process::id()
+            ))
+            .to_string_lossy()
+            .into_owned();
+        let info = WorktreeInfo {
+            path: missing.clone(),
+            cwd: missing.clone(),
+            branch: "terra/t-gone-wt".into(),
+            base: "main".into(),
+            repo: missing,
+        };
+        app.state::<Mutex<WorkspaceStore>>()
+            .lock_or_recover()
+            .record_terminal(&workspace_id, stored_terminal_meta("t-gone-wt", Some(info)));
+
+        let result = spawn(&app, &workspace_id, Some("t-gone-wt"));
+
+        assert!(result.is_err_and(|error| error.contains("no longer exists")));
+    }
+
+    #[test]
+    fn given_a_stored_command_when_recording_a_respawn_then_resume_commands_keep_the_original() {
+        let original = || Some("claude --model opus".to_string());
+
+        assert_eq!(
+            recorded_command(original(), "claude --continue".into()),
+            "claude --model opus"
+        );
+        assert_eq!(
+            recorded_command(Some("claude --continue".into()), "claude --continue".into()),
+            "claude --continue"
+        );
+        assert_eq!(recorded_command(original(), String::new()), "shell");
+        assert_eq!(recorded_command(None, "codex".into()), "codex");
+    }
+}

@@ -510,4 +510,59 @@ mod tests {
         let status = hub.statuses().unwrap().status_of("t-1").cloned().unwrap();
         assert_eq!(status.state, crate::mcp::model::AgentState::NeedsInput);
     }
+
+    #[test]
+    fn given_an_unknown_tool_when_calling_it_then_the_call_is_rejected_as_invalid_params() {
+        let (hub, _) = hub();
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
+        let server = TestServer::start(Arc::clone(&hub));
+        initialize(&server, &token);
+
+        let reply = server.rpc(
+            &token,
+            RpcCall {
+                id: 2,
+                method: "tools/call",
+                params: json!({ "name": "launch_rockets", "arguments": {} }),
+            },
+        );
+
+        assert_eq!(reply["error"]["code"], json!(-32602));
+        assert!(reply["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("unknown tool `launch_rockets`"));
+    }
+
+    #[test]
+    fn given_a_hub_when_starting_the_server_then_it_listens_on_the_port_it_records() {
+        let (hub, _) = hub();
+
+        let port = start(Arc::clone(&hub)).unwrap();
+
+        assert_eq!(hub.port(), Some(port));
+        assert_eq!(
+            hub.url(),
+            Some(format!("http://127.0.0.1:{}{}", port, MCP_PATH))
+        );
+        assert!(std::net::TcpStream::connect(("127.0.0.1", port)).is_ok());
+    }
+
+    #[test]
+    fn given_a_server_handler_when_looking_up_tools_then_known_names_resolve_and_clones_share_the_hub(
+    ) {
+        let (hub, _) = hub();
+        let server = TerraServer {
+            hub: Arc::clone(&hub),
+        };
+
+        let copy = server.clone();
+
+        assert!(Arc::ptr_eq(&copy.hub, &hub));
+        assert_eq!(
+            copy.get_tool("whoami").map(|tool| tool.name.to_string()),
+            Some("whoami".to_string())
+        );
+        assert!(copy.get_tool("launch_rockets").is_none());
+    }
 }

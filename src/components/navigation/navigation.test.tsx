@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NavigatorPanel } from "./NavigatorPanel";
 import type { Workspace, WorkspaceGroup, WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import { useEditorStore } from "../../stores/editorStore";
+import { defined } from "../../test/defined";
 
 const groups: WorkspaceGroup[] = [{
   id: "group-core",
@@ -166,7 +167,7 @@ describe("NavigatorPanel", () => {
 
     const createGroupButtons = screen.getAllByRole("button", { name: "Criar grupo" });
     expect(createGroupButtons).toHaveLength(1);
-    await userEvent.setup().click(createGroupButtons[0]!);
+    await userEvent.setup().click(defined(createGroupButtons[0]));
     expect(onCreateGroup).toHaveBeenCalledTimes(1);
   });
 

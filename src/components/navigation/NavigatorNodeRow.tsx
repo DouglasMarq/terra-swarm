@@ -35,71 +35,108 @@ function countLabel(node: NavigatorNode, t: Translate): string {
   return t("nav.agentCount", { count: node.count });
 }
 
-function actionButton(
-  key: string,
-  label: string,
-  icon: ReactNode,
-  onClick: (event: MouseEvent<HTMLButtonElement>) => void,
-) {
+interface RowAction {
+  id: string;
+  label: string;
+  icon: ReactNode;
+  run: (event: MouseEvent<HTMLButtonElement>) => void;
+}
+
+function rowActionButton(action: RowAction) {
   return (
-    <button key={key} aria-label={label} className={styles.rowAction} onClick={onClick} type="button">
-      {icon}
+    <button
+      key={action.id}
+      aria-label={action.label}
+      className={styles.rowAction}
+      onClick={(event) => {
+        stop(event);
+        action.run(event);
+      }}
+      type="button"
+    >
+      {action.icon}
     </button>
   );
 }
 
-function rowActions(node: NavigatorNode, actions: NavigatorNodeActions, t: Translate): ReactNode[] {
+function editActions(node: NavigatorNode, actions: NavigatorNodeActions, t: Translate): RowAction[] {
+  if (node.kind !== "group" && node.kind !== "project") return [];
   const ref = navigatorRef(node);
-  const result: ReactNode[] = [];
-  if ((node.kind === "group" || node.kind === "project") && actions.onCreate) {
-    result.push(actionButton("create", t("nav.createInside"), <Plus aria-hidden="true" size={13} />, (event) => {
-      stop(event);
-      actions.onCreate?.(ref);
-    }));
+  const result: RowAction[] = [];
+  if (actions.onCreate) {
+    result.push({ id: "create", label: t("nav.createInside"), icon: <Plus aria-hidden="true" size={13} />, run: () => actions.onCreate?.(ref) });
   }
   // The host only persists names for groups and projects. Containers, panes
   // and agents are structural/runtime nodes, so do not advertise a rename
   // action that would open an unsupported dialog or silently do nothing.
-  if (actions.onRename && (node.kind === "group" || node.kind === "project")) {
-    result.push(actionButton("rename", t("nav.rename"), <Pencil aria-hidden="true" size={13} />, (event) => {
-      stop(event);
-      actions.onRename?.(ref);
-    }));
-  }
-  if (node.kind === "project" && actions.onDelete) {
-    result.push(actionButton("delete", t("nav.deleteProject"), <Trash2 aria-hidden="true" size={13} />, (event) => {
-      stop(event);
-      actions.onDelete?.(ref);
-    }));
-  }
-  if (node.kind === "project" && actions.onHide) {
-    const visible = (node as NavigatorProjectNode).visible;
-    result.push(actionButton(visible ? "hide" : "show", visible ? t("nav.hideProject") : t("nav.showProject"), visible ? <EyeOff aria-hidden="true" size={13} /> : <Eye aria-hidden="true" size={13} />, (event) => {
-      stop(event);
-      actions.onHide?.(ref);
-    }));
-  }
-  if (node.kind === "group") {
-    const group = node as NavigatorGroupNode;
-    if (group.suspended && actions.onResume) {
-      result.push(actionButton("resume", t("nav.resumeGroup"), <Play aria-hidden="true" size={13} />, (event) => {
-        stop(event);
-        actions.onResume?.(ref);
-      }));
-    } else if (!group.suspended && actions.onSuspend) {
-      result.push(actionButton("suspend", t("nav.suspendGroup"), <Pause aria-hidden="true" size={13} />, (event) => {
-        stop(event);
-        actions.onSuspend?.(ref);
-      }));
-    }
-  }
-  if (actions.onContextMenu) {
-    result.push(actionButton("context", t("nav.contextMenu"), <MoreHorizontal aria-hidden="true" size={13} />, (event) => {
-      stop(event);
-      actions.onContextMenu?.(event, ref);
-    }));
+  if (actions.onRename) {
+    result.push({ id: "rename", label: t("nav.rename"), icon: <Pencil aria-hidden="true" size={13} />, run: () => actions.onRename?.(ref) });
   }
   return result;
+}
+
+function projectActions(node: NavigatorProjectNode, actions: NavigatorNodeActions, t: Translate): RowAction[] {
+  const ref = navigatorRef(node);
+  const result: RowAction[] = [];
+  if (actions.onDelete) {
+    result.push({ id: "delete", label: t("nav.deleteProject"), icon: <Trash2 aria-hidden="true" size={13} />, run: () => actions.onDelete?.(ref) });
+  }
+  if (actions.onHide) {
+    result.push(node.visible
+      ? { id: "hide", label: t("nav.hideProject"), icon: <EyeOff aria-hidden="true" size={13} />, run: () => actions.onHide?.(ref) }
+      : { id: "show", label: t("nav.showProject"), icon: <Eye aria-hidden="true" size={13} />, run: () => actions.onHide?.(ref) });
+  }
+  return result;
+}
+
+function groupActions(node: NavigatorGroupNode, actions: NavigatorNodeActions, t: Translate): RowAction[] {
+  const ref = navigatorRef(node);
+  if (node.suspended && actions.onResume) {
+    return [{ id: "resume", label: t("nav.resumeGroup"), icon: <Play aria-hidden="true" size={13} />, run: () => actions.onResume?.(ref) }];
+  }
+  if (!node.suspended && actions.onSuspend) {
+    return [{ id: "suspend", label: t("nav.suspendGroup"), icon: <Pause aria-hidden="true" size={13} />, run: () => actions.onSuspend?.(ref) }];
+  }
+  return [];
+}
+
+function kindActions(node: NavigatorNode, actions: NavigatorNodeActions, t: Translate): RowAction[] {
+  if (node.kind === "project") return projectActions(node, actions, t);
+  if (node.kind === "group") return groupActions(node, actions, t);
+  return [];
+}
+
+function contextActions(node: NavigatorNode, actions: NavigatorNodeActions, t: Translate): RowAction[] {
+  if (!actions.onContextMenu) return [];
+  const ref = navigatorRef(node);
+  return [{ id: "context", label: t("nav.contextMenu"), icon: <MoreHorizontal aria-hidden="true" size={13} />, run: (event) => actions.onContextMenu?.(event, ref) }];
+}
+
+function rowActions(node: NavigatorNode, actions: NavigatorNodeActions, t: Translate): ReactNode[] {
+  return [
+    ...editActions(node, actions, t),
+    ...kindActions(node, actions, t),
+    ...contextActions(node, actions, t),
+  ].map(rowActionButton);
+}
+
+function AgentSubline({ node, t }: { node: NavigatorAgentNode; t: Translate }) {
+  if (node.tag) return <span className={styles.nodeSubline}>{node.tag}</span>;
+  if (node.branchIds.length === 0) return null;
+  return <span className={styles.nodeSubline}><GitBranch aria-hidden="true" size={11} /> {t("nav.branches", { count: node.branchIds.length })}</span>;
+}
+
+function AgentBadges({ node, t }: { node: NavigatorAgentNode; t: Translate }) {
+  return (
+    <>
+      {node.notifications > 0 ? <span className={styles.notificationBadge}>{node.notifications}</span> : null}
+      {node.contextUsage !== null ? (
+        <span className={node.contextUsage >= CONTEXT_ATTENTION_PERCENT ? styles.contextBadge : styles.contextValue} title={t("inspector.context")}>
+          {node.contextUsage}%
+        </span>
+      ) : null}
+    </>
+  );
 }
 
 export function NavigatorNodeRow({
@@ -187,19 +224,10 @@ export function NavigatorNodeRow({
       <span className={styles.nodeIcon}><IconForNode expanded={expanded} node={node} /></span>
       <span className={styles.nodeMain}>
         <span className={styles.nodeName}>{node.name}</span>
-      {node.kind === "agent" && (node as NavigatorAgentNode).tag ? (
-          <span className={styles.nodeSubline}>{(node as NavigatorAgentNode).tag}</span>
-        ) : node.kind === "agent" && (node as NavigatorAgentNode).branchIds.length > 0 ? (
-          <span className={styles.nodeSubline}><GitBranch aria-hidden="true" size={11} /> {t("nav.branches", { count: (node as NavigatorAgentNode).branchIds.length })}</span>
-        ) : null}
+        {node.kind === "agent" ? <AgentSubline node={node} t={t} /> : null}
       </span>
       {!visible && node.kind === "project" ? <EyeOff aria-label={t("nav.hidden")} className={styles.visibilityIcon} size={12} /> : null}
-      {node.kind === "agent" && (node as NavigatorAgentNode).notifications > 0 ? <span className={styles.notificationBadge}>{(node as NavigatorAgentNode).notifications}</span> : null}
-      {node.kind === "agent" && (node as NavigatorAgentNode).contextUsage !== null ? (
-        <span className={((node as NavigatorAgentNode).contextUsage ?? 0) >= CONTEXT_ATTENTION_PERCENT ? styles.contextBadge : styles.contextValue} title={t("inspector.context")}>
-          {(node as NavigatorAgentNode).contextUsage}%
-        </span>
-      ) : null}
+      {node.kind === "agent" ? <AgentBadges node={node} t={t} /> : null}
       <span className={styles.nodeCount}>{countLabel(node, t)}</span>
       <span className={styles.actions} onClick={(event) => event.stopPropagation()}>{rowActions(node, actions, t)}</span>
     </div>

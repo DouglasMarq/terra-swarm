@@ -491,7 +491,7 @@ function searchableText(node: NavigatorNode): string {
 }
 
 function cloneVisibleNode(node: NavigatorNode, children: NavigatorNode[]): NavigatorNode {
-  return { ...node, children } as NavigatorNode;
+  return { ...node, children };
 }
 
 /** Keeps matching descendants and their path so search never loses context. */

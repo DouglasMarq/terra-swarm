@@ -16,6 +16,7 @@ use super::model::{
 /// The tables a workspace's rows live in; fixed at compile time, so they
 /// can be named in SQL with `format!`.
 const WORKSPACE_TABLES: [&str; 3] = ["tasks", "messages", "notes"];
+const TASK_STATUS_COLUMN: usize = 4;
 const NOTE_KEY_WEIGHT: f64 = 2.0;
 const NOTE_BODY_WEIGHT: f64 = 1.0;
 const STATUS_ORDER: [TaskStatus; 4] = [
@@ -132,9 +133,20 @@ fn delete_workspace_rows(tx: &Transaction<'_>, workspace_id: &str) -> StoreResul
     Ok(())
 }
 
+fn status_from_row(row: &Row<'_>) -> rusqlite::Result<TaskStatus> {
+    let status: String = row.get(TASK_STATUS_COLUMN)?;
+    TaskStatus::parse(&status).ok_or_else(|| {
+        rusqlite::Error::FromSqlConversionFailure(
+            TASK_STATUS_COLUMN,
+            rusqlite::types::Type::Text,
+            format!("unknown task status {:?}", status).into(),
+        )
+    })
+}
+
 fn task_from_row(row: &Row<'_>) -> rusqlite::Result<Task> {
     let id: String = row.get(0)?;
-    let status: String = row.get(4)?;
+    let status = status_from_row(row)?;
     let labels: String = row.get(8)?;
     let labels = serde_json::from_str(&labels).unwrap_or_else(|error| {
         eprintln!("task {} has unreadable labels, showing none: {}", id, error);
@@ -145,7 +157,7 @@ fn task_from_row(row: &Row<'_>) -> rusqlite::Result<Task> {
         workspace_id: row.get(1)?,
         title: row.get(2)?,
         description: row.get(3)?,
-        status: TaskStatus::parse(&status).unwrap_or(TaskStatus::Todo),
+        status,
         priority: TaskPriority::from_rank(row.get(5)?),
         assignee: row.get(6)?,
         created_by: row.get(7)?,
@@ -359,6 +371,8 @@ impl Queries<'_> {
     }
 
     pub fn insert_task(&self, task: &Task) -> StoreResult<()> {
+        let labels = serde_json::to_string(&task.labels)
+            .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
         self.conn.execute(
             "INSERT INTO tasks(id, workspace_id, title, description, status, priority, assignee,
                                created_by, labels, position, created_at, updated_at)
@@ -372,7 +386,7 @@ impl Queries<'_> {
                 task.priority.rank(),
                 task.assignee,
                 task.created_by,
-                serde_json::to_string(&task.labels).unwrap_or_else(|_| "[]".into()),
+                labels,
                 task.position,
                 task.created_at,
                 task.updated_at
@@ -788,6 +802,24 @@ mod tests {
             params![id],
         );
         assert!(tasks::get(&repo, "ws-1", &id).unwrap().labels.is_empty());
+    }
+
+    #[test]
+    fn given_an_unknown_stored_status_when_loading_the_task_then_it_is_a_database_error() {
+        let mut repo = Repo::in_memory();
+        let id = tasks::create(&mut repo, &actor("ws-1", "t-1"), task("x"))
+            .unwrap()
+            .id;
+        repo.execute("PRAGMA ignore_check_constraints = ON", &[]);
+        repo.execute(
+            "UPDATE tasks SET status = 'archived' WHERE id = ?1",
+            params![id],
+        );
+
+        assert!(matches!(
+            tasks::get(&repo, "ws-1", &id),
+            Err(StoreError::Database(_))
+        ));
     }
 
     #[test]

@@ -119,12 +119,13 @@ impl<R: Runtime> ServerHandler for TerraServer<R> {
             ErrorData::internal_error(TOOL_CALL_FAILED, None)
         })?;
         Ok(match outcome {
-            Ok(value) => CallToolResult::success(vec![ContentBlock::text(
-                serde_json::to_string_pretty(&value).unwrap_or_else(|error| {
+            Ok(value) => match serde_json::to_string_pretty(&value) {
+                Ok(text) => CallToolResult::success(vec![ContentBlock::text(text)]),
+                Err(error) => {
                     eprintln!("cannot serialize an MCP tool result: {}", error);
-                    String::new()
-                }),
-            )]),
+                    CallToolResult::error(vec![ContentBlock::text(TOOL_CALL_FAILED)])
+                }
+            },
             Err(ToolError::UnknownTool(name)) => {
                 return Err(ErrorData::invalid_params(
                     format!("unknown tool `{}`", name),

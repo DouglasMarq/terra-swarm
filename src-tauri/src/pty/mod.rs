@@ -1,6 +1,6 @@
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -111,6 +111,7 @@ fn kill_entry(entry: PtyEntry, disable_scrollback: bool) {
 
 pub struct PtyManager {
     terminals: HashMap<String, PtyEntry>,
+    spawning: HashSet<String>,
     scrollback: Arc<ScrollbackStore>,
     /// Runtime gate for durable scrollback. It starts disabled (fail-closed)
     /// and is shared with every PTY flusher so toggling the feature does not
@@ -122,6 +123,7 @@ impl Default for PtyManager {
     fn default() -> Self {
         Self {
             terminals: HashMap::new(),
+            spawning: HashSet::new(),
             scrollback: Arc::new(ScrollbackStore::default()),
             durable_scrollback_enabled: Arc::new(AtomicBool::new(false)),
         }
@@ -132,6 +134,7 @@ impl PtyManager {
     pub fn with_scrollback_dir(path: std::path::PathBuf) -> Self {
         Self {
             terminals: HashMap::new(),
+            spawning: HashSet::new(),
             scrollback: Arc::new(ScrollbackStore::from_root(path)),
             durable_scrollback_enabled: Arc::new(AtomicBool::new(false)),
         }
@@ -337,12 +340,7 @@ pub fn spawn_terminal_inner<R: Runtime>(
         }
     }
 
-    {
-        let manager = manager.lock_or_recover();
-        if manager.terminals.contains_key(&id) {
-            return Err(format!("terminal {} already running", id));
-        }
-    }
+    let _reservation = SpawnReservation::claim(manager, &id)?;
 
     let (existing_worktree, existing_role, existing_command) = store
         .lock_or_recover()
@@ -629,6 +627,30 @@ pub fn spawn_terminal_inner<R: Runtime>(
 
     created_worktree.disarm();
     Ok(SpawnedTerminal { meta, seq })
+}
+
+struct SpawnReservation<'a> {
+    manager: &'a Mutex<PtyManager>,
+    id: String,
+}
+
+impl<'a> SpawnReservation<'a> {
+    fn claim(manager: &'a Mutex<PtyManager>, id: &str) -> Result<Self, String> {
+        let mut guard = manager.lock_or_recover();
+        if guard.terminals.contains_key(id) || !guard.spawning.insert(id.to_string()) {
+            return Err(format!("terminal {} already running", id));
+        }
+        Ok(Self {
+            manager,
+            id: id.to_string(),
+        })
+    }
+}
+
+impl Drop for SpawnReservation<'_> {
+    fn drop(&mut self) {
+        self.manager.lock_or_recover().spawning.remove(&self.id);
+    }
 }
 
 /// Removes a worktree created for a spawn that then failed.
@@ -1048,11 +1070,69 @@ mod runtime_info_tests {
 
 #[cfg(test)]
 mod spawn_lifecycle_tests {
-    use super::{spawn_terminal_inner, PtyManager, SpawnOptions, SpawnRequest};
+    use super::{spawn_terminal_inner, PtyManager, SpawnOptions, SpawnRequest, SpawnReservation};
     use crate::workspace::WorkspaceStore;
     use std::sync::Mutex;
     use std::time::{Duration, Instant};
     use tauri::Manager;
+
+    #[test]
+    fn given_a_spawn_in_progress_for_an_id_when_spawning_the_same_id_then_it_fails_without_registering(
+    ) {
+        let app = tauri::test::mock_app();
+        assert!(app.manage(Mutex::new(PtyManager::default())));
+        assert!(app.manage(Mutex::new(WorkspaceStore::default())));
+        let store = app.state::<Mutex<WorkspaceStore>>();
+        let workspace = store.lock().expect("workspace store").create(
+            "spawn-race".into(),
+            std::env::temp_dir().to_string_lossy().into_owned(),
+        );
+        let manager = app.state::<Mutex<PtyManager>>();
+        let in_progress =
+            SpawnReservation::claim(manager.inner(), "t-race").expect("first reservation");
+
+        let result = spawn_terminal_inner(
+            app.handle(),
+            manager.inner(),
+            store.inner(),
+            SpawnRequest {
+                workspace_id: &workspace.id,
+                command: "sleep 30",
+                cols: 80,
+                rows: 24,
+                terminal_id: Some("t-race"),
+            },
+            &SpawnOptions::default(),
+        );
+
+        assert!(result.is_err());
+        assert!(!manager
+            .lock()
+            .expect("pty manager")
+            .terminals
+            .contains_key("t-race"));
+        drop(in_progress);
+    }
+
+    #[test]
+    fn given_a_released_reservation_when_claiming_the_same_id_then_it_succeeds() {
+        let manager = Mutex::new(PtyManager::default());
+        drop(SpawnReservation::claim(&manager, "t-1").expect("first reservation"));
+
+        let again = SpawnReservation::claim(&manager, "t-1");
+
+        assert!(again.is_ok());
+    }
+
+    #[test]
+    fn given_a_held_reservation_when_claiming_the_same_id_then_it_fails() {
+        let manager = Mutex::new(PtyManager::default());
+        let _held = SpawnReservation::claim(&manager, "t-1").expect("first reservation");
+
+        let second = SpawnReservation::claim(&manager, "t-1");
+
+        assert!(second.is_err());
+    }
 
     #[test]
     fn immediate_exit_is_registered_then_removed_without_a_phantom_runtime() {

@@ -423,7 +423,7 @@ mod tests {
     use super::super::messages::{self, Outgoing};
     use super::super::model::{MAX_BODY_BYTES, MAX_TITLE_CHARS};
     use super::super::notes::{self, NoteDraft};
-    use super::super::repo::TaskQuery;
+    use super::super::repo::{StatusFilter, TaskQuery};
     use super::super::test_support::actor;
     use super::*;
     use rusqlite::params;
@@ -565,7 +565,7 @@ mod tests {
         assert_eq!(
             repo.queries()
                 .list_tasks(&TaskQuery {
-                    status: Some(TaskStatus::Todo),
+                    status: StatusFilter::Is(TaskStatus::Todo),
                     ..TaskQuery::all("ws-1")
                 })
                 .unwrap()

@@ -63,8 +63,12 @@ impl TaskFilter {
             values: Vec::new(),
         };
         filter.add("workspace_id =", Value::Text(query.workspace_id.into()));
-        if let Some(status) = query.status {
-            filter.add("status =", Value::Text(status.as_str().into()));
+        match query.status {
+            StatusFilter::Any => {}
+            StatusFilter::Is(status) => filter.add("status =", Value::Text(status.as_str().into())),
+            StatusFilter::Unfinished => {
+                filter.add("status !=", Value::Text(TaskStatus::Done.as_str().into()))
+            }
         }
         if let Some(assignee) = query.assignee {
             filter.add("assignee =", Value::Text(assignee.into()));
@@ -90,9 +94,16 @@ impl TaskFilter {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum StatusFilter {
+    Any,
+    Is(TaskStatus),
+    Unfinished,
+}
+
 pub struct TaskQuery<'a> {
     pub workspace_id: &'a str,
-    pub status: Option<TaskStatus>,
+    pub status: StatusFilter,
     pub assignee: Option<&'a str>,
     pub events: Option<usize>,
     pub limit: usize,
@@ -102,7 +113,7 @@ impl<'a> TaskQuery<'a> {
     pub fn all(workspace_id: &'a str) -> Self {
         Self {
             workspace_id,
-            status: None,
+            status: StatusFilter::Any,
             assignee: None,
             events: None,
             limit: MAX_LIMIT,
@@ -887,6 +898,43 @@ mod tests {
         assert_eq!(listed, [ids[0].as_str(), ids[2].as_str()]);
     }
 
+    #[test]
+    fn given_the_unfinished_filter_when_listing_an_agents_tasks_then_done_ones_are_left_out() {
+        let mut repo = Repo::in_memory();
+        let ids: Vec<String> = ["open", "finished"]
+            .into_iter()
+            .map(|title| {
+                tasks::create(
+                    &mut repo,
+                    &actor("ws-1", "t-1"),
+                    NewTask {
+                        title: title.into(),
+                        assignee: Some("t-1".into()),
+                        ..NewTask::default()
+                    },
+                )
+                .unwrap()
+                .id
+            })
+            .collect();
+        repo.execute(
+            "UPDATE tasks SET status = 'done' WHERE id = ?1",
+            params![ids[1]],
+        );
+        let query = TaskQuery {
+            status: StatusFilter::Unfinished,
+            assignee: Some("t-1"),
+            ..TaskQuery::all("ws-1")
+        };
+
+        let listed = repo.queries().list_tasks(&query).unwrap();
+
+        let listed: Vec<&str> = listed.iter().map(|task| task.id.as_str()).collect();
+        assert_eq!(listed, [ids[0].as_str()]);
+        let plan = list_tasks_plan(&repo, &query);
+        assert!(plan.contains("idx_tasks_ws_assignee"), "{}", plan);
+    }
+
     fn list_tasks_plan(repo: &Repo, query: &TaskQuery<'_>) -> String {
         let filter = TaskFilter::of(query);
         let mut stmt = repo
@@ -925,7 +973,7 @@ mod tests {
         let plan = list_tasks_plan(
             &repo,
             &TaskQuery {
-                status: Some(TaskStatus::Review),
+                status: StatusFilter::Is(TaskStatus::Review),
                 ..TaskQuery::all("ws-1")
             },
         );

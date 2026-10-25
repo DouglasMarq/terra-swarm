@@ -9,7 +9,7 @@ use super::messages::{self, InboxRequest, Outgoing};
 use super::model::{AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus};
 use super::model::{DEFAULT_INBOX_LIMIT, DEFAULT_SEARCH_LIMIT, MAX_LIMIT, MAX_TITLE_CHARS};
 use super::notes::{self, NoteDraft, NoteSearch};
-use super::repo::TaskQuery;
+use super::repo::{StatusFilter, TaskQuery};
 use super::statuses::{StatusReport, MAX_STATUS_SUMMARY_CHARS};
 use super::tasks::{self, Assignment, Completion, TaskUpdate};
 use super::{AgentIdentity, McpHub};
@@ -517,6 +517,7 @@ fn whoami<R: Runtime>(
     let peers = peer_summaries(hub, who)?;
     let repo = hub.repo()?;
     let mine = repo.queries().list_tasks(&TaskQuery {
+        status: StatusFilter::Unfinished,
         assignee: Some(me),
         ..TaskQuery::all(ws)
     })?;
@@ -529,11 +530,7 @@ fn whoami<R: Runtime>(
         "workspace_name": workspace.as_ref().map(|info| info.name.clone()),
         "workspace_cwd": workspace.as_ref().map(|info| info.cwd.clone()),
         "unread_messages": repo.queries().unread_count(ws, me)?,
-        "my_open_tasks": mine
-            .iter()
-            .filter(|task| task.status != TaskStatus::Done)
-            .map(task_summary)
-            .collect::<Vec<_>>(),
+        "my_open_tasks": mine.iter().map(task_summary).collect::<Vec<_>>(),
         "peers": peers,
     }))
 }
@@ -557,7 +554,7 @@ fn list_tasks<R: Runtime>(
             }
         });
     let tasks = hub.repo()?.queries().list_tasks(&TaskQuery {
-        status,
+        status: status.map_or(StatusFilter::Any, StatusFilter::Is),
         assignee: assignee.as_deref(),
         ..TaskQuery::all(&who.workspace_id)
     })?;

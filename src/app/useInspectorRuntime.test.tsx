@@ -52,4 +52,26 @@ describe("useInspectorRuntime", () => {
     expect(pty.terminalRuntimeInfo).toHaveBeenCalledTimes(1);
     expect(result.current.status).toBe("idle");
   });
+
+  it("Given a request in flight, when the inspector unmounts, then the late answer or failure is ignored", async () => {
+    let settle: (value: TerminalRuntimeInfo) => void = () => undefined;
+    let fail: (error: unknown) => void = () => undefined;
+    pty.terminalRuntimeInfo
+      .mockReturnValueOnce(new Promise((resolve) => {
+        settle = resolve;
+      }))
+      .mockReturnValueOnce(new Promise((_resolve, reject) => {
+        fail = reject;
+      }));
+    const first = renderHook(() => useInspectorRuntime("t-1", true));
+    const second = renderHook(() => useInspectorRuntime("t-2", true));
+
+    first.unmount();
+    second.unmount();
+    settle(info);
+    fail(new Error("gone"));
+    await act(() => vi.advanceTimersByTimeAsync(INSPECTOR_RUNTIME_POLL_MS * 2));
+
+    expect(pty.terminalRuntimeInfo).toHaveBeenCalledTimes(2);
+  });
 });

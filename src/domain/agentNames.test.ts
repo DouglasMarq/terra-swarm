@@ -34,6 +34,23 @@ describe("namesSimilar", () => {
     expect(namesSimilar("Vega", "Orion")).toBe(false);
     expect(namesSimilar("Tapajós", "tapajos")).toBe(true);
   });
+
+  it("Given a blank name, when comparing, then nothing is similar", () => {
+    expect(namesSimilar("", "Vega")).toBe(false);
+    expect(namesSimilar("Vega", "  ")).toBe(false);
+  });
+
+  it.each([
+    ["Mira", "Mila", true],
+    ["Mira", "Mile", false],
+    ["Spicka", "Spica", true],
+    ["Spica", "Spicka", true],
+    ["Deneb", "Denebs", true],
+    ["Hydra", "Hxdr", false],
+    ["Nova", "Novaxyz", false],
+  ])("Given %s and %s, when their consonants differ, then one edit apart is %s", (...[first, second, isSimilar]) => {
+    expect(namesSimilar(first, second)).toBe(isSimilar);
+  });
 });
 
 describe("agentNamesInUse", () => {

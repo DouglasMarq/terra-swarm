@@ -74,23 +74,31 @@ pub(crate) fn git_command(dir: &Path) -> Command {
     command
 }
 
-pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
-    let output = git_command(dir)
-        .args(args)
+pub(crate) fn run_command(
+    mut command: Command,
+    program: &str,
+    failure: &str,
+) -> Result<String, String> {
+    let output = command
         .output()
-        .map_err(|error| format!("could not run git: {}", error))?;
+        .map_err(|error| format!("could not run {}: {}", program, error))?;
     if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout)
+        return Ok(String::from_utf8_lossy(&output.stdout)
             .trim_end()
-            .to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(if stderr.is_empty() {
-            format!("git {} failed", args.join(" "))
-        } else {
-            stderr
-        })
+            .to_string());
     }
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    Err(if stderr.is_empty() {
+        failure.to_string()
+    } else {
+        stderr
+    })
+}
+
+pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
+    let mut command = git_command(dir);
+    command.args(args);
+    run_command(command, "git", &format!("git {} failed", args.join(" ")))
 }
 
 /// The repository root containing `dir`, if it is inside a git work tree.

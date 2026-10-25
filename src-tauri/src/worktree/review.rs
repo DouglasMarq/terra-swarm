@@ -5,7 +5,7 @@ use serde::Serialize;
 use std::path::Path;
 use std::process::Command;
 
-use super::{git, git_command, status, WorktreeInfo, WorktreeStatus};
+use super::{git, git_command, run_command, status, WorktreeInfo, WorktreeStatus};
 
 const MAX_PATCH_BYTES: usize = 1024 * 1024;
 
@@ -240,24 +240,14 @@ pub fn merge(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
     status(info)
 }
 
-fn run(program: &str, dir: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new(program)
+fn gh(dir: &Path, args: &[&str]) -> Result<String, String> {
+    let mut command = Command::new("gh");
+    command
         .current_dir(dir)
         .args(args)
         .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GH_PROMPT_DISABLED", "1")
-        .output()
-        .map_err(|error| format!("could not run {}: {}", program, error))?;
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(if stderr.is_empty() {
-            format!("{} failed", program)
-        } else {
-            stderr
-        })
-    }
+        .env("GH_PROMPT_DISABLED", "1");
+    run_command(command, "gh", "gh failed")
 }
 
 /// Push the branch to `origin` and open a pull request against the base
@@ -277,8 +267,7 @@ pub fn open_pull_request(info: &WorktreeInfo, title: &str, body: &str) -> Result
     let dir = Path::new(&info.path);
     let branch_ref = format!("refs/heads/{}", info.branch);
     git(dir, &["push", "-u", "origin", &branch_ref])?;
-    run(
-        "gh",
+    gh(
         dir,
         &[
             "pr",

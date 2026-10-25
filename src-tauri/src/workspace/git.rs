@@ -149,33 +149,28 @@ pub fn git_status(
     git_status_for_directory(Path::new(&cwd))
 }
 
+fn git_line(cwd: &str, args: &[&str]) -> Option<String> {
+    let mut command = crate::worktree::git_command(Path::new(cwd));
+    command
+        .args(args)
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    crate::worktree::run_command(command, "git", "git failed")
+        .ok()
+        .map(|text| text.trim().to_string())
+        .filter(|text| !text.is_empty())
+}
+
 /// Current git branch for a workspace directory, or the short commit hash
 /// when HEAD is detached. None when the directory is not a git work tree.
 #[tauri::command(async)]
 pub fn git_branch(cwd: String) -> Option<String> {
-    fn git(cwd: &str, args: &[&str]) -> Option<String> {
-        let mut cmd = crate::worktree::git_command(Path::new(cwd));
-        cmd.args(args)
-            .env("GIT_OPTIONAL_LOCKS", "0")
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null());
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-            cmd.creation_flags(CREATE_NO_WINDOW);
-        }
-        let out = cmd.output().ok()?;
-        if !out.status.success() {
-            return None;
-        }
-        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if s.is_empty() {
-            None
-        } else {
-            Some(s)
-        }
-    }
-    git(&cwd, &["branch", "--show-current"])
-        .or_else(|| git(&cwd, &["rev-parse", "--short", "HEAD"]))
+    git_line(&cwd, &["branch", "--show-current"])
+        .or_else(|| git_line(&cwd, &["rev-parse", "--short", "HEAD"]))
 }

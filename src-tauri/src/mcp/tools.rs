@@ -3,7 +3,9 @@ use serde_json::{json, Value};
 use tauri::Runtime;
 
 use super::messages::{self, InboxRequest, Outgoing};
-use super::model::{AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus};
+use super::model::{
+    AgentState, NewTask, Nudge, StoreError, Task, TaskPatch, TaskPriority, TaskStatus,
+};
 use super::model::{DEFAULT_INBOX_LIMIT, DEFAULT_SEARCH_LIMIT, MAX_LIMIT, MAX_TITLE_CHARS};
 use super::notes::{self, NoteDraft, NoteSearch};
 use super::repo::{StatusFilter, TaskQuery};
@@ -775,7 +777,11 @@ fn assign_task<R: Runtime>(
     hub.emit_message(&message);
     if is_target_idle {
         let prompt = assignment_prompt(&task, &who.terminal_id);
-        hub.emit_nudge(&who.workspace_id, to, &prompt);
+        hub.emit_nudge(&Nudge {
+            workspace_id: &who.workspace_id,
+            terminal_id: to,
+            prompt: &prompt,
+        });
     }
     Ok(json!({ "task": task, "woken": is_target_idle }))
 }

@@ -13,6 +13,12 @@ const MIN_LIMIT: usize = 1;
 const BYTES_PER_KIB: usize = 1024;
 const TASK_ID_PREFIX: &str = "T-";
 
+pub struct Nudge<'a> {
+    pub workspace_id: &'a str,
+    pub terminal_id: &'a str,
+    pub prompt: &'a str,
+}
+
 pub struct Actor<'a> {
     pub workspace_id: &'a str,
     pub name: &'a str,

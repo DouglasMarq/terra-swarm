@@ -4,7 +4,7 @@ pub mod models;
 pub mod transcriber;
 
 use crate::sync::LockExt;
-use audio::AudioController;
+use audio::{AudioController, Capture};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
@@ -99,7 +99,12 @@ fn start_recording_impl<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let device = state.input_device.lock_or_recover().clone();
 
     state.audio_buffer.lock_or_recover().clear();
-    if let Err(error) = controller.start(state.audio_buffer.clone(), app.clone(), device) {
+    let capture = Capture {
+        audio_buffer: state.audio_buffer.clone(),
+        app: app.clone(),
+        device_name: device,
+    };
+    if let Err(error) = controller.start(capture) {
         let _ = app.emit("voice-recording-error", &error);
         return Err(error);
     }

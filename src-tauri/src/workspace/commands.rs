@@ -101,7 +101,11 @@ pub fn reorder_workspace_panes(
     order: Vec<String>,
 ) -> Result<(), String> {
     update_and_notify(&app, &store, |store| {
-        store.reorder_panes(&workspace_id, &container_id, &order)
+        let reorder = PaneReorder {
+            container_id: &container_id,
+            order: &order,
+        };
+        store.reorder_panes(&workspace_id, reorder)
     })
 }
 
@@ -133,7 +137,11 @@ pub fn set_workspace_container_state(
     patch: WorkspaceContainerPatch,
 ) -> Result<(), String> {
     update_and_notify(&app, &store, |store| {
-        store.set_container_state(&workspace_id, &container_id, patch)
+        let change = ContainerStateChange {
+            container_id: &container_id,
+            patch,
+        };
+        store.set_container_state(&workspace_id, change)
     })
 }
 
@@ -226,7 +234,11 @@ pub fn set_terminal_width(
     width: f64,
 ) -> Result<(), String> {
     update_and_notify(&app, &store, |store| {
-        store.set_width(&ws_id, &terminal_id, width)
+        let terminal_width = TerminalWidth {
+            terminal_id: &terminal_id,
+            width,
+        };
+        store.set_width(&ws_id, terminal_width)
     })
 }
 

@@ -341,6 +341,21 @@ pub struct PaneMove {
     pub index: Option<usize>,
 }
 
+pub struct PaneReorder<'a> {
+    pub container_id: &'a str,
+    pub order: &'a [String],
+}
+
+pub struct ContainerStateChange<'a> {
+    pub container_id: &'a str,
+    pub patch: WorkspaceContainerPatch,
+}
+
+pub struct TerminalWidth<'a> {
+    pub terminal_id: &'a str,
+    pub width: f64,
+}
+
 #[derive(Default)]
 pub struct WorkspaceStore {
     pub workspaces: Vec<Workspace>,

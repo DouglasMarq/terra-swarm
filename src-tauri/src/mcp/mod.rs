@@ -278,10 +278,10 @@ impl<R: Runtime> McpHub<R> {
             .cloned()
     }
 
-    pub fn emit_nudge(&self, workspace_id: &str, terminal_id: &str, prompt: &str) {
+    pub fn emit_nudge(&self, nudge: &model::Nudge<'_>) {
         self.emit(
             EVENT_NUDGE,
-            serde_json::json!({ "workspace_id": workspace_id, "terminal_id": terminal_id, "prompt": prompt }),
+            serde_json::json!({ "workspace_id": nudge.workspace_id, "terminal_id": nudge.terminal_id, "prompt": nudge.prompt }),
         );
     }
 

@@ -4,7 +4,7 @@ use super::model::{
     Message, NewTask, StoreError, StoreResult, Task, TaskPatch, TaskPriority, TaskStatus,
     TASK_EVENTS_SHOWN,
 };
-use super::repo::{EventRecord, Queries, Repo};
+use super::repo::{EventRecord, Queries, Repo, TaskLookup};
 use crate::clock::now_millis;
 
 const FIRST_POSITION: f64 = 1.0;
@@ -29,7 +29,11 @@ pub struct Completion<'a> {
 pub fn get(repo: &Repo, workspace_id: &str, raw_id: &str) -> StoreResult<Task> {
     let queries = repo.queries();
     let id = resolve_id(queries, workspace_id, raw_id)?;
-    queries.task(workspace_id, &id, Some(TASK_EVENTS_SHOWN))
+    queries.task(&TaskLookup {
+        workspace_id,
+        id: &id,
+        events: Some(TASK_EVENTS_SHOWN),
+    })
 }
 
 pub fn delete(repo: &Repo, workspace_id: &str, raw_id: &str) -> StoreResult<()> {
@@ -44,13 +48,14 @@ pub fn create(repo: &mut Repo, actor: &Actor<'_>, new: NewTask) -> StoreResult<T
     let task = new_task(queries, actor, new)?;
     queries.insert_task(&task)?;
     let change = Change {
+        queries,
         actor: actor.name,
         task_id: &task.id,
         at: task.created_at,
     };
-    change.record(queries, "created", "")?;
+    change.record("created", "")?;
     if let Some(assignee) = &task.assignee {
-        change.record(queries, "assigned", assignee)?;
+        change.record("assigned", assignee)?;
     }
     tx.commit()?;
     shown(repo, actor, &task.id)
@@ -68,11 +73,12 @@ pub fn claim(repo: &mut Repo, actor: &Actor<'_>, raw_id: &str) -> StoreResult<Ta
     task.updated_at = at;
     queries.save_task(&task)?;
     let change = Change {
+        queries,
         actor: actor.name,
         task_id: &task.id,
         at,
     };
-    change.record(queries, "claimed", "")?;
+    change.record("claimed", "")?;
     tx.commit()?;
     shown(repo, actor, &task.id)
 }
@@ -106,7 +112,11 @@ pub fn assign(
             patch,
         },
     )?;
-    let task = queries.task(actor.workspace_id, &id, Some(TASK_EVENTS_SHOWN))?;
+    let task = queries.task(&TaskLookup {
+        workspace_id: actor.workspace_id,
+        id: &id,
+        events: Some(TASK_EVENTS_SHOWN),
+    })?;
     let body = assignment_message(&task, assignment.note);
     let outgoing = Outgoing {
         to: assignment.to,
@@ -136,18 +146,22 @@ pub fn complete(
     task.updated_at = at;
     queries.save_task(&task)?;
     let change = Change {
+        queries,
         actor: actor.name,
         task_id: &task.id,
         at,
     };
-    change.record(queries, "completed", &summary)?;
+    change.record("completed", &summary)?;
     tx.commit()?;
     shown(repo, actor, &task.id)
 }
 
 fn shown(repo: &Repo, actor: &Actor<'_>, id: &str) -> StoreResult<Task> {
-    repo.queries()
-        .task(actor.workspace_id, id, Some(TASK_EVENTS_SHOWN))
+    repo.queries().task(&TaskLookup {
+        workspace_id: actor.workspace_id,
+        id,
+        events: Some(TASK_EVENTS_SHOWN),
+    })
 }
 
 fn resolve_id(queries: Queries<'_>, workspace_id: &str, raw_id: &str) -> StoreResult<String> {
@@ -160,18 +174,23 @@ fn resolve_id(queries: Queries<'_>, workspace_id: &str, raw_id: &str) -> StoreRe
 
 fn existing(queries: Queries<'_>, workspace_id: &str, raw_id: &str) -> StoreResult<Task> {
     let id = resolve_id(queries, workspace_id, raw_id)?;
-    queries.task(workspace_id, &id, None)
+    queries.task(&TaskLookup {
+        workspace_id,
+        id: &id,
+        events: None,
+    })
 }
 
 struct Change<'a> {
+    queries: Queries<'a>,
     actor: &'a str,
     task_id: &'a str,
     at: i64,
 }
 
 impl Change<'_> {
-    fn record(&self, queries: Queries<'_>, kind: &str, body: &str) -> StoreResult<()> {
-        queries.add_event(&EventRecord {
+    fn record(&self, kind: &str, body: &str) -> StoreResult<()> {
+        self.queries.add_event(&EventRecord {
             task_id: self.task_id,
             actor: self.actor,
             kind,
@@ -318,6 +337,7 @@ fn apply_patch(
     let before = existing(queries, actor.workspace_id, update.id)?;
     let patch = clean_patch(update.patch)?;
     let change = Change {
+        queries,
         actor: actor.name,
         task_id: &before.id,
         at: now_millis(),
@@ -327,7 +347,7 @@ fn apply_patch(
     after.updated_at = change.at;
     queries.save_task(&after)?;
     for (kind, body) in patch_events(&before, &after, patch.note.as_deref()) {
-        change.record(queries, kind, &body)?;
+        change.record(kind, &body)?;
     }
     Ok(before.id.clone())
 }

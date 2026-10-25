@@ -183,6 +183,12 @@ fn is_usable_input(name: &str, device: &cpal::Device) -> bool {
     device.default_input_config().is_ok()
 }
 
+pub struct Capture<R: Runtime> {
+    pub audio_buffer: Arc<Mutex<Vec<f32>>>,
+    pub app: AppHandle<R>,
+    pub device_name: Option<String>,
+}
+
 pub struct AudioController<R: Runtime = tauri::Wry> {
     tx: mpsc::Sender<Command<R>>,
 }
@@ -228,12 +234,12 @@ impl<R: Runtime> AudioController<R> {
         Self { tx }
     }
 
-    pub fn start(
-        &self,
-        audio_buffer: Arc<Mutex<Vec<f32>>>,
-        app: AppHandle<R>,
-        device_name: Option<String>,
-    ) -> Result<(), String> {
+    pub fn start(&self, capture: Capture<R>) -> Result<(), String> {
+        let Capture {
+            audio_buffer,
+            app,
+            device_name,
+        } = capture;
         let (reply_tx, reply_rx) = mpsc::channel();
         self.tx
             .send(Command::Start(

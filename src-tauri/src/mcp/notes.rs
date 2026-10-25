@@ -2,7 +2,7 @@ use super::model::{
     clamp_limit, clean_body, Actor, Note, StoreError, StoreResult, DEFAULT_SEARCH_LIMIT,
     MAX_NOTE_KEY_CHARS,
 };
-use super::repo::{NoteRecord, Queries};
+use super::repo::{NoteQuery, NoteRecord, Queries};
 use crate::clock::now_millis;
 
 pub struct NoteDraft<'a> {
@@ -39,7 +39,11 @@ pub fn search(
     search: &NoteSearch<'_>,
 ) -> StoreResult<Vec<Note>> {
     let limit = clamp_limit(search.limit, DEFAULT_SEARCH_LIMIT);
-    queries.search_notes(workspace_id, search.query, limit)
+    queries.search_notes(&NoteQuery {
+        workspace_id,
+        query: search.query,
+        limit,
+    })
 }
 
 #[cfg(test)]

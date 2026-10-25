@@ -131,9 +131,9 @@ impl WorkspaceStore {
     pub fn set_width(
         &mut self,
         workspace_id: &str,
-        terminal_id: &str,
-        width: f64,
+        terminal_width: TerminalWidth<'_>,
     ) -> Result<(), String> {
+        let TerminalWidth { terminal_id, width } = terminal_width;
         let workspace = self.workspace_mut(workspace_id)?;
         let terminal = workspace
             .terminals

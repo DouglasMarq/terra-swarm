@@ -137,6 +137,18 @@ pub struct NoteRecord<'a> {
     pub at: i64,
 }
 
+pub struct TaskLookup<'a> {
+    pub workspace_id: &'a str,
+    pub id: &'a str,
+    pub events: Option<usize>,
+}
+
+pub struct NoteQuery<'a> {
+    pub workspace_id: &'a str,
+    pub query: &'a str,
+    pub limit: usize,
+}
+
 pub struct InboxQuery<'a> {
     pub workspace_id: &'a str,
     pub reader: &'a str,
@@ -262,19 +274,21 @@ impl Queries<'_> {
         Ok(found.is_some())
     }
 
-    pub fn task(&self, workspace_id: &str, id: &str, events: Option<usize>) -> StoreResult<Task> {
+    pub fn task(&self, lookup: &TaskLookup<'_>) -> StoreResult<Task> {
         let mut task = self
             .conn
             .query_row(
                 "SELECT id, workspace_id, title, description, status, priority, assignee, created_by,
                         labels, position, created_at, updated_at
                  FROM tasks WHERE id = ?1 AND workspace_id = ?2",
-                params![id, workspace_id],
+                params![lookup.id, lookup.workspace_id],
                 task_from_row,
             )
             .optional()?
-            .ok_or_else(|| task_not_found(id))?;
-        self.attach_task_details(workspace_id, std::slice::from_mut(&mut task), events)?;
+            .ok_or_else(|| task_not_found(lookup.id))?;
+        let tasks = std::slice::from_mut(&mut task);
+        self.attach_dependencies(lookup.workspace_id, tasks)?;
+        self.attach_recent_events(tasks, lookup.events)?;
         Ok(task)
     }
 
@@ -301,17 +315,12 @@ impl Queries<'_> {
             let rows = stmt.query_map(params_from_iter(&filter.values), task_from_row)?;
             rows.collect::<Result<_, _>>()?
         };
-        self.attach_task_details(query.workspace_id, &mut tasks, query.events)?;
+        self.attach_dependencies(query.workspace_id, &mut tasks)?;
+        self.attach_recent_events(&mut tasks, query.events)?;
         Ok(tasks)
     }
 
-    fn attach_task_details(
-        &self,
-        workspace_id: &str,
-        tasks: &mut [Task],
-        events: Option<usize>,
-    ) -> StoreResult<()> {
-        self.attach_dependencies(workspace_id, tasks)?;
+    fn attach_recent_events(&self, tasks: &mut [Task], events: Option<usize>) -> StoreResult<()> {
         let Some(limit) = events else {
             return Ok(());
         };
@@ -590,12 +599,12 @@ impl Queries<'_> {
             .ok_or_else(|| StoreError::NotFound(format!("note {} not found in this workspace", id)))
     }
 
-    pub fn search_notes(
-        &self,
-        workspace_id: &str,
-        query: &str,
-        limit: usize,
-    ) -> StoreResult<Vec<Note>> {
+    pub fn search_notes(&self, search: &NoteQuery<'_>) -> StoreResult<Vec<Note>> {
+        let NoteQuery {
+            workspace_id,
+            query,
+            limit,
+        } = *search;
         let notes: Vec<Note> = match fts_query(query) {
             Some(fts) => {
                 let mut stmt = self.conn.prepare_cached(
@@ -789,7 +798,11 @@ mod tests {
         .unwrap()
         .id;
         assert!(matches!(
-            repo.queries().task("ws-2", &task_id, None),
+            repo.queries().task(&TaskLookup {
+                workspace_id: "ws-2",
+                id: &task_id,
+                events: None,
+            }),
             Err(StoreError::NotFound(_))
         ));
         assert!(matches!(

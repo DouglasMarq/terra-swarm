@@ -585,8 +585,10 @@ fn given_visual_layout_operations_when_applying_them_then_they_persist_and_never
     store
         .reorder_panes(
             "ws-layout",
-            &first_container_id,
-            &["pane-two".to_string(), "pane-one".to_string()],
+            PaneReorder {
+                container_id: &first_container_id,
+                order: &["pane-two".to_string(), "pane-one".to_string()],
+            },
         )
         .expect("pane reorder");
     store
@@ -602,14 +604,16 @@ fn given_visual_layout_operations_when_applying_them_then_they_persist_and_never
     store
         .set_container_state(
             "ws-layout",
-            "container-secondary",
-            WorkspaceContainerPatch {
-                collapsed: Some(true),
-                fullscreen: Some(true),
-                active_pane_id: Some("pane-two".to_string()),
-                internal_layout: Some("vertical".to_string()),
-                size: Some(42.0),
-                ..WorkspaceContainerPatch::default()
+            ContainerStateChange {
+                container_id: "container-secondary",
+                patch: WorkspaceContainerPatch {
+                    collapsed: Some(true),
+                    fullscreen: Some(true),
+                    active_pane_id: Some("pane-two".to_string()),
+                    internal_layout: Some("vertical".to_string()),
+                    size: Some(42.0),
+                    ..WorkspaceContainerPatch::default()
+                },
             },
         )
         .expect("container state");
@@ -669,15 +673,33 @@ fn given_a_width_when_setting_it_then_non_finite_values_are_rejected_and_finite_
     let terminal_id = store.workspaces[0].terminals[0].id.clone();
 
     store
-        .set_width("ws-width", &terminal_id, f64::NAN)
+        .set_width(
+            "ws-width",
+            TerminalWidth {
+                terminal_id: &terminal_id,
+                width: f64::NAN,
+            },
+        )
         .expect("width");
     assert_eq!(store.workspaces[0].terminals[0].width, None);
     store
-        .set_width("ws-width", &terminal_id, f64::INFINITY)
+        .set_width(
+            "ws-width",
+            TerminalWidth {
+                terminal_id: &terminal_id,
+                width: f64::INFINITY,
+            },
+        )
         .expect("width");
     assert_eq!(store.workspaces[0].terminals[0].width, None);
     store
-        .set_width("ws-width", &terminal_id, 1.0)
+        .set_width(
+            "ws-width",
+            TerminalWidth {
+                terminal_id: &terminal_id,
+                width: 1.0,
+            },
+        )
         .expect("width");
     assert_eq!(
         store.workspaces[0].terminals[0].width,
@@ -694,11 +716,23 @@ fn given_an_unknown_workspace_or_terminal_when_setting_width_then_it_reports_not
     };
 
     assert!(store
-        .set_width("ws-missing", "ws-1-terminal", 40.0)
+        .set_width(
+            "ws-missing",
+            TerminalWidth {
+                terminal_id: "ws-1-terminal",
+                width: 40.0
+            }
+        )
         .unwrap_err()
         .contains("workspace ws-missing not found"));
     assert!(store
-        .set_width("ws-1", "t-missing", 40.0)
+        .set_width(
+            "ws-1",
+            TerminalWidth {
+                terminal_id: "t-missing",
+                width: 40.0
+            }
+        )
         .unwrap_err()
         .contains("terminal t-missing not found"));
     assert_eq!(store.workspaces[0].terminals[0].width, None);

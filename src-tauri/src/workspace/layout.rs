@@ -130,14 +130,13 @@ impl WorkspaceStore {
     pub fn reorder_panes(
         &mut self,
         workspace_id: &str,
-        container_id: &str,
-        order: &[String],
+        reorder: PaneReorder<'_>,
     ) -> Result<(), String> {
         let workspace = self.workspace_mut(workspace_id)?;
-        let container_index = resolve_container(workspace, container_id)?;
+        let container_index = resolve_container(workspace, reorder.container_id)?;
         let container = &mut workspace.containers[container_index];
         let pane_ids = std::mem::take(&mut container.pane_ids);
-        container.pane_ids = reorder_by_ids(pane_ids, order, String::as_str);
+        container.pane_ids = reorder_by_ids(pane_ids, reorder.order, String::as_str);
         if let Some(layout) = &mut container.layout {
             layout.item_ids = container.pane_ids.clone();
         }
@@ -193,9 +192,12 @@ impl WorkspaceStore {
     pub fn set_container_state(
         &mut self,
         workspace_id: &str,
-        container_id: &str,
-        patch: WorkspaceContainerPatch,
+        change: ContainerStateChange<'_>,
     ) -> Result<(), String> {
+        let ContainerStateChange {
+            container_id,
+            patch,
+        } = change;
         let workspace = self.workspace_mut(workspace_id)?;
         let container_index = resolve_container(workspace, container_id)?;
         let container = &mut workspace.containers[container_index];

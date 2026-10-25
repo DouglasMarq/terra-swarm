@@ -690,9 +690,6 @@ fn emit_audio_level(samples: &[f32], ctx: &StreamContext) {
     check_silence(rms, ctx);
 }
 
-/// Count `samples` towards the next level reading and, once
-/// `LEVEL_EMIT_INTERVAL` samples have passed, restart the count and return
-/// their RMS. Counting and restarting happen under one lock.
 fn take_due_level(counter: &Mutex<usize>, samples: &[f32]) -> Option<f32> {
     let mut counter = counter.lock_or_recover();
     *counter += samples.len();

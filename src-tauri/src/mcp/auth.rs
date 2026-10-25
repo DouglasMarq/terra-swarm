@@ -5,6 +5,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
+use super::model::Actor;
 use super::McpHub;
 use tauri::{Runtime, Wry};
 
@@ -17,6 +18,15 @@ pub struct AgentIdentity {
     /// The team role the agent was started with, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<crate::roles::Role>,
+}
+
+impl AgentIdentity {
+    pub fn actor(&self) -> Actor<'_> {
+        Actor {
+            workspace_id: &self.workspace_id,
+            name: &self.terminal_id,
+        }
+    }
 }
 
 pub fn new_token() -> String {

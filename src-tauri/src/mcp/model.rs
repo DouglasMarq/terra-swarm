@@ -1,5 +1,24 @@
 use serde::{Deserialize, Serialize};
 
+pub const MAX_TITLE_CHARS: usize = 200;
+/// Guards against runaway input; history itself is never trimmed.
+pub const MAX_BODY_BYTES: usize = 64 * 1024;
+pub const MAX_LABELS: usize = 16;
+pub const MAX_LABEL_CHARS: usize = 40;
+pub const MAX_NOTE_KEY_CHARS: usize = 80;
+pub const DEFAULT_INBOX_LIMIT: usize = 50;
+pub const DEFAULT_SEARCH_LIMIT: usize = 20;
+pub const MAX_LIMIT: usize = 200;
+pub const TASK_EVENTS_SHOWN: usize = 50;
+const MIN_LIMIT: usize = 1;
+const BYTES_PER_KIB: usize = 1024;
+const TASK_ID_PREFIX: &str = "T-";
+
+pub struct Actor<'a> {
+    pub workspace_id: &'a str,
+    pub name: &'a str,
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
@@ -231,4 +250,69 @@ pub fn normalize_task_id(raw: &str) -> Option<String> {
         .ok()
         .filter(|n| *n > 0)
         .map(|n| format!("T-{}", n))
+}
+
+pub fn task_not_found(raw: &str) -> StoreError {
+    StoreError::NotFound(format!("task {} not found in this workspace", raw.trim()))
+}
+
+pub fn clean_title(raw: &str) -> StoreResult<String> {
+    let title = raw.trim();
+    if title.is_empty() {
+        return Err(StoreError::Invalid("title cannot be empty".into()));
+    }
+    if title.chars().count() > MAX_TITLE_CHARS {
+        return Err(StoreError::Invalid(format!(
+            "title is longer than {} characters",
+            MAX_TITLE_CHARS
+        )));
+    }
+    Ok(title.to_string())
+}
+
+pub fn clean_body(raw: &str, what: &str, allow_empty: bool) -> StoreResult<String> {
+    let body = raw.trim();
+    if body.is_empty() && !allow_empty {
+        return Err(StoreError::Invalid(format!("{} cannot be empty", what)));
+    }
+    if body.len() > MAX_BODY_BYTES {
+        return Err(StoreError::Invalid(format!(
+            "{} is larger than {} KiB",
+            what,
+            MAX_BODY_BYTES / BYTES_PER_KIB
+        )));
+    }
+    Ok(body.to_string())
+}
+
+pub fn clean_labels(raw: &[String]) -> StoreResult<Vec<String>> {
+    let mut labels: Vec<String> = Vec::new();
+    for label in raw {
+        let label = label.trim();
+        if label.is_empty() || labels.iter().any(|existing| existing == label) {
+            continue;
+        }
+        if label.chars().count() > MAX_LABEL_CHARS {
+            return Err(StoreError::Invalid(format!(
+                "label `{}` is too long",
+                label
+            )));
+        }
+        labels.push(label.to_string());
+    }
+    if labels.len() > MAX_LABELS {
+        return Err(StoreError::Invalid(format!(
+            "at most {} labels",
+            MAX_LABELS
+        )));
+    }
+    Ok(labels)
+}
+
+pub fn clamp_limit(limit: Option<usize>, default: usize) -> usize {
+    limit.unwrap_or(default).clamp(MIN_LIMIT, MAX_LIMIT)
+}
+
+pub fn task_id_of(number: i64) -> String {
+    format!("{}{}", TASK_ID_PREFIX, number)
 }

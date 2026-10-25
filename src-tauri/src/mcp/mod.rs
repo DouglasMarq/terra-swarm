@@ -16,10 +16,13 @@ pub mod db;
 pub mod hooks;
 pub mod integration;
 pub mod launch;
+pub mod messages;
 pub mod model;
+pub mod notes;
 pub mod repo;
 pub mod server;
 pub mod statuses;
+pub mod tasks;
 pub mod tools;
 
 use serde::Serialize;
@@ -403,6 +406,10 @@ pub mod test_support {
         )
     }
 
+    pub fn actor<'a>(workspace_id: &'a str, name: &'a str) -> model::Actor<'a> {
+        model::Actor { workspace_id, name }
+    }
+
     pub fn identity(terminal_id: &str, workspace_id: &str, agent: &str) -> AgentIdentity {
         AgentIdentity {
             terminal_id: terminal_id.into(),
@@ -442,17 +449,18 @@ mod tests {
     fn purge_revokes_tokens_and_clears_data() {
         let (hub, events) = hub();
         let token = hub.issue(identity("t-1", "ws-1", "claude"));
-        hub.repo()
-            .unwrap()
-            .create_task(
-                "ws-1",
-                "t-1",
-                model::NewTask {
-                    title: "x".into(),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
+        tasks::create(
+            &mut hub.repo().unwrap(),
+            &model::Actor {
+                workspace_id: "ws-1",
+                name: "t-1",
+            },
+            model::NewTask {
+                title: "x".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
         hub.statuses()
             .unwrap()
             .report_status("ws-1", "t-1", model::AgentState::Working, "")
@@ -463,6 +471,7 @@ mod tests {
         assert!(hub
             .repo()
             .unwrap()
+            .queries()
             .list_tasks("ws-1", None, None, None)
             .unwrap()
             .is_empty());

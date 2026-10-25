@@ -5,9 +5,12 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::Runtime;
 
+use super::messages::{self, InboxRequest, Outgoing};
 use super::model::{AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus};
-use super::repo::{DEFAULT_INBOX_LIMIT, DEFAULT_SEARCH_LIMIT, MAX_LIMIT, MAX_TITLE_CHARS};
+use super::model::{DEFAULT_INBOX_LIMIT, DEFAULT_SEARCH_LIMIT, MAX_LIMIT, MAX_TITLE_CHARS};
+use super::notes::{self, NoteDraft, NoteSearch};
 use super::statuses::MAX_STATUS_SUMMARY_CHARS;
+use super::tasks::{self, Assignment, Completion, TaskUpdate};
 use super::{AgentIdentity, McpHub};
 
 pub struct ToolDef {
@@ -388,6 +391,7 @@ pub fn call<R: Runtime>(
 ) -> Result<Value, ToolError> {
     let ws = who.workspace_id.as_str();
     let me = who.terminal_id.as_str();
+    let actor = who.actor();
     match name {
         "whoami" => {
             let workspace = hub.workspace(ws);
@@ -410,7 +414,7 @@ pub fn call<R: Runtime>(
                 .collect();
             drop(statuses);
             let repo = hub.repo()?;
-            let mine = repo.list_tasks(ws, None, Some(me), None)?;
+            let mine = repo.queries().list_tasks(ws, None, Some(me), None)?;
             Ok(json!({
                 "terminal_id": me,
                 "agent": who.agent,
@@ -419,7 +423,7 @@ pub fn call<R: Runtime>(
                 "workspace_id": ws,
                 "workspace_name": workspace.as_ref().map(|info| info.name.clone()),
                 "workspace_cwd": workspace.as_ref().map(|info| info.cwd.clone()),
-                "unread_messages": repo.unread_count(ws, me)?,
+                "unread_messages": repo.queries().unread_count(ws, me)?,
                 "my_open_tasks": mine
                     .iter()
                     .filter(|task| task.status != TaskStatus::Done)
@@ -438,6 +442,7 @@ pub fn call<R: Runtime>(
                 .map(|value| if value == "me" { me.to_string() } else { value });
             let tasks = hub
                 .repo()?
+                .queries()
                 .list_tasks(ws, status, assignee.as_deref(), None)?;
             Ok(json!({
                 "tasks": tasks.iter().map(task_summary).collect::<Vec<_>>(),
@@ -445,7 +450,7 @@ pub fn call<R: Runtime>(
         }
         "get_task" => {
             let args: IdArgs = parse(args)?;
-            Ok(json!(hub.repo()?.get_task(ws, &args.id)?))
+            Ok(json!(tasks::get(&*hub.repo()?, ws, &args.id)?))
         }
         "create_task" => {
             let args: CreateTaskArgs = parse(args)?;
@@ -460,9 +465,9 @@ pub fn call<R: Runtime>(
                     })
                 })
                 .transpose()?;
-            let task = hub.repo()?.create_task(
-                ws,
-                me,
+            let task = tasks::create(
+                &mut *hub.repo()?,
+                &actor,
                 NewTask {
                     title: args.title,
                     description: args.description,
@@ -477,7 +482,7 @@ pub fn call<R: Runtime>(
         }
         "claim_task" => {
             let args: IdArgs = parse(args)?;
-            let task = hub.repo()?.claim_task(ws, &args.id, me)?;
+            let task = tasks::claim(&mut *hub.repo()?, &actor, &args.id)?;
             hub.emit_tasks_changed(ws);
             Ok(json!(task))
         }
@@ -494,14 +499,16 @@ pub fn call<R: Runtime>(
                     "pass a status, a note, or both".into(),
                 ));
             }
-            let task = hub.repo()?.update_task(
-                ws,
-                &args.id,
-                me,
-                TaskPatch {
-                    status,
-                    note: args.note,
-                    ..TaskPatch::default()
+            let task = tasks::update(
+                &mut *hub.repo()?,
+                &actor,
+                TaskUpdate {
+                    id: &args.id,
+                    patch: TaskPatch {
+                        status,
+                        note: args.note,
+                        ..TaskPatch::default()
+                    },
                 },
             )?;
             hub.emit_tasks_changed(ws);
@@ -509,7 +516,11 @@ pub fn call<R: Runtime>(
         }
         "complete_task" => {
             let args: CompleteTaskArgs = parse(args)?;
-            let task = hub.repo()?.complete_task(ws, &args.id, me, &args.summary)?;
+            let completion = Completion {
+                id: &args.id,
+                summary: &args.summary,
+            };
+            let task = tasks::complete(&mut *hub.repo()?, &actor, &completion)?;
             hub.emit_tasks_changed(ws);
             Ok(json!(task))
         }
@@ -531,7 +542,11 @@ pub fn call<R: Runtime>(
                     to
                 )));
             }
-            let message = hub.repo()?.send_message(ws, me, to, &args.body)?;
+            let outgoing = Outgoing {
+                to,
+                body: &args.body,
+            };
+            let message = messages::send(hub.repo()?.queries(), &actor, &outgoing)?;
             hub.emit_message(&message);
             Ok(json!(message))
         }
@@ -556,9 +571,12 @@ pub fn call<R: Runtime>(
                     to
                 )));
             }
-            let (task, message) =
-                hub.repo()?
-                    .assign_task(ws, &args.id, me, to, args.note.as_deref())?;
+            let assignment = Assignment {
+                id: &args.id,
+                to,
+                note: args.note.as_deref(),
+            };
+            let (task, message) = tasks::assign(&mut *hub.repo()?, &actor, &assignment)?;
             // Typing into a terminal that is busy or waiting on a human could
             // answer a prompt by accident, so only idle agents are woken.
             let idle = hub
@@ -578,21 +596,29 @@ pub fn call<R: Runtime>(
         }
         "read_inbox" => {
             let args: ReadInboxArgs = parse(args)?;
-            let messages =
-                hub.repo()?
-                    .read_inbox(ws, me, args.unread_only.unwrap_or(true), args.limit)?;
+            let request = InboxRequest {
+                unread_only: args.unread_only.unwrap_or(true),
+                limit: args.limit,
+            };
+            let messages = messages::read_inbox(&mut *hub.repo()?, &actor, &request)?;
             Ok(json!({ "messages": messages }))
         }
         "add_note" => {
             let args: AddNoteArgs = parse(args)?;
-            let note = hub
-                .repo()?
-                .add_note(ws, me, &args.body, args.key.as_deref())?;
+            let draft = NoteDraft {
+                key: args.key.as_deref(),
+                body: &args.body,
+            };
+            let note = notes::add(hub.repo()?.queries(), &actor, &draft)?;
             Ok(json!(note))
         }
         "search_notes" => {
             let args: SearchNotesArgs = parse(args)?;
-            Ok(json!({ "notes": hub.repo()?.search_notes(ws, &args.query, args.limit)? }))
+            let search = NoteSearch {
+                query: &args.query,
+                limit: args.limit,
+            };
+            Ok(json!({ "notes": notes::search(hub.repo()?.queries(), ws, &search)? }))
         }
         "report_status" => {
             let args: ReportStatusArgs = parse(args)?;

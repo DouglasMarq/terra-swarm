@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("../api", () => ({ api }));
 
+import { translateNow } from "../i18n";
 import type { ReviewTarget } from "../stores/reviewStore";
 import { useWorktreeReview } from "./useWorktreeReview";
 
@@ -98,5 +99,30 @@ describe("useWorktreeReview", () => {
 
     expect(api.worktreeOpenPr).toHaveBeenCalledWith({ workspaceId: "ws-1", terminalId: "t-1", title: "Changes from Vega", body: "" });
     expect(result.current.prUrl).toBe("https://example.test/pr/1");
+  });
+
+  it("Given no target, when running an action, then it resolves to false without calling the backend", async () => {
+    const { result } = renderHook(() => useWorktreeReview(null));
+
+    let isMerged = true;
+    await act(async () => {
+      isMerged = await result.current.merge();
+    });
+
+    expect(isMerged).toBe(false);
+    expect(api.worktreeMerge).not.toHaveBeenCalled();
+  });
+
+  it("Given no diff loaded yet, when merging, then the notice names empty branches", async () => {
+    api.worktreeDiff.mockRejectedValueOnce(new Error("busy")).mockResolvedValue(diff());
+    api.worktreeMerge.mockResolvedValue(undefined);
+    const { result } = renderHook(() => useWorktreeReview(target));
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+
+    await act(async () => {
+      await result.current.merge();
+    });
+
+    expect(result.current.notice).toBe(translateNow("review.merged", { branch: "", base: "" }));
   });
 });

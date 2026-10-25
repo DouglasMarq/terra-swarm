@@ -377,7 +377,8 @@ async fn download_model_impl(model_id: String, app: tauri::AppHandle) -> Result<
             final_path: model_path.clone(),
             partial_path: dir.join(format!("{}.tmp", model.filename)),
         };
-        download::download_file(&reqwest::Client::new(), request, |progress| {
+        let client = download::client(download::DOWNLOAD_TIMEOUTS)?;
+        download::download_file(&client, request, |progress| {
             emit_download_progress(&app, &model_id, progress)
         })
         .await?;

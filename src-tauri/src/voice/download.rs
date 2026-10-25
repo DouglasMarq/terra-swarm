@@ -1,8 +1,28 @@
 use futures_util::StreamExt;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 const DOWNLOAD_QUEUE_CHUNKS: usize = 64;
 const FULL_PERCENT: u64 = 100;
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Timeouts {
+    pub connect: Duration,
+    pub read: Duration,
+}
+
+pub(super) const DOWNLOAD_TIMEOUTS: Timeouts = Timeouts {
+    connect: Duration::from_secs(30),
+    read: Duration::from_secs(60),
+};
+
+pub(super) fn client(timeouts: Timeouts) -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .connect_timeout(timeouts.connect)
+        .read_timeout(timeouts.read)
+        .build()
+        .map_err(|e| format!("Failed to create the download client: {e}"))
+}
 
 pub(super) struct DownloadRequest<'a> {
     pub url: &'a str,
@@ -131,12 +151,42 @@ fn write_chunks<C: AsRef<[u8]>>(
 
 #[cfg(test)]
 mod tests {
-    use super::{download_file, percent_of, write_chunks, DownloadRequest, Progress};
+    use super::{
+        client, download_file, percent_of, write_chunks, DownloadRequest, Progress, Timeouts,
+    };
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::path::PathBuf;
+    use std::time::{Duration, Instant};
 
     const REQUEST_BUFFER_BYTES: usize = 4096;
+    const SERVER_STALL: Duration = Duration::from_secs(10);
+    const SHORT_TIMEOUTS: Timeouts = Timeouts {
+        connect: Duration::from_secs(1),
+        read: Duration::from_millis(200),
+    };
+
+    #[test]
+    fn given_a_server_that_stalls_mid_body_when_downloading_then_the_read_timeout_ends_it() {
+        let dir = temp_dir("stalled");
+        let url = serve_once(Reply {
+            declared_length: 100,
+            body: b"partial".to_vec(),
+            stall: SERVER_STALL,
+        });
+        let started = Instant::now();
+
+        let result = tauri::async_runtime::block_on(download_file(
+            &client(SHORT_TIMEOUTS).unwrap(),
+            request_for(&url, &dir),
+            |_| {},
+        ));
+
+        assert!(result.is_err_and(|error| error.starts_with("Download error")));
+        assert!(started.elapsed() < SERVER_STALL);
+        assert!(!dir.join("ggml-test.bin.tmp").exists());
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -152,6 +202,7 @@ mod tests {
     struct Reply {
         declared_length: usize,
         body: Vec<u8>,
+        stall: Duration,
     }
 
     fn serve_once(reply: Reply) -> String {
@@ -167,6 +218,7 @@ mod tests {
             );
             let _ = socket.write_all(head.as_bytes());
             let _ = socket.write_all(&reply.body);
+            std::thread::sleep(reply.stall);
         });
         format!("http://{address}/ggml-test.bin")
     }
@@ -187,6 +239,7 @@ mod tests {
         let url = serve_once(Reply {
             declared_length: body.len(),
             body: body.clone(),
+            stall: Duration::ZERO,
         });
         let mut reports: Vec<Progress> = Vec::new();
 
@@ -209,6 +262,7 @@ mod tests {
         let url = serve_once(Reply {
             declared_length: 100,
             body: b"short".to_vec(),
+            stall: Duration::ZERO,
         });
 
         let result = tauri::async_runtime::block_on(download_file(

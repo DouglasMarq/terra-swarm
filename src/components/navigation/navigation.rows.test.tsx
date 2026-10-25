@@ -57,6 +57,13 @@ describe("Navigator rows", () => {
     expect(onResumeGroup).toHaveBeenCalledWith("group-lab");
   });
 
+  it("Given no suspend or resume handlers, when rendering groups, then neither row offers the action", () => {
+    render(<NavigatorPanel workspaces={workspaces} groups={groups} />);
+
+    expect(within(row("Group Core")).queryByRole("button", { name: "Suspend group" })).toBeNull();
+    expect(within(row("Group Lab")).queryByRole("button", { name: "Resume group" })).toBeNull();
+  });
+
   it("Given an agent and a project, when opening the agent and deleting the project, then the terminal is focused and the project removed", async () => {
     const user = userEvent.setup();
     const onOpenTerminal = vi.fn();

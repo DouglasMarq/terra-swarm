@@ -42,6 +42,13 @@ function nodeActive(node: NavigatorNode, props: ProjectTreeViewProps): boolean {
     : node.kind === "agent" && node.terminalId === props.activeTerminalId;
 }
 
+function groupAction(handler: ((groupId: string) => void) | undefined): NavigatorNodeActions["onSuspend"] {
+  if (!handler) return undefined;
+  return (ref) => {
+    if (ref.kind === "group") handler(ref.id);
+  };
+}
+
 function actionSet(props: ProjectTreeViewProps): NavigatorNodeActions {
   const hide = props.onHideContainer ?? props.onHideWorkspace;
   return {
@@ -73,12 +80,8 @@ function actionSet(props: ProjectTreeViewProps): NavigatorNodeActions {
     onHide: (ref) => {
       if (ref.kind === "project") hide?.(ref.id);
     },
-    onSuspend: (ref) => {
-      if (ref.kind === "group") props.onSuspendGroup?.(ref.id);
-    },
-    onResume: (ref) => {
-      if (ref.kind === "group") props.onResumeGroup?.(ref.id);
-    },
+    onSuspend: groupAction(props.onSuspendGroup),
+    onResume: groupAction(props.onResumeGroup),
     onContextMenu: props.onContextMenu,
   };
 }

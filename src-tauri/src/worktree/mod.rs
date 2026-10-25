@@ -15,6 +15,8 @@ pub const BRANCH_PREFIX: &str = "terra/";
 
 const FIRST_BRANCH_SUFFIX: u32 = 2;
 
+const PORCELAIN_PATH_OFFSET: usize = 3;
+
 /// Stored with the terminal record, so a resumed agent returns to it.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -220,7 +222,7 @@ pub fn status(info: &WorktreeInfo) -> Result<WorktreeStatus, String> {
         git(path, &["status", "--porcelain"])
             .map_err(|error| format!("could not read the worktree status: {}", error))?
             .lines()
-            .filter_map(|line| line.get(3..))
+            .filter_map(|line| line.get(PORCELAIN_PATH_OFFSET..))
             .map(str::to_string)
             .collect()
     } else {

@@ -272,7 +272,7 @@ impl<R: Runtime> McpHub<R> {
         match self.repo() {
             Ok(mut repo) => {
                 if let Err(error) = repo.purge_workspace(workspace_id) {
-                    eprintln!("failed to purge MCP data of {}: {}", workspace_id, error);
+                    eprintln!("failed to purge MCP data of {}: {:?}", workspace_id, error);
                 }
             }
             Err(_) => return,

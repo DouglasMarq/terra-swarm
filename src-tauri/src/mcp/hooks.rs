@@ -69,7 +69,7 @@ pub fn apply<R: Runtime>(hub: &McpHub<R>, who: &AgentIdentity, call: &HookCall) 
         Ok(status) => status,
         Err(error) => {
             eprintln!(
-                "cannot record the state hook of {}: {}",
+                "cannot record the state hook of {}: {:?}",
                 who.terminal_id, error
             );
             return;

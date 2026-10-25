@@ -1526,4 +1526,45 @@ mod tests {
         assert_eq!(nudge.1["terminal_id"], "t-2");
         assert!(nudge.1["prompt"].as_str().unwrap().contains("get_task"));
     }
+
+    #[test]
+    fn given_a_failing_query_when_calling_a_tool_then_the_error_hides_the_sqlite_detail() {
+        let (hub, _) = hub();
+        hub.repo().unwrap().execute("DROP TABLE notes", &[]);
+
+        let error = call(
+            &hub,
+            &identity("t-1", "ws-1", "claude"),
+            ToolCall {
+                name: "add_note",
+                args: json!({ "body": "the build uses npm" }),
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(error.to_string(), "database error");
+    }
+
+    #[test]
+    fn given_an_unavailable_database_when_calling_a_tool_then_the_error_hides_the_cause() {
+        let dir =
+            std::env::temp_dir().join(format!("terra-mcp-tools-{}", crate::clock::now_millis()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(super::super::db::DB_FILE);
+        std::fs::write(&path, b"not a sqlite database").unwrap();
+        let hub = McpHub::open(path, None, super::super::test_support::app());
+
+        let error = call(
+            &hub,
+            &identity("t-1", "ws-1", "claude"),
+            ToolCall {
+                name: "list_tasks",
+                args: json!({}),
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(error.to_string(), "the Terra MCP database is unavailable");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

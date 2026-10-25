@@ -231,10 +231,16 @@ impl std::fmt::Display for StoreError {
             StoreError::NotFound(message)
             | StoreError::Invalid(message)
             | StoreError::Conflict(message) => f.write_str(message),
-            StoreError::Unavailable(message) => {
-                write!(f, "the Terra MCP database is unavailable: {}", message)
-            }
-            StoreError::Database(message) => write!(f, "database error: {}", message),
+            StoreError::Unavailable(_) => f.write_str("the Terra MCP database is unavailable"),
+            StoreError::Database(_) => f.write_str("database error"),
+        }
+    }
+}
+
+impl StoreError {
+    pub fn log_internal(&self, context: &str) {
+        if let StoreError::Unavailable(detail) | StoreError::Database(detail) = self {
+            eprintln!("{}: {}", context, detail);
         }
     }
 }

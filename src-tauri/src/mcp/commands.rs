@@ -14,6 +14,7 @@ use super::{McpHub, ServerInfo};
 pub const USER_ACTOR: &str = "user";
 /// History shown on each card of the Tasks panel.
 const PANEL_EVENTS: usize = 20;
+const COMMAND_FAILED: &str = "MCP command failed";
 
 type Hub<'a> = State<'a, Arc<McpHub>>;
 
@@ -56,6 +57,7 @@ pub fn mcp_server_info(hub: Hub<'_>) -> ServerInfo {
 pub fn mcp_set_enabled(hub: Hub<'_>, enabled: bool) -> Result<ServerInfo, String> {
     hub.repo()
         .and_then(|repo| repo.set_enabled(enabled))
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
         .map_err(|e| e.to_string())?;
     Ok(hub.info())
 }
@@ -69,6 +71,7 @@ pub fn mcp_list_tasks(hub: Hub<'_>, workspace_id: String) -> Result<Vec<Task>, S
                 ..TaskQuery::all(&workspace_id)
             })
         })
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
         .map_err(|e| e.to_string())
 }
 
@@ -96,6 +99,7 @@ pub fn mcp_create_task(
                 },
             )
         })
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
         .map_err(|e| e.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(task)
@@ -128,6 +132,7 @@ pub fn mcp_update_task(
                 },
             )
         })
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
         .map_err(|e| e.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(task)
@@ -137,6 +142,7 @@ pub fn mcp_update_task(
 pub fn mcp_delete_task(hub: Hub<'_>, workspace_id: String, id: String) -> Result<(), String> {
     hub.repo()
         .and_then(|repo| tasks::delete(&repo, &workspace_id, &id))
+        .inspect_err(|error| error.log_internal(COMMAND_FAILED))
         .map_err(|e| e.to_string())?;
     hub.emit_tasks_changed(&workspace_id);
     Ok(())
@@ -147,7 +153,7 @@ pub fn mcp_agent_statuses(hub: Hub<'_>, workspace_id: String) -> Vec<AgentStatus
     hub.statuses()
         .map(|statuses| statuses.statuses(&workspace_id))
         .unwrap_or_else(|error| {
-            eprintln!("cannot list agent statuses: {}", error);
+            eprintln!("cannot list agent statuses: {:?}", error);
             Vec::new()
         })
 }

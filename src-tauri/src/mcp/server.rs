@@ -27,6 +27,7 @@ use super::{AgentIdentity, McpHub};
 
 pub const MCP_PATH: &str = "/mcp";
 const MAX_BODY_BYTES: usize = 256 * 1024;
+const TOOL_CALL_FAILED: &str = "the tool call failed";
 /// Tokio workers of the server's own runtime; requests are short and the
 /// blocking work runs on `spawn_blocking` threads.
 const SERVER_WORKER_THREADS: usize = 2;
@@ -113,7 +114,10 @@ impl<R: Runtime> ServerHandler for TerraServer<R> {
             tools::call(&hub, &identity, ToolCall { name: &name, args })
         })
         .await
-        .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
+        .map_err(|error| {
+            eprintln!("an MCP tool call did not finish: {}", error);
+            ErrorData::internal_error(TOOL_CALL_FAILED, None)
+        })?;
         Ok(match outcome {
             Ok(value) => CallToolResult::success(vec![ContentBlock::text(
                 serde_json::to_string_pretty(&value).unwrap_or_else(|error| {
@@ -127,7 +131,12 @@ impl<R: Runtime> ServerHandler for TerraServer<R> {
                     None,
                 ))
             }
-            Err(error) => CallToolResult::error(vec![ContentBlock::text(error.to_string())]),
+            Err(error) => {
+                if let ToolError::Store(store) = &error {
+                    store.log_internal("MCP tool call failed");
+                }
+                CallToolResult::error(vec![ContentBlock::text(error.to_string())])
+            }
         }
         .into())
     }

@@ -162,14 +162,24 @@ pub enum AgentState {
 }
 
 impl AgentState {
-    pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "working" => Some(AgentState::Working),
-            "idle" => Some(AgentState::Idle),
-            "needs_input" => Some(AgentState::NeedsInput),
-            "blocked" => Some(AgentState::Blocked),
-            _ => None,
+    pub const ALL: [AgentState; 4] = [
+        AgentState::Working,
+        AgentState::Idle,
+        AgentState::NeedsInput,
+        AgentState::Blocked,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AgentState::Working => "working",
+            AgentState::Idle => "idle",
+            AgentState::NeedsInput => "needs_input",
+            AgentState::Blocked => "blocked",
         }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|state| state.as_str() == value)
     }
 }
 

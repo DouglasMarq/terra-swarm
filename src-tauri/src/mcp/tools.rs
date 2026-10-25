@@ -54,9 +54,21 @@ and use `send_message` to coordinate. Save durable project knowledge (commands, 
 decisions) with `add_note` and look it up with `search_notes`. Keep `report_status` current so \
 the humans watching the board know what you are doing.";
 
-const STATUS_VALUES: [&str; 5] = ["todo", "in_progress", "review", "done", "blocked"];
-const PRIORITY_VALUES: [&str; 4] = ["low", "medium", "high", "urgent"];
-const STATE_VALUES: [&str; 4] = ["working", "idle", "needs_input", "blocked"];
+fn status_values() -> Vec<&'static str> {
+    TaskStatus::ALL.map(TaskStatus::as_str).to_vec()
+}
+
+fn priority_values_lowest_first() -> Vec<&'static str> {
+    TaskPriority::ALL
+        .map(TaskPriority::as_str)
+        .into_iter()
+        .rev()
+        .collect()
+}
+
+fn state_values() -> Vec<&'static str> {
+    AgentState::ALL.map(AgentState::as_str).to_vec()
+}
 
 pub fn definitions() -> Vec<ToolDef> {
     vec![
@@ -82,7 +94,7 @@ pub fn definitions() -> Vec<ToolDef> {
             schema: json!({
                 "type": "object",
                 "properties": {
-                    "status": { "type": "string", "enum": STATUS_VALUES },
+                    "status": { "type": "string", "enum": status_values() },
                     "assignee": { "type": "string", "description": "Terminal id, or \"me\"." }
                 }
             }),
@@ -114,7 +126,7 @@ pub fn definitions() -> Vec<ToolDef> {
                         "description": format!("Short imperative summary (max {} characters).", MAX_TITLE_CHARS)
                     },
                     "description": { "type": "string", "description": "What done looks like, relevant files, constraints." },
-                    "priority": { "type": "string", "enum": PRIORITY_VALUES, "default": "medium" },
+                    "priority": { "type": "string", "enum": priority_values_lowest_first(), "default": "medium" },
                     "depends_on": { "type": "array", "items": { "type": "string" } },
                     "labels": { "type": "array", "items": { "type": "string" } }
                 },
@@ -147,7 +159,7 @@ pub fn definitions() -> Vec<ToolDef> {
                 "type": "object",
                 "properties": {
                     "id": { "type": "string" },
-                    "status": { "type": "string", "enum": STATUS_VALUES },
+                    "status": { "type": "string", "enum": status_values() },
                     "note": { "type": "string", "description": "Progress log entry." }
                 },
                 "required": ["id"]
@@ -261,7 +273,7 @@ pub fn definitions() -> Vec<ToolDef> {
             schema: json!({
                 "type": "object",
                 "properties": {
-                    "state": { "type": "string", "enum": STATE_VALUES },
+                    "state": { "type": "string", "enum": state_values() },
                     "summary": {
                         "type": "string",
                         "description": format!("One line, max {} characters.", MAX_STATUS_SUMMARY_CHARS)
@@ -284,7 +296,7 @@ fn status_arg(value: Option<String>) -> Result<Option<TaskStatus>, ToolError> {
             TaskStatus::parse(raw.trim()).ok_or_else(|| {
                 ToolError::InvalidArguments(format!(
                     "status must be one of {}",
-                    STATUS_VALUES.join(", ")
+                    status_values().join(", ")
                 ))
             })
         })
@@ -460,7 +472,7 @@ pub fn call<R: Runtime>(
                     TaskPriority::parse(raw.trim()).ok_or_else(|| {
                         ToolError::InvalidArguments(format!(
                             "priority must be one of {}",
-                            PRIORITY_VALUES.join(", ")
+                            priority_values_lowest_first().join(", ")
                         ))
                     })
                 })
@@ -625,7 +637,7 @@ pub fn call<R: Runtime>(
             let state = AgentState::parse(args.state.trim()).ok_or_else(|| {
                 ToolError::InvalidArguments(format!(
                     "state must be one of {}",
-                    STATE_VALUES.join(", ")
+                    state_values().join(", ")
                 ))
             })?;
             let status = hub
@@ -644,6 +656,22 @@ mod tests {
     use super::super::{EVENT_AGENT_STATUS, EVENT_MESSAGE, EVENT_NUDGE, EVENT_TASKS_CHANGED};
     use super::*;
     use crate::roles::Role;
+
+    #[test]
+    fn given_the_model_enums_when_listing_their_values_then_the_documented_order_is_kept() {
+        assert_eq!(
+            status_values(),
+            ["todo", "in_progress", "review", "done", "blocked"]
+        );
+        assert_eq!(
+            priority_values_lowest_first(),
+            ["low", "medium", "high", "urgent"]
+        );
+        assert_eq!(
+            state_values(),
+            ["working", "idle", "needs_input", "blocked"]
+        );
+    }
 
     #[test]
     fn every_tool_has_an_object_schema_and_a_handler() {

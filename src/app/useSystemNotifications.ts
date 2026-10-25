@@ -5,26 +5,10 @@ import type { Workspace } from "../types";
 import { t } from "../i18n";
 import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { deriveAgentStatus } from "../domain/agentStatus";
+import { shouldNotify } from "../domain/notifications";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useReportedStates } from "../stores/mcpStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
-
-/** One native notification per agent at most this often. */
-const PER_AGENT_COOLDOWN_MS = 30_000;
-
-/** Whether a native notification should be shown for this agent now. */
-export function shouldNotify(
-  lastShown: Map<string, number>,
-  terminalId: string,
-  now: number,
-  appFocused: boolean,
-): boolean {
-  if (appFocused) return false;
-  const last = lastShown.get(terminalId);
-  if (last !== undefined && now - last < PER_AGENT_COOLDOWN_MS) return false;
-  lastShown.set(terminalId, now);
-  return true;
-}
 
 /**
  * Native notifications when an agent needs a human while the app is in the

@@ -24,7 +24,7 @@ use shell::{shell_flavor, ShellFlavor};
 
 use crate::agent_catalog;
 use crate::ipc_error::{IpcError, IpcErrorCode};
-use crate::mcp::connect::McpLaunch;
+use crate::mcp::connect::{LaunchRequest, McpLaunch};
 use crate::mcp::launch::Quoting;
 use crate::mcp::{McpHub, McpLease};
 use crate::roles::Role;
@@ -557,13 +557,13 @@ fn spawn_process<'a, R: Runtime>(
     // Issued only after the duplicate checks above: a fresh token for an id
     // that is already running would log the live terminal out.
     let mut mcp_launch = app.try_state::<Arc<McpHub>>().and_then(|hub| {
-        hub.launch(
-            launch.id,
-            launch.workspace_id,
-            &launch_command,
-            launch.role,
-            quoting_for(&shell),
-        )
+        hub.launch(LaunchRequest {
+            terminal_id: launch.id,
+            workspace_id: launch.workspace_id,
+            command: &launch_command,
+            role: launch.role,
+            quoting: quoting_for(&shell),
+        })
     });
     // Only the spawned process sees the MCP flags; `command` (persisted in
     // the workspace store) stays as the user typed it.

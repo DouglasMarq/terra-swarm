@@ -504,7 +504,13 @@ mod tests {
         );
         assert!(matches!(hub.repo(), Err(StoreError::Unavailable(_))));
         assert!(hub
-            .launch("t-1", "ws-1", "claude", None, launch::Quoting::Posix)
+            .launch(connect::LaunchRequest {
+                terminal_id: "t-1",
+                workspace_id: "ws-1",
+                command: "claude",
+                role: None,
+                quoting: launch::Quoting::Posix,
+            })
             .is_none());
         let _ = std::fs::remove_dir_all(dir);
     }

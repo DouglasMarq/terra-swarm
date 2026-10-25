@@ -20,6 +20,15 @@ pub struct McpLaunch<R: Runtime = Wry> {
     pub lease: McpLease<R>,
 }
 
+#[derive(Clone, Copy)]
+pub struct LaunchRequest<'a> {
+    pub terminal_id: &'a str,
+    pub workspace_id: &'a str,
+    pub command: &'a str,
+    pub role: Option<Role>,
+    pub quoting: Quoting,
+}
+
 pub fn rewrite_command(command: &str, agent: &str, context: &LaunchContext<'_>) -> String {
     let command = command.trim();
     let Some(integration) = integration::of_agent(agent) else {
@@ -31,14 +40,14 @@ pub fn rewrite_command(command: &str, agent: &str, context: &LaunchContext<'_>) 
 impl<R: Runtime> McpHub<R> {
     /// Everything a terminal needs to talk to the server, or `None` when the
     /// server is off or not running (the terminal then starts unchanged).
-    pub fn launch(
-        self: &Arc<Self>,
-        terminal_id: &str,
-        workspace_id: &str,
-        command: &str,
-        role: Option<Role>,
-        quoting: Quoting,
-    ) -> Option<McpLaunch<R>> {
+    pub fn launch(self: &Arc<Self>, request: LaunchRequest<'_>) -> Option<McpLaunch<R>> {
+        let LaunchRequest {
+            terminal_id,
+            workspace_id,
+            command,
+            role,
+            quoting,
+        } = request;
         if !self.enabled() {
             return None;
         }
@@ -135,13 +144,9 @@ mod tests {
     #[test]
     fn launch_issues_a_token_and_env_only_when_enabled_and_running() {
         let (hub, _) = hub();
-        assert!(hub
-            .launch("t-1", "ws-1", "claude", None, Quoting::Posix)
-            .is_none());
+        assert!(hub.launch(posix_request("claude")).is_none());
         hub.set_port(4100);
-        let launch = hub
-            .launch("t-1", "ws-1", "shell", None, Quoting::Posix)
-            .unwrap();
+        let launch = hub.launch(posix_request("shell")).unwrap();
         let env: std::collections::HashMap<_, _> = launch.env.iter().cloned().collect();
         assert_eq!(env[ENV_URL], URL);
         assert_eq!(env[ENV_HOOK_URL], "http://127.0.0.1:4100/hooks");
@@ -153,8 +158,16 @@ mod tests {
         assert!(hub.identify(&env[ENV_TOKEN]).is_none());
 
         hub.repo().unwrap().set_enabled(false).unwrap();
-        assert!(hub
-            .launch("t-1", "ws-1", "claude", None, Quoting::Posix)
-            .is_none());
+        assert!(hub.launch(posix_request("claude")).is_none());
+    }
+
+    fn posix_request(command: &str) -> LaunchRequest<'_> {
+        LaunchRequest {
+            terminal_id: "t-1",
+            workspace_id: "ws-1",
+            command,
+            role: None,
+            quoting: Quoting::Posix,
+        }
     }
 }

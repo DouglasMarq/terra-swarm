@@ -26,7 +26,9 @@ pub fn suspend_group(app: AppHandle, id: String) -> Result<(), String> {
     let store = app.state::<Mutex<WorkspaceStore>>();
     let terminal_ids = {
         let mut store = store.lock_or_recover();
-        store.suspend_group(&id)?
+        let terminal_ids = store.group_terminal_ids(&id)?;
+        store.suspend_group(&id)?;
+        terminal_ids
     };
     let manager = app.state::<Mutex<PtyManager>>();
     for terminal_id in terminal_ids {

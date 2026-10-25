@@ -206,7 +206,10 @@ fn group_lifecycle_preserves_projects_and_terminal_metadata() {
     store
         .rename_group(&group.id, "Workers".to_string())
         .expect("rename");
-    let suspended = store.suspend_group(&group.id).expect("suspend");
+    let suspended = store
+        .group_terminal_ids(&group.id)
+        .expect("group terminals");
+    store.suspend_group(&group.id).expect("suspend");
     assert_eq!(suspended, vec!["ws-group-terminal"]);
     assert_eq!(store.groups[0].name, "Workers");
     assert!(store.groups[0].suspended);

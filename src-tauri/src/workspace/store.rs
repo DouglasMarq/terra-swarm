@@ -85,29 +85,29 @@ impl WorkspaceStore {
     /// Returns false when the workspace no longer exists (e.g. it was closed
     /// while a terminal was being spawned), so the caller can roll back.
     pub fn add_terminal(&mut self, ws_id: &str, meta: TerminalMeta) -> bool {
-        if self
-            .terminal_owner(&meta.id)
-            .is_some_and(|owner| owner != ws_id)
-        {
+        if !self.can_add_terminal(ws_id, &meta.id) {
             return false;
         }
-        let Some(ws) = self.workspace_mut(ws_id).ok() else {
-            return false;
+        self.record_terminal(ws_id, meta);
+        true
+    }
+
+    pub fn can_add_terminal(&self, ws_id: &str, terminal_id: &str) -> bool {
+        self.get(ws_id).is_some()
+            && self
+                .terminal_owner(terminal_id)
+                .is_none_or(|owner| owner == ws_id)
+    }
+
+    pub fn record_terminal(&mut self, ws_id: &str, meta: TerminalMeta) {
+        let Ok(ws) = self.workspace_mut(ws_id) else {
+            return;
         };
-        if let Some(existing) = ws.terminals.iter_mut().find(|t| t.id == meta.id) {
-            existing.command = meta.command.clone();
-            existing.suspended = false;
-            if meta.worktree.is_some() {
-                existing.worktree = meta.worktree.clone();
-            }
-            if meta.role.is_some() {
-                existing.role = meta.role;
-            }
-        } else {
-            ws.terminals.push(meta);
+        match ws.terminals.iter_mut().find(|t| t.id == meta.id) {
+            Some(existing) => refresh_terminal(existing, meta),
+            None => ws.terminals.push(meta),
         }
         self.save();
-        true
     }
 
     pub fn remove_terminal(&mut self, terminal_id: &str) {
@@ -159,5 +159,16 @@ impl WorkspaceStore {
             .then_some(width.clamp(MIN_TERMINAL_WIDTH, MAX_TERMINAL_WIDTH));
         self.save();
         Ok(())
+    }
+}
+
+fn refresh_terminal(existing: &mut TerminalMeta, meta: TerminalMeta) {
+    existing.command = meta.command;
+    existing.suspended = false;
+    if meta.worktree.is_some() {
+        existing.worktree = meta.worktree;
+    }
+    if meta.role.is_some() {
+        existing.role = meta.role;
     }
 }

@@ -3,8 +3,7 @@
 use super::*;
 use crate::sync::LockExt;
 use serde::{Deserialize, Serialize};
-use std::path::{Component, PathBuf};
-use std::sync::atomic::Ordering;
+use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use tauri::State;
 
@@ -87,12 +86,12 @@ pub(crate) fn parse_import_snapshot(raw: &str) -> Result<WorkspaceStore, String>
     if decoded.dropped_entries {
         return Err("snapshot contains malformed workspace or group entries".to_string());
     }
-    let mut candidate = WorkspaceStore {
+    let candidate = WorkspaceStore {
         workspaces: decoded.workspaces,
         groups: decoded.groups,
         save_path: None,
     };
-    if candidate.validate() {
+    if !candidate.is_normalized() {
         return Err("snapshot failed workspace metadata validation".to_string());
     }
 
@@ -130,24 +129,22 @@ pub(crate) fn mark_imported_sessions_suspended(store: &mut WorkspaceStore) {
     }
 }
 
-pub(crate) fn transfer_counts(store: &WorkspaceStore) -> (usize, usize, usize, usize) {
-    let terminal_count = store
-        .workspaces
-        .iter()
-        .map(|workspace| workspace.terminals.len())
-        .sum();
-    let suspended_terminal_count = store
-        .workspaces
-        .iter()
-        .flat_map(|workspace| workspace.terminals.iter())
-        .filter(|terminal| terminal.suspended)
-        .count();
-    (
-        store.workspaces.len(),
-        store.groups.len(),
-        terminal_count,
-        suspended_terminal_count,
-    )
+pub(crate) fn transfer_summary(store: &WorkspaceStore, path: &Path) -> WorkspaceSnapshotTransfer {
+    let terminals = || {
+        store
+            .workspaces
+            .iter()
+            .flat_map(|workspace| &workspace.terminals)
+    };
+    WorkspaceSnapshotTransfer {
+        version: WORKSPACE_FILE_VERSION,
+        path: path.to_string_lossy().into_owned(),
+        backup_path: None,
+        workspace_count: store.workspaces.len(),
+        group_count: store.groups.len(),
+        terminal_count: terminals().count(),
+        suspended_terminal_count: terminals().filter(|terminal| terminal.suspended).count(),
+    }
 }
 
 /// Last time the store file was written, in milliseconds since the Unix
@@ -159,11 +156,7 @@ pub fn store_saved_at(store: State<'_, Mutex<WorkspaceStore>>) -> Result<Option<
     let Some(path) = &store.save_path else {
         return Ok(None);
     };
-    let millis = std::fs::metadata(path)
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(crate::clock::epoch_millis);
-    Ok(millis)
+    Ok(modified_millis(path))
 }
 
 /// Export the current metadata snapshot to an explicit, absolute local path.
@@ -175,30 +168,21 @@ pub fn export_workspace_snapshot(
     path: String,
 ) -> Result<WorkspaceSnapshotTransfer, String> {
     let target = validate_explicit_path(&path)?;
-    let (json, counts) = {
+    let (json, transfer) = {
         let store = store.lock_or_recover();
         (
             store
                 .serialized_snapshot()
                 .map_err(|error| format!("failed to serialize workspace snapshot: {}", error))?,
-            transfer_counts(&store),
+            transfer_summary(&store, &target),
         )
     };
-    let seq = SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
-    write_guarded_result(&target, &json, seq).map_err(|error| {
+    write_guarded_result(&target, &json, next_save_seq()).map_err(|error| {
         format!(
             "failed to export workspace snapshot to {}: {}",
             target.display(),
             error
         )
     })?;
-    Ok(WorkspaceSnapshotTransfer {
-        version: WORKSPACE_FILE_VERSION,
-        path: target.to_string_lossy().into_owned(),
-        backup_path: None,
-        workspace_count: counts.0,
-        group_count: counts.1,
-        terminal_count: counts.2,
-        suspended_terminal_count: counts.3,
-    })
+    Ok(transfer)
 }

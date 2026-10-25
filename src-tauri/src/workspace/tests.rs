@@ -197,16 +197,21 @@ fn group_lifecycle_preserves_projects_and_terminal_metadata() {
     store
         .set_terminal_placement(
             "ws-group",
-            "ws-group-terminal",
-            "pane-group".to_string(),
-            "tab-group".to_string(),
+            TerminalPlacement {
+                terminal_id: "ws-group-terminal".to_string(),
+                pane_id: "pane-group".to_string(),
+                tab_id: "tab-group".to_string(),
+            },
         )
         .expect("placement");
 
     store
         .rename_group(&group.id, "Workers".to_string())
         .expect("rename");
-    let suspended = store.suspend_group(&group.id).expect("suspend");
+    let suspended = store
+        .group_terminal_ids(&group.id)
+        .expect("group terminals");
+    store.suspend_group(&group.id).expect("suspend");
     assert_eq!(suspended, vec!["ws-group-terminal"]);
     assert_eq!(store.groups[0].name, "Workers");
     assert!(store.groups[0].suspended);
@@ -294,9 +299,11 @@ fn terminal_placement_creates_and_normalizes_pane_and_tab_metadata() {
     store
         .set_terminal_placement(
             "ws-place",
-            "ws-place-terminal",
-            "pane-one".to_string(),
-            "tab-one".to_string(),
+            TerminalPlacement {
+                terminal_id: "ws-place-terminal".to_string(),
+                pane_id: "pane-one".to_string(),
+                tab_id: "tab-one".to_string(),
+            },
         )
         .expect("first placement");
     assert_eq!(
@@ -320,9 +327,11 @@ fn terminal_placement_creates_and_normalizes_pane_and_tab_metadata() {
     store
         .set_terminal_placement(
             "ws-place",
-            "ws-place-terminal",
-            "pane-two".to_string(),
-            "tab-two".to_string(),
+            TerminalPlacement {
+                terminal_id: "ws-place-terminal".to_string(),
+                pane_id: "pane-two".to_string(),
+                tab_id: "tab-two".to_string(),
+            },
         )
         .expect("second placement");
     assert_eq!(store.workspaces[0].panes[0].tabs.len(), 0);
@@ -547,17 +556,21 @@ fn visual_layout_operations_are_durable_and_never_remove_ptys() {
     store
         .set_terminal_placement(
             "ws-layout",
-            "ws-layout-terminal",
-            "pane-one".to_string(),
-            "tab-one".to_string(),
+            TerminalPlacement {
+                terminal_id: "ws-layout-terminal".to_string(),
+                pane_id: "pane-one".to_string(),
+                tab_id: "tab-one".to_string(),
+            },
         )
         .expect("first pane placement");
     store
         .set_terminal_placement(
             "ws-layout",
-            "ws-layout-terminal-two",
-            "pane-two".to_string(),
-            "tab-two".to_string(),
+            TerminalPlacement {
+                terminal_id: "ws-layout-terminal-two".to_string(),
+                pane_id: "pane-two".to_string(),
+                tab_id: "tab-two".to_string(),
+            },
         )
         .expect("second pane placement");
     let first_container_id = store.workspaces[0].containers[0].id.clone();
@@ -575,7 +588,14 @@ fn visual_layout_operations_are_durable_and_never_remove_ptys() {
         )
         .expect("pane reorder");
     store
-        .move_pane("ws-layout", "pane-two", "container-secondary", Some(0))
+        .move_pane(
+            "ws-layout",
+            PaneMove {
+                pane_id: "pane-two".to_string(),
+                to_container_id: "container-secondary".to_string(),
+                index: Some(0),
+            },
+        )
         .expect("pane move");
     store
         .set_container_state(
@@ -717,9 +737,11 @@ fn snapshot_roundtrip_preserves_layout_but_suspends_imported_sessions() {
     original
         .set_terminal_placement(
             "ws-transfer",
-            "ws-transfer-terminal",
-            "pane-transfer".to_string(),
-            "tab-transfer".to_string(),
+            TerminalPlacement {
+                terminal_id: "ws-transfer-terminal".to_string(),
+                pane_id: "pane-transfer".to_string(),
+                tab_id: "tab-transfer".to_string(),
+            },
         )
         .expect("terminal placement");
     let json = original.serialized_snapshot().expect("snapshot JSON");
@@ -736,7 +758,10 @@ fn snapshot_roundtrip_preserves_layout_but_suspends_imported_sessions() {
         imported.workspaces[0].panes[0].tabs[0].pty_id.as_deref(),
         Some("ws-transfer-terminal")
     );
-    assert_eq!(transfer_counts(&imported).3, 1);
+    assert_eq!(
+        transfer_summary(&imported, &source).suspended_terminal_count,
+        1
+    );
     cleanup(&source);
 }
 
@@ -839,7 +864,8 @@ fn given_a_stored_worktree_with_an_option_like_branch_drops_it_on_load() {
         save_path: None,
     };
 
-    assert!(store.validate());
+    assert!(!store.is_normalized());
+    store.normalize();
     assert_eq!(store.workspaces[0].terminals[0].worktree, None);
     assert_eq!(store.workspaces[0].terminals[0].id, "ws-1-terminal");
     assert!(store.workspaces[1].terminals[0].worktree.is_some());

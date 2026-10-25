@@ -51,7 +51,6 @@ impl WorkspaceStore {
             layout: Some(WorkspaceLayout::default()),
         };
         self.workspaces.push(ws.clone());
-        self.save();
         ws
     }
 
@@ -61,7 +60,6 @@ impl WorkspaceStore {
         for group in &mut self.groups {
             group.project_ids.retain(|project_id| project_id != id);
         }
-        self.save();
         Some(ws)
     }
 
@@ -82,51 +80,33 @@ impl WorkspaceStore {
         })
     }
 
-    /// Returns false when the workspace no longer exists (e.g. it was closed
-    /// while a terminal was being spawned), so the caller can roll back.
-    pub fn add_terminal(&mut self, ws_id: &str, meta: TerminalMeta) -> bool {
-        if self
-            .terminal_owner(&meta.id)
-            .is_some_and(|owner| owner != ws_id)
-        {
-            return false;
-        }
-        let Some(ws) = self.workspace_mut(ws_id).ok() else {
-            return false;
-        };
-        if let Some(existing) = ws.terminals.iter_mut().find(|t| t.id == meta.id) {
-            existing.command = meta.command.clone();
-            existing.suspended = false;
-            if meta.worktree.is_some() {
-                existing.worktree = meta.worktree.clone();
-            }
-            if meta.role.is_some() {
-                existing.role = meta.role;
-            }
-        } else {
-            ws.terminals.push(meta);
-        }
-        self.save();
-        true
+    pub fn can_add_terminal(&self, ws_id: &str, terminal_id: &str) -> bool {
+        self.get(ws_id).is_some()
+            && self
+                .terminal_owner(terminal_id)
+                .is_none_or(|owner| owner == ws_id)
     }
 
-    pub fn remove_terminal(&mut self, terminal_id: &str) {
+    pub fn record_terminal(&mut self, ws_id: &str, meta: TerminalMeta) {
+        let Ok(ws) = self.workspace_mut(ws_id) else {
+            return;
+        };
+        match ws.terminals.iter_mut().find(|t| t.id == meta.id) {
+            Some(existing) => refresh_terminal(existing, meta),
+            None => ws.terminals.push(meta),
+        }
+    }
+
+    pub fn forget_terminal(&mut self, terminal_id: &str) {
         for ws in self.workspaces.iter_mut() {
             ws.terminals.retain(|t| t.id != terminal_id);
             for pane in &mut ws.panes {
                 pane.tabs.retain(|tab| {
                     tab.pty_id.as_deref() != Some(terminal_id) && tab.id.as_str() != terminal_id
                 });
-                if pane
-                    .active_tab_id
-                    .as_deref()
-                    .is_some_and(|id| !pane.tabs.iter().any(|tab| tab.id == id))
-                {
-                    pane.active_tab_id = pane.tabs.first().map(|tab| tab.id.clone());
-                }
+                pane.repair_active_tab();
             }
         }
-        self.save();
     }
 
     /// A blank name leaves the workspace as it is.
@@ -137,21 +117,12 @@ impl WorkspaceStore {
             return Ok(());
         }
         ws.name = name;
-        self.save();
         Ok(())
     }
 
     pub fn reorder_workspaces(&mut self, order: &[String]) {
-        let mut remaining = std::mem::take(&mut self.workspaces);
-        let mut sorted = Vec::with_capacity(remaining.len());
-        for id in order {
-            if let Some(pos) = remaining.iter().position(|w| &w.id == id) {
-                sorted.push(remaining.remove(pos));
-            }
-        }
-        sorted.extend(remaining);
-        self.workspaces = sorted;
-        self.save();
+        let workspaces = std::mem::take(&mut self.workspaces);
+        self.workspaces = reorder_by_ids(workspaces, order, |workspace| &workspace.id);
     }
 
     pub fn set_width(&mut self, ws_id: &str, terminal_id: &str, width: f64) -> Result<(), String> {
@@ -164,7 +135,17 @@ impl WorkspaceStore {
         t.width = width
             .is_finite()
             .then_some(width.clamp(MIN_TERMINAL_WIDTH, MAX_TERMINAL_WIDTH));
-        self.save();
         Ok(())
+    }
+}
+
+fn refresh_terminal(existing: &mut TerminalMeta, meta: TerminalMeta) {
+    existing.command = meta.command;
+    existing.suspended = false;
+    if meta.worktree.is_some() {
+        existing.worktree = meta.worktree;
+    }
+    if meta.role.is_some() {
+        existing.role = meta.role;
     }
 }

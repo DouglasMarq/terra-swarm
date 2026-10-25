@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Runtime};
 
 mod commands;
 mod editor;
@@ -14,6 +14,7 @@ mod git;
 mod groups;
 mod layout;
 mod normalize;
+mod persisted;
 mod persistence;
 mod snapshot;
 mod store;
@@ -26,6 +27,7 @@ pub use files::list_workspace_files;
 pub(crate) use files::*;
 pub(crate) use git::*;
 pub use git::{git_branch, git_status};
+pub(crate) use persisted::change_and_save;
 pub(crate) use persistence::*;
 pub(crate) use snapshot::*;
 pub use snapshot::{export_workspace_snapshot, store_saved_at};
@@ -52,8 +54,20 @@ const MAX_LAYOUT_TRACKS: u32 = 128;
 /// frontend already coalesces/refreshes this event; keeping emission at the
 /// command boundary also covers secondary windows that did not initiate the
 /// mutation.
-pub(crate) fn emit_workspaces_changed(app: &AppHandle) {
+pub(crate) fn emit_workspaces_changed<R: Runtime>(app: &AppHandle<R>) {
     let _ = app.emit("workspaces-changed", ());
+}
+
+fn reorder_by_ids<T>(items: Vec<T>, order: &[String], id_of: impl Fn(&T) -> &str) -> Vec<T> {
+    let mut remaining = items;
+    let mut sorted = Vec::with_capacity(remaining.len());
+    for id in order {
+        if let Some(position) = remaining.iter().position(|item| id_of(item) == id) {
+            sorted.push(remaining.remove(position));
+        }
+    }
+    sorted.extend(remaining);
+    sorted
 }
 
 pub fn bump_next_id(id: &str) {
@@ -218,6 +232,18 @@ pub struct TerminalTab {
     pub suspended: bool,
 }
 
+impl Pane {
+    pub(crate) fn repair_active_tab(&mut self) {
+        if self
+            .active_tab_id
+            .as_deref()
+            .is_some_and(|id| !self.tabs.iter().any(|tab| tab.id == id))
+        {
+            self.active_tab_id = self.tabs.first().map(|tab| tab.id.clone());
+        }
+    }
+}
+
 fn default_tab_kind() -> String {
     "shell".to_string()
 }
@@ -341,6 +367,18 @@ pub struct WorkspaceContainerPatch {
     pub internal_layout: Option<String>,
     pub size: Option<f64>,
     pub layout: Option<WorkspaceLayout>,
+}
+
+pub struct TerminalPlacement {
+    pub terminal_id: String,
+    pub pane_id: String,
+    pub tab_id: String,
+}
+
+pub struct PaneMove {
+    pub pane_id: String,
+    pub to_container_id: String,
+    pub index: Option<usize>,
 }
 
 #[derive(Default)]

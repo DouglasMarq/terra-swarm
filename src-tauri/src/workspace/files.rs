@@ -68,67 +68,12 @@ pub(crate) fn list_directory_entries(
     relative_path: Option<&str>,
     requested_limit: Option<usize>,
 ) -> Result<WorkspaceFileListing, String> {
-    let limit = requested_limit.unwrap_or(DEFAULT_FILE_LIST_LIMIT);
-    if limit == 0 {
-        return Err("file listing limit must be greater than zero".to_string());
-    }
-    let limit = limit.min(MAX_FILE_LIST_LIMIT);
-    let root = workspace_root
-        .canonicalize()
-        .map_err(|error| format!("workspace directory is unavailable: {}", error))?;
-    if !root.is_dir() {
-        return Err("workspace cwd is not a directory".to_string());
-    }
+    let limit = listing_limit(requested_limit)?;
+    let root = workspace_root_directory(workspace_root)?;
     let relative = safe_relative_path(relative_path)?;
-    let target = root
-        .join(&relative)
-        .canonicalize()
-        .map_err(|error| format!("directory is unavailable: {}", error))?;
-    if !target.starts_with(&root) {
-        return Err("file path cannot escape the workspace".to_string());
-    }
-    if !target.is_dir() {
-        return Err("requested file path is not a directory".to_string());
-    }
-
-    let mut entries = std::fs::read_dir(&target)
-        .map_err(|error| format!("cannot list directory: {}", error))?
-        .map(|entry| {
-            let entry = entry.map_err(|error| format!("cannot read directory entry: {}", error))?;
-            let metadata = std::fs::symlink_metadata(entry.path())
-                .map_err(|error| format!("cannot inspect {}: {}", entry.path().display(), error))?;
-            let file_type = metadata.file_type();
-            let kind = if file_type.is_symlink() {
-                "symlink"
-            } else if file_type.is_dir() {
-                "directory"
-            } else if file_type.is_file() {
-                "file"
-            } else {
-                "other"
-            };
-            let name = entry.file_name().to_string_lossy().into_owned();
-            let child_path = if relative.as_os_str().is_empty() {
-                PathBuf::from(&name)
-            } else {
-                relative.join(&name)
-            };
-            Ok(WorkspaceFileEntry {
-                name,
-                path: relative_path_string(&child_path),
-                kind: kind.to_string(),
-                size: file_type.is_file().then_some(metadata.len()),
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-    entries.sort_by(|left, right| {
-        let left_directory = left.kind == "directory";
-        let right_directory = right.kind == "directory";
-        right_directory
-            .cmp(&left_directory)
-            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
-            .then_with(|| left.name.cmp(&right.name))
-    });
+    let target = directory_inside(&root, &relative)?;
+    let mut entries = read_entries(&target, &relative)?;
+    entries.sort_by(compare_entries);
     let truncated = entries.len() > limit;
     entries.truncate(limit);
     Ok(WorkspaceFileListing {
@@ -137,6 +82,90 @@ pub(crate) fn list_directory_entries(
         truncated,
         limit,
     })
+}
+
+const DIRECTORY_KIND: &str = "directory";
+
+fn listing_limit(requested_limit: Option<usize>) -> Result<usize, String> {
+    let limit = requested_limit.unwrap_or(DEFAULT_FILE_LIST_LIMIT);
+    if limit == 0 {
+        return Err("file listing limit must be greater than zero".to_string());
+    }
+    Ok(limit.min(MAX_FILE_LIST_LIMIT))
+}
+
+fn workspace_root_directory(workspace_root: &Path) -> Result<PathBuf, String> {
+    let root = workspace_root
+        .canonicalize()
+        .map_err(|error| format!("workspace directory is unavailable: {}", error))?;
+    if !root.is_dir() {
+        return Err("workspace cwd is not a directory".to_string());
+    }
+    Ok(root)
+}
+
+fn directory_inside(root: &Path, relative: &Path) -> Result<PathBuf, String> {
+    let target = root
+        .join(relative)
+        .canonicalize()
+        .map_err(|error| format!("directory is unavailable: {}", error))?;
+    if !target.starts_with(root) {
+        return Err("file path cannot escape the workspace".to_string());
+    }
+    if !target.is_dir() {
+        return Err("requested file path is not a directory".to_string());
+    }
+    Ok(target)
+}
+
+fn read_entries(target: &Path, relative: &Path) -> Result<Vec<WorkspaceFileEntry>, String> {
+    std::fs::read_dir(target)
+        .map_err(|error| format!("cannot list directory: {}", error))?
+        .map(|entry| {
+            let entry = entry.map_err(|error| format!("cannot read directory entry: {}", error))?;
+            file_entry(&entry, relative)
+        })
+        .collect()
+}
+
+fn file_entry(entry: &std::fs::DirEntry, relative: &Path) -> Result<WorkspaceFileEntry, String> {
+    let metadata = std::fs::symlink_metadata(entry.path())
+        .map_err(|error| format!("cannot inspect {}: {}", entry.path().display(), error))?;
+    let file_type = metadata.file_type();
+    let name = entry.file_name().to_string_lossy().into_owned();
+    let child_path = if relative.as_os_str().is_empty() {
+        PathBuf::from(&name)
+    } else {
+        relative.join(&name)
+    };
+    Ok(WorkspaceFileEntry {
+        name,
+        path: relative_path_string(&child_path),
+        kind: entry_kind(&file_type).to_string(),
+        size: file_type.is_file().then_some(metadata.len()),
+    })
+}
+
+fn entry_kind(file_type: &std::fs::FileType) -> &'static str {
+    if file_type.is_symlink() {
+        return "symlink";
+    }
+    if file_type.is_dir() {
+        return DIRECTORY_KIND;
+    }
+    if file_type.is_file() {
+        return "file";
+    }
+    "other"
+}
+
+fn compare_entries(left: &WorkspaceFileEntry, right: &WorkspaceFileEntry) -> std::cmp::Ordering {
+    let left_directory = left.kind == DIRECTORY_KIND;
+    let right_directory = right.kind == DIRECTORY_KIND;
+    right_directory
+        .cmp(&left_directory)
+        .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+        .then_with(|| left.name.cmp(&right.name))
 }
 
 #[tauri::command(async)]

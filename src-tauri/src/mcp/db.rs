@@ -108,7 +108,12 @@ const MIGRATION_2: &str = r#"
 CREATE INDEX idx_task_deps_depends_on ON task_deps(depends_on);
 "#;
 
-const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2];
+const MIGRATION_3: &str = r#"
+CREATE INDEX idx_tasks_ws_assignee ON tasks(workspace_id, assignee);
+DROP INDEX idx_tasks_assignee;
+"#;
+
+const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3];
 
 pub fn schema_version() -> u32 {
     // MIGRATIONS is a short compile-time list, so its length always fits in a u32.
@@ -265,6 +270,27 @@ mod tests {
             )
             .unwrap();
         assert_eq!(indexes, 1);
+    }
+
+    #[test]
+    fn given_a_version_2_database_when_migrating_then_the_assignee_index_is_scoped_to_the_workspace(
+    ) {
+        let mut conn = Connection::open_in_memory().unwrap();
+        configure(&conn, false).unwrap();
+        conn.execute_batch(MIGRATION_1).unwrap();
+        conn.execute_batch(MIGRATION_2).unwrap();
+        conn.pragma_update(None, "user_version", 2).unwrap();
+
+        assert_eq!(migrate(&mut conn).unwrap(), schema_version());
+
+        let indexes: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'tasks' AND name LIKE 'idx_%' ORDER BY name")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(indexes, ["idx_tasks_ws_assignee", "idx_tasks_ws_status"]);
     }
 
     #[test]

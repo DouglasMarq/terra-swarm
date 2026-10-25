@@ -4,7 +4,10 @@
 //!
 //! Everything is in `mcp.db` and is kept in full (no size-based eviction).
 
-use rusqlite::{params, Connection, OptionalExtension, Row, Transaction, TransactionBehavior};
+use rusqlite::types::Value;
+use rusqlite::{
+    params, params_from_iter, Connection, OptionalExtension, Row, Transaction, TransactionBehavior,
+};
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
@@ -25,18 +28,10 @@ const STATUS_ORDER: [TaskStatus; 4] = [
     TaskStatus::Blocked,
     TaskStatus::Review,
 ];
-static LIST_TASKS_SQL: LazyLock<String> = LazyLock::new(|| {
-    format!(
-        "SELECT id, workspace_id, title, description, status, priority, assignee, created_by,
-                labels, position, created_at, updated_at
-         FROM tasks
-         WHERE workspace_id = ?1
-           AND (?2 IS NULL OR status = ?2)
-           AND (?3 IS NULL OR assignee = ?3)
-         ORDER BY {}, priority, position, created_at",
-        status_rank_sql()
-    )
-});
+const TASK_COLUMNS: &str = "id, workspace_id, title, description, status, priority, assignee,
+     created_by, labels, position, created_at, updated_at";
+static TASK_ORDER_SQL: LazyLock<String> =
+    LazyLock::new(|| format!("{}, priority, position, created_at", status_rank_sql()));
 
 fn sql_limit(limit: usize) -> i64 {
     i64::try_from(limit).unwrap_or(i64::MAX)
@@ -49,6 +44,43 @@ fn status_rank_sql() -> String {
         .map(|(rank, status)| format!("WHEN '{}' THEN {} ", status.as_str(), rank))
         .collect();
     format!("CASE status {}ELSE {} END", cases, STATUS_ORDER.len())
+}
+
+struct TaskFilter {
+    conditions: Vec<String>,
+    values: Vec<Value>,
+}
+
+impl TaskFilter {
+    fn of(query: &TaskQuery<'_>) -> Self {
+        let mut filter = Self {
+            conditions: Vec::new(),
+            values: Vec::new(),
+        };
+        filter.add("workspace_id =", Value::Text(query.workspace_id.into()));
+        if let Some(status) = query.status {
+            filter.add("status =", Value::Text(status.as_str().into()));
+        }
+        if let Some(assignee) = query.assignee {
+            filter.add("assignee =", Value::Text(assignee.into()));
+        }
+        filter
+    }
+
+    fn add(&mut self, condition: &str, value: Value) {
+        self.values.push(value);
+        self.conditions
+            .push(format!("{} ?{}", condition, self.values.len()));
+    }
+
+    fn sql(&self) -> String {
+        format!(
+            "SELECT {} FROM tasks WHERE {} ORDER BY {}",
+            TASK_COLUMNS,
+            self.conditions.join(" AND "),
+            *TASK_ORDER_SQL
+        )
+    }
 }
 
 pub struct TaskQuery<'a> {
@@ -258,15 +290,9 @@ impl Queries<'_> {
     /// Ordered by status (active work first), priority, then position.
     pub fn list_tasks(&self, query: &TaskQuery<'_>) -> StoreResult<Vec<Task>> {
         let mut tasks: Vec<Task> = {
-            let mut stmt = self.conn.prepare_cached(&LIST_TASKS_SQL)?;
-            let rows = stmt.query_map(
-                params![
-                    query.workspace_id,
-                    query.status.map(TaskStatus::as_str),
-                    query.assignee
-                ],
-                task_from_row,
-            )?;
+            let filter = TaskFilter::of(query);
+            let mut stmt = self.conn.prepare_cached(&filter.sql())?;
+            let rows = stmt.query_map(params_from_iter(&filter.values), task_from_row)?;
             rows.collect::<Result<_, _>>()?
         };
         self.attach_task_details(query.workspace_id, &mut tasks, query.events)?;
@@ -820,6 +846,56 @@ mod tests {
             tasks::get(&repo, "ws-1", &id),
             Err(StoreError::Database(_))
         ));
+    }
+
+    fn list_tasks_plan(repo: &Repo, query: &TaskQuery<'_>) -> String {
+        let filter = TaskFilter::of(query);
+        let mut stmt = repo
+            .conn
+            .prepare(&format!("EXPLAIN QUERY PLAN {}", filter.sql()))
+            .unwrap();
+        let rows = stmt
+            .query_map(params_from_iter(&filter.values), |row| {
+                row.get::<_, String>(3)
+            })
+            .unwrap();
+        rows.collect::<Result<Vec<_>, _>>().unwrap().join("\n")
+    }
+
+    #[test]
+    fn given_an_assignee_filter_when_listing_tasks_then_the_plan_uses_the_workspace_assignee_index()
+    {
+        let repo = Repo::in_memory();
+
+        let plan = list_tasks_plan(
+            &repo,
+            &TaskQuery {
+                assignee: Some("t-1"),
+                ..TaskQuery::all("ws-1")
+            },
+        );
+
+        assert!(plan.contains("idx_tasks_ws_assignee"), "{}", plan);
+    }
+
+    #[test]
+    fn given_a_status_filter_when_listing_tasks_then_the_plan_searches_the_workspace_status_index()
+    {
+        let repo = Repo::in_memory();
+
+        let plan = list_tasks_plan(
+            &repo,
+            &TaskQuery {
+                status: Some(TaskStatus::Review),
+                ..TaskQuery::all("ws-1")
+            },
+        );
+
+        assert!(
+            plan.contains("idx_tasks_ws_status (workspace_id=? AND status=?)"),
+            "{}",
+            plan
+        );
     }
 
     #[test]

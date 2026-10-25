@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { safeStorage } from "../lib/storage/safeStorage";
 
 export const SHELL_STORAGE_KEY = "terra-shell-state";
 export const SHELL_STATE_VERSION = 3;
@@ -96,19 +97,6 @@ const LEGACY_SURFACES: Readonly<Record<string, ShellSurface>> = {
 };
 
 const DOCK_TABS: readonly DockTab[] = ["inspector", "tasks", "preview"];
-
-const NOOP_STORAGE: Storage = {
-  getItem: () => null,
-  setItem: () => undefined,
-  removeItem: () => undefined,
-  clear: () => undefined,
-  key: () => null,
-  length: 0,
-};
-
-function storage(): Storage {
-  return typeof localStorage === "undefined" ? NOOP_STORAGE : localStorage;
-}
 
 function isSurface(value: unknown): value is ShellSurface {
   return typeof value === "string" && SURFACES.includes(value as ShellSurface);
@@ -463,7 +451,7 @@ export const useShellStore = create<ShellState>()(
     {
       name: SHELL_STORAGE_KEY,
       version: SHELL_STATE_VERSION,
-      storage: createJSONStorage(storage),
+      storage: createJSONStorage(() => safeStorage),
       partialize: (state) => ({
         version: SHELL_STATE_VERSION,
         activeSurface: state.activeSurface,

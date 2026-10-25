@@ -1,5 +1,6 @@
 import { t } from "../i18n";
 import { errorMessage } from "../lib/errors/errorMessage";
+import { storageGet, storageSet } from "../lib/storage/safeStorage";
 import { create } from "zustand";
 import type {
   Group,
@@ -72,22 +73,6 @@ type PersistedOrchestrationState = {
   /** Visual detachments are durable UI state; they never imply PTY death. */
   detachedTerminalIds?: string[];
   snapshot?: WorkspaceSnapshotV2 | null;
-};
-
-const storageGet = (key: string): string | null => {
-  try {
-    return typeof localStorage === "undefined" ? null : localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
-
-const storageSet = (key: string, value: string): void => {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // The desktop webview can disable storage in restricted/private contexts.
-  }
 };
 
 function asRecord(value: unknown): Record<string, unknown> {

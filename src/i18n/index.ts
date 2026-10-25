@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { create } from "zustand";
+import { storageGet, storageSet } from "../lib/storage/safeStorage";
 import { en } from "./locales/en";
 import { ptBR } from "./locales/pt-BR";
 
@@ -54,12 +55,8 @@ function isLocale(value: unknown): value is Locale {
 }
 
 function readStoredLocale(): Locale {
-  try {
-    const stored = typeof localStorage === "undefined" ? null : localStorage.getItem(STORAGE_KEY);
-    return isLocale(stored) ? stored : DEFAULT_LOCALE;
-  } catch {
-    return DEFAULT_LOCALE;
-  }
+  const stored = storageGet(STORAGE_KEY);
+  return isLocale(stored) ? stored : DEFAULT_LOCALE;
 }
 
 function lookup(dictionary: unknown, key: string): Leaf | undefined {
@@ -113,11 +110,7 @@ interface LocaleState {
 export const useLocaleStore = create<LocaleState>((set) => ({
   locale: readStoredLocale(),
   setLocale: (locale) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, locale);
-    } catch {
-      // Storage can be unavailable in restricted web views.
-    }
+    storageSet(STORAGE_KEY, locale);
     if (typeof document !== "undefined") document.documentElement.lang = locale;
     set({ locale });
   },

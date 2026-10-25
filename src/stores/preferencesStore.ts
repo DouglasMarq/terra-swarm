@@ -1,6 +1,7 @@
 import { DEFAULT_NAME_LIST, NAME_SETS, type NameSetId, type NamesExhaustedStrategy } from "../domain/agentNames";
 import { create } from "zustand";
 import { t } from "../i18n";
+import { storageGet, storageRemove, storageSet } from "../lib/storage/safeStorage";
 import { DEFAULT_VOICE_LANGUAGE, isVoiceLanguage, type VoiceLanguage } from "../domain/voiceLanguages";
 import {
   detectShortcutPlatform,
@@ -210,30 +211,6 @@ function loadAgentNames(): Record<string, string> {
   }
   return {};
 }
-
-const storageGet = (key: string): string | null => {
-  try {
-    return typeof localStorage === "undefined" ? null : localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
-
-const storageSet = (key: string, value: string): void => {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Storage can be unavailable in private or restricted web views.
-  }
-};
-
-const storageRemove = (key: string): void => {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // Storage can be unavailable in private or restricted web views.
-  }
-};
 
 function loadHotkeys(): Record<HotkeyActionId, Hotkey> {
   try {

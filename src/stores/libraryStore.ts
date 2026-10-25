@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { t } from "../i18n";
+import { storageGet, storageSet } from "../lib/storage/safeStorage";
 
 export interface SavedPrompt {
   id: string;
@@ -20,7 +21,7 @@ function defaultPrompts(): SavedPrompt[] {
 
 function load(): SavedPrompt[] {
   try {
-    const raw = typeof localStorage === "undefined" ? null : localStorage.getItem(STORAGE_KEY);
+    const raw = storageGet(STORAGE_KEY);
     if (!raw) return defaultPrompts();
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return defaultPrompts();
@@ -34,11 +35,7 @@ function load(): SavedPrompt[] {
 }
 
 function persist(prompts: readonly SavedPrompt[]) {
-  try {
-    if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(prompts));
-  } catch {
-    // Private mode or full storage: the library still works for this session.
-  }
+  storageSet(STORAGE_KEY, JSON.stringify(prompts));
 }
 
 /** `{project}` becomes the active project's name. */

@@ -10,7 +10,12 @@ pub mod agents;
 pub mod dev_server;
 mod output;
 mod output_scan;
+#[cfg(unix)]
+mod process_group;
 pub mod shell;
+
+#[cfg(unix)]
+use process_group::ProcessGroup;
 
 use agents::command_available;
 use shell::resolve_shell;
@@ -87,6 +92,8 @@ pub struct PtyEntry {
     /// The terminal's MCP token, held only for its `Drop`: dropping the entry
     /// revokes it.
     pub _mcp_lease: Option<McpLease>,
+    #[cfg(unix)]
+    process_group: Option<Arc<ProcessGroup>>,
 }
 
 fn kill_entry(entry: PtyEntry, disable_scrollback: bool) {
@@ -94,15 +101,9 @@ fn kill_entry(entry: PtyEntry, disable_scrollback: bool) {
         entry.scrollback_enabled.store(false, Ordering::SeqCst);
     }
     #[cfg(unix)]
-    if let Some(pid) = entry.pid {
-        // Only signal the process group if the child has not been reaped yet.
-        // After reaping, the pid (== pgid for a session leader) may already
-        // have been recycled by an unrelated process.
-        if !entry.reaped.load(Ordering::SeqCst) {
-            unsafe {
-                libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
-            }
-        }
+    if let Some(group) = &entry.process_group {
+        group.kill();
+        return;
     }
     if let Err(error) = entry.killer.lock_or_recover().kill() {
         eprintln!("failed to kill a terminal process: {}", error);
@@ -470,6 +471,8 @@ pub fn spawn_terminal_inner<R: Runtime>(
     drop(pair.slave);
 
     let pid = child.process_id();
+    #[cfg(unix)]
+    let process_group = pid.and_then(ProcessGroup::of_leader).map(Arc::new);
     let killer = Arc::new(Mutex::new(child.clone_killer()));
     let reaped = Arc::new(AtomicBool::new(false));
     let scrollback_enabled = Arc::new(AtomicBool::new(true));
@@ -531,6 +534,8 @@ pub fn spawn_terminal_inner<R: Runtime>(
         backlog,
         scrollback_enabled,
         _mcp_lease: mcp_launch.take().map(|launch| launch.lease),
+        #[cfg(unix)]
+        process_group: process_group.clone(),
     };
     manager
         .lock_or_recover()
@@ -548,6 +553,11 @@ pub fn spawn_terminal_inner<R: Runtime>(
         let entry_killer = entry_killer;
         let reaped = monitor_reaped;
         std::thread::spawn(move || {
+            #[cfg(unix)]
+            if let Some(group) = &process_group {
+                group.wait_for_exit();
+                group.kill_and_seal();
+            }
             let code = match child.wait() {
                 Ok(status) => Some(status.exit_code()),
                 Err(error) => {
@@ -568,16 +578,6 @@ pub fn spawn_terminal_inner<R: Runtime>(
                     .is_some_and(|e| Arc::ptr_eq(&e.killer, &entry_killer));
                 if is_current {
                     manager.terminals.remove(&exit_id);
-                }
-            }
-            // Clean up descendants that survive the child: while any of them
-            // lives, the group still owns this pgid, so the signal cannot hit
-            // a recycled group. Dropping the entry also closes the master,
-            // which delivers SIGHUP to the session.
-            #[cfg(unix)]
-            if let Some(pid) = pid {
-                unsafe {
-                    libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
                 }
             }
             let _ = app.emit(

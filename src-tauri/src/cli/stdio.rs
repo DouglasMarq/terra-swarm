@@ -306,7 +306,7 @@ mod tests {
     #[test]
     fn a_stdio_client_talks_to_the_real_server() {
         let (hub, _) = hub();
-        let token = hub.issue(identity("t-4", "ws-1", "opencode"));
+        let token = hub.issue(identity("t-4", "ws-1", "opencode")).unwrap();
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .enable_all()

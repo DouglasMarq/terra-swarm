@@ -909,8 +909,8 @@ mod tests {
     #[test]
     fn two_agents_coordinate_through_the_board() {
         let (hub, events) = hub();
-        hub.issue(identity("t-1", "ws-1", "claude"));
-        hub.issue(identity("t-2", "ws-1", "claude"));
+        hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
+        hub.issue(identity("t-2", "ws-1", "claude")).unwrap();
         let lead = identity("t-1", "ws-1", "claude");
         let helper = identity("t-2", "ws-1", "claude");
 
@@ -1078,8 +1078,8 @@ mod tests {
     #[test]
     fn tools_are_scoped_to_the_callers_workspace() {
         let (hub, _) = hub();
-        hub.issue(identity("t-1", "ws-1", "claude"));
-        hub.issue(identity("t-5", "ws-2", "codex"));
+        hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
+        hub.issue(identity("t-5", "ws-2", "codex")).unwrap();
         let one = identity("t-1", "ws-1", "claude");
         let other = identity("t-5", "ws-2", "codex");
 
@@ -1166,9 +1166,9 @@ mod tests {
             role: Some(Role::Orchestrator),
             ..identity("t-5", "ws-2", "codex")
         };
-        hub.issue(owner.clone());
-        hub.issue(lead.clone());
-        hub.issue(identity("t-6", "ws-2", "codex"));
+        hub.issue(owner.clone()).unwrap();
+        hub.issue(lead.clone()).unwrap();
+        hub.issue(identity("t-6", "ws-2", "codex")).unwrap();
         call(
             &hub,
             &owner,
@@ -1300,8 +1300,8 @@ mod tests {
     #[test]
     fn status_and_notes_round_trip() {
         let (hub, events) = hub();
-        hub.issue(identity("t-1", "ws-1", "claude"));
-        hub.issue(identity("t-2", "ws-1", "codex"));
+        hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
+        hub.issue(identity("t-2", "ws-1", "codex")).unwrap();
         let one = identity("t-1", "ws-1", "claude");
         let two = identity("t-2", "ws-1", "codex");
         call(
@@ -1381,9 +1381,9 @@ mod tests {
             role: Some(Role::Executor),
             ..identity("t-2", "ws-1", "claude")
         };
-        hub.issue(lead.clone());
-        hub.issue(dev.clone());
-        hub.issue(identity("t-3", "ws-1", "codex"));
+        hub.issue(lead.clone()).unwrap();
+        hub.issue(dev.clone()).unwrap();
+        hub.issue(identity("t-3", "ws-1", "codex")).unwrap();
 
         let me = call(
             &hub,

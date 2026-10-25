@@ -337,7 +337,7 @@ mod tests {
     #[test]
     fn initialize_list_and_call_over_http() {
         let (hub, _) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
 
         let init = initialize(&server, &token);
@@ -393,7 +393,7 @@ mod tests {
     #[test]
     fn requests_without_a_valid_token_get_401() {
         let (hub, _) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
         let ping = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {} });
 
@@ -404,7 +404,7 @@ mod tests {
         assert_eq!(server.post(Some(&token), ping.clone()).0, 401);
 
         // A killed terminal drops its PTY entry, and with it the lease.
-        let lease_token = hub.issue(identity("t-2", "ws-1", "claude"));
+        let lease_token = hub.issue(identity("t-2", "ws-1", "claude")).unwrap();
         let lease = crate::mcp::McpLease::new(&hub, lease_token.clone());
         assert_eq!(server.post(Some(&lease_token), ping.clone()).0, 200);
         drop(lease);
@@ -414,8 +414,8 @@ mod tests {
     #[test]
     fn a_token_only_sees_its_own_workspace() {
         let (hub, _) = hub();
-        let mine = hub.issue(identity("t-1", "ws-1", "claude"));
-        let theirs = hub.issue(identity("t-7", "ws-2", "codex"));
+        let mine = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
+        let theirs = hub.issue(identity("t-7", "ws-2", "codex")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
         initialize(&server, &mine);
         server.rpc(
@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn browser_origins_are_rejected() {
         let (hub, _) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let server = TestServer::start(Arc::clone(&hub));
         let (status, _) = server.post_with(
             Some(&token),

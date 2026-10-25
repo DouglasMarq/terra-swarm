@@ -31,12 +31,10 @@ impl AgentIdentity {
 
 const TOKEN_BYTES: usize = 32;
 
-pub fn new_token() -> String {
+pub fn new_token() -> Result<String, getrandom::Error> {
     let mut bytes = [0u8; TOKEN_BYTES];
-    // getrandom only fails when the OS has no entropy source at all; a
-    // guessable token is worse than not starting the terminal's access.
-    getrandom::fill(&mut bytes).expect("no OS randomness available for MCP tokens");
-    bytes.iter().map(|byte| format!("{:02x}", byte)).collect()
+    getrandom::fill(&mut bytes)?;
+    Ok(bytes.iter().map(|byte| format!("{:02x}", byte)).collect())
 }
 
 /// `t-2` sorts before `t-10`.
@@ -55,12 +53,12 @@ pub struct TokenRegistry {
 
 impl TokenRegistry {
     /// A fresh token for a terminal; any older token of it stops working.
-    pub fn issue(&mut self, identity: AgentIdentity) -> String {
-        let token = new_token();
+    pub fn issue(&mut self, identity: AgentIdentity) -> Result<String, getrandom::Error> {
+        let token = new_token()?;
         self.by_token
             .retain(|_, existing| existing.terminal_id != identity.terminal_id);
         self.by_token.insert(token.clone(), identity);
-        token
+        Ok(token)
     }
 
     pub fn identify(&self, token: &str) -> Option<AgentIdentity> {
@@ -149,8 +147,8 @@ mod tests {
     #[test]
     fn tokens_are_unique_and_replaced_per_terminal() {
         let mut registry = TokenRegistry::default();
-        let first = registry.issue(identity("t-1", "ws-1"));
-        let second = registry.issue(identity("t-1", "ws-1"));
+        let first = registry.issue(identity("t-1", "ws-1")).unwrap();
+        let second = registry.issue(identity("t-1", "ws-1")).unwrap();
         assert_ne!(first, second);
         assert_eq!(first.len(), 64);
         assert!(registry.identify(&first).is_none());
@@ -163,9 +161,9 @@ mod tests {
     #[test]
     fn peers_are_per_workspace_and_ordered() {
         let mut registry = TokenRegistry::default();
-        registry.issue(identity("t-10", "ws-1"));
-        registry.issue(identity("t-2", "ws-1"));
-        registry.issue(identity("t-3", "ws-2"));
+        registry.issue(identity("t-10", "ws-1")).unwrap();
+        registry.issue(identity("t-2", "ws-1")).unwrap();
+        registry.issue(identity("t-3", "ws-2")).unwrap();
         let peers: Vec<String> = registry
             .peers("ws-1")
             .into_iter()

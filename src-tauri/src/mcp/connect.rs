@@ -49,7 +49,13 @@ impl<R: Runtime> McpHub<R> {
             agent: agent_of(command),
             role,
         };
-        let token = self.issue(identity.clone());
+        let token = match self.issue(identity.clone()) {
+            Ok(token) => token,
+            Err(error) => {
+                eprintln!("cannot issue an MCP token for {}: {}", terminal_id, error);
+                return None;
+            }
+        };
         let lease = McpLease::new(self, token.clone());
         let endpoints = Endpoints {
             hook_url: hook_url_of(&url),

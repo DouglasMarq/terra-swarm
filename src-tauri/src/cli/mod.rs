@@ -140,7 +140,7 @@ mod tests {
     #[test]
     fn a_hook_post_reaches_the_server_and_sets_the_state() {
         let (hub, _) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .enable_all()

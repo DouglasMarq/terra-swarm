@@ -222,7 +222,7 @@ impl<R: Runtime> McpHub<R> {
 
     // ----- tokens ---------------------------------------------------------
 
-    pub fn issue(&self, identity: AgentIdentity) -> String {
+    pub fn issue(&self, identity: AgentIdentity) -> Result<String, getrandom::Error> {
         self.tokens.lock_or_recover().issue(identity)
     }
 
@@ -429,9 +429,9 @@ mod tests {
     #[test]
     fn dropping_a_lease_revokes_its_token_only() {
         let (hub, events) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         let lease = McpLease::new(&hub, token.clone());
-        let newer = hub.issue(identity("t-1", "ws-1", "claude"));
+        let newer = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         // The stale lease belongs to a replaced token: dropping it must not
         // log the restarted terminal out.
         drop(lease);
@@ -448,7 +448,7 @@ mod tests {
     #[test]
     fn purge_revokes_tokens_and_clears_data() {
         let (hub, events) = hub();
-        let token = hub.issue(identity("t-1", "ws-1", "claude"));
+        let token = hub.issue(identity("t-1", "ws-1", "claude")).unwrap();
         tasks::create(
             &mut hub.repo().unwrap(),
             &actor("ws-1", "t-1"),

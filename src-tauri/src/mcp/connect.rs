@@ -43,43 +43,64 @@ impl<R: Runtime> McpHub<R> {
             return None;
         }
         let url = self.url()?;
-        let agent = agent_of(command);
-        let token = self.issue(AgentIdentity {
+        let identity = AgentIdentity {
             terminal_id: terminal_id.to_string(),
             workspace_id: workspace_id.to_string(),
-            agent: agent.clone(),
+            agent: agent_of(command),
             role,
-        });
+        };
+        let token = self.issue(identity.clone());
         let lease = McpLease::new(self, token.clone());
-        let hook_url =
-            url.trim_end_matches(super::server::MCP_PATH).to_string() + super::hooks::HOOKS_PATH;
+        let endpoints = Endpoints {
+            hook_url: hook_url_of(&url),
+            url,
+        };
         let hook_program = self.hook_program();
         let brief = role.map(Role::brief);
         let context = LaunchContext {
-            url: &url,
-            hook_url: &hook_url,
+            url: &endpoints.url,
+            hook_url: &endpoints.hook_url,
             hook_program: hook_program.as_deref(),
             config_dir: self.config_dir().map(PathBuf::as_path),
             system_prompt: brief.as_deref(),
             quoting,
         };
-        let command = if command.trim().is_empty() || command.trim() == "shell" {
-            command.to_string()
-        } else {
-            rewrite_command(command, &agent, &context)
-        };
         Some(McpLaunch {
-            env: vec![
-                (ENV_URL.into(), url.clone()),
-                (ENV_HOOK_URL.into(), hook_url),
-                (ENV_TOKEN.into(), token),
-                (ENV_PANE_ID.into(), terminal_id.to_string()),
-                (ENV_WORKSPACE_ID.into(), workspace_id.to_string()),
-            ],
-            command,
+            command: agent_command(command, &identity.agent, &context),
+            env: launch_env(&identity, &endpoints, token),
             lease,
         })
     }
+}
+
+struct Endpoints {
+    url: String,
+    hook_url: String,
+}
+
+fn hook_url_of(url: &str) -> String {
+    url.trim_end_matches(super::server::MCP_PATH).to_string() + super::hooks::HOOKS_PATH
+}
+
+fn agent_command(command: &str, agent: &str, context: &LaunchContext<'_>) -> String {
+    if command.trim().is_empty() || command.trim() == "shell" {
+        return command.to_string();
+    }
+    rewrite_command(command, agent, context)
+}
+
+fn launch_env(
+    identity: &AgentIdentity,
+    endpoints: &Endpoints,
+    token: String,
+) -> Vec<(String, String)> {
+    vec![
+        (ENV_URL.into(), endpoints.url.clone()),
+        (ENV_HOOK_URL.into(), endpoints.hook_url.clone()),
+        (ENV_TOKEN.into(), token),
+        (ENV_PANE_ID.into(), identity.terminal_id.clone()),
+        (ENV_WORKSPACE_ID.into(), identity.workspace_id.clone()),
+    ]
 }
 
 #[cfg(test)]

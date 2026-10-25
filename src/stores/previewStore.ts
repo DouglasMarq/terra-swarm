@@ -28,7 +28,7 @@ export interface PreviewState {
   detected: Record<string, string[]>;
   /** The URL each workspace's panel shows. */
   selected: Record<string, string>;
-  probing: boolean;
+  isProbing: boolean;
   addDetected: (workspaceId: string, url: string) => void;
   select: (workspaceId: string, url: string) => void;
   /** Look for listening dev servers; `exclude` is Terra's own MCP port. */
@@ -39,7 +39,7 @@ export interface PreviewState {
 export const usePreviewStore = create<PreviewState>((set, get) => ({
   detected: {},
   selected: {},
-  probing: false,
+  isProbing: false,
 
   addDetected: (workspaceId, url) => {
     const clean = loopbackUrl(url);
@@ -57,18 +57,18 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
   },
 
   probe: async (workspaceId, exclude = null) => {
-    set({ probing: true });
+    set({ isProbing: true });
     try {
       const ports = await previewApi.probeDevServers(COMMON_DEV_PORTS.filter((port) => port !== exclude));
       for (const port of [...ports].reverse()) get().addDetected(workspaceId, `http://localhost:${port}/`);
     } catch (error) {
       console.warn("dev server probe failed:", error);
     } finally {
-      set({ probing: false });
+      set({ isProbing: false });
     }
   },
 
-  reset: () => set({ detected: {}, selected: {}, probing: false }),
+  reset: () => set({ detected: {}, selected: {}, isProbing: false }),
 }));
 
 /** Collect the URLs terminals print, per workspace. */

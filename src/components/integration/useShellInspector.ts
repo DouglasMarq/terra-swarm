@@ -44,7 +44,7 @@ export function useShellInspector(
     target,
     label: target ? agents.agentLabels[target.terminalId] ?? null : null,
     status: terminal ? agents.agentStatus(terminal) : "working",
-    request: inspectorSignals.find((item) => !item.read && !item.system) ?? null,
+    request: inspectorSignals.find((item) => !item.isRead && !item.isSystem) ?? null,
     activity: inspectorSignals.slice(0, INSPECTOR_ACTIVITY_LIMIT),
     runtime,
     usage,

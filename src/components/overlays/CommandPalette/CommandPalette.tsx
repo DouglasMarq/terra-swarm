@@ -39,14 +39,14 @@ import {
 import styles from "./CommandPalette.module.css";
 
 export interface CommandPaletteProps extends Omit<CommandPaletteData, "workspaces" | "groups" | "agents"> {
-  open: boolean;
+  isOpen: boolean;
   workspaces: readonly Workspace[];
   groups?: readonly WorkspaceGroup[];
   agents?: readonly AgentInfo[];
   callbacks?: CommandPaletteCallbacks;
   /** Called for destructive actions; the command is not dispatched until the host confirms. */
   onRequestConfirm?: (request: CommandConfirmRequest) => void;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (isOpen: boolean) => void;
 }
 
 const ICONS: Readonly<Record<CommandIconName, LucideIcon>> = {
@@ -83,7 +83,7 @@ function commandKey(command: CommandDescriptor): string {
 
 /** Terra's keyboard-first command surface. Ctrl/Cmd+K ownership remains with the host. */
 export function CommandPalette({
-  open,
+  isOpen,
   workspaces,
   groups = [],
   agents = [],
@@ -93,9 +93,9 @@ export function CommandPalette({
   recentCommandIds = [],
   hasDetachedTabs = false,
   hasRecentlyClosedTabs = false,
-  dockOpen,
-  voiceEnabled,
-  voiceRecording,
+  isDockOpen,
+  isVoiceEnabled,
+  isVoiceRecording,
   agentLabels,
   resumeCount,
   exitedTerminalIds,
@@ -106,7 +106,7 @@ export function CommandPalette({
   const translate = useT();
   const [query, setQuery] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
-  const commands = open ? buildCommandModel({
+  const commands = isOpen ? buildCommandModel({
     workspaces,
     groups,
     agents,
@@ -116,9 +116,9 @@ export function CommandPalette({
     recentCommandIds,
     hasDetachedTabs,
     hasRecentlyClosedTabs,
-    dockOpen,
-    voiceEnabled,
-    voiceRecording,
+    isDockOpen,
+    isVoiceEnabled,
+    isVoiceRecording,
     agentLabels,
     resumeCount,
     exitedTerminalIds,
@@ -126,11 +126,11 @@ export function CommandPalette({
   const visibleGroups = groupCommands(filterCommands(commands, query)).filter((group) => group.commands.length > 0);
 
   useEffect(() => {
-    if (!open) {
+    if (!isOpen) {
       setQuery("");
       setStatusMessage("");
     }
-  }, [open]);
+  }, [isOpen]);
 
   function handleSelect(commandId: string) {
     const selected = commands.find((candidate) => commandKey(candidate) === commandId);
@@ -157,7 +157,7 @@ export function CommandPalette({
       label={translate("palette.title")}
       loop
       onOpenChange={onOpenChange}
-      open={open}
+      open={isOpen}
       overlayClassName={styles.overlay}
       shouldFilter={false}
     >
@@ -188,7 +188,7 @@ export function CommandPalette({
                   return (
                     <Command.Item
                       className={classes(styles.item, command.confirmation && styles.destructive)}
-                      disabled={command.disabled}
+                      disabled={command.isDisabled}
                       key={command.id}
                       keywords={[...command.keywords]}
                       onSelect={() => handleSelect(command.id)}

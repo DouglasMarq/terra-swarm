@@ -11,8 +11,8 @@ export interface PaneMenuItem {
   /** Secondary line, e.g. the resume command that will be copied. */
   detail?: string;
   shortcut?: string;
-  danger?: boolean;
-  disabled?: boolean;
+  isDanger?: boolean;
+  isDisabled?: boolean;
   onSelect: () => void;
 }
 
@@ -29,7 +29,7 @@ export interface PaneActionsMenuProps {
  * actions; the header itself only keeps Maximize visible.
  */
 export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
-  const [open, setOpen] = useState(false);
+  const [isOpen, setOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -38,7 +38,7 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
   // overflow, so an in-pane dropdown was cut off in dense grids. Open below
   // the trigger, flip above when there is no room, and stay on screen.
   useLayoutEffect(() => {
-    if (!open) {
+    if (!isOpen) {
       setPosition(null);
       return;
     }
@@ -57,10 +57,10 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
     place();
     window.addEventListener("resize", place);
     return () => window.removeEventListener("resize", place);
-  }, [open]);
+  }, [isOpen]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!isOpen) return;
     const close = (event: PointerEvent) => {
       const target = event.target as Node;
       if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
@@ -69,7 +69,7 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
     document.addEventListener("pointerdown", close);
     menuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     return () => document.removeEventListener("pointerdown", close);
-  }, [open]);
+  }, [isOpen]);
 
   const onMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
@@ -95,13 +95,13 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
         aria-label={label}
         title={label}
         aria-haspopup="menu"
-        aria-expanded={open}
-        data-open={open}
-        onClick={() => setOpen((value) => !value)}
+        aria-expanded={isOpen}
+        data-open={isOpen}
+        onClick={() => setOpen((isCurrentlyOpen) => !isCurrentlyOpen)}
       >
         <MoreHorizontal size={14} aria-hidden="true" />
       </button>
-      {open ? createPortal(
+      {isOpen ? createPortal(
         <div
           className="pane-menu-list terra-anim-pop"
           role="menu"
@@ -123,8 +123,8 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
                   role="menuitem"
                   key={item.id}
                   className="pane-menu-item"
-                  data-danger={item.danger}
-                  disabled={item.disabled}
+                  data-danger={item.isDanger}
+                  disabled={item.isDisabled}
                   onClick={() => {
                     setOpen(false);
                     item.onSelect();

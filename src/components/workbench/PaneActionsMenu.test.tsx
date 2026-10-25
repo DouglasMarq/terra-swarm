@@ -16,7 +16,7 @@ describe("PaneActionsMenu", () => {
         groups={[
           [{ id: "restart", label: "Reiniciar", shortcut: "⌘R", onSelect: restart }],
           [{ id: "copy", label: "Copiar comando de retomada", detail: "claude --continue", onSelect: vi.fn() }],
-          [{ id: "kill", label: "Encerrar sessão…", danger: true, onSelect: kill }],
+          [{ id: "kill", label: "Encerrar sessão…", isDanger: true, onSelect: kill }],
         ]}
       />,
     );

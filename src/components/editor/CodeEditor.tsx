@@ -61,13 +61,13 @@ export default function CodeEditor({ docKey, path, initial, onChange, onSave }: 
       }),
     });
     view.focus();
-    let disposed = false;
+    let isDisposed = false;
     const description = LanguageDescription.matchFilename(languages, path.split("/").pop() ?? path);
     void description?.load().then((support) => {
-      if (!disposed) view.dispatch({ effects: language.reconfigure(support) });
+      if (!isDisposed) view.dispatch({ effects: language.reconfigure(support) });
     });
     return () => {
-      disposed = true;
+      isDisposed = true;
       view.destroy();
     };
     // The editor owns the text after mount; only a new document resets it.

@@ -3,7 +3,7 @@ import type { NotificationItem } from "./notification.model";
 import { latestUnreadPerAgent, shouldNotify } from "./notifications";
 
 function item(key: number, terminalId: string, fields: Pick<NotificationItem, "ts"> & Partial<NotificationItem>): NotificationItem {
-  return { key, terminalId, workspaceId: "ws-1", message: `message ${key}`, read: false, ...fields };
+  return { key, terminalId, workspaceId: "ws-1", message: `message ${key}`, isRead: false, ...fields };
 }
 
 describe("latestUnreadPerAgent", () => {
@@ -15,8 +15,8 @@ describe("latestUnreadPerAgent", () => {
   it("given read and system messages, skips them", () => {
     const latest = latestUnreadPerAgent([
       item(1, "t-1", { ts: 10 }),
-      item(2, "t-1", { ts: 30, read: true }),
-      item(3, "t-2", { ts: 20, system: true }),
+      item(2, "t-1", { ts: 30, isRead: true }),
+      item(3, "t-2", { ts: 20, isSystem: true }),
     ]);
     expect(latest.map((entry) => entry.key)).toEqual([1]);
   });

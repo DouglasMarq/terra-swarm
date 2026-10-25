@@ -84,8 +84,8 @@ describe("command palette model", () => {
     const createAgent = vi.fn();
 
     expect(generic?.label).toBe("Novo agente… (selecione um projeto)");
-    expect(generic?.disabled).toBe(true);
-    expect(codex?.disabled).toBe(true);
+    expect(generic?.isDisabled).toBe(true);
+    expect(codex?.isDisabled).toBe(true);
     expect(executeCommand(defined(generic), { onCreateAgent: createAgent }).kind).toBe("unavailable");
     expect(createAgent).not.toHaveBeenCalled();
   });
@@ -136,19 +136,19 @@ describe("command palette model", () => {
     const start = vi.fn();
     const stop = vi.fn();
 
-    const disabled = buildCommandModel({ workspaces, voiceEnabled: false });
+    const disabled = buildCommandModel({ workspaces, isVoiceEnabled: false });
     const settingsCommand = disabled.find((command) => command.id === "settings:voice");
     expect(settingsCommand?.label).toBe("Configurar entrada por voz");
     expect(executeCommand(defined(settingsCommand), { onOpenVoiceSettings: settings }).kind).toBe("executed");
     expect(settings).toHaveBeenCalledOnce();
 
-    const idle = buildCommandModel({ workspaces, voiceEnabled: true, voiceRecording: false });
+    const idle = buildCommandModel({ workspaces, isVoiceEnabled: true, isVoiceRecording: false });
     const startCommand = idle.find((command) => command.id === "voice:start");
     expect(startCommand?.label).toBe("Iniciar captura de voz");
     expect(executeCommand(defined(startCommand), { onStartVoice: start }).kind).toBe("executed");
     expect(start).toHaveBeenCalledOnce();
 
-    const recording = buildCommandModel({ workspaces, voiceEnabled: true, voiceRecording: true });
+    const recording = buildCommandModel({ workspaces, isVoiceEnabled: true, isVoiceRecording: true });
     const stopCommand = recording.find((command) => command.id === "voice:stop");
     expect(stopCommand?.label).toBe("Parar captura de voz");
     expect(executeCommand(defined(stopCommand), { onStopVoice: stop }).kind).toBe("executed");

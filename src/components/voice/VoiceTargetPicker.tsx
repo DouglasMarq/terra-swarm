@@ -31,10 +31,10 @@ export interface VoiceTargetPickerProps {
  */
 export function VoiceTargetPicker({ projects, targetId, onChange }: VoiceTargetPickerProps) {
   const translate = useT();
-  const [open, setOpen] = useState(false);
+  const [isOpen, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!open) return;
+    if (!isOpen) return;
     const onPointerDown = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
@@ -50,12 +50,12 @@ export function VoiceTargetPicker({ projects, targetId, onChange }: VoiceTargetP
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [open]);
+  }, [isOpen]);
   const target = projects.flatMap((project) => project.agents.map((agent) => ({ agent, project }))).find(({ agent }) => agent.id === targetId);
 
   return (
     <div className="terra-voice-target" ref={rootRef}>
-      {open ? (
+      {isOpen ? (
         <div className="terra-voice-target-list terra-anim-pop" role="listbox" aria-label={translate("voice.sendTo")}>
           <div className="terra-voice-target-head">
             <b>{translate("voice.sendTo")}</b>
@@ -65,15 +65,15 @@ export function VoiceTargetPicker({ projects, targetId, onChange }: VoiceTargetP
             <div className="terra-voice-target-group" role="group" aria-label={project.name} key={project.id}>
               <span className="terra-voice-target-project">{project.name}</span>
               {project.agents.map((agent) => {
-                const selected = agent.id === targetId;
+                const isSelected = agent.id === targetId;
                 return (
                   <button
                     type="button"
                     role="option"
-                    aria-selected={selected}
+                    aria-selected={isSelected}
                     key={agent.id}
                     className="terra-voice-target-option"
-                    data-selected={selected}
+                    data-selected={isSelected}
                     disabled={agent.status === "suspended"}
                     onClick={() => {
                       onChange(agent.id);
@@ -88,7 +88,7 @@ export function VoiceTargetPicker({ projects, targetId, onChange }: VoiceTargetP
                       </span>
                     </span>
                     <span className="terra-tag">{agent.tag}</span>
-                    {selected ? <Check size={14} aria-hidden="true" /> : null}
+                    {isSelected ? <Check size={14} aria-hidden="true" /> : null}
                   </button>
                 );
               })}
@@ -103,8 +103,8 @@ export function VoiceTargetPicker({ projects, targetId, onChange }: VoiceTargetP
           type="button"
           className="terra-voice-target-chip"
           aria-haspopup="listbox"
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
+          aria-expanded={isOpen}
+          onClick={() => setOpen((isCurrentlyOpen) => !isCurrentlyOpen)}
         >
           <span className="terra-dot" data-status={target?.agent.status ?? "working"} aria-hidden="true" />
           {target ? agentLabelText(target.agent) : translate("voice.noTarget")}

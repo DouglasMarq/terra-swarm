@@ -38,7 +38,7 @@ const collision: CollisionDetection = (args) => {
 
 export interface BoardAgent extends TaskAgentOption {
   /** Agents that are not running cannot take a task. */
-  running: boolean;
+  isRunning: boolean;
 }
 
 export interface TaskBoardProps {
@@ -106,7 +106,7 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
     setDragging(null);
     const task = list.find((candidate) => `task:${candidate.id}` === event.active.id);
     if (!task) return;
-    const running = new Set(agents.filter((agent) => agent.running).map((agent) => agent.id));
+    const running = new Set(agents.filter((agent) => agent.isRunning).map((agent) => agent.id));
     const plan = planDrop(task, event.over ? String(event.over.id) : null, { tasks: list, runningAgents: running });
     if (plan?.kind === "update") void update(task.id, plan.patch);
     if (plan?.kind === "handoff") {
@@ -178,12 +178,12 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
           <aside className="terra-board-agents" aria-label={translate("tasks.board.agents")}>
             <h3>{translate("tasks.board.agents")}</h3>
             <p className="terra-tasks-hint">{translate("tasks.board.agentsHint")}</p>
-            {agents.some((agent) => agent.running) ? null : <p className="terra-tasks-hint">{translate("tasks.board.noAgents")}</p>}
+            {agents.some((agent) => agent.isRunning) ? null : <p className="terra-tasks-hint">{translate("tasks.board.noAgents")}</p>}
             <button type="button" className="terra-board-team" onClick={() => useLibraryStore.getState().openDialog("team")}>
               <Users size={13} aria-hidden="true" /> {translate("palette.startTeam")}
             </button>
             <ul>
-              {agents.filter((agent) => agent.running).map((agent) => (
+              {agents.filter((agent) => agent.isRunning).map((agent) => (
                 <li key={agent.id}>
                   <AgentDrop agent={agent} status={statuses[agent.id]} />
                 </li>

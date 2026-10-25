@@ -123,13 +123,13 @@ export const getActiveTab = selectActiveTab;
 
 function descendantGroupIds(snapshot: WorkspaceSnapshotV2, groupId: string): Set<string> {
   const result = new Set<string>([groupId]);
-  let changed = true;
-  while (changed) {
-    changed = false;
+  let hasChanged = true;
+  while (hasChanged) {
+    hasChanged = false;
     for (const group of snapshot.groups) {
       if (group.parentGroupId && result.has(group.parentGroupId) && !result.has(group.id)) {
         result.add(group.id);
-        changed = true;
+        hasChanged = true;
       }
     }
   }

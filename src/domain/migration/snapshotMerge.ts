@@ -336,10 +336,10 @@ function mergedContainer(
       merge.incoming.layout,
     ),
   };
-  const requestedVisibility = merge.containerVisibility?.[container.id];
-  if (requestedVisibility !== undefined) {
-    container.visible = requestedVisibility;
-    container.closed = !requestedVisibility;
+  const isRequestedVisible = merge.containerVisibility?.[container.id];
+  if (isRequestedVisible !== undefined) {
+    container.visible = isRequestedVisible;
+    container.closed = !isRequestedVisible;
   }
   return container;
 }

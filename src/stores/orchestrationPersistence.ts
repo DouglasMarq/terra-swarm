@@ -8,7 +8,7 @@ export interface OrchestrationProjection {
   groups: Group[];
   containerVisibility: Record<string, boolean>;
   detachedTerminalIds: string[];
-  hydrated: boolean;
+  isHydrated: boolean;
 }
 
 export interface PersistenceEngineDeps {
@@ -78,7 +78,7 @@ export function createPersistenceEngine({ read, apply, reportError }: Persistenc
         groups: [...state.groups],
         containerVisibility: { ...state.containerVisibility },
         detachedTerminalIds: [...state.detachedTerminalIds],
-        hydrated: state.hydrated,
+        isHydrated: state.isHydrated,
       },
     };
   };
@@ -105,7 +105,7 @@ export function createPersistenceEngine({ read, apply, reportError }: Persistenc
       groups: derived.groups,
       containerVisibility: snapshotContainerVisibility(derived.snapshot),
       detachedTerminalIds: liveDetachedTerminalIds(workspaces, read().detachedTerminalIds),
-      hydrated: true,
+      isHydrated: true,
     };
   };
 

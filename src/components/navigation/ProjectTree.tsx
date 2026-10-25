@@ -84,12 +84,12 @@ function actionSet(props: ProjectTreeViewProps): NavigatorNodeActions {
 }
 
 function renderNode(node: NavigatorNode, props: ProjectTreeViewProps, actions: NavigatorNodeActions): ReactNode {
-  const expanded = props.expandedIds.has(node.id);
+  const isExpanded = props.expandedIds.has(node.id);
   const common = {
-    active: nodeActive(node, props),
-    expanded,
-    selected: nodeSelected(node, props),
-    visible: node.kind === "project" ? node.visible : true,
+    isActive: nodeActive(node, props),
+    isExpanded,
+    isSelected: nodeSelected(node, props),
+    isVisible: node.kind === "project" ? node.isVisible : true,
   };
   let row: ReactNode;
   if (node.kind === "group") {
@@ -106,7 +106,7 @@ function renderNode(node: NavigatorNode, props: ProjectTreeViewProps, actions: N
   return (
     <div key={`${node.kind}:${node.id}`}>
       {row}
-      {expanded && node.children.length > 0 ? node.children.map((child) => renderNode(child, props, actions)) : null}
+      {isExpanded && node.children.length > 0 ? node.children.map((child) => renderNode(child, props, actions)) : null}
     </div>
   );
 }

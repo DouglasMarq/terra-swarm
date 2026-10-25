@@ -85,7 +85,7 @@ export interface TerraDialogProps extends Omit<DialogPrimitive.DialogProps, "chi
   className?: string;
   titleClassName?: string;
   descriptionClassName?: string;
-  showCloseButton?: boolean;
+  shouldShowCloseButton?: boolean;
 }
 
 /** A complete dialog for small forms and confirmations. */
@@ -95,7 +95,7 @@ export function TerraDialog({
   description,
   descriptionClassName,
   footer,
-  showCloseButton = true,
+  shouldShowCloseButton = true,
   title,
   titleClassName,
   ...rootProps
@@ -114,7 +114,7 @@ export function TerraDialog({
           </DialogHeader>
           {children}
           {footer ? <DialogFooter>{footer}</DialogFooter> : null}
-          {showCloseButton ? (
+          {shouldShowCloseButton ? (
             <DialogClose className={styles.closeButton} aria-label={translate("common.close")}>
               <X aria-hidden="true" size={16} strokeWidth={1.8} />
             </DialogClose>

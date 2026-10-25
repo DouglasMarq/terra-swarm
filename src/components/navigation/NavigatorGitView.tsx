@@ -30,7 +30,7 @@ export function NavigatorGitView({
   const workspace = workspaces.find((candidate) => candidate.id === activeWorkspaceId) ?? null;
   const workspaceId = workspace?.id ?? null;
   const [status, setStatus] = useState<WorkspaceGitStatus | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
 
@@ -80,10 +80,10 @@ export function NavigatorGitView({
             {workspaces.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
           </select>
         </label>
-        <button aria-label={translate("nav.git.refresh")} className={styles.integrationRefresh} disabled={!workspace || loading} onClick={() => void refresh()} type="button"><RefreshCw size={13} /></button>
+        <button aria-label={translate("nav.git.refresh")} className={styles.integrationRefresh} disabled={!workspace || isLoading} onClick={() => void refresh()} type="button"><RefreshCw size={13} /></button>
       </div>
       {!workspace ? <div className={styles.integrationEmpty}>{translate("nav.git.pick")}</div> : null}
-      {workspace && loading && !status ? <div className={styles.integrationLoading}><LoaderCircle className={styles.spin} size={14} /> {translate("nav.git.loading")}</div> : null}
+      {workspace && isLoading && !status ? <div className={styles.integrationLoading}><LoaderCircle className={styles.spin} size={14} /> {translate("nav.git.loading")}</div> : null}
       {workspace && error !== null ? <div className={styles.integrationError}><AlertCircle aria-hidden="true" size={14} /><span>{error || translate("nav.git.error")}</span><button aria-label={translate("nav.retry")} onClick={() => void refresh()} type="button"><RefreshCw size={12} /></button></div> : null}
       {workspace && status ? (
         <div className={styles.integrationList}>

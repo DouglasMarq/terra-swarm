@@ -31,7 +31,7 @@ export interface InspectorTarget {
   cwd: string;
   state: InspectorRuntimeState;
   contextUsage: number | null;
-  detached: boolean;
+  isDetached: boolean;
 }
 
 export interface ResolveInspectorTargetOptions {
@@ -83,13 +83,13 @@ export function resolveInspectorTarget(
     ?? snapshot?.groups.find((candidate) => candidate.id === groupId)
     ?? null;
   const profile = profileForCommand(terminal.command);
-  const tabSuspended = tab !== null
+  const isTabSuspended = tab !== null
     && typeof tab === "object"
     && "suspended" in tab
     && Boolean((tab as { suspended?: unknown }).suspended);
   const state: InspectorRuntimeState = terminal.id in exited
     ? "encerrado"
-    : terminal.suspended || tabSuspended || group?.suspended
+    : terminal.suspended || isTabSuspended || group?.suspended
       ? "suspenso"
       : "ativo";
   const usage = contextUsage[terminal.id];
@@ -110,7 +110,7 @@ export function resolveInspectorTarget(
     cwd: tab?.cwd || workspace.cwd,
     state,
     contextUsage: typeof usage === "number" && Number.isFinite(usage) ? usage : null,
-    detached: detachedTerminalIds.includes(terminal.id),
+    isDetached: detachedTerminalIds.includes(terminal.id),
   };
 }
 

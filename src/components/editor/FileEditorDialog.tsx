@@ -25,10 +25,10 @@ export function FileEditorDialog() {
   const close = useEditorStore((state) => state.close);
   const editor = useFileEditor(target);
   const { file, loadError, saveError, generation } = editor;
-  const conflict = editor.hasConflict;
-  const saving = editor.isSaving;
-  const dirty = editor.isDirty;
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const hasConflict = editor.hasConflict;
+  const isSaving = editor.isSaving;
+  const isDirty = editor.isDirty;
+  const [isConfirmingDiscard, setConfirmDiscard] = useState(false);
 
   useEffect(() => {
     setConfirmDiscard(false);
@@ -39,12 +39,12 @@ export function FileEditorDialog() {
     void editor.load();
   };
 
-  const save = async (overwrite = false) => {
-    if (await editor.save(overwrite)) setConfirmDiscard(false);
+  const save = async (shouldOverwrite = false) => {
+    if (await editor.save(shouldOverwrite)) setConfirmDiscard(false);
   };
 
   const requestClose = () => {
-    if (dirty && !confirmDiscard) {
+    if (isDirty && !isConfirmingDiscard) {
       setConfirmDiscard(true);
       return;
     }
@@ -55,14 +55,14 @@ export function FileEditorDialog() {
     <TerraDialog
       className="terra-editor"
       open={target !== null}
-      onOpenChange={(open) => {
-        if (!open) requestClose();
+      onOpenChange={(isOpen) => {
+        if (!isOpen) requestClose();
       }}
       title={
         <span className="terra-editor-title">
           <FileText size={14} aria-hidden="true" />
           {target?.path ?? ""}
-          {dirty ? <span className="terra-editor-dirty" aria-label={translate("editor.unsaved")} title={translate("editor.unsaved")}>●</span> : null}
+          {isDirty ? <span className="terra-editor-dirty" aria-label={translate("editor.unsaved")} title={translate("editor.unsaved")}>●</span> : null}
         </span>
       }
       description={file ? translate("editor.meta", { size: Math.max(1, Math.round(file.size / BYTES_PER_KIB)), shortcut: formatShortcut(SAVE_SHORTCUT) }) : translate("editor.loading")}
@@ -81,25 +81,25 @@ export function FileEditorDialog() {
         )}
       </div>
       {saveError ? <p className="terra-editor-error" role="alert">{saveError}</p> : null}
-      {confirmDiscard ? <p className="terra-editor-error" role="alert">{translate("editor.discardPrompt")}</p> : null}
+      {isConfirmingDiscard ? <p className="terra-editor-error" role="alert">{translate("editor.discardPrompt")}</p> : null}
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={requestClose}>
-          {confirmDiscard ? translate("editor.discard") : translate("common.close")}
+          {isConfirmingDiscard ? translate("editor.discard") : translate("common.close")}
         </Button>
-        {conflict ? (
+        {hasConflict ? (
           <>
             <Button type="button" onClick={load}>
               <RotateCw size={14} aria-hidden="true" />
               {translate("editor.reload")}
             </Button>
-            <Button type="button" variant="danger" onClick={() => void save(true)} disabled={saving}>
+            <Button type="button" variant="danger" onClick={() => void save(true)} disabled={isSaving}>
               {translate("editor.overwrite")}
             </Button>
           </>
         ) : (
-          <Button type="button" variant="primary" onClick={() => void save()} disabled={!dirty || saving || !file || file.binary}>
+          <Button type="button" variant="primary" onClick={() => void save()} disabled={!isDirty || isSaving || !file || file.binary}>
             <Save size={14} aria-hidden="true" />
-            {saving ? translate("editor.saving") : translate("editor.save")}
+            {isSaving ? translate("editor.saving") : translate("editor.save")}
           </Button>
         )}
       </DialogFooter>

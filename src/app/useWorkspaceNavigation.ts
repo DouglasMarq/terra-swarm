@@ -16,13 +16,13 @@ export function useWorkspaceNavigation({ workspaces, snapshot, activeId, focused
 
   const containerIdForWorkspace = (
     workspaceId: string,
-    visibleOnly = false,
+    isVisibleOnly = false,
     focusedTerminalId = focusedId,
   ): string | null =>
     selectWorkspaceContainerId(snapshot, workspaces as Workspace[], {
       workspaceId,
       focusedTerminalId,
-      visibleOnly,
+      isVisibleOnly,
     });
 
   /** Hide exactly one visual container. PTYs and sibling containers remain intact. */

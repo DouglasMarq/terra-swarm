@@ -17,7 +17,7 @@ describe("CommandPalette", () => {
       <CommandPalette
         callbacks={{ onNavigate }}
         onOpenChange={onOpenChange}
-        open
+        isOpen
         workspaces={workspaces}
       />,
     );

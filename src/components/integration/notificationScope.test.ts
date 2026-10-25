@@ -4,9 +4,9 @@ import type { WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 import { filterNotificationItemsForTarget } from "./notificationScope";
 
 const items: NotificationItem[] = [
-  { key: 1, terminalId: "term-a", workspaceId: "project-a", message: "A", ts: 1, read: false },
-  { key: 2, terminalId: "term-b", workspaceId: "project-a", message: "B", ts: 2, read: false },
-  { key: 3, terminalId: "term-c", workspaceId: "project-b", message: "C", ts: 3, read: false },
+  { key: 1, terminalId: "term-a", workspaceId: "project-a", message: "A", ts: 1, isRead: false },
+  { key: 2, terminalId: "term-b", workspaceId: "project-a", message: "B", ts: 2, isRead: false },
+  { key: 3, terminalId: "term-c", workspaceId: "project-b", message: "C", ts: 3, isRead: false },
 ];
 
 const snapshot: WorkspaceSnapshotV2 = {

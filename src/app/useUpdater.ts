@@ -12,7 +12,7 @@ export type UpdateCheckState = "idle" | "checking" | "uptodate" | "error";
 export function useUpdater() {
   const [appVersion, setAppVersion] = useState("");
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
-  const [updateInstalling, setUpdateInstalling] = useState(false);
+  const [isUpdateInstalling, setUpdateInstalling] = useState(false);
   const [updateCheckState, setUpdateCheckState] = useState<UpdateCheckState>("idle");
   const notifyUpdateAvailable = useTerminalRuntimeStore((state) => state.notifyUpdateAvailable);
   const pendingUpdate = useRef<Update | null>(null);
@@ -63,7 +63,7 @@ export function useUpdater() {
   };
 
   const installUpdate = () => {
-    if (updateInstalling) return;
+    if (isUpdateInstalling) return;
     setUpdateInstalling(true);
     installAppUpdate(pendingUpdate.current).catch((error) => {
       console.error("update install failed:", error);
@@ -72,5 +72,5 @@ export function useUpdater() {
     });
   };
 
-  return { appVersion, updateVersion, updateInstalling, updateCheckState, manualUpdateCheck, installUpdate };
+  return { appVersion, updateVersion, isUpdateInstalling, updateCheckState, manualUpdateCheck, installUpdate };
 }

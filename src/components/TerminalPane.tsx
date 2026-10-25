@@ -39,12 +39,12 @@ interface Props {
   id: string;
   command: string;
   fontSize: number;
-  exited: boolean;
-  expanded: boolean;
+  hasExited: boolean;
+  isExpanded: boolean;
   basis: number;
   height: string;
-  entering: boolean;
-  dragOver: boolean;
+  isEntering: boolean;
+  isDragOver: boolean;
   notifications: number;
   contextUsed?: number;
   title?: string;
@@ -64,7 +64,7 @@ interface Props {
   /** Lifecycle actions for the "…" menu. */
   menu?: PaneMenuGroups;
   onClearNotifications: () => void;
-  focused: boolean;
+  isFocused: boolean;
   onFocus: () => void;
   onToggleExpand: () => void;
   onRestart: () => void;
@@ -75,7 +75,7 @@ interface Props {
   /** Explicitly destructive PTY action; intentionally separate from detach. */
   onKill?: () => void;
   /** Hidden tabs remain mounted so switching tabs never kills a PTY. */
-  hidden?: boolean;
+  isHidden?: boolean;
 }
 
 export function TerminalPane(props: Props) {
@@ -83,17 +83,17 @@ export function TerminalPane(props: Props) {
     id,
     command,
     fontSize,
-    exited,
-    expanded,
+    hasExited,
+    isExpanded,
     basis,
     height,
-    entering,
-    dragOver,
+    isEntering,
+    isDragOver,
     notifications,
     contextUsed,
     title,
-    focused,
-    hidden = false,
+    isFocused,
+    isHidden = false,
     label,
     tag,
     attentionMessage,
@@ -111,10 +111,10 @@ export function TerminalPane(props: Props) {
   // The component intentionally survives a PTY exit so it can show scrollback
   // and restart controls, but geometry observers must stop addressing a PTY
   // that no longer exists.
-  const exitedRef = useRef(exited);
-  exitedRef.current = exited;
-  const hiddenRef = useRef(hidden);
-  hiddenRef.current = hidden;
+  const exitedRef = useRef(hasExited);
+  exitedRef.current = hasExited;
+  const hiddenRef = useRef(isHidden);
+  hiddenRef.current = isHidden;
   const onFocusRef = useRef(props.onFocus);
   onFocusRef.current = props.onFocus;
   const [isDropTarget, setIsDropTarget] = useState(false);
@@ -144,8 +144,8 @@ export function TerminalPane(props: Props) {
     term.open(container);
     registerTerminal(id, term);
 
-    let disposed = false;
-    const isStopped = (): boolean => disposed || exitedRef.current;
+    let isDisposed = false;
+    const isStopped = (): boolean => isDisposed || exitedRef.current;
     const warnThrottled = throttle(
       (what: string, err: unknown) => console.warn(`[terminal ${id}] ${what} failed:`, err),
       WARN_THROTTLE_MS,
@@ -229,7 +229,7 @@ export function TerminalPane(props: Props) {
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
-      disposed = true;
+      isDisposed = true;
       output.dispose();
       fitScheduler.dispose();
       resizeQueue.dispose();
@@ -256,10 +256,10 @@ export function TerminalPane(props: Props) {
       const target = document.elementFromPoint(point.x, point.y);
       return Boolean(target && rootRef.current?.contains(target));
     };
-    let disposed = false;
+    let isDisposed = false;
     let unlisten: UnlistenFn | null = null;
     onFileDrop((event) => {
-      if (disposed) return;
+      if (isDisposed) return;
       if (event.type === "leave") {
         setIsDropTarget(false);
         return;
@@ -278,18 +278,18 @@ export function TerminalPane(props: Props) {
       term.paste(text);
     })
       .then((un) => {
-        if (disposed) un();
+        if (isDisposed) un();
         else unlisten = un;
       })
       .catch((err) => console.warn(`[terminal ${id}] file drop unavailable:`, err));
     return () => {
-      disposed = true;
+      isDisposed = true;
       unlisten?.();
       setIsDropTarget(false);
     };
   }, [id]);
 
-  const previousExited = useRef(exited);
+  const previousExited = useRef(hasExited);
 
   useEffect(() => {
     if (appliedFontSize.current === fontSize) return;
@@ -314,42 +314,42 @@ export function TerminalPane(props: Props) {
   // transition, so treat visibility/focus/preset changes as explicit fit
   // signals as well.
   useEffect(() => {
-    const resumed = previousExited.current && !exited;
-    previousExited.current = exited;
-    if (resumed) resizeQueueRef.current?.reset();
+    const isResumed = previousExited.current && !hasExited;
+    previousExited.current = hasExited;
+    if (isResumed) resizeQueueRef.current?.reset();
     fitRef.current?.();
-  }, [basis, exited, expanded, focused, height, hidden, id]);
+  }, [basis, hasExited, isExpanded, isFocused, height, isHidden, id]);
 
   const reported = useMcpStore((state) => state.statuses[id]?.state);
   const kind = agentKind(command);
   const primary = label || kind;
   const secondary = tag && tag !== primary ? tag : null;
-  const attention = notifications > 0 && Boolean(attentionMessage);
-  const status = deriveAgentStatus({ exited, notifications, contextUsed: contextUsed ?? undefined, reported });
+  const hasAttention = notifications > 0 && Boolean(attentionMessage);
+  const status = deriveAgentStatus({ hasExited, notifications, contextUsed: contextUsed ?? undefined, reported });
 
   return (
     <div
       ref={rootRef}
       data-term-id={id}
-      className={`pane ${expanded ? "expanded" : ""} ${entering ? "pane-enter" : ""} ${
-        dragOver ? "drag-over" : ""
-      } ${focused ? "focused" : ""} ${isDropTarget ? "drop-target" : ""}`}
+      className={`pane ${isExpanded ? "expanded" : ""} ${isEntering ? "pane-enter" : ""} ${
+        isDragOver ? "drag-over" : ""
+      } ${isFocused ? "focused" : ""} ${isDropTarget ? "drop-target" : ""}`}
       data-status={status}
       style={{
         flex: `1 1 calc(${basis}% - 12px)`,
         height,
-        display: hidden ? "none" : undefined,
+        display: isHidden ? "none" : undefined,
       }}
-      aria-hidden={hidden}
+      aria-hidden={isHidden}
       onMouseDown={() => {
-        if (hidden) return;
+        if (isHidden) return;
         props.onFocus();
         if (notifications > 0) props.onClearNotifications();
       }}
       // Tabbing into the terminal must move focus too, or ⌘Enter and the
       // other focused-pane shortcuts act on the previously clicked pane.
       onFocusCapture={() => {
-        if (!hidden && !focused) props.onFocus();
+        if (!isHidden && !isFocused) props.onFocus();
       }}
     >
       <div className="pane-header">
@@ -377,7 +377,7 @@ export function TerminalPane(props: Props) {
             {title}
           </span>
         ) : <span className="pane-title" />}
-        {contextUsed != null && !exited && (
+        {contextUsed != null && !hasExited && (
           <span
             className={`pane-ctx ${contextUsed >= CONTEXT_ATTENTION_PERCENT ? "high" : contextUsed >= CONTEXT_WARNING_PERCENT ? "mid" : ""}`}
             title={translate("pane.contextUsed", { count: contextUsed })}
@@ -392,18 +392,18 @@ export function TerminalPane(props: Props) {
           <button
             type="button"
             className="pane-btn"
-            aria-label={expanded ? translate("pane.restore") : translate("pane.maximize")}
-            title={expanded ? translate("pane.restore") : translate("pane.maximize")}
+            aria-label={isExpanded ? translate("pane.restore") : translate("pane.maximize")}
+            title={isExpanded ? translate("pane.restore") : translate("pane.maximize")}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={props.onToggleExpand}
           >
-            {expanded ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
+            {isExpanded ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
           </button>
           {menu ? <PaneActionsMenu label={translate("pane.moreActions")} groups={menu} /> : null}
         </div>
       </div>
       <div className="pane-body" ref={containerRef} />
-      {attention && !exited ? (
+      {hasAttention && !hasExited ? (
         <div className="pane-attention" role="status">
           <span className="pane-attention-message">{attentionMessage}</span>
           <button
@@ -416,7 +416,7 @@ export function TerminalPane(props: Props) {
           </button>
         </div>
       ) : null}
-      {exited && (
+      {hasExited && (
         <div className="pane-overlay" role="status">
           <strong>{translate("pane.exited")}</strong>
           <span>{translate("pane.exitedDetail")}</span>

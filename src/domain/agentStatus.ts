@@ -18,8 +18,8 @@ export const CONTEXT_WARNING_PERCENT = 60;
 export type AgentRunStatus = "working" | "idle" | "attention" | "suspended" | "exited";
 
 export interface AgentStatusSignals {
-  suspended?: boolean;
-  exited?: boolean;
+  isSuspended?: boolean;
+  hasExited?: boolean;
   /** Unread terminal notifications (BEL, OSC 9/777…). */
   notifications?: number;
   /** Context window used, in percent. */
@@ -35,8 +35,8 @@ export interface AgentStatusSignals {
  * reported. Agents without hooks keep the old assumption: alive = working.
  */
 export function deriveAgentStatus(signals: AgentStatusSignals): AgentRunStatus {
-  if (signals.suspended) return "suspended";
-  if (signals.exited) return "exited";
+  if (signals.isSuspended) return "suspended";
+  if (signals.hasExited) return "exited";
   if (signals.reported === "needs_input" || signals.reported === "blocked") return "attention";
   if ((signals.notifications ?? 0) > 0 || (signals.contextUsed ?? 0) >= CONTEXT_ATTENTION_PERCENT) return "attention";
   if (signals.reported === "idle") return "idle";

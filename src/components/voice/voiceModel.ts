@@ -32,7 +32,7 @@ export interface VoiceCapsuleModel {
   finalTranscript: string;
   intent: VoiceCapsuleIntent | null;
   error: string | null;
-  awaitingConfirmation: boolean;
+  isAwaitingConfirmation: boolean;
 }
 
 export type VoiceCapsuleEvent =
@@ -66,9 +66,9 @@ export const requiresVoiceConfirmation = isDestructiveVoiceIntent;
  */
 export function canExecuteVoiceIntent(
   intent: VoiceCapsuleIntent | null | undefined,
-  confirmed = false,
+  isConfirmed = false,
 ): boolean {
-  return Boolean(intent) && (!isDestructiveVoiceIntent(intent) || confirmed);
+  return Boolean(intent) && (!isDestructiveVoiceIntent(intent) || isConfirmed);
 }
 
 export function createInitialVoiceCapsuleModel(
@@ -80,7 +80,7 @@ export function createInitialVoiceCapsuleModel(
     finalTranscript: "",
     intent: null,
     error: null,
-    awaitingConfirmation: false,
+    isAwaitingConfirmation: false,
   };
 
   return { ...model, ...overrides };
@@ -104,7 +104,7 @@ export function reduceVoiceCapsuleModel(
         intent: null,
         partialTranscript: "",
         finalTranscript: "",
-        awaitingConfirmation: false,
+        isAwaitingConfirmation: false,
       };
     case "stop-listening":
       return model.state === "listening"
@@ -127,7 +127,7 @@ export function reduceVoiceCapsuleModel(
         partialTranscript: event.transcript,
         intent,
         error: null,
-        awaitingConfirmation: isDestructiveVoiceIntent(intent),
+        isAwaitingConfirmation: isDestructiveVoiceIntent(intent),
       };
     }
     case "fail":
@@ -135,13 +135,13 @@ export function reduceVoiceCapsuleModel(
         ...model,
         state: "error",
         error: event.message,
-        awaitingConfirmation: false,
+        isAwaitingConfirmation: false,
       };
     case "cancel":
       return createInitialVoiceCapsuleModel();
     case "send":
-      return isDestructiveVoiceIntent(model.intent) || model.awaitingConfirmation
-        ? { ...model, awaitingConfirmation: true }
+      return isDestructiveVoiceIntent(model.intent) || model.isAwaitingConfirmation
+        ? { ...model, isAwaitingConfirmation: true }
         : createInitialVoiceCapsuleModel();
     case "confirm":
       return isDestructiveVoiceIntent(model.intent)

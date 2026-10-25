@@ -38,8 +38,8 @@ export function useShellAgentOverview({ workspaces, titles, exited, notification
   const agentLabels = useMemo(() => buildAgentLabels(workspaces, { titles, names: agentNames }), [agentNames, titles, workspaces]);
   const reported = useReportedStates();
   const agentStatus = useCallback<AgentStatusOf>((terminal) => deriveAgentStatus({
-    suspended: terminal.suspended,
-    exited: terminal.id in exited,
+    isSuspended: terminal.suspended,
+    hasExited: terminal.id in exited,
     notifications: notifications[terminal.id],
     contextUsed: contextUsage[terminal.id],
     reported: reported[terminal.id],
@@ -51,9 +51,9 @@ export function useShellAgentOverview({ workspaces, titles, exited, notification
       const detail = translate(`status.${status}Lower` as const);
       return { id: terminal.id, label: label?.primary ?? terminal.command, status, detail };
     });
-    const suspended = workspace.terminals.length > 0 && workspace.terminals.every((terminal) => terminal.suspended);
+    const isSuspended = workspace.terminals.length > 0 && workspace.terminals.every((terminal) => terminal.suspended);
     const status = projectStatus(agents.map((agent) => agent.status));
-    return { id: workspace.id, name: workspace.name, status, suspended, agents };
+    return { id: workspace.id, name: workspace.name, status, isSuspended, agents };
   }), [agentLabels, agentStatus, workspaces, translate]);
   return {
     agentLabels,

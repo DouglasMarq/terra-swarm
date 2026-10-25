@@ -29,7 +29,7 @@ describe("ApplicationShell", () => {
     render(
       <ApplicationShell
         sidebar={<div>Sidebar slot</div>}
-        rightDock={{ open: true, onClose, content: <p>Inspector content</p> }}
+        rightDock={{ isOpen: true, onClose, content: <p>Inspector content</p> }}
       >
         <div>Content slot</div>
       </ApplicationShell>,
@@ -45,7 +45,7 @@ describe("ApplicationShell", () => {
 
   it("swaps the sidebar for the rail when collapsed", () => {
     render(
-      <ApplicationShell sidebar={<div>Full sidebar</div>} collapsedSidebar={<div>Rail</div>} sidebarCollapsed>
+      <ApplicationShell sidebar={<div>Full sidebar</div>} collapsedSidebar={<div>Rail</div>} isSidebarCollapsed>
         <div>Content</div>
       </ApplicationShell>,
     );
@@ -118,7 +118,7 @@ describe("WindowChrome", () => {
   it("closes the notification popover on Escape", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<WindowChrome notificationsOpen onNotificationsOpenChange={onChange} notificationsPanel={<div>Panel</div>} />);
+    render(<WindowChrome isNotificationsOpen onNotificationsOpenChange={onChange} notificationsPanel={<div>Panel</div>} />);
     expect(screen.getByText("Panel")).toBeInTheDocument();
     await user.keyboard("{Escape}");
     expect(onChange).toHaveBeenCalledWith(false);
@@ -158,11 +158,11 @@ describe("Sidebar", () => {
         surface="workbench"
         attentionCount={1}
         projects={[
-          { id: "ws-1", name: "terra-swarm", status: "attention", suspended: false, agents: [
+          { id: "ws-1", name: "terra-swarm", status: "attention", isSuspended: false, agents: [
             { id: "pty-1", label: "Planejador", status: "attention", detail: "precisa de você" },
             { id: "pty-2", label: "codex", status: "working", detail: "trabalhando" },
           ] },
-          { id: "ws-2", name: "site-docs", status: "idle", suspended: false, agents: [] },
+          { id: "ws-2", name: "site-docs", status: "idle", isSuspended: false, agents: [] },
         ]}
         activeWorkspaceId="ws-1"
         focusedAgentId="pty-1"

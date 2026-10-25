@@ -20,10 +20,10 @@ export function PreviewPanel({ workspaceId }: PreviewPanelProps) {
   const translate = useT();
   const detected = usePreviewStore((state) => (workspaceId ? state.detected[workspaceId] ?? EMPTY : EMPTY));
   const selected = usePreviewStore((state) => (workspaceId ? state.selected[workspaceId] ?? null : null));
-  const probing = usePreviewStore((state) => state.probing);
+  const isProbing = usePreviewStore((state) => state.isProbing);
   const mcpPort = useMcpStore((state) => state.server?.port ?? null);
   const [draft, setDraft] = useState(selected ?? "");
-  const [invalid, setInvalid] = useState(false);
+  const [isInvalid, setInvalid] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const probed = useRef<Set<string>>(new Set());
 
@@ -66,7 +66,7 @@ export function PreviewPanel({ workspaceId }: PreviewPanelProps) {
           }}
           placeholder={translate("preview.placeholder")}
           aria-label={translate("preview.address")}
-          aria-invalid={invalid}
+          aria-invalid={isInvalid}
           spellCheck={false}
         />
         <datalist id={`terra-preview-urls-${workspaceId}`}>
@@ -81,14 +81,14 @@ export function PreviewPanel({ workspaceId }: PreviewPanelProps) {
           type="button"
           className="terra-preview-icon"
           onClick={() => void usePreviewStore.getState().probe(workspaceId, mcpPort)}
-          disabled={probing}
+          disabled={isProbing}
           aria-label={translate("preview.scan")}
           title={translate("preview.scan")}
         >
           <Radar size={13} aria-hidden="true" />
         </button>
       </form>
-      {invalid ? <p className="terra-preview-hint" role="alert">{translate("preview.onlyLocal")}</p> : null}
+      {isInvalid ? <p className="terra-preview-hint" role="alert">{translate("preview.onlyLocal")}</p> : null}
       {selected ? (
         <iframe
           key={`${selected}#${reloadKey}`}
@@ -101,7 +101,7 @@ export function PreviewPanel({ workspaceId }: PreviewPanelProps) {
       ) : (
         <div className="terra-preview-empty">
           <Globe size={18} aria-hidden="true" />
-          <span>{probing ? translate("preview.scanning") : translate("preview.none")}</span>
+          <span>{isProbing ? translate("preview.scanning") : translate("preview.none")}</span>
         </div>
       )}
     </div>

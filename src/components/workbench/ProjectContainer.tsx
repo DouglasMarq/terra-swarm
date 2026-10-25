@@ -20,7 +20,7 @@ function projectLabel(props: ProjectContainerProps): string {
 export function ProjectContainer({
   projection,
   renderTab,
-  visible = projection.container.visible && !projection.container.closed,
+  isVisible = projection.container.visible && !projection.container.closed,
   onCollapseContainer,
   onFullscreenContainer,
   onHideContainer,
@@ -31,14 +31,14 @@ export function ProjectContainer({
   const translate = useT();
   const newAgentHotkey = usePreferencesStore((state) => state.hotkeys.newTerminal ?? DEFAULT_HOTKEYS.newTerminal);
   const { container } = projection;
-  const label = projectLabel({ projection, renderTab, visible, ...actions });
+  const label = projectLabel({ projection, renderTab, isVisible, ...actions });
   const paneCount = projection.panes.length;
   const gridDimensions = gridDimensionsForLayout(container.layout, paneCount);
   const storedMode: WorkbenchLayoutMode = projection.project
     ? workbenchModeForLayout(projection.project.layout)
     : container.layout.mode;
   const visibleMode = visibleWorkbenchMode(storedMode);
-  const autoGrid = isAutoGrid(container.layout);
+  const hasAutoGrid = isAutoGrid(container.layout);
 
   const setMode = (nextMode: "grid" | "spotlight"): void => {
     const project = projection.project;
@@ -65,10 +65,10 @@ export function ProjectContainer({
     <section
       className="terra-project-container"
       data-container-id={container.id}
-      data-visible={visible}
+      data-visible={isVisible}
       data-collapsed={container.collapsed}
       data-fullscreen={container.fullscreen}
-      aria-hidden={!visible}
+      aria-hidden={!isVisible}
     >
       <header className="terra-project-container__header">
         <button
@@ -96,9 +96,9 @@ export function ProjectContainer({
         {visibleMode === "grid" ? (
           <GridSizePicker
             dimensions={gridDimensions}
-            auto={autoGrid}
+            isAuto={hasAutoGrid}
             paneCount={paneCount}
-            disabled={!onLayoutChange}
+            isDisabled={!onLayoutChange}
             onSelect={(dimensions) => updateGrid(dimensions)}
             onAuto={() => onLayoutChange?.({ containerId: container.id, layout: workspaceLayoutForAutoGrid(container.layout) })}
           />

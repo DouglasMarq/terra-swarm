@@ -75,8 +75,8 @@ export type SettingsSectionSlot =
   | ((context: SettingsSectionRenderContext) => ReactNode);
 
 export interface SettingsDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
   activeSection?: SettingsSectionId;
   defaultSection?: SettingsSectionId;
   onActiveSectionChange?: (section: SettingsSectionId) => void;
@@ -131,7 +131,7 @@ export function SettingsDialog({
   headerSlot,
   onActiveSectionChange,
   onOpenChange,
-  open,
+  isOpen,
   renderSection,
   searchPlaceholder,
   sections = SETTINGS_SECTIONS,
@@ -160,14 +160,14 @@ export function SettingsDialog({
   }, [activeSection, firstSection, sections, uncontrolledSection]);
 
   useEffect(() => {
-    if (!open) {
+    if (!isOpen) {
       setQuery("");
       setConfirmation(null);
     }
-  }, [open]);
+  }, [isOpen]);
 
   useEffect(() => {
-    if (!open || isPage) return undefined;
+    if (!isOpen || isPage) return undefined;
 
     function focusSearch(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase("en-US") === "k") {
@@ -179,7 +179,7 @@ export function SettingsDialog({
 
     window.addEventListener("keydown", focusSearch);
     return () => window.removeEventListener("keydown", focusSearch);
-  }, [isPage, open]);
+  }, [isPage, isOpen]);
 
   const visibleSections = useMemo(() => filterSettingsSections(sections, query), [query, sections]);
   const selectedSection = activeSection ?? uncontrolledSection ?? firstSection;
@@ -318,9 +318,9 @@ export function SettingsDialog({
 
   const confirmDialog = (
     <ConfirmActionDialog
-      open={confirmation !== null}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) setConfirmation(null);
+      isOpen={confirmation !== null}
+      onOpenChange={(isNextOpen) => {
+        if (!isNextOpen) setConfirmation(null);
       }}
       title={confirmation?.title ?? translate("common.confirm")}
       description={confirmation?.description ?? ""}
@@ -347,7 +347,7 @@ export function SettingsDialog({
 
   return (
     <>
-      <DialogRoot open={open} onOpenChange={onOpenChange}>
+      <DialogRoot open={isOpen} onOpenChange={onOpenChange}>
         <DialogPortal>
           <DialogOverlay className={styles.overlay} />
           <DialogContent

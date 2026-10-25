@@ -215,23 +215,23 @@ export type OrchestrationState = {
   /** Terminal ids hidden from the visual tab strip while their PTYs continue. */
   detachedTerminalIds: string[];
   flags: FeatureFlags;
-  hydrated: boolean;
+  isHydrated: boolean;
   /** Last rejected durable layout command, surfaced once by the shell. */
   persistenceError: OrchestrationPersistenceError | null;
   sync: (workspaces: readonly Workspace[], groups?: readonly WorkspaceGroup[]) => void;
   hydrate: (workspaces: readonly Workspace[], groups?: readonly WorkspaceGroup[]) => void;
   syncWorkspaces: (workspaces: readonly Workspace[], groups?: readonly WorkspaceGroup[]) => void;
-  setFeatureFlag: (id: FeatureFlagId, enabled: boolean) => void;
-  setFlag: (id: FeatureFlagId, enabled: boolean) => void;
+  setFeatureFlag: (id: FeatureFlagId, isEnabled: boolean) => void;
+  setFlag: (id: FeatureFlagId, isEnabled: boolean) => void;
   setFeatureFlags: (flags: Partial<FeatureFlags>) => void;
-  setContainerVisible: (containerId: string, visible: boolean) => void;
-  setContainerVisibility: (containerId: string, visible: boolean) => void;
+  setContainerVisible: (containerId: string, isVisible: boolean) => void;
+  setContainerVisibility: (containerId: string, isVisible: boolean) => void;
   openContainer: (containerId: string) => void;
   closeContainer: (containerId: string) => void;
   toggleContainer: (containerId: string) => void;
   setContainerState: (containerId: string, patch: WorkspaceContainerPatch) => void;
-  setContainerCollapsed: (containerId: string, collapsed: boolean) => void;
-  setContainerFullscreen: (containerId: string, fullscreen: boolean) => void;
+  setContainerCollapsed: (containerId: string, isCollapsed: boolean) => void;
+  setContainerFullscreen: (containerId: string, isFullscreen: boolean) => void;
   setContainerActivePane: (containerId: string, paneId: string | null) => void;
   setContainerInternalLayout: (containerId: string, internalLayout: string) => void;
   reorderContainers: (projectId: string, order: string[]) => void;
@@ -239,24 +239,24 @@ export type OrchestrationState = {
   reorderTabs: (paneId: string, order: string[]) => void;
   movePane: (paneId: string, toContainerId: string, index?: number | null) => void;
   setWorkspaceLayout: (projectId: string, layout: WorkspaceLayout) => void;
-  setWorkspaceCollapsed: (projectId: string, collapsed: boolean) => void;
-  setGroupSuspended: (groupId: string, suspended: boolean) => void;
+  setWorkspaceCollapsed: (projectId: string, isCollapsed: boolean) => void;
+  setGroupSuspended: (groupId: string, isSuspended: boolean) => void;
   setProjectGroup: (projectId: string, groupId: string | null) => void;
   setActivePane: (paneId: string | null) => void;
   clearPersistenceError: () => void;
-  setTerminalDetached: (terminalId: string, detached: boolean) => void;
+  setTerminalDetached: (terminalId: string, isDetached: boolean) => void;
   detachTerminal: (terminalId: string) => void;
   reattachTerminal: (terminalId: string) => void;
   reset: () => void;
 };
 
-const emptyState = (): Pick<OrchestrationState, "snapshot" | "groups" | "containerVisibility" | "detachedTerminalIds" | "flags" | "hydrated" | "persistenceError"> => ({
+const emptyState = (): Pick<OrchestrationState, "snapshot" | "groups" | "containerVisibility" | "detachedTerminalIds" | "flags" | "isHydrated" | "persistenceError"> => ({
   snapshot: null,
   groups: [],
   containerVisibility: {},
   detachedTerminalIds: [],
   flags: { ...DEFAULT_FEATURE_FLAGS },
-  hydrated: false,
+  isHydrated: false,
   persistenceError: null,
 });
 
@@ -286,7 +286,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     containerVisibility: persisted.containerVisibility,
     detachedTerminalIds: [...new Set(persisted.detachedTerminalIds ?? [])],
     flags: persisted.flags,
-    hydrated: persisted.snapshot !== null,
+    isHydrated: persisted.snapshot !== null,
     persistenceError: null,
 
     sync: (workspaces, sourceGroups = []) => {
@@ -305,8 +305,8 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     const detachedTerminalIds = state.detachedTerminalIds.filter((id) => terminalIds.has(id));
     const knownContainerIds = new Set(derived.snapshot.containers.map((container) => container.id));
     const containerVisibility: Record<string, boolean> = {};
-    for (const [id, visible] of Object.entries(state.containerVisibility)) {
-      if (knownContainerIds.has(id)) containerVisibility[id] = visible;
+    for (const [id, isVisible] of Object.entries(state.containerVisibility)) {
+      if (knownContainerIds.has(id)) containerVisibility[id] = isVisible;
     }
     for (const container of derived.snapshot.containers) {
       containerVisibility[container.id] = container.visible;
@@ -317,7 +317,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
       groups: derived.groups,
       containerVisibility,
       detachedTerminalIds,
-      hydrated: true,
+      isHydrated: true,
     });
   },
 
@@ -327,15 +327,15 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
   syncWorkspaces: (workspaces, sourceGroups = []) =>
     get().sync(workspaces, sourceGroups),
 
-    setFeatureFlag: (id, enabled) => {
+    setFeatureFlag: (id, isEnabled) => {
     if (!FEATURE_FLAG_IDS.includes(id)) return;
     markNewerProjection();
-    const flags = { ...get().flags, [id]: enabled };
+    const flags = { ...get().flags, [id]: isEnabled };
     persist({ ...get(), flags });
     set({ flags });
   },
 
-  setFlag: (id, enabled) => get().setFeatureFlag(id, enabled),
+  setFlag: (id, isEnabled) => get().setFeatureFlag(id, isEnabled),
 
   setFeatureFlags: (partial) => {
     markNewerProjection();
@@ -344,21 +344,21 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     set({ flags });
   },
 
-  setContainerVisible: (containerId, visible) => {
+  setContainerVisible: (containerId, isVisible) => {
     const containerVisibility = {
       ...get().containerVisibility,
-      [containerId]: visible,
+      [containerId]: isVisible,
     };
     const snapshot = updateSnapshotContainerState(get().snapshot, containerId, {
-      visible,
-      closed: !visible,
+      visible: isVisible,
+      closed: !isVisible,
     });
     const container = snapshot?.containers.find((candidate) => candidate.id === containerId);
     if (container?.projectId) {
       persistCommand(
         workspaceApi.setWorkspaceContainerState(container.projectId, containerId, {
-          visible,
-          closed: !visible,
+          visible: isVisible,
+          closed: !isVisible,
         }),
         "container visibility",
         [`container:${containerId}`],
@@ -370,14 +370,14 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     set({ containerVisibility, snapshot });
   },
 
-  setContainerVisibility: (containerId, visible) =>
-    get().setContainerVisible(containerId, visible),
+  setContainerVisibility: (containerId, isVisible) =>
+    get().setContainerVisible(containerId, isVisible),
 
   openContainer: (containerId) => get().setContainerVisible(containerId, true),
   closeContainer: (containerId) => get().setContainerVisible(containerId, false),
   toggleContainer: (containerId) => {
-    const visible = get().containerVisibility[containerId] ?? true;
-    get().setContainerVisible(containerId, !visible);
+    const isVisible = get().containerVisibility[containerId] ?? true;
+    get().setContainerVisible(containerId, !isVisible);
   },
 
   setContainerState: (containerId, patch) => {
@@ -425,11 +425,11 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     set({ containerVisibility, snapshot });
   },
 
-  setContainerCollapsed: (containerId, collapsed) =>
-    get().setContainerState(containerId, { collapsed }),
+  setContainerCollapsed: (containerId, isCollapsed) =>
+    get().setContainerState(containerId, { collapsed: isCollapsed }),
 
-  setContainerFullscreen: (containerId, fullscreen) =>
-    get().setContainerState(containerId, { fullscreen }),
+  setContainerFullscreen: (containerId, isFullscreen) =>
+    get().setContainerState(containerId, { fullscreen: isFullscreen }),
 
   setContainerActivePane: (containerId, paneId) =>
     get().setContainerState(containerId, {
@@ -577,17 +577,17 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     set({ snapshot });
   },
 
-  setWorkspaceCollapsed: (projectId, collapsed) => {
+  setWorkspaceCollapsed: (projectId, isCollapsed) => {
     const snapshot = get().snapshot;
     if (!snapshot) return;
     const next = {
       ...snapshot,
       projects: snapshot.projects.map((project) =>
-        project.id === projectId ? { ...project, collapsed } : project,
+        project.id === projectId ? { ...project, collapsed: isCollapsed } : project,
       ),
     };
     persistCommand(
-      workspaceApi.setWorkspaceCollapsed(projectId, collapsed),
+      workspaceApi.setWorkspaceCollapsed(projectId, isCollapsed),
       "workspace collapsed",
       [`project:${projectId}`],
     );
@@ -595,14 +595,14 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     set({ snapshot: next });
   },
 
-  setGroupSuspended: (groupId, suspended) => {
+  setGroupSuspended: (groupId, isSuspended) => {
     markNewerProjection();
-    const snapshot = patchGroup(get().snapshot, groupId, { suspended });
+    const snapshot = patchGroup(get().snapshot, groupId, { suspended: isSuspended });
     persist({ ...get(), snapshot });
     set({
       snapshot,
       groups: get().groups.map((group) =>
-        group.id === groupId ? { ...group, suspended } : group,
+        group.id === groupId ? { ...group, suspended: isSuspended } : group,
       ),
     });
   },
@@ -660,11 +660,11 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
 
   clearPersistenceError: () => set({ persistenceError: null }),
 
-  setTerminalDetached: (terminalId, detached) => {
+  setTerminalDetached: (terminalId, isDetached) => {
     const normalized = terminalId.trim();
     if (!normalized) return;
     const current = get().detachedTerminalIds;
-    const next = detached
+    const next = isDetached
       ? [...new Set([...current, normalized])]
       : current.filter((id) => id !== normalized);
     if (next.length === current.length && next.every((id, index) => id === current[index])) return;

@@ -58,8 +58,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       title: promptTitle(title, body),
       body,
     };
-    const exists = get().prompts.some((prompt) => prompt.id === saved.id);
-    const prompts = exists ? get().prompts.map((prompt) => (prompt.id === saved.id ? saved : prompt)) : [...get().prompts, saved];
+    const isExisting = get().prompts.some((prompt) => prompt.id === saved.id);
+    const prompts = isExisting ? get().prompts.map((prompt) => (prompt.id === saved.id ? saved : prompt)) : [...get().prompts, saved];
     persist(prompts);
     set({ prompts });
     return saved;

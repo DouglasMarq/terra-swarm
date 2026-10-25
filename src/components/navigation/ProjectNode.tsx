@@ -3,15 +3,15 @@ import type { NavigatorNodeActions, NavigatorProjectNode } from "./types";
 
 export interface ProjectNodeProps {
   node: NavigatorProjectNode;
-  expanded: boolean;
-  selected?: boolean;
-  active?: boolean;
+  isExpanded: boolean;
+  isSelected?: boolean;
+  isActive?: boolean;
   actions?: NavigatorNodeActions;
   onToggle?: (id: string) => void;
   onSelect?: (node: NavigatorProjectNode) => void;
 }
 
 /** Project rows represent visible containers while preserving PTY identity underneath. */
-export function ProjectNode({ node, actions = {}, onSelect, selected = false, active = false, ...props }: ProjectNodeProps) {
-  return <NavigatorNodeRow {...props} actions={actions} active={active} node={node} onSelect={(selected) => onSelect?.(selected as typeof node)} selected={selected} visible={node.visible} />;
+export function ProjectNode({ node, actions = {}, onSelect, isSelected = false, isActive = false, ...props }: ProjectNodeProps) {
+  return <NavigatorNodeRow {...props} actions={actions} isActive={isActive} node={node} onSelect={(selected) => onSelect?.(selected as typeof node)} isSelected={isSelected} isVisible={node.isVisible} />;
 }

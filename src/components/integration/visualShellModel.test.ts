@@ -40,7 +40,7 @@ function snapshot(): WorkspaceSnapshotV2 {
 }
 
 function item(key: number, terminalId: string, fields: Pick<NotificationItem, "ts"> & Partial<NotificationItem>): NotificationItem {
-  return { key, terminalId, workspaceId: "ws-1", message: `message ${key}`, read: false, ...fields };
+  return { key, terminalId, workspaceId: "ws-1", message: `message ${key}`, isRead: false, ...fields };
 }
 
 describe("visibleSnapshot", () => {
@@ -108,13 +108,13 @@ describe("nearlyFullContexts", () => {
 
 describe("latestMessageByAgent", () => {
   it("given unread messages, keeps each agent's latest text", () => {
-    expect(latestMessageByAgent([item(1, "t-1", { ts: 10 }), item(2, "t-1", { ts: 20 }), item(3, "t-2", { ts: 5, read: true })])).toEqual({ "t-1": "message 2" });
+    expect(latestMessageByAgent([item(1, "t-1", { ts: 10 }), item(2, "t-1", { ts: 20 }), item(3, "t-2", { ts: 5, isRead: true })])).toEqual({ "t-1": "message 2" });
   });
 });
 
 describe("lastActivityByAgent", () => {
   it("given messages, keeps each agent's latest time and skips system notices", () => {
-    expect(lastActivityByAgent([item(1, "t-1", { ts: 10, read: true }), item(2, "t-1", { ts: 5 }), item(3, "t-2", { ts: 50, system: true })])).toEqual({ "t-1": 10 });
+    expect(lastActivityByAgent([item(1, "t-1", { ts: 10, isRead: true }), item(2, "t-1", { ts: 5 }), item(3, "t-2", { ts: 50, isSystem: true })])).toEqual({ "t-1": 10 });
   });
 });
 

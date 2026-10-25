@@ -6,13 +6,13 @@ import type { AgentTokenUsage } from "../domain/agent.model";
 export const USAGE_REFRESH_MS = 15_000;
 
 /** Keep a workspace's token usage fresh while something shows it. */
-export function useAgentUsage(workspaceId: string | null, terminalId: string | null, active: boolean): AgentTokenUsage | null {
+export function useAgentUsage(workspaceId: string | null, terminalId: string | null, isActive: boolean): AgentTokenUsage | null {
   const usage = useUsageStore((state) => (terminalId ? state.usage[terminalId] ?? null : null));
   useEffect(() => {
-    if (!active || !workspaceId) return;
+    if (!isActive || !workspaceId) return;
     void useUsageStore.getState().load(workspaceId);
     const timer = window.setInterval(() => void useUsageStore.getState().load(workspaceId), USAGE_REFRESH_MS);
     return () => window.clearInterval(timer);
-  }, [active, workspaceId]);
+  }, [isActive, workspaceId]);
   return usage;
 }

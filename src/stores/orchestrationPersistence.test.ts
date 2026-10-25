@@ -40,7 +40,7 @@ const optimistic: OrchestrationProjection = {
   groups: [],
   containerVisibility: { "container-1": false },
   detachedTerminalIds: ["t-live", "t-gone"],
-  hydrated: false,
+  isHydrated: false,
 };
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -59,7 +59,7 @@ describe("createPersistenceEngine", () => {
 
     expect(reportError).toHaveBeenCalledWith("container order", expect.any(Error));
     expect(applied[0]).toEqual(optimistic);
-    expect(read().hydrated).toBe(true);
+    expect(read().isHydrated).toBe(true);
     expect(read().snapshot?.projects.map((project) => project.id)).toEqual(["ws-1"]);
     expect(read().detachedTerminalIds).toEqual(["t-live"]);
   });
@@ -80,7 +80,7 @@ describe("createPersistenceEngine", () => {
     const { engine, applied, reportError, setState } = harness(optimistic);
 
     engine.persistCommand(Promise.reject(new Error("rejected")), "workspace layout", ["project:ws-1"]);
-    setState({ ...optimistic, hydrated: true });
+    setState({ ...optimistic, isHydrated: true });
     await settle();
 
     expect(applied[applied.length - 1]).toEqual(optimistic);

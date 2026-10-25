@@ -18,24 +18,24 @@ export function useBranchPolling(workspaces: readonly Workspace[]) {
           return { id: entry.slice(0, separator), cwd: entry.slice(separator + 1) };
         })
       : [];
-    let cancelled = false;
+    let isCancelled = false;
     const poll = async () => {
       const entries = await Promise.all(
         targets.map(async (target) => [target.id, await api.gitBranch(target.cwd).catch(() => null)] as const),
       );
-      if (cancelled) return;
+      if (isCancelled) return;
       useTerminalRuntimeStore.getState().setBranches((previous) => {
         const next: Record<string, string> = {};
         for (const [id, branch] of entries) if (branch) next[id] = branch;
         const keys = Object.keys(next);
-        const same = keys.length === Object.keys(previous).length && keys.every((key) => previous[key] === next[key]);
-        return same ? previous : next;
+        const isSame = keys.length === Object.keys(previous).length && keys.every((key) => previous[key] === next[key]);
+        return isSame ? previous : next;
       });
     };
     void poll();
     const interval = setInterval(poll, BRANCH_POLL_MS);
     return () => {
-      cancelled = true;
+      isCancelled = true;
       clearInterval(interval);
     };
   }, [signature]);

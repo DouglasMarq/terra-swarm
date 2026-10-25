@@ -5,8 +5,8 @@ function worktreeStatus(workspaceId: string, terminalId: string): Promise<Worktr
   return invokeCommand("worktreeStatus", { workspaceId, terminalId });
 }
 
-function worktreeRemove(workspaceId: string, terminalId: string, deleteBranch: boolean): Promise<void> {
-  return invokeCommand("worktreeRemove", { workspaceId, terminalId, deleteBranch });
+function worktreeRemove(workspaceId: string, terminalId: string, shouldDeleteBranch: boolean): Promise<void> {
+  return invokeCommand("worktreeRemove", { workspaceId, terminalId, deleteBranch: shouldDeleteBranch });
 }
 
 function worktreeDiff(workspaceId: string, terminalId: string): Promise<WorktreeDiff> {

@@ -26,7 +26,7 @@ export interface PromptLibraryDialogProps {
 /** Saved prompts: edit them, and send one to an agent of the project. */
 export function PromptLibraryDialog({ projectName, targets, defaultTargetId }: PromptLibraryDialogProps) {
   const translate = useT();
-  const open = useLibraryStore((state) => state.dialog === "prompts");
+  const isOpen = useLibraryStore((state) => state.dialog === "prompts");
   const prompts = useLibraryStore((state) => state.prompts);
   const { closeDialog, savePrompt, deletePrompt } = useLibraryStore.getState();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -37,10 +37,10 @@ export function PromptLibraryDialog({ projectName, targets, defaultTargetId }: P
   const [notice, setNotice] = useState<string | null>(null);
 
   const selected = prompts.find((prompt) => prompt.id === selectedId) ?? null;
-  const dirty = selected ? selected.title !== title || selected.body !== body : Boolean(title.trim() || body.trim());
+  const isDirty = selected ? selected.title !== title || selected.body !== body : Boolean(title.trim() || body.trim());
 
   useEffect(() => {
-    if (!open) return;
+    if (!isOpen) return;
     setNotice(null);
     setQuery("");
     setTargetId(defaultTargetId ?? targets[0]?.id ?? null);
@@ -48,7 +48,7 @@ export function PromptLibraryDialog({ projectName, targets, defaultTargetId }: P
     setSelectedId(first?.id ?? null);
     setTitle(first?.title ?? "");
     setBody(first?.body ?? "");
-  }, [open, defaultTargetId, targets]);
+  }, [isOpen, defaultTargetId, targets]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
@@ -87,9 +87,9 @@ export function PromptLibraryDialog({ projectName, targets, defaultTargetId }: P
   return (
     <TerraDialog
       className="terra-library"
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) closeDialog();
+      open={isOpen}
+      onOpenChange={(isNextOpen) => {
+        if (!isNextOpen) closeDialog();
       }}
       title={translate("library.title")}
       description={translate("library.description")}
@@ -123,7 +123,7 @@ export function PromptLibraryDialog({ projectName, targets, defaultTargetId }: P
             <Trash2 size={14} aria-hidden="true" /> {translate("library.delete")}
           </Button>
         ) : null}
-        <Button type="button" onClick={save} disabled={!dirty || !body.trim()}>
+        <Button type="button" onClick={save} disabled={!isDirty || !body.trim()}>
           {translate("library.save")}
         </Button>
         <select

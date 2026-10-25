@@ -21,7 +21,7 @@ export interface ApplicationShellProps {
   sidebar: ReactNode;
   /** 56px rail shown instead of the sidebar while it is collapsed. */
   collapsedSidebar?: ReactNode;
-  sidebarCollapsed?: boolean;
+  isSidebarCollapsed?: boolean;
   children: ReactNode;
   rightDock?: RightDockProps | false;
   /** Floating layers that sit above the content (voice capsule). */
@@ -32,7 +32,7 @@ export interface ApplicationShellProps {
 }
 
 function useCompactShell(): boolean {
-  const [compact, setCompact] = useState(false);
+  const [isCompact, setCompact] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
@@ -47,16 +47,16 @@ function useCompactShell(): boolean {
     };
   }, []);
 
-  return compact;
+  return isCompact;
 }
 
 /** Keep only the panels that are mounted; react-resizable-panels rejects unknown ids. */
-function layoutFor(stored: Layout | undefined, withSidebar: boolean, withDock: boolean): Layout {
-  const sidebar = withSidebar ? stored?.navigator ?? DEFAULT_NAVIGATOR_PERCENT : 0;
-  const dock = withDock ? stored?.dock ?? DEFAULT_DOCK_PERCENT : 0;
+function layoutFor(stored: Layout | undefined, hasSidebar: boolean, hasDock: boolean): Layout {
+  const sidebar = hasSidebar ? stored?.navigator ?? DEFAULT_NAVIGATOR_PERCENT : 0;
+  const dock = hasDock ? stored?.dock ?? DEFAULT_DOCK_PERCENT : 0;
   const layout: Layout = { content: Math.max(MIN_CONTENT_PERCENT, FULL_PERCENT - sidebar - dock) };
-  if (withSidebar) layout.navigator = sidebar;
-  if (withDock) layout.dock = dock;
+  if (hasSidebar) layout.navigator = sidebar;
+  if (hasDock) layout.dock = dock;
   return layout;
 }
 
@@ -65,7 +65,7 @@ export function ApplicationShell({
   surface = "workbench",
   sidebar,
   collapsedSidebar,
-  sidebarCollapsed = false,
+  isSidebarCollapsed = false,
   children,
   rightDock = false,
   overlay,
@@ -74,38 +74,38 @@ export function ApplicationShell({
   onLayoutChanged,
 }: ApplicationShellProps) {
   const dockProps = rightDock === false ? undefined : rightDock;
-  const dockEnabled = dockProps !== undefined && dockProps.open !== false;
+  const isDockEnabled = dockProps !== undefined && dockProps.isOpen !== false;
   const translate = useT();
-  const compact = useCompactShell();
-  const [compactSidebarOpen, setCompactSidebarOpen] = useState(false);
-  const showSidebarPanel = !sidebarCollapsed;
+  const isCompact = useCompactShell();
+  const [isCompactSidebarOpen, setCompactSidebarOpen] = useState(false);
+  const shouldShowSidebarPanel = !isSidebarCollapsed;
   const layout = useMemo(
-    () => layoutFor(defaultLayout, showSidebarPanel, dockEnabled),
-    [defaultLayout, dockEnabled, showSidebarPanel],
+    () => layoutFor(defaultLayout, shouldShowSidebarPanel, isDockEnabled),
+    [defaultLayout, isDockEnabled, shouldShowSidebarPanel],
   );
   const shellClassName = ["terra-shell", className].filter(Boolean).join(" ");
 
   useEffect(() => {
-    if (!compact) setCompactSidebarOpen(false);
-  }, [compact]);
+    if (!isCompact) setCompactSidebarOpen(false);
+  }, [isCompact]);
 
   // In compact mode ⌘B (which flips the persisted collapse flag) opens and
   // closes the drawer, and leaving a surface closes it.
-  const lastCollapsed = useRef(sidebarCollapsed);
+  const lastCollapsed = useRef(isSidebarCollapsed);
   useEffect(() => {
-    if (lastCollapsed.current === sidebarCollapsed) return;
-    lastCollapsed.current = sidebarCollapsed;
-    if (compact) setCompactSidebarOpen((open) => !open);
-  }, [compact, sidebarCollapsed]);
+    if (lastCollapsed.current === isSidebarCollapsed) return;
+    lastCollapsed.current = isSidebarCollapsed;
+    if (isCompact) setCompactSidebarOpen((isCurrentlyOpen) => !isCurrentlyOpen);
+  }, [isCompact, isSidebarCollapsed]);
   useEffect(() => {
     setCompactSidebarOpen(false);
   }, [surface]);
 
-  const compactChrome: WindowChromeProps | undefined = compact
+  const compactChrome: WindowChromeProps | undefined = isCompact
     ? {
       ...chrome,
-      sidebarCollapsed: !compactSidebarOpen,
-      onToggleSidebar: () => setCompactSidebarOpen((open) => !open),
+      isSidebarCollapsed: !isCompactSidebarOpen,
+      onToggleSidebar: () => setCompactSidebarOpen((isCurrentlyOpen) => !isCurrentlyOpen),
     }
     : chrome;
 
@@ -114,13 +114,13 @@ export function ApplicationShell({
       className={shellClassName}
       data-platform={detectShortcutPlatform()}
       data-shell-surface={surface}
-      data-sidebar={sidebarCollapsed ? "collapsed" : "expanded"}
+      data-sidebar={isSidebarCollapsed ? "collapsed" : "expanded"}
     >
       <WindowChrome {...compactChrome} />
       <div className="terra-shell-body">
-        {compact ? (
+        {isCompact ? (
           <div className="terra-shell-compact-content">
-            {compactSidebarOpen ? (
+            {isCompactSidebarOpen ? (
               <>
                 <button className="terra-shell-compact-backdrop" type="button" aria-label={translate("shell.sidebar.collapse")} onClick={() => setCompactSidebarOpen(false)} />
                 <div
@@ -136,15 +136,15 @@ export function ApplicationShell({
               </>
             ) : null}
             <main className="terra-shell-compact-main">{children}</main>
-            {dockEnabled && dockProps ? (
+            {isDockEnabled && dockProps ? (
               <div className="terra-shell-compact-drawer terra-shell-compact-dock">
-                <RightDock {...dockProps} open />
+                <RightDock {...dockProps} isOpen />
               </div>
             ) : null}
           </div>
         ) : (
           <>
-            {sidebarCollapsed ? <div className="terra-shell-rail-slot">{collapsedSidebar}</div> : null}
+            {isSidebarCollapsed ? <div className="terra-shell-rail-slot">{collapsedSidebar}</div> : null}
             <PanelGroup
               className="terra-shell-panel-group"
               id="terra-application-shell"
@@ -153,7 +153,7 @@ export function ApplicationShell({
               onLayoutChanged={onLayoutChanged}
               resizeTargetMinimumSize={{ coarse: 20, fine: 10 }}
             >
-              {showSidebarPanel ? (
+              {shouldShowSidebarPanel ? (
                 <>
                   <Panel id="navigator" className="terra-shell-panel" data-slot="navigator" minSize="220px" maxSize="420px">
                     <div className="terra-shell-panel-slot" data-slot="navigator">{sidebar}</div>
@@ -164,12 +164,12 @@ export function ApplicationShell({
               <Panel id="content" className="terra-shell-panel" data-slot="content" minSize={`${MIN_CONTENT_PERCENT}%`}>
                 <div className="terra-shell-panel-slot" data-slot="content">{children}</div>
               </Panel>
-              {dockEnabled ? (
+              {isDockEnabled ? (
                 <>
                   <Separator id="dock-separator" className="terra-shell-separator" aria-label={translate("shell.inspector.resize")} />
                   <Panel id="dock" className="terra-shell-panel" data-slot="dock" minSize="260px" maxSize="480px">
                     <div className="terra-shell-panel-slot" data-slot="dock">
-                      {dockProps ? <RightDock {...dockProps} open /> : null}
+                      {dockProps ? <RightDock {...dockProps} isOpen /> : null}
                     </div>
                   </Panel>
                 </>

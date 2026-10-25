@@ -72,18 +72,18 @@ export function TerminalTabSurface({
     );
   }
 
-  const hidden = context.hidden || detachedIds?.has(ptyId) === true;
+  const isHidden = context.isHidden || detachedIds?.has(ptyId) === true;
   return (
     <TerminalPane
       id={ptyId}
       command={tab.command}
       fontSize={fontSize}
-      exited={ptyId in exited}
-      expanded={expandedId === ptyId}
+      hasExited={ptyId in exited}
+      isExpanded={expandedId === ptyId}
       basis={100}
       height="100%"
-      entering={false}
-      dragOver={false}
+      isEntering={false}
+      isDragOver={false}
       notifications={notifications[ptyId] ?? 0}
       contextUsed={contextUsage[ptyId]}
       title={labels?.[ptyId] ? undefined : titles[ptyId] || tab.title}
@@ -96,14 +96,14 @@ export function TerminalTabSurface({
       roleLabel={roleLabels?.[ptyId]}
       onOpenReview={onOpenReview ? () => onOpenReview(ptyId) : undefined}
       onClearNotifications={() => onClearNotifications(ptyId)}
-      focused={focusedId === ptyId}
+      isFocused={focusedId === ptyId}
       onFocus={() => onFocus(ptyId)}
       onToggleExpand={() => onToggleExpand(expandedId === ptyId ? null : ptyId)}
       onRestart={() => onRestart(ptyId, tab.command)}
       onClose={() => onKill(ptyId)}
       onDetach={onDetach ? () => onDetach(ptyId) : undefined}
       onKill={() => onKill(ptyId)}
-      hidden={hidden}
+      isHidden={isHidden}
     />
   );
 }

@@ -36,7 +36,7 @@ describe("parsePatch", () => {
     expect(notes.path).toBe("app/notes.md");
     expect(notes.lines[0]).toMatchObject({ kind: "meta", text: "new file mode 100644" });
     expect(notes.lines.filter((line) => line.kind === "add")).toHaveLength(2);
-    expect(logo.binary).toBe(true);
+    expect(logo.isBinary).toBe(true);
   });
 
   it("handles an empty patch", () => {

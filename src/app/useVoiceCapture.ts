@@ -48,9 +48,9 @@ interface VoiceCaptureInput {
   activeWorkspace: Workspace | null;
   focusedId: string | null;
   titles: Record<string, string>;
-  voiceEnabled: boolean;
+  isVoiceEnabled: boolean;
   /** Parse spoken commands ("foca no claude 2") instead of only dictating. */
-  voiceCommandsEnabled: boolean;
+  isVoiceCommandsEnabled: boolean;
   sessions: Pick<TerminalSessions, "spawnInto" | "close" | "restart">;
   openVoiceSettings: () => void;
   actions: {
@@ -73,8 +73,8 @@ export function useVoiceCapture({
   activeWorkspace,
   focusedId,
   titles,
-  voiceEnabled,
-  voiceCommandsEnabled,
+  isVoiceEnabled,
+  isVoiceCommandsEnabled,
   sessions,
   openVoiceSettings,
   actions,
@@ -89,7 +89,7 @@ export function useVoiceCapture({
   const [voiceLevel, setVoiceLevel] = useState(0);
   const [voiceSamples, setVoiceSamples] = useState<number[]>([]);
   const [voiceFeedback, setVoiceFeedback] = useState<string | null>(null);
-  const [voiceSubmitted, setVoiceSubmitted] = useState(false);
+  const [isVoiceSubmitted, setVoiceSubmitted] = useState(false);
 
   const voiceTerminalFor = (target: string) =>
     resolveVoiceTerminal(workspaces, target, { titles, names: usePreferencesStore.getState().agentNames });
@@ -159,9 +159,9 @@ export function useVoiceCapture({
 
   const executeVoiceIntent = async (
     intent: VoiceCapsuleIntent,
-    confirmed = false,
+    isConfirmed = false,
   ): Promise<boolean> => {
-    if (!canExecuteVoiceIntent(intent, confirmed)) {
+    if (!canExecuteVoiceIntent(intent, isConfirmed)) {
       setVoiceFeedback(translateNow("app.voice.confirmDestructive"));
       return false;
     }
@@ -208,22 +208,22 @@ export function useVoiceCapture({
 
 
   const toggleVoice = useCallback(() => {
-    if (!voiceEnabled) {
+    if (!isVoiceEnabled) {
       openVoiceSettings();
       return;
     }
     api
       .voiceToggleRecording()
       .catch((err) => console.error("voice toggle failed:", err));
-  }, [voiceEnabled, openVoiceSettings]);
+  }, [isVoiceEnabled, openVoiceSettings]);
 
   // Latest focused terminal for the voice paste target, readable from
   // listeners that are registered once.
   const voiceFocusRef = useRef<string | null>(null);
   const [voiceTargetId, setVoiceTargetId] = useState<string | null>(null);
-  const voiceToOrchestrator = usePreferencesStore((state) => state.voiceToOrchestrator);
+  const shouldSendVoiceToOrchestrator = usePreferencesStore((state) => state.shouldSendVoiceToOrchestrator);
   const exitedTerminals = useTerminalRuntimeStore((state) => state.exited);
-  const orchestratorId = voiceToOrchestrator ? orchestratorOf(activeWorkspace, exitedTerminals) : null;
+  const orchestratorId = shouldSendVoiceToOrchestrator ? orchestratorOf(activeWorkspace, exitedTerminals) : null;
   const defaultTargetId = voiceTargetId ?? orchestratorId ?? focusedId;
   voiceFocusRef.current = defaultTargetId;
 
@@ -246,9 +246,9 @@ export function useVoiceCapture({
     const prompt = voiceCommandsEnabledRef.current && profile
       ? buildVoicePrompt(profile, text)
       : text;
-    const bracketed = term ? term.modes.bracketedPasteMode : profile?.id !== "shell";
+    const isBracketed = term ? term.modes.bracketedPasteMode : profile?.id !== "shell";
     try {
-      await api.writeTerminal(id, promptPayload(prompt, bracketed));
+      await api.writeTerminal(id, promptPayload(prompt, isBracketed));
       term?.focus();
       setVoiceSubmitted(true);
       setVoiceFeedback(translateNow("app.voice.sent"));
@@ -264,8 +264,8 @@ export function useVoiceCapture({
   useEffect(() => {
     if (voiceCapsule.state === "idle") setVoiceTargetId(null);
   }, [voiceCapsule.state]);
-  const voiceCommandsEnabledRef = useRef(voiceCommandsEnabled);
-  voiceCommandsEnabledRef.current = voiceCommandsEnabled;
+  const voiceCommandsEnabledRef = useRef(isVoiceCommandsEnabled);
+  voiceCommandsEnabledRef.current = isVoiceCommandsEnabled;
 
   // Voice backend events. Parsed intents stop at the capsule preview; they
   // are executed only by the explicit Send/Confirm action below. Everything
@@ -353,7 +353,7 @@ export function useVoiceCapture({
 
 
   const startVoiceCapture = () => {
-    if (!voiceEnabled) {
+    if (!isVoiceEnabled) {
       toggleVoice();
       return;
     }
@@ -384,7 +384,7 @@ export function useVoiceCapture({
   };
 
   const retryVoiceCapture = () => {
-    if (!voiceEnabled) {
+    if (!isVoiceEnabled) {
       toggleVoice();
       return;
     }
@@ -398,10 +398,10 @@ export function useVoiceCapture({
     });
   };
 
-  const sendVoicePayload = async (payload: VoiceSendPayload, confirmed: boolean) => {
+  const sendVoicePayload = async (payload: VoiceSendPayload, isConfirmed: boolean) => {
     if (payload.intent) {
-      const success = await executeVoiceIntent(payload.intent, confirmed);
-      if (success) setVoiceSubmitted(true);
+      const hasSucceeded = await executeVoiceIntent(payload.intent, isConfirmed);
+      if (hasSucceeded) setVoiceSubmitted(true);
       return;
     }
 
@@ -422,7 +422,7 @@ export function useVoiceCapture({
     level: voiceLevel,
     samples: voiceSamples,
     feedback: voiceFeedback,
-    submitted: voiceSubmitted,
+    isSubmitted: isVoiceSubmitted,
     targetId: defaultTargetId,
     setTargetId: setVoiceTargetId,
     targetLabel: targetLabelForVoiceIntent(voiceCapsule.intent),

@@ -148,9 +148,9 @@ export function setWorkspaceLayout(
 
 export function setWorkspaceCollapsed(
   workspaceId: string,
-  collapsed: boolean,
+  isCollapsed: boolean,
 ): Promise<void> {
-  return invokeCommand("setWorkspaceCollapsed", { workspaceId, collapsed });
+  return invokeCommand("setWorkspaceCollapsed", { workspaceId, collapsed: isCollapsed });
 }
 
 export function reorderWorkspaces(order: string[]): Promise<void> {

@@ -7,7 +7,7 @@ import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
 
 export function useWorkspaceCreator(refresh: () => Promise<void>) {
-  const [open, setOpen] = useState(false);
+  const [isOpen, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [cwd, setCwd] = useState("");
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -54,5 +54,5 @@ export function useWorkspaceCreator(refresh: () => Promise<void>) {
     setOpen(true);
   };
 
-  return { open, name, cwd, groupId, setOpen, setName, setCwd, pickFolder, create, openCreator };
+  return { isOpen, name, cwd, groupId, setOpen, setName, setCwd, pickFolder, create, openCreator };
 }

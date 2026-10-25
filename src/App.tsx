@@ -96,12 +96,12 @@ function App() {
     value: string;
   } | null>(null);
   const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
-  const [showNewGroup, setShowNewGroup] = useState(false);
+  const [shouldShowNewGroup, setShowNewGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
-  const showSettings = useShellStore((state) => state.activeSurface === "settings");
-  const setShowSettings = (open: boolean) => {
+  const shouldShowSettings = useShellStore((state) => state.activeSurface === "settings");
+  const setShowSettings = (isOpen: boolean) => {
     const shell = useShellStore.getState();
-    if (open) shell.navigate("settings", shell.activeWorkspaceId);
+    if (isOpen) shell.navigate("settings", shell.activeWorkspaceId);
     else if (shell.activeSurface === "settings") shell.navigate("workbench", shell.activeWorkspaceId);
   };
   const [settingsSection, setSettingsSection] =
@@ -112,8 +112,8 @@ function App() {
   }, []);
   const [capturing, setCapturing] = useState<HotkeyActionId | null>(null);
   const voiceSettings = useVoiceSettings({
-    settingsOpen: showSettings,
-    voiceSectionOpen: showSettings && settingsSection === "voice",
+    isSettingsOpen: shouldShowSettings,
+    isVoiceSectionOpen: shouldShowSettings && settingsSection === "voice",
   });
   const {
     activeId,
@@ -193,10 +193,10 @@ function App() {
     hotkeys,
     fontSize,
     defaultShell,
-    reduceMotion,
-    autoResume,
+    shouldReduceMotion,
+    shouldAutoResume,
     gridCols,
-    voiceEnabled,
+    isVoiceEnabled,
     voiceLang,
     voiceInputDevice,
     setDefaultAgent,
@@ -213,10 +213,10 @@ function App() {
       hotkeys: state.hotkeys,
       fontSize: state.fontSize,
       defaultShell: state.defaultShell,
-      reduceMotion: state.reduceMotion,
-      autoResume: state.autoResume,
+      shouldReduceMotion: state.shouldReduceMotion,
+      shouldAutoResume: state.shouldAutoResume,
       gridCols: state.gridCols,
-      voiceEnabled: state.voiceEnabled,
+      isVoiceEnabled: state.isVoiceEnabled,
       voiceLang: state.voiceLang,
       voiceInputDevice: state.voiceInputDevice,
       setDefaultAgent: state.setDefaultAgent,
@@ -231,8 +231,8 @@ function App() {
   );
 
   useEffect(() => {
-    document.documentElement.classList.toggle("reduce-motion", reduceMotion);
-  }, [reduceMotion]);
+    document.documentElement.classList.toggle("reduce-motion", shouldReduceMotion);
+  }, [shouldReduceMotion]);
 
   useEffect(() => {
     api.setDurableScrollbackEnabled(flags.durableScrollback).catch((error) => {
@@ -252,10 +252,10 @@ function App() {
     pushSystemNotification,
   ]);
 
-  const updateReduceMotion = (on: boolean) => {
-    setReduceMotion(on);
+  const updateReduceMotion = (isOn: boolean) => {
+    setReduceMotion(isOn);
   };
-  const { appVersion, updateVersion, updateInstalling, updateCheckState, manualUpdateCheck, installUpdate } = useUpdater();
+  const { appVersion, updateVersion, isUpdateInstalling, updateCheckState, manualUpdateCheck, installUpdate } = useUpdater();
   const sessions = useTerminalSessions({ workspaces, snapshot: orchestrationSnapshot, refresh });
   const resumeQueue = useResumeQueue(sessions, refresh);
   const worktreeClose = useWorktreeClose(workspaces, sessions);
@@ -274,14 +274,14 @@ function App() {
       .filter((terminal) => isTerminalRunning(terminal, exited))
       .map((terminal) => ({ id: terminal.id, label: labels[terminal.id] ? agentLabelText(labels[terminal.id]) : terminal.command }));
   }, [active, titles, agentNames, exited]);
-  const showResume = resumeQueue.open;
-  const modalOpen =
-    workspaceCreator.open ||
-    agentPicker.open ||
-    showResume ||
+  const shouldShowResume = resumeQueue.isOpen;
+  const isModalOpen =
+    workspaceCreator.isOpen ||
+    agentPicker.isOpen ||
+    shouldShowResume ||
     renameTarget !== null ||
     workspaceToDelete !== null ||
-    showNewGroup ||
+    shouldShowNewGroup ||
     snapshotTransfer.pendingImportPath !== null;
 
   useBranchPolling(workspaces);
@@ -292,7 +292,7 @@ function App() {
     activeId,
     focusedId,
     snapshot: orchestrationSnapshot,
-    modalOpen,
+    isModalOpen,
   });
 
   const clearNotifications = (id: string) => {
@@ -362,8 +362,8 @@ function App() {
     activeWorkspace: active,
     focusedId,
     titles,
-    voiceEnabled,
-    voiceCommandsEnabled: flags.voiceCommands,
+    isVoiceEnabled,
+    isVoiceCommandsEnabled: flags.voiceCommands,
     sessions,
     openVoiceSettings,
     actions: { quickNewTerminal: agentPicker.quickNewTerminal, selectWorkspace, suspendGroup, resumeGroup },
@@ -414,10 +414,10 @@ function App() {
   };
 
   useGlobalHotkeys({
-    modalOpen,
+    isModalOpen,
     capturing,
     setCapturing,
-    shortcutsSectionOpen: showSettings && settingsSection === "shortcuts",
+    isShortcutsSectionOpen: shouldShowSettings && settingsSection === "shortcuts",
     active,
     focusedId,
     workspaces,
@@ -460,14 +460,14 @@ function App() {
     }
   };
 
-  const settingsPage = showSettings ? (
+  const settingsPage = shouldShowSettings ? (
         <Suspense fallback={<AppLoadingSurface />}>
           <LazySettingsDialog
             variant="page"
-            open
-            onOpenChange={(open) => {
-              setShowSettings(open);
-              if (!open) setCapturing(null);
+            isOpen
+            onOpenChange={(isOpen) => {
+              setShowSettings(isOpen);
+              if (!isOpen) setCapturing(null);
             }}
             activeSection={settingsSection}
             onActiveSectionChange={(section) => {
@@ -489,19 +489,19 @@ function App() {
                   onFontSizeReset={resetFontSize}
                   gridCols={gridCols}
                   onGridLayoutChange={applyGridLayout}
-                  reduceMotion={reduceMotion}
+                  shouldReduceMotion={shouldReduceMotion}
                   onReduceMotionChange={updateReduceMotion}
                   flags={flags}
                   onFeatureFlagChange={setFeatureFlag}
-                  voiceEnabled={voiceEnabled}
+                  isVoiceEnabled={isVoiceEnabled}
                   onVoiceEnabledChange={voiceSettings.setEnabled}
                   voiceLang={voiceLang}
                   onVoiceLangChange={voiceSettings.setLanguage}
                   voiceInputDevice={voiceInputDevice}
                   voiceInputDevices={voiceSettings.inputDevices}
                   onVoiceInputDeviceChange={voiceSettings.setInputDevice}
-                  micAvailable={voiceSettings.micAvailable}
-                  micTesting={voiceSettings.micTesting}
+                  isMicAvailable={voiceSettings.isMicAvailable}
+                  isMicTesting={voiceSettings.isMicTesting}
                   onMicTestToggle={voiceSettings.toggleMicTest}
                   voiceModels={voiceSettings.models}
                   voiceModelsStatus={voiceSettings.modelsStatus}
@@ -526,7 +526,7 @@ function App() {
                   }}
                   appVersion={appVersion}
                   updateVersion={updateVersion}
-                  updateInstalling={updateInstalling}
+                  isUpdateInstalling={isUpdateInstalling}
                   updateCheckState={updateCheckState}
                   onManualUpdateCheck={manualUpdateCheck}
                   onInstallUpdate={installUpdate}
@@ -538,15 +538,15 @@ function App() {
   ) : null;
 
   return (
-    <MotionConfig reducedMotion={reduceMotion ? "always" : "user"}>
+    <MotionConfig reducedMotion={shouldReduceMotion ? "always" : "user"}>
       {initialization.error ? (
         <div className="terra-initialization-error" role="alert" aria-live="assertive">
           <div>
             <strong>{translateNow("system.initFailed")}</strong>
             <span>{initialization.error}</span>
           </div>
-          <button type="button" className="terra-button" onClick={initialization.retry} disabled={initialization.running}>
-            {initialization.running ? translateNow("system.retrying") : translateNow("nav.retry")}
+          <button type="button" className="terra-button" onClick={initialization.retry} disabled={initialization.isRunning}>
+            {initialization.isRunning ? translateNow("system.retrying") : translateNow("nav.retry")}
           </button>
         </div>
       ) : null}
@@ -570,7 +570,7 @@ function App() {
         onOpenResume={resumeQueue.show}
         detachedTerminalIds={detachedTerminalIds}
         fontSize={fontSize}
-        voiceEnabled={voiceEnabled}
+        isVoiceEnabled={isVoiceEnabled}
         voiceStatus={voice.status}
         voiceState={voice.capsule.state}
         voiceTranscript={voice.capsule.partialTranscript}
@@ -587,7 +587,7 @@ function App() {
         voiceLevel={voice.level}
         voiceSamples={voice.samples}
         voiceError={voice.capsule.error}
-        voiceSubmitted={voice.submitted}
+        isVoiceSubmitted={voice.isSubmitted}
         voiceFeedback={voice.feedback}
         onFocus={setFocusedId}
         onSelectWorkspace={selectWorkspace}
@@ -679,7 +679,7 @@ function App() {
         />
       </Suspense>
 
-      {showResume ? (
+      {shouldShowResume ? (
         <Suspense fallback={<AppLoadingSurface />}>
           <LazyResumeDialog
             items={resumeItems ?? []}
@@ -689,7 +689,7 @@ function App() {
             onResumeAll={resumeQueue.resumeAll}
             onDismissAll={resumeQueue.dismissAll}
             onDefer={resumeQueue.defer}
-            autoResume={autoResume}
+            shouldAutoResume={shouldAutoResume}
             onAutoResumeChange={setAutoResume}
           />
         </Suspense>
@@ -704,7 +704,7 @@ function App() {
         onNameChange={workspaceCreator.setName}
         onOpenChange={workspaceCreator.setOpen}
         onSubmit={workspaceCreator.create}
-        open={workspaceCreator.open}
+        isOpen={workspaceCreator.isOpen}
       />
 
       <AgentPickerDialog
@@ -713,10 +713,10 @@ function App() {
         onChoose={agentPicker.choose}
         onOpenChange={agentPicker.setOpen}
         onSaveDefaultChange={agentPicker.setSaveDefault}
-        open={agentPicker.open}
-        saveDefault={agentPicker.saveDefault}
+        isOpen={agentPicker.isOpen}
+        shouldSaveDefault={agentPicker.shouldSaveDefault}
         canIsolate={Boolean(agentPicker.target && branches[agentPicker.target])}
-        isolate={agentPicker.isolate}
+        shouldIsolate={agentPicker.shouldIsolate}
         onIsolateChange={agentPicker.setIsolate}
         role={agentPicker.role}
         onRoleChange={agentPicker.setRole}
@@ -746,11 +746,11 @@ function App() {
         onChange={(value) => {
           setRenameTarget((current) => current ? { ...current, value } : current);
         }}
-        onOpenChange={(open) => {
-          if (!open) setRenameTarget(null);
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setRenameTarget(null);
         }}
         onSubmit={submitRename}
-        open={renameTarget !== null}
+        isOpen={renameTarget !== null}
         value={renameTarget?.value ?? ""}
       />
 
@@ -758,22 +758,22 @@ function App() {
         kind="group"
         mode="create"
         onChange={setNewGroupName}
-        onOpenChange={(open) => {
-          setShowNewGroup(open);
-          if (!open) setNewGroupName("");
+        onOpenChange={(isOpen) => {
+          setShowNewGroup(isOpen);
+          if (!isOpen) setNewGroupName("");
         }}
         onSubmit={submitNewGroup}
-        open={showNewGroup}
+        isOpen={shouldShowNewGroup}
         value={newGroupName}
       />
 
       <ConfirmActionDialog
         description={translateNow("app.importDescription")}
         onConfirm={() => snapshotTransfer.confirmImport()}
-        onOpenChange={(open) => {
-          if (!open) snapshotTransfer.cancelImport();
+        onOpenChange={(isOpen) => {
+          if (!isOpen) snapshotTransfer.cancelImport();
         }}
-        open={snapshotTransfer.pendingImportPath !== null}
+        isOpen={snapshotTransfer.pendingImportPath !== null}
         title={translateNow("app.importTitle")}
         confirmLabel={translateNow("settingsPanels.importSnapshot")}
       />
@@ -789,13 +789,13 @@ function App() {
         })()}
         onConfirm={async () => {
           if (!workspaceToDelete) return;
-          const deleted = await closeWorkspace(workspaceToDelete);
-          if (deleted) setWorkspaceToDelete(null);
+          const isDeleted = await closeWorkspace(workspaceToDelete);
+          if (isDeleted) setWorkspaceToDelete(null);
         }}
-        onOpenChange={(open) => {
-          if (!open) setWorkspaceToDelete(null);
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setWorkspaceToDelete(null);
         }}
-        open={workspaceToDelete !== null}
+        isOpen={workspaceToDelete !== null}
         title={translateNow("app.deleteTitle")}
         confirmLabel={translateNow("app.deleteConfirm")}
       />

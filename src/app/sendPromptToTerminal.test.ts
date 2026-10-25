@@ -17,7 +17,7 @@ describe("sendPromptToTerminal", () => {
 
   it("given submit is false, pastes without pressing Enter", async () => {
     const write = vi.fn(async () => undefined);
-    await sendPromptToTerminal("t-1", "draft", { submit: false, write });
+    await sendPromptToTerminal("t-1", "draft", { shouldSubmit: false, write });
     expect(write.mock.calls).toEqual([["t-1", "\u001b[200~draft\u001b[201~"]]);
   });
 });

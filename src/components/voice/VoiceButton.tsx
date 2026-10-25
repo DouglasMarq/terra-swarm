@@ -6,11 +6,11 @@ import styles from "./voice.module.css";
 
 export interface VoiceButtonProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick"> {
-  listening?: boolean;
+  isListening?: boolean;
   onStart?: () => void;
   onStop?: () => void;
   shortcut?: string;
-  pushToTalk?: boolean;
+  isPushToTalk?: boolean;
 }
 
 /**
@@ -20,17 +20,17 @@ export interface VoiceButtonProps
 export function VoiceButton({
   ariaLabel,
   className,
-  listening = false,
+  isListening = false,
   onStart,
   onStop,
-  pushToTalk = false,
+  isPushToTalk = false,
   shortcut,
   title,
   ...buttonProps
 }: VoiceButtonProps & { ariaLabel?: string }) {
   const translate = useT();
-  const label = ariaLabel ?? (listening ? translate("palette.voiceStop") : translate("palette.voiceStart"));
-  const hint = [pushToTalk ? translate("voiceCapsule.holdToTalk") : null, shortcut].filter(Boolean).join(" · ");
+  const label = ariaLabel ?? (isListening ? translate("palette.voiceStop") : translate("palette.voiceStart"));
+  const hint = [isPushToTalk ? translate("voiceCapsule.holdToTalk") : null, shortcut].filter(Boolean).join(" · ");
   const classes = [styles.voiceButton, className].filter(Boolean).join(" ");
 
   return (
@@ -39,12 +39,12 @@ export function VoiceButton({
       type={buttonProps.type ?? "button"}
       className={classes}
       aria-label={label}
-      aria-pressed={listening}
-      data-listening={listening || undefined}
+      aria-pressed={isListening}
+      data-listening={isListening || undefined}
       title={title ?? (hint ? `${label} (${hint})` : label)}
-      onClick={() => (listening ? onStop?.() : onStart?.())}
+      onClick={() => (isListening ? onStop?.() : onStart?.())}
     >
-      {listening ? <MicOff aria-hidden="true" size={16} /> : <Mic aria-hidden="true" size={16} />}
+      {isListening ? <MicOff aria-hidden="true" size={16} /> : <Mic aria-hidden="true" size={16} />}
       <span className={styles.srOnly}>{label}</span>
     </button>
   );

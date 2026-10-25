@@ -65,7 +65,7 @@ export function FleetCommandCenter({
   const needsYou = model.agents.filter((agent) => agent.status === "attention");
   const projectCount = new Set(model.agents.map((agent) => agent.projectId)).size;
   const selectedIds = rows.filter((agent) => selected.has(agent.terminalId)).map((agent) => agent.terminalId);
-  const allSelected = rows.length > 0 && selectedIds.length === rows.length;
+  const isAllSelected = rows.length > 0 && selectedIds.length === rows.length;
 
   const toggle = (id: string) => setSelected((current) => {
     const next = new Set(current);
@@ -112,7 +112,7 @@ export function FleetCommandCenter({
           <div className="terra-fleet-cards terra-stagger">
             {needsYou.map((agent) => {
               const message = attentionMessages[agent.terminalId];
-              const contextHigh = (agent.contextUsage ?? 0) >= CONTEXT_ATTENTION_PERCENT;
+              const isContextHigh = (agent.contextUsage ?? 0) >= CONTEXT_ATTENTION_PERCENT;
               return (
                 <article className="terra-fleet-card" key={agent.terminalId}>
                   <div className="terra-fleet-card-meta">
@@ -120,7 +120,7 @@ export function FleetCommandCenter({
                     <b>{label(agent)?.primary ?? agent.label}</b>
                     <span className="terra-tag">{label(agent)?.tag ?? agent.command} · {agent.projectName}</span>
                   </div>
-                  <p>{message ?? (contextHigh ? translate("fleet.contextHigh", { count: agent.contextUsage ?? 0 }) : translate("fleet.waiting"))}</p>
+                  <p>{message ?? (isContextHigh ? translate("fleet.contextHigh", { count: agent.contextUsage ?? 0 }) : translate("fleet.waiting"))}</p>
                   <div className="terra-fleet-card-actions">
                     <button type="button" className="terra-button terra-button-attention" onClick={() => onFocus?.(agent.terminalId, agent.workspaceId)}>
                       {translate("fleet.open")}
@@ -186,8 +186,8 @@ export function FleetCommandCenter({
                     <input
                       type="checkbox"
                       aria-label={translate("fleet.selectAll")}
-                      checked={allSelected}
-                      onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map((agent) => agent.terminalId)))}
+                      checked={isAllSelected}
+                      onChange={() => setSelected(isAllSelected ? new Set() : new Set(rows.map((agent) => agent.terminalId)))}
                     />
                   </th>
                   <th scope="col">{translate("fleet.col.agent")}</th>

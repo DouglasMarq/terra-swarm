@@ -13,12 +13,12 @@ const SUBMIT_DELAY_MS = 120;
 export async function sendPromptToTerminal(
   terminalId: string,
   prompt: string,
-  options: { submit?: boolean; write?: (id: string, data: string) => Promise<void> } = {},
+  options: { shouldSubmit?: boolean; write?: (id: string, data: string) => Promise<void> } = {},
 ): Promise<void> {
   const write = options.write ?? writeTerminal;
-  const bracketed = getTerminal(terminalId)?.modes.bracketedPasteMode ?? true;
-  await write(terminalId, promptPayload(prompt, bracketed));
-  if (options.submit === false) return;
+  const isBracketed = getTerminal(terminalId)?.modes.bracketedPasteMode ?? true;
+  await write(terminalId, promptPayload(prompt, isBracketed));
+  if (options.shouldSubmit === false) return;
   await new Promise((resolve) => setTimeout(resolve, SUBMIT_DELAY_MS));
   await write(terminalId, "\r");
 }

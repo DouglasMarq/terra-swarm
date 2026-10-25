@@ -96,7 +96,7 @@ export interface CollapsedSidebarProject {
   id: string;
   name: string;
   status: CollapsedSidebarAgent["status"] | "idle";
-  suspended: boolean;
+  isSuspended: boolean;
   agents: CollapsedSidebarAgent[];
 }
 
@@ -166,14 +166,14 @@ export function CollapsedSidebar({
       <span className="terra-rail-divider" aria-hidden="true" />
       <div className="terra-rail-projects">
         {projects.map((project) => {
-          const active = project.id === activeWorkspaceId;
+          const isActive = project.id === activeWorkspaceId;
           return (
             <div className="terra-rail-project" key={project.id}>
               <button
                 type="button"
                 className="terra-rail-initials"
-                data-active={active}
-                data-suspended={project.suspended}
+                data-active={isActive}
+                data-suspended={project.isSuspended}
                 aria-label={translate("shell.sidebar.projectAgents", { name: project.name, count: project.agents.length })}
                 title={project.name}
                 onClick={() => onOpenWorkspace(project.id)}
@@ -181,7 +181,7 @@ export function CollapsedSidebar({
                 {initials(project.name)}
                 {project.status === "attention" ? <span className="terra-rail-project-dot" aria-hidden="true" /> : null}
               </button>
-              {active
+              {isActive
                 ? project.agents.map((agent) => (
                   <button
                     type="button"

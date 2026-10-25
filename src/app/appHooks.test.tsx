@@ -48,7 +48,7 @@ describe("useResumeQueue", () => {
     for (const fn of Object.values(api)) fn.mockReset();
     api.storeSavedAt.mockResolvedValue(123);
     api.killTerminal.mockResolvedValue(undefined);
-    usePreferencesStore.setState({ autoResume: false });
+    usePreferencesStore.setState({ shouldAutoResume: false });
   });
   afterEach(() => useTerminalRuntimeStore.getState().reset());
 
@@ -57,19 +57,19 @@ describe("useResumeQueue", () => {
     const refresh = vi.fn(async () => {});
     const { result } = renderHook(() => useResumeQueue(sessions, refresh));
     act(() => result.current.offer([item("t-1"), item("t-2")]));
-    expect(result.current.open).toBe(true);
+    expect(result.current.isOpen).toBe(true);
     await act(() => result.current.resumeAll());
     expect(useTerminalRuntimeStore.getState().resumeItems?.map((entry) => entry.terminalId)).toEqual(["t-2"]);
     expect(refresh).toHaveBeenCalled();
   });
 
   it("resumes automatically when the user chose it", async () => {
-    usePreferencesStore.setState({ autoResume: true });
+    usePreferencesStore.setState({ shouldAutoResume: true });
     const sessions = fakeSessions();
     const { result } = renderHook(() => useResumeQueue(sessions, vi.fn(async () => {})));
     await act(async () => result.current.offer([item("t-1")]));
     await vi.waitFor(() => expect(sessions.resumeItems).toHaveBeenCalled());
-    expect(result.current.open).toBe(false);
+    expect(result.current.isOpen).toBe(false);
   });
 
   it("only forgets a dismissed session after the backend deleted it", async () => {

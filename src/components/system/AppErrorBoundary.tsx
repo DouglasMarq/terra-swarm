@@ -13,7 +13,7 @@ import styles from "./system.module.css";
 export interface AppErrorFallbackProps {
   error: unknown;
   details: SafeErrorDetails;
-  copied: boolean;
+  isCopied: boolean;
   reset: () => void;
   copyDetails: () => Promise<void>;
 }
@@ -31,10 +31,10 @@ export interface AppErrorBoundaryProps {
 interface AppErrorBoundaryState {
   error: unknown | null;
   info: ErrorInfo | null;
-  copied: boolean;
+  isCopied: boolean;
 }
 
-const INITIAL_STATE: AppErrorBoundaryState = { copied: false, error: null, info: null };
+const INITIAL_STATE: AppErrorBoundaryState = { isCopied: false, error: null, info: null };
 
 /** How long the "copied" confirmation stays on the copy button. */
 const COPIED_FEEDBACK_MS = 2_400;
@@ -50,7 +50,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   }
 
   public static getDerivedStateFromError(error: unknown): Partial<AppErrorBoundaryState> {
-    return { copied: false, error };
+    return { isCopied: false, error };
   }
 
   public componentDidCatch(error: unknown, info: ReactErrorInfo) {
@@ -85,13 +85,13 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
     try {
       if (!navigator.clipboard?.writeText) throw new Error("clipboard-unavailable");
       await navigator.clipboard.writeText(details.text);
-      this.setState({ copied: true });
+      this.setState({ isCopied: true });
       if (this.copyTimer !== undefined) clearTimeout(this.copyTimer);
-      this.copyTimer = setTimeout(() => this.setState({ copied: false }), COPIED_FEEDBACK_MS);
+      this.copyTimer = setTimeout(() => this.setState({ isCopied: false }), COPIED_FEEDBACK_MS);
     } catch {
       // Clipboard permissions are optional; do not expose the raw report or
       // turn a recoverable error surface into a second error.
-      this.setState({ copied: false });
+      this.setState({ isCopied: false });
     }
   };
 
@@ -102,7 +102,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
     const fallback = this.props.fallback;
     if (typeof fallback === "function") {
       return fallback({
-        copied: this.state.copied,
+        isCopied: this.state.isCopied,
         copyDetails: this.copyDetails,
         details,
         error: this.state.error,
@@ -138,12 +138,12 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
               {translateNow("nav.retry")}
             </button>
             <button type="button" className={styles.errorButton} onClick={this.copyDetails}>
-              {this.state.copied ? (
+              {this.state.isCopied ? (
                 <Check size={14} aria-hidden="true" />
               ) : (
                 <ClipboardCopy size={14} aria-hidden="true" />
               )}
-              {this.state.copied ? translateNow("system.copied") : translateNow("system.copyReport")}
+              {this.state.isCopied ? translateNow("system.copied") : translateNow("system.copyReport")}
             </button>
           </div>
         </section>

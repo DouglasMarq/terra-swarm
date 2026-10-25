@@ -22,7 +22,7 @@ export function shouldNotify(lastShown: Map<string, number>, terminalId: string,
 export function latestUnreadPerAgent(items: readonly NotificationItem[]): NotificationItem[] {
   const latest = new Map<string, NotificationItem>();
   for (const item of items) {
-    if (item.read || item.system) continue;
+    if (item.isRead || item.isSystem) continue;
     const current = latest.get(item.terminalId);
     if (!current || current.ts < item.ts) latest.set(item.terminalId, item);
   }

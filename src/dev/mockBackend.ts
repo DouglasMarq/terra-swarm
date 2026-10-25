@@ -95,10 +95,10 @@ const mcpStatuses: McpAgentStatus[] = [
   { terminal_id: "pty-claude-1", workspace_id: "ws-terra", state: "working", summary: "Editando resumePlanner.ts", updated_at: now },
   { terminal_id: "pty-codex", workspace_id: "ws-terra", state: "needs_input", summary: "Posso rodar npm test?", updated_at: now },
 ];
-let mcpEnabled = true;
+let isMcpEnabled = true;
 const mockFiles: Record<string, string> = {};
 const mcpInfo = () => ({
-  enabled: mcpEnabled,
+  enabled: isMcpEnabled,
   available: true,
   running: true,
   url: "http://127.0.0.1:52817/mcp",
@@ -237,7 +237,7 @@ export function installMockBackend(): void {
         return { branch: "terra/pty-claude-2", base: "main", path: "/tmp/wt/pty-claude-2", dirty: [], ahead: 1, behind: 0, exists: true };
       case "worktree_open_pr": return "https://github.com/example/terra-swarm/pull/42";
       case "mcp_server_info": return mcpInfo();
-      case "mcp_set_enabled": mcpEnabled = Boolean(args.enabled); return mcpInfo();
+      case "mcp_set_enabled": isMcpEnabled = Boolean(args.enabled); return mcpInfo();
       case "mcp_list_tasks": return mcpTasks.filter((task) => task.workspace_id === args.workspaceId);
       case "mcp_agent_statuses": return mcpStatuses.filter((status) => status.workspace_id === args.workspaceId);
       case "mcp_create_task": {

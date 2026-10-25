@@ -79,7 +79,7 @@ export interface NavigatorGroupNode extends NavigatorBaseNode {
   kind: "group";
   source: WorkspaceGroup;
   projectIds: string[];
-  suspended: boolean;
+  isSuspended: boolean;
 }
 
 export interface NavigatorProjectNode extends NavigatorBaseNode {
@@ -87,7 +87,7 @@ export interface NavigatorProjectNode extends NavigatorBaseNode {
   source: Workspace;
   workspaceId: string;
   terminalIds: string[];
-  visible: boolean;
+  isVisible: boolean;
 }
 
 export interface NavigatorContainerNode extends NavigatorBaseNode {
@@ -97,9 +97,9 @@ export interface NavigatorContainerNode extends NavigatorBaseNode {
   projectId: string;
   containerId: string;
   paneIds: string[];
-  visible: boolean;
-  collapsed: boolean;
-  fullscreen: boolean;
+  isVisible: boolean;
+  isCollapsed: boolean;
+  isFullscreen: boolean;
 }
 
 export interface NavigatorPaneNode extends NavigatorBaseNode {
@@ -203,7 +203,7 @@ export interface NavigatorPanelProps {
   /** Task title / numbered kind per terminal id, see domain/agentLabels. */
   agentLabels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
   /** Skip container and pane levels: group → project → agent. */
-  flatten?: boolean;
+  shouldFlatten?: boolean;
   /** Replaces the title row (the sidebar puts its surface switch there). */
   headerSlot?: ReactNode;
   /** Actions for an agent row's "…" / right-click menu (same as the pane menu). */
@@ -220,10 +220,10 @@ export interface ProjectTreeProps extends Omit<NavigatorPanelProps, "className" 
 
 export interface NavigatorRowProps {
   node: NavigatorNode;
-  expanded: boolean;
-  selected: boolean;
-  active: boolean;
-  visible: boolean;
+  isExpanded: boolean;
+  isSelected: boolean;
+  isActive: boolean;
+  isVisible: boolean;
   actions: NavigatorNodeActions;
   onToggle?: (id: string) => void;
   onSelect?: (node: NavigatorNode) => void;

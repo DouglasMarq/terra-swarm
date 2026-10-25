@@ -11,7 +11,7 @@ export interface WorktreeCloseDialogProps {
   /** The agent being closed and its worktree; `null` closes the dialog. */
   target: { label: string; status: WorktreeStatus } | null;
   onKeep: () => void;
-  onDelete: (deleteBranch: boolean) => void;
+  onDelete: (shouldDeleteBranch: boolean) => void;
   onCancel: () => void;
   /** Open the review of the worktree instead of closing. */
   onReview?: () => void;
@@ -20,14 +20,14 @@ export interface WorktreeCloseDialogProps {
 /** Closing an isolated agent whose work is not merged anywhere yet. */
 export function WorktreeCloseDialog({ target, onKeep, onDelete, onCancel, onReview }: WorktreeCloseDialogProps) {
   const translate = useT();
-  const [deleteBranch, setDeleteBranch] = useState(false);
+  const [shouldDeleteBranch, setDeleteBranch] = useState(false);
   const status = target?.status;
   return (
     <TerraDialog
       className={styles.dialog}
       open={target !== null}
-      onOpenChange={(open) => {
-        if (!open) onCancel();
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onCancel();
       }}
       title={translate("dialogs.worktree.title", { name: target?.label ?? "" })}
       description={translate("dialogs.worktree.description", { branch: status?.branch ?? "" })}
@@ -48,7 +48,7 @@ export function WorktreeCloseDialog({ target, onKeep, onDelete, onCancel, onRevi
         </div>
       ) : null}
       <label className={styles.pickerDefault}>
-        <input checked={deleteBranch} onChange={(event) => setDeleteBranch(event.target.checked)} type="checkbox" />
+        <input checked={shouldDeleteBranch} onChange={(event) => setDeleteBranch(event.target.checked)} type="checkbox" />
         <span>{translate("dialogs.worktree.deleteBranch", { branch: status?.branch ?? "" })}</span>
       </label>
       <DialogFooter>
@@ -63,7 +63,7 @@ export function WorktreeCloseDialog({ target, onKeep, onDelete, onCancel, onRevi
         <Button onClick={onKeep} type="button">
           {translate("dialogs.worktree.keep")}
         </Button>
-        <Button onClick={() => onDelete(deleteBranch)} type="button" variant="danger">
+        <Button onClick={() => onDelete(shouldDeleteBranch)} type="button" variant="danger">
           {translate("dialogs.worktree.delete")}
         </Button>
       </DialogFooter>

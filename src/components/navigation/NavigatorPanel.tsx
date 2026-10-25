@@ -164,7 +164,7 @@ export function NavigatorPanel({
   style,
   emptyState,
   agentLabels,
-  flatten = false,
+  shouldFlatten = false,
   headerSlot,
   agentMenu,
 }: NavigatorPanelProps) {
@@ -173,7 +173,7 @@ export function NavigatorPanel({
   const [localCollapsed, setLocalCollapsed] = useState<Set<string>>(() => new Set(defaultCollapsedIds));
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
-  const controlledCollapsed = collapsedIds !== undefined;
+  const isCollapseControlled = collapsedIds !== undefined;
   const hasWorkspaces = workspaces.length > 0;
   const enabledActivities = useMemo(
     () => enabledActivityTabs({
@@ -188,8 +188,8 @@ export function NavigatorPanel({
   const collapsed = useMemo(() => new Set(collapsedIds ?? localCollapsed), [collapsedIds, localCollapsed]);
   const reported = useReportedStates();
   const tree = useMemo(
-    () => buildNavigatorTree(workspaces, { snapshot, groups, exited, notifications, contextUsage, statuses, branches, containerVisibility, agentLabels, flatten, reported }),
-    [agentLabels, branches, containerVisibility, contextUsage, exited, flatten, groups, notifications, snapshot, statuses, workspaces, reported],
+    () => buildNavigatorTree(workspaces, { snapshot, groups, exited, notifications, contextUsage, statuses, branches, containerVisibility, agentLabels, shouldFlatten, reported }),
+    [agentLabels, branches, containerVisibility, contextUsage, exited, shouldFlatten, groups, notifications, snapshot, statuses, workspaces, reported],
   );
   const filteredTree = useMemo(() => filterNavigatorTree(tree, query), [query, tree]);
   const expandableIds = useMemo(() => collectExpandable(filteredTree), [filteredTree]);
@@ -200,13 +200,13 @@ export function NavigatorPanel({
     return result;
   }, [collapsed, expandableIds, query]);
   useEffect(() => {
-    if (controlledCollapsed) return;
+    if (isCollapseControlled) return;
     setLocalCollapsed((current) => {
       const valid = new Set(defaultCollapsedIds);
       if (current.size === 0 && valid.size > 0) return valid;
       return current;
     });
-  }, [controlledCollapsed, defaultCollapsedIds]);
+  }, [isCollapseControlled, defaultCollapsedIds]);
 
   useMenuDismiss(contextMenu !== null, closeContextMenu);
 
@@ -214,7 +214,7 @@ export function NavigatorPanel({
     const next = new Set(collapsed);
     if (next.has(id)) next.delete(id);
     else next.add(id);
-    if (!controlledCollapsed) setLocalCollapsed(next);
+    if (!isCollapseControlled) setLocalCollapsed(next);
     onCollapsedChange?.([...next]);
   }
 

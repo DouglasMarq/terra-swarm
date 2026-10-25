@@ -120,9 +120,9 @@ export function AgentInspector({ target, label, status, request, activity, runti
           <RotateCcw size={13} aria-hidden="true" />
           {translate("pane.menu.restart")}
         </button>
-        <button type="button" className="terra-button" onClick={() => onAction(target.detached ? "reattach" : "detach", target)}>
+        <button type="button" className="terra-button" onClick={() => onAction(target.isDetached ? "reattach" : "detach", target)}>
           <SquareArrowOutUpRight size={13} aria-hidden="true" />
-          {target.detached ? translate("pane.menu.reattach") : translate("inspector.detach")}
+          {target.isDetached ? translate("pane.menu.reattach") : translate("inspector.detach")}
         </button>
         <button type="button" className="terra-button terra-button-danger terra-inspector-kill" onClick={() => onAction("kill", target)}>
           <Power size={13} aria-hidden="true" />

@@ -7,12 +7,12 @@ import { conflictingAction, isEditableTarget, recordedHotkey, runHotkeyAction, t
 
 interface GlobalHotkeysInput {
   /** A dialog is open: shortcuts stay off. */
-  modalOpen: boolean;
+  isModalOpen: boolean;
   /** The action whose shortcut is being recorded in Settings, if any. */
   capturing: HotkeyActionId | null;
   setCapturing: (action: HotkeyActionId | null) => void;
   /** Settings → Shortcuts is on screen; capture ends when it is left. */
-  shortcutsSectionOpen: boolean;
+  isShortcutsSectionOpen: boolean;
   active: Workspace | null;
   focusedId: string | null;
   workspaces: readonly Workspace[];
@@ -21,10 +21,10 @@ interface GlobalHotkeysInput {
 
 /** The app-wide keyboard shortcuts and recording a new one in Settings. */
 export function useGlobalHotkeys({
-  modalOpen,
+  isModalOpen,
   capturing,
   setCapturing,
-  shortcutsSectionOpen,
+  isShortcutsSectionOpen,
   active,
   focusedId,
   workspaces,
@@ -35,22 +35,22 @@ export function useGlobalHotkeys({
   // Recording ends when the Shortcuts section is left: left on, it would
   // swallow every key in the app and save the next ⌘-combo as a shortcut.
   useEffect(() => {
-    if (shortcutsSectionOpen) return;
+    if (isShortcutsSectionOpen) return;
     setCapturing(null);
-  }, [shortcutsSectionOpen, setCapturing]);
+  }, [isShortcutsSectionOpen, setCapturing]);
 
   // Latest-values ref so the global hotkey listener can be registered once
   // instead of being torn down and re-added on every render.
-  const hotkeyCtx = useRef({ modalOpen, capturing, hotkeys, active, focusedId, workspaces });
-  hotkeyCtx.current = { modalOpen, capturing, hotkeys, active, focusedId, workspaces };
+  const hotkeyCtx = useRef({ isModalOpen, capturing, hotkeys, active, focusedId, workspaces });
+  hotkeyCtx.current = { isModalOpen, capturing, hotkeys, active, focusedId, workspaces };
   const hotkeyActions = useRef(actions);
   hotkeyActions.current = actions;
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      const { modalOpen, capturing, hotkeys, active, focusedId, workspaces } =
+      const { isModalOpen, capturing, hotkeys, active, focusedId, workspaces } =
         hotkeyCtx.current;
-      if (modalOpen || capturing) return;
+      if (isModalOpen || capturing) return;
       if (isEditableTarget(event.target)) return;
       const matched = Object.entries(hotkeys).find(([, hk]) => matchHotkey(event, hk));
       if (!matched) return;

@@ -28,7 +28,7 @@ interface InitializationInput {
  */
 export function useAppInitialization({ workspaces, sessions, resumeQueue, agentCatalog, voiceSettings }: InitializationInput) {
   const [error, setError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  const [isRunning, setRunning] = useState(false);
   const started = useRef(false);
   const gate = useRef<InitializationGate | null>(null);
   if (!gate.current) gate.current = createInitializationGate();
@@ -96,5 +96,5 @@ export function useAppInitialization({ workspaces, sessions, resumeQueue, agentC
     // Mount only: later attempts go through `retry`.
   }, []);
 
-  return { error, running, retry: start };
+  return { error, isRunning, retry: start };
 }

@@ -26,10 +26,10 @@ export type WorktreeCloseSessions = Pick<TerminalSessions, "close">;
 export function useWorktreeClose(workspaces: readonly Workspace[], sessions: WorktreeCloseSessions) {
   const [pending, setPending] = useState<PendingClose | null>(null);
 
-  const removeWorktree = async (workspaceId: string, terminalId: string, deleteBranch: boolean) => {
+  const removeWorktree = async (workspaceId: string, terminalId: string, shouldDeleteBranch: boolean) => {
     // The agent's shell must not keep running inside the folder.
     await api.stopTerminal(terminalId).catch((error) => console.warn(`failed to stop ${terminalId}:`, error));
-    await api.worktreeRemove(workspaceId, terminalId, deleteBranch).catch((error) => {
+    await api.worktreeRemove(workspaceId, terminalId, shouldDeleteBranch).catch((error) => {
       console.error(`failed to remove the worktree of ${terminalId}:`, error);
       useTerminalRuntimeStore.getState().pushSystemNotification(translateNow("app.worktreeRemoveFailed", { detail: String(error) }));
     });
@@ -74,10 +74,10 @@ export function useWorktreeClose(workspaces: readonly Workspace[], sessions: Wor
     await sessions.close(pending.terminalId);
   };
 
-  const remove = async (deleteBranch: boolean) => {
+  const remove = async (shouldDeleteBranch: boolean) => {
     if (!pending) return;
     setPending(null);
-    await removeWorktree(pending.workspaceId, pending.terminalId, deleteBranch);
+    await removeWorktree(pending.workspaceId, pending.terminalId, shouldDeleteBranch);
     await sessions.close(pending.terminalId);
   };
 
@@ -86,7 +86,7 @@ export function useWorktreeClose(workspaces: readonly Workspace[], sessions: Wor
     dialog: {
       target: pending ? { label: pending.label, status: pending.status } : null,
       onKeep: () => void keep(),
-      onDelete: (deleteBranch: boolean) => void remove(deleteBranch),
+      onDelete: (shouldDeleteBranch: boolean) => void remove(shouldDeleteBranch),
       onCancel: () => setPending(null),
       /** Look at the work before deciding; the agent stays open. */
       onReview: () => {

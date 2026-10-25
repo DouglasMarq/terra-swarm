@@ -21,7 +21,7 @@ export interface FileEditor {
   isSaving: boolean;
   load: () => Promise<void>;
   /** Saves `text`; `overwrite` skips the changed-on-disk check. Resolves to whether it saved. */
-  save: (overwrite?: boolean) => Promise<boolean>;
+  save: (shouldOverwrite?: boolean) => Promise<boolean>;
 }
 
 /** Read and save one workspace file for the built-in editor; reads again when the target changes. */
@@ -54,12 +54,12 @@ export function useFileEditor(target: EditorTarget | null): FileEditor {
     void load();
   }, [load]);
 
-  const save = async (overwrite = false): Promise<boolean> => {
+  const save = async (shouldOverwrite = false): Promise<boolean> => {
     if (!target || !file || isSaving || file.binary) return false;
     setIsSaving(true);
     setSaveError(null);
     try {
-      const saved = await api.writeWorkspaceFile(target.workspaceId, target.path, text, overwrite ? null : file.modified);
+      const saved = await api.writeWorkspaceFile(target.workspaceId, target.path, text, shouldOverwrite ? null : file.modified);
       setFile({ ...file, content: text, size: saved.size, modified: saved.modified });
       setHasConflict(false);
       return true;

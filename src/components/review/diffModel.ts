@@ -10,7 +10,7 @@ export interface DiffLine {
 export interface DiffFileSection {
   path: string;
   lines: DiffLine[];
-  binary: boolean;
+  isBinary: boolean;
 }
 
 const NEW_PATH_PREFIX = "+++ b/";
@@ -29,12 +29,12 @@ export function parsePatch(patch: string): DiffFileSection[] {
   let current: DiffFileSection | null = null;
   let oldLine = 0;
   let newLine = 0;
-  let inHunk = false;
+  let isInHunk = false;
   for (const text of patch.split("\n")) {
     if (text.startsWith("diff --git ")) {
-      current = { path: pathOf(text), lines: [], binary: false };
+      current = { path: pathOf(text), lines: [], isBinary: false };
       sections.push(current);
-      inHunk = false;
+      isInHunk = false;
       continue;
     }
     if (!current) continue;
@@ -42,13 +42,13 @@ export function parsePatch(patch: string): DiffFileSection[] {
     if (hunk) {
       oldLine = Number(hunk[1]);
       newLine = Number(hunk[2]);
-      inHunk = true;
+      isInHunk = true;
       current.lines.push({ kind: "hunk", text, oldLine: null, newLine: null });
       continue;
     }
-    if (!inHunk) {
+    if (!isInHunk) {
       if (text.startsWith(NEW_PATH_PREFIX)) current.path = text.slice(NEW_PATH_PREFIX.length);
-      if (text.startsWith("Binary files")) current.binary = true;
+      if (text.startsWith("Binary files")) current.isBinary = true;
       if (text.startsWith("new file") || text.startsWith("deleted file") || text.startsWith("rename ") || text.startsWith("Binary files")) {
         current.lines.push({ kind: "meta", text, oldLine: null, newLine: null });
       }

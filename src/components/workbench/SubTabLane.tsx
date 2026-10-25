@@ -33,9 +33,9 @@ function SubTab({
   return (
     <div
       className="terra-subtab-lane__tab"
-      data-active={entry.active}
+      data-active={entry.isActive}
       data-status={entry.status ?? "idle"}
-      data-unread={entry.unread === true}
+      data-unread={entry.isUnread === true}
       role="group"
       title={title}
     >
@@ -43,7 +43,7 @@ function SubTab({
         type="button"
         className="terra-subtab-lane__tab-button"
         aria-label={translate("lane.focus", { name: title })}
-        aria-pressed={entry.active}
+        aria-pressed={entry.isActive}
         onClick={() => onFocusTab?.(entry.tab.id)}
       >
         <span aria-hidden="true">{tabLabel(entry, translate)}</span>
@@ -114,9 +114,9 @@ export function SubTabLane({
       ) : null}
       </aside>
       <ConfirmActionDialog
-        open={pendingKill !== null}
-        onOpenChange={(open) => {
-          if (!open) setPendingKill(null);
+        isOpen={pendingKill !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setPendingKill(null);
         }}
         title={pendingKill ? translate("lane.killTitleNamed", { name: tabTitle(pendingKill, translate) }) : translate("lane.killTitle")}
         description={pendingKill ? translate("lane.killDescNamed", { name: tabTitle(pendingKill, translate) }) : translate("lane.killDesc")}

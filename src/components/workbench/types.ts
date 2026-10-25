@@ -14,9 +14,9 @@ export interface WorkbenchTabRenderContext {
   container: WorkspaceContainer;
   project: Project | null;
   group: Group | null;
-  active: boolean;
+  isActive: boolean;
   /** Inactive tabs remain mounted; consumers can use this for accessibility. */
-  hidden: boolean;
+  isHidden: boolean;
 }
 
 export type WorkbenchTabRenderer = (context: WorkbenchTabRenderContext) => ReactNode;
@@ -67,8 +67,8 @@ export interface WorkbenchActionCallbacks {
   onDetachTab?: (tabId: string, location: WorkbenchLocation) => void;
   /** Explicit destructive action. Hiding/closing a container never calls this. */
   onKillTab?: (tabId: string, location: WorkbenchLocation) => void;
-  onCollapseContainer?: (containerId: string, collapsed: boolean) => void;
-  onFullscreenContainer?: (containerId: string, fullscreen: boolean) => void;
+  onCollapseContainer?: (containerId: string, isCollapsed: boolean) => void;
+  onFullscreenContainer?: (containerId: string, isFullscreen: boolean) => void;
   /** Hides a visual container while preserving every mounted terminal surface. */
   onHideContainer?: (containerId: string) => void;
   onLayoutChange?: (change: ContainerLayoutChange) => void;
@@ -89,7 +89,7 @@ export interface WorkspaceWorkbenchProps extends WorkbenchActionCallbacks {
 export interface ProjectContainerProps extends WorkbenchActionCallbacks {
   projection: WorkbenchContainerProjection;
   renderTab: WorkbenchTabRenderer;
-  visible?: boolean;
+  isVisible?: boolean;
 }
 
 export interface PaneFrameProps extends WorkbenchActionCallbacks {
@@ -97,14 +97,14 @@ export interface PaneFrameProps extends WorkbenchActionCallbacks {
   container: WorkspaceContainer;
   project: Project | null;
   group: Group | null;
-  active?: boolean;
+  isActive?: boolean;
   renderTab: WorkbenchTabRenderer;
 }
 
 export interface SubTabLaneTab {
   tab: TerminalTab;
-  active: boolean;
-  unread?: boolean;
+  isActive: boolean;
+  isUnread?: boolean;
   status?: "running" | "idle" | "attention" | "error" | "suspended";
 }
 

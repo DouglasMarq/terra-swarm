@@ -28,7 +28,7 @@ export function terminalFontStack(name: string | null | undefined): string {
 }
 
 /** Case- and accent-insensitive substring filter, optionally monospace only. */
-export function filterFonts(fonts: readonly SystemFont[], query: string, monospaceOnly: boolean): SystemFont[] {
+export function filterFonts(fonts: readonly SystemFont[], query: string, isMonospaceOnly: boolean): SystemFont[] {
   const needle = normalizeSearchText(query);
-  return fonts.filter((font) => (!monospaceOnly || font.monospace) && (!needle || normalizeSearchText(font.name).includes(needle)));
+  return fonts.filter((font) => (!isMonospaceOnly || font.monospace) && (!needle || normalizeSearchText(font.name).includes(needle)));
 }

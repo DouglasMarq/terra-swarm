@@ -47,7 +47,7 @@ export function WorkspaceWorkbench(props: ComponentProps<typeof LazyWorkspaceWor
 }
 
 export function CommandPalette(props: ComponentProps<typeof LazyCommandPalette>) {
-  if (!props.open) return null;
+  if (!props.isOpen) return null;
   return (
     <Suspense fallback={null}>
       <LazyCommandPalette {...props} />

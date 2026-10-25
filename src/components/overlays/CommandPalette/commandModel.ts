@@ -54,10 +54,10 @@ export interface CommandPaletteData {
   recentCommandIds?: readonly string[];
   hasDetachedTabs?: boolean;
   hasRecentlyClosedTabs?: boolean;
-  dockOpen?: boolean;
-  voiceEnabled?: boolean;
+  isDockOpen?: boolean;
+  isVoiceEnabled?: boolean;
   /** True only while the runtime is actively capturing audio. */
-  voiceRecording?: boolean;
+  isVoiceRecording?: boolean;
   /** Task title / numbered kind per terminal id (domain/agentLabels). */
   agentLabels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
   /** Saved sessions waiting to be resumed. */
@@ -139,7 +139,7 @@ export interface CommandDescriptor {
   keywords: readonly string[];
   icon: CommandIconName;
   shortcut?: string;
-  disabled?: boolean;
+  isDisabled?: boolean;
   intent: CommandIntent;
   confirmation?: CommandConfirmRequest;
   /** Search text is exposed for a host that wants to render its own list. */
@@ -394,7 +394,7 @@ function createCommands(data: CommandPaletteData, focusedWorkspaceId: string | n
       group: "create",
       keywords: ["criar", "agente", "terminal", "novo"],
       icon: "agent",
-      disabled: !hasAgentWorkspace,
+      isDisabled: !hasAgentWorkspace,
       intent: { kind: "create-agent", workspaceId: focusedWorkspaceId },
     }),
     command({
@@ -404,7 +404,7 @@ function createCommands(data: CommandPaletteData, focusedWorkspaceId: string | n
       group: "create",
       keywords: ["time", "team", "orquestrador", "orchestrator", "papéis", "roles", "template"],
       icon: "agent",
-      disabled: !hasAgentWorkspace,
+      isDisabled: !hasAgentWorkspace,
       intent: { kind: "open-library", dialog: "team" },
     }),
     command({
@@ -453,7 +453,7 @@ function startAgentCommand(agent: AgentInfo, focusedWorkspaceId: string | null):
     group: "create",
     keywords: [agentName, agent.id, "agente", "iniciar", "disponível", "disponivel"],
     icon: "agent",
-    disabled: !(agent.available && hasAgentWorkspace),
+    isDisabled: !(agent.available && hasAgentWorkspace),
     intent: {
       kind: "create-agent",
       workspaceId: focusedWorkspaceId,
@@ -563,7 +563,7 @@ function focusedAgentCommands(data: CommandPaletteData, context: FocusedAgentCon
 
 function voiceCommand(data: CommandPaletteData): CommandDescriptor {
   return command(
-    data.voiceEnabled === false
+    data.isVoiceEnabled === false
       ? {
           id: "settings:voice",
           label: translateNow("palette.voiceSetup"),
@@ -573,7 +573,7 @@ function voiceCommand(data: CommandPaletteData): CommandDescriptor {
           icon: "voice",
           intent: { kind: "voice-settings" },
         }
-      : data.voiceRecording
+      : data.isVoiceRecording
         ? {
             id: "voice:stop",
             label: translateNow("palette.voiceStop"),
@@ -635,7 +635,7 @@ function restoreCommands(data: CommandPaletteData): CommandDescriptor[] {
       group: "settings",
       keywords: ["reanexar", "reattach", "terminal", "destacado", "anexar"],
       icon: "reopen",
-      disabled: !data.hasDetachedTabs,
+      isDisabled: !data.hasDetachedTabs,
       intent: { kind: "reattach-terminal" },
     }),
     command({
@@ -645,7 +645,7 @@ function restoreCommands(data: CommandPaletteData): CommandDescriptor[] {
       group: "settings",
       keywords: ["retomar", "sessões", "resume", "continuar", "abertura"],
       icon: "agent",
-      disabled: !data.resumeCount,
+      isDisabled: !data.resumeCount,
       intent: { kind: "open-resume" },
     }),
     command({
@@ -655,7 +655,7 @@ function restoreCommands(data: CommandPaletteData): CommandDescriptor[] {
       group: "settings",
       keywords: ["reabrir", "aba", "tab", "workspace", "fechado"],
       icon: "reopen",
-      disabled: !data.hasRecentlyClosedTabs,
+      isDisabled: !data.hasRecentlyClosedTabs,
       intent: { kind: "reopen-tab" },
     }),
   ];
@@ -665,7 +665,7 @@ function settingsCommands(data: CommandPaletteData): CommandDescriptor[] {
   return [
     command({
       id: "settings:toggle-dock",
-      label: data.dockOpen === false ? translateNow("palette.openInspector") : translateNow("palette.closeInspector"),
+      label: data.isDockOpen === false ? translateNow("palette.openInspector") : translateNow("palette.closeInspector"),
       description: translateNow("palette.toggleInspectorDesc"),
       group: "settings",
       keywords: ["dock", "painel", "lateral", "direita", "alternar"],
@@ -746,7 +746,7 @@ export function executeCommand(
   command: CommandDescriptor,
   callbacks: CommandPaletteCallbacks,
 ): CommandRunResult {
-  if (command.disabled) return unavailable(command.id);
+  if (command.isDisabled) return unavailable(command.id);
   if (command.confirmation) {
     return { kind: "requestConfirm", commandId: command.id, request: command.confirmation };
   }

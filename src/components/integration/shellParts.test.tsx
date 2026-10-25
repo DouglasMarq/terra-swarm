@@ -75,9 +75,9 @@ describe("buildPaneMenu", () => {
   it("Given an agent outside any workspace, when building the menu, then the agent actions are disabled", () => {
     const items = menuItems({ ...target, workspaceId: null }, menuActions());
 
-    expect(menuItem(items, "interrupt").disabled).toBe(true);
-    expect(menuItem(items, "clear-history").disabled).toBe(true);
-    expect(menuItem(items, "kill").disabled).toBe(true);
+    expect(menuItem(items, "interrupt").isDisabled).toBe(true);
+    expect(menuItem(items, "clear-history").isDisabled).toBe(true);
+    expect(menuItem(items, "kill").isDisabled).toBe(true);
   });
 
   it("Given a pane menu, when kill is selected, then a stop-agent confirmation is requested", () => {
@@ -97,11 +97,11 @@ describe("buildPaneMenu", () => {
 });
 
 function voiceProps(overrides: Partial<ShellVoiceProps> = {}): ShellVoiceProps {
-  return { voiceEnabled: true, onToggleVoice: vi.fn(), ...overrides };
+  return { isVoiceEnabled: true, onToggleVoice: vi.fn(), ...overrides };
 }
 
 const voiceTargets = {
-  projects: [{ id: "ws-api", name: "Terra API", status: "working" as const, suspended: false, agents: [{ id: "term-codex", label: "codex", status: "working" as const, detail: "working" }] }],
+  projects: [{ id: "ws-api", name: "Terra API", status: "working" as const, isSuspended: false, agents: [{ id: "term-codex", label: "codex", status: "working" as const, detail: "working" }] }],
   labels: {},
 };
 
@@ -128,7 +128,7 @@ describe("ShellVoiceOverlay", () => {
   });
 
   it("Given disabled voice without feedback, when rendering, then the footer asks to turn voice on", () => {
-    render(<ShellVoiceOverlay voice={voiceProps({ voiceEnabled: false })} state="error" focusedId={null} targets={voiceTargets} shortcut="⌘M" />);
+    render(<ShellVoiceOverlay voice={voiceProps({ isVoiceEnabled: false })} state="error" focusedId={null} targets={voiceTargets} shortcut="⌘M" />);
 
     expect(screen.getByText(translateNow("shell.voiceDisabled"))).toBeInTheDocument();
   });

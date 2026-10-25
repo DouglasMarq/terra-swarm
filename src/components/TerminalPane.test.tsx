@@ -121,14 +121,14 @@ const defaultProps: PaneProps = {
   id: "pty-1",
   command: "luna-max",
   fontSize: 14,
-  exited: false,
-  expanded: false,
+  hasExited: false,
+  isExpanded: false,
   basis: 100,
   height: "100%",
-  entering: false,
-  dragOver: false,
+  isEntering: false,
+  isDragOver: false,
   notifications: 0,
-  focused: true,
+  isFocused: true,
   onClearNotifications: vi.fn(),
   onFocus: vi.fn(),
   onToggleExpand: vi.fn(),
@@ -246,7 +246,7 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
   it("never forwards FitAddon's 2x1 hidden fallback", async () => {
     mocks.geometry.width = 0;
     mocks.geometry.height = 0;
-    pane({ hidden: true });
+    pane({ isHidden: true });
     await flushFrames();
 
     expect(mocks.api.resizeTerminal).not.toHaveBeenCalled();
@@ -255,7 +255,7 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
   it("refits after hidden-to-visible and layout/font changes", async () => {
     mocks.geometry.width = 0;
     mocks.geometry.height = 0;
-    const view = pane({ hidden: true });
+    const view = pane({ isHidden: true });
     await flushFrames();
     expect(mocks.api.resizeTerminal).not.toHaveBeenCalled();
 
@@ -263,7 +263,7 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
     mocks.geometry.height = 600;
     mocks.fitDimensions.cols = 150;
     mocks.fitDimensions.rows = 30;
-    rerenderPane(view, { hidden: false, basis: 50, height: "50%", fontSize: 16 });
+    rerenderPane(view, { isHidden: false, basis: 50, height: "50%", fontSize: 16 });
     await flushFrames();
 
     expect(mocks.api.resizeTerminal).toHaveBeenCalledTimes(1);
@@ -294,7 +294,7 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
     mocks.api.writeTerminal.mockClear();
     const terminal = mocks.terminals[0];
 
-    rerenderPane(view, { exited: true });
+    rerenderPane(view, { hasExited: true });
     terminal?.dataHandler?.("echo should not be sent after exit");
     terminal?.keyHandler?.(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true }));
     await act(async () => {
@@ -310,7 +310,7 @@ describe("TerminalPane geometry and PTY lifecycle", () => {
     expect(view.container).toHaveTextContent("Processo encerrado");
     expect(mocks.api.resizeTerminal).not.toHaveBeenCalled();
 
-    rerenderPane(view, { exited: false });
+    rerenderPane(view, { hasExited: false });
     await flushFrames();
     expect(mocks.api.resizeTerminal).toHaveBeenCalledTimes(1);
     expect(mocks.api.resizeTerminal).toHaveBeenCalledWith("pty-1", 100, 24);
@@ -394,7 +394,7 @@ describe("TerminalPane file drop", () => {
   });
 
   it("given an exited pane, pastes nothing", async () => {
-    const { send, terminal } = await dropOnPane({ exited: true });
+    const { send, terminal } = await dropOnPane({ hasExited: true });
 
     send({ type: "drop", paths: ["/Users/me/shot.png"], position });
 

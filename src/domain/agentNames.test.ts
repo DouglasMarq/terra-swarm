@@ -6,7 +6,7 @@ const list = ["Vega", "Lyra", "Lara", "Orion", "Rigel"];
 describe("pickAgentName", () => {
   it("returns the first free name", () => {
     expect(pickAgentName([], list)).toBe("Vega");
-    expect(pickAgentName(["Vega"], list, { avoidSimilar: false })).toBe("Lyra");
+    expect(pickAgentName(["Vega"], list, { shouldAvoidSimilar: false })).toBe("Lyra");
   });
 
   it("skips names that start alike or sound alike an open agent", () => {

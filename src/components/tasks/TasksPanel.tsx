@@ -134,13 +134,13 @@ export interface TaskCardProps {
 
 export function TaskCard({ task, agents, agentLabel, status, onChange, onDelete }: TaskCardProps) {
   const translate = useT();
-  const [open, setOpen] = useState(false);
+  const [isOpen, setOpen] = useState(false);
   const author = (id: string) => (id === "user" ? translate("tasks.you") : agentLabel(id));
-  const assigneeKnown = !task.assignee || agents.some((agent) => agent.id === task.assignee);
+  const isAssigneeKnown = !task.assignee || agents.some((agent) => agent.id === task.assignee);
 
   return (
     <article className="terra-task" data-priority={task.priority}>
-      <button type="button" className="terra-task-title" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button type="button" className="terra-task-title" aria-expanded={isOpen} onClick={() => setOpen(!isOpen)}>
         <span className="terra-task-id">{task.id}</span>
         <span className="terra-task-text">{task.title}</span>
       </button>
@@ -183,13 +183,13 @@ export function TaskCard({ task, agents, agentLabel, status, onChange, onDelete 
           {agents.map((agent) => (
             <option key={agent.id} value={agent.id}>{agent.label}</option>
           ))}
-          {assigneeKnown ? null : <option value={task.assignee ?? ""}>{task.assignee}</option>}
+          {isAssigneeKnown ? null : <option value={task.assignee ?? ""}>{task.assignee}</option>}
         </select>
         <button type="button" className="terra-task-delete" onClick={onDelete} aria-label={translate("tasks.delete", { id: task.id })} title={translate("tasks.delete", { id: task.id })}>
           <Trash2 size={13} aria-hidden="true" />
         </button>
       </div>
-      {open ? (
+      {isOpen ? (
         <div className="terra-task-details">
           {task.description ? <p className="terra-task-description">{task.description}</p> : null}
           <dl className="terra-task-facts">

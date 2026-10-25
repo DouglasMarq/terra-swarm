@@ -45,7 +45,7 @@ describe("reduceVoiceCapsuleModel", () => {
     expect(preview).toMatchObject({
       state: "preview",
       finalTranscript: "abrir a frota",
-      awaitingConfirmation: false,
+      isAwaitingConfirmation: false,
     });
   });
 
@@ -59,8 +59,8 @@ describe("reduceVoiceCapsuleModel", () => {
     const afterSend = reduceVoiceCapsuleModel(preview, { type: "send" });
     const afterConfirm = reduceVoiceCapsuleModel(afterSend, { type: "confirm" });
 
-    expect(afterSend).toMatchObject({ state: "preview", awaitingConfirmation: true });
-    expect(afterConfirm).toMatchObject({ state: "idle", awaitingConfirmation: false });
+    expect(afterSend).toMatchObject({ state: "preview", isAwaitingConfirmation: true });
+    expect(afterConfirm).toMatchObject({ state: "idle", isAwaitingConfirmation: false });
   });
 
   it("clears a failed capture on retry and cancel", () => {

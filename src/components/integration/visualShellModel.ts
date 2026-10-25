@@ -91,7 +91,7 @@ export function latestMessageByAgent(items: readonly NotificationItem[]): Record
 export function lastActivityByAgent(items: readonly NotificationItem[]): Record<string, number> {
   const latest: Record<string, number> = {};
   for (const item of items) {
-    if (item.system) continue;
+    if (item.isSystem) continue;
     latest[item.terminalId] = Math.max(latest[item.terminalId] ?? 0, item.ts);
   }
   return latest;

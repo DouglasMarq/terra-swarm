@@ -55,7 +55,7 @@ function agentItems(input: PaneMenuInput): PaneMenuItem[] {
   const { target, actions, labels } = input;
   const { translate } = labels;
   return [
-    { id: "interrupt", label: translate("pane.menu.interrupt"), icon: <Square size={13} />, shortcut: labels.shortcuts.interrupt, disabled: !input.canRunAgentAction, onSelect: () => input.runAgentAction("interrupt") },
+    { id: "interrupt", label: translate("pane.menu.interrupt"), icon: <Square size={13} />, shortcut: labels.shortcuts.interrupt, isDisabled: !input.canRunAgentAction, onSelect: () => input.runAgentAction("interrupt") },
     { id: "restart", label: translate("pane.menu.restart"), icon: <RotateCcw size={13} />, onSelect: () => actions.onRestart(target.ptyId, target.command) },
     detachItem(input),
     { id: "inspector", label: translate("pane.menu.inspector"), icon: <PanelRight size={13} />, shortcut: labels.shortcuts.inspector, onSelect: () => actions.onOpenInspector(target.ptyId) },
@@ -70,7 +70,7 @@ function sessionItems(input: PaneMenuInput): PaneMenuItem[] {
   return [
     { id: "copy-resume", label: translate("pane.menu.copyResume"), detail: resumeCommand, icon: <Copy size={13} />, onSelect: () => { void window.navigator.clipboard?.writeText(resumeCommand).catch((error) => console.warn("failed to copy the resume command:", error)); } },
     ...(actions.onRenameAgent ? [{ id: "rename", label: translate("pane.menu.rename"), icon: <Pencil size={13} />, onSelect: () => actions.onRenameAgent?.(target.ptyId) }] : []),
-    { id: "clear-history", label: translate("pane.menu.clearHistory"), icon: <Eraser size={13} />, disabled: !input.canRunAgentAction, onSelect: () => input.runAgentAction("clear-scrollback") },
+    { id: "clear-history", label: translate("pane.menu.clearHistory"), icon: <Eraser size={13} />, isDisabled: !input.canRunAgentAction, onSelect: () => input.runAgentAction("clear-scrollback") },
   ];
 }
 
@@ -80,8 +80,8 @@ function killItem({ target, actions, labels, canRunAgentAction }: PaneMenuInput)
     id: "kill",
     label: translate("pane.menu.kill"),
     icon: <Power size={13} />,
-    danger: true,
-    disabled: !canRunAgentAction,
+    isDanger: true,
+    isDisabled: !canRunAgentAction,
     onSelect: () => actions.onRequestConfirm({
       kind: "stop-agent",
       commandId: `pane:kill:${target.ptyId}`,

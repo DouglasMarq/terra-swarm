@@ -41,7 +41,7 @@ export function ContainerLayout({
           projection={projection}
           paneProjection={paneProjection}
           renderTab={renderTab}
-          active={paneProjection.pane.id === activePaneId}
+          isActive={paneProjection.pane.id === activePaneId}
           {...actions}
         />
       )}

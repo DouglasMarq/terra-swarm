@@ -13,7 +13,7 @@ export interface NotificationCenterProps {
   items: readonly NotificationItem[];
   labels: Readonly<Record<string, AgentLabel | undefined>>;
   workspaceNames: Readonly<Record<string, string | undefined>>;
-  muted: boolean;
+  isMuted: boolean;
   /** Agents whose context window is nearly full (≥ `CONTEXT_ATTENTION_PERCENT`). */
   contextAlerts?: readonly { terminalId: string; workspaceId: string; used: number }[];
   onJump: (item: NotificationItem) => void;
@@ -39,7 +39,7 @@ export function NotificationCenter({
   items,
   labels,
   workspaceNames,
-  muted,
+  isMuted,
   contextAlerts = [],
   onJump,
   onFocusAgent,
@@ -56,7 +56,7 @@ export function NotificationCenter({
   const attentionCount = pending.length + contextOnly.length;
   const [filter, setFilter] = useState<Filter>(attentionCount > 0 ? "attention" : "all");
   const earlier = useMemo(
-    () => [...items].filter((item) => filter === "all" || item.read || item.system).sort((left, right) => right.ts - left.ts).slice(0, MAX_EARLIER_NOTIFICATIONS),
+    () => [...items].filter((item) => filter === "all" || item.isRead || item.isSystem).sort((left, right) => right.ts - left.ts).slice(0, MAX_EARLIER_NOTIFICATIONS),
     [filter, items],
   );
   const pendingKeys = new Set(pending.map((item) => item.key));
@@ -140,12 +140,12 @@ export function NotificationCenter({
               .map((item) => {
                 const label = labels[item.terminalId];
                 return (
-                  <button type="button" className="terra-notification-row" key={item.key} data-read={item.read} onClick={() => onJump(item)}>
-                    {item.system ? <Info size={14} aria-hidden="true" /> : <Bell size={14} aria-hidden="true" />}
+                  <button type="button" className="terra-notification-row" key={item.key} data-read={item.isRead} onClick={() => onJump(item)}>
+                    {item.isSystem ? <Info size={14} aria-hidden="true" /> : <Bell size={14} aria-hidden="true" />}
                     <span className="terra-notification-row-copy">
-                      <span>{item.system ? item.message : <><b>{label?.primary ?? translate("common.agentFallback")}</b> {item.message}</>}</span>
+                      <span>{item.isSystem ? item.message : <><b>{label?.primary ?? translate("common.agentFallback")}</b> {item.message}</>}</span>
                       <span className="terra-notification-row-meta">
-                        {item.system ? translate("common.appName") : `${label?.tag ?? translate("common.agent")}${workspaceNames[item.workspaceId] ? ` · ${workspaceNames[item.workspaceId]}` : ""}`}
+                        {item.isSystem ? translate("common.appName") : `${label?.tag ?? translate("common.agent")}${workspaceNames[item.workspaceId] ? ` · ${workspaceNames[item.workspaceId]}` : ""}`}
                       </span>
                     </span>
                     <span className="terra-notification-time">{relativeTime(item.ts, translate, now)}</span>
@@ -158,8 +158,8 @@ export function NotificationCenter({
 
       <div className="terra-notifications-foot">
         <button type="button" className="terra-link-button" onClick={onOpenFleet}>{translate("notifications.seeFleet")}</button>
-        <button type="button" className="terra-link-button" aria-pressed={muted} onClick={onToggleMute}>
-          {muted ? translate("notifications.unmute") : translate("notifications.mute")}
+        <button type="button" className="terra-link-button" aria-pressed={isMuted} onClick={onToggleMute}>
+          {isMuted ? translate("notifications.unmute") : translate("notifications.mute")}
         </button>
       </div>
     </div>

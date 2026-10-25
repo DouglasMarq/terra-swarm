@@ -12,12 +12,12 @@ function stop(event: MouseEvent<HTMLElement>): void {
   event.stopPropagation();
 }
 
-function IconForNode({ node, expanded }: { node: NavigatorNode; expanded: boolean }) {
+function IconForNode({ node, isExpanded }: { node: NavigatorNode; isExpanded: boolean }) {
   if (node.kind === "agent") return <Bot aria-hidden="true" size={15} strokeWidth={1.8} />;
   if (node.kind === "container") return <Workflow aria-hidden="true" size={15} strokeWidth={1.8} />;
   if (node.kind === "pane") return <SquareTerminal aria-hidden="true" size={15} strokeWidth={1.8} />;
   if (node.kind === "group") {
-    return expanded ? <FolderOpen aria-hidden="true" size={15} strokeWidth={1.8} /> : <Folder aria-hidden="true" size={15} strokeWidth={1.8} />;
+    return isExpanded ? <FolderOpen aria-hidden="true" size={15} strokeWidth={1.8} /> : <Folder aria-hidden="true" size={15} strokeWidth={1.8} />;
   }
   return <Folder aria-hidden="true" size={15} strokeWidth={1.8} />;
 }
@@ -82,7 +82,7 @@ function projectActions(node: NavigatorProjectNode, actions: NavigatorNodeAction
     result.push({ id: "delete", label: translate("nav.deleteProject"), icon: <Trash2 aria-hidden="true" size={13} />, run: () => actions.onDelete?.(ref) });
   }
   if (actions.onHide) {
-    result.push(node.visible
+    result.push(node.isVisible
       ? { id: "hide", label: translate("nav.hideProject"), icon: <EyeOff aria-hidden="true" size={13} />, run: () => actions.onHide?.(ref) }
       : { id: "show", label: translate("nav.showProject"), icon: <Eye aria-hidden="true" size={13} />, run: () => actions.onHide?.(ref) });
   }
@@ -91,10 +91,10 @@ function projectActions(node: NavigatorProjectNode, actions: NavigatorNodeAction
 
 function groupActions(node: NavigatorGroupNode, actions: NavigatorNodeActions, translate: Translate): RowAction[] {
   const ref = navigatorRef(node);
-  if (node.suspended && actions.onResume) {
+  if (node.isSuspended && actions.onResume) {
     return [{ id: "resume", label: translate("nav.resumeGroup"), icon: <Play aria-hidden="true" size={13} />, run: () => actions.onResume?.(ref) }];
   }
-  if (!node.suspended && actions.onSuspend) {
+  if (!node.isSuspended && actions.onSuspend) {
     return [{ id: "suspend", label: translate("nav.suspendGroup"), icon: <Pause aria-hidden="true" size={13} />, run: () => actions.onSuspend?.(ref) }];
   }
   return [];
@@ -141,10 +141,10 @@ function AgentBadges({ node, translate }: { node: NavigatorAgentNode; translate:
 
 export function NavigatorNodeRow({
   node,
-  expanded,
-  selected,
-  active,
-  visible,
+  isExpanded,
+  isSelected,
+  isActive,
+  isVisible,
   actions,
   onToggle,
   onSelect,
@@ -157,9 +157,9 @@ export function NavigatorNodeRow({
     styles.row,
     styles[node.kind],
     styles[node.status],
-    selected ? styles.selected : "",
-    active ? styles.active : "",
-    visible ? "" : styles.hiddenRow,
+    isSelected ? styles.selected : "",
+    isActive ? styles.active : "",
+    isVisible ? "" : styles.hiddenRow,
   ].filter(Boolean).join(" ");
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     // Keys on the row's own buttons (rename, delete, …) belong to them.
@@ -170,10 +170,10 @@ export function NavigatorNodeRow({
       else actions.onOpen?.(ref);
       return;
     }
-    if (event.key === "ArrowRight" && canToggle && !expanded) {
+    if (event.key === "ArrowRight" && canToggle && !isExpanded) {
       event.preventDefault();
       onToggle?.(node.id);
-    } else if (event.key === "ArrowLeft" && canToggle && expanded) {
+    } else if (event.key === "ArrowLeft" && canToggle && isExpanded) {
       event.preventDefault();
       onToggle?.(node.id);
     }
@@ -181,10 +181,10 @@ export function NavigatorNodeRow({
 
   return (
     <div
-      aria-expanded={canToggle ? expanded : undefined}
+      aria-expanded={canToggle ? isExpanded : undefined}
       aria-label={labelFor(node, translate)}
       aria-level={node.depth + 1}
-      aria-selected={selected}
+      aria-selected={isSelected}
       className={className}
       data-depth={node.depth}
       data-node-id={node.id}
@@ -208,7 +208,7 @@ export function NavigatorNodeRow({
     >
       <span className={styles.indent} aria-hidden="true" />
       <button
-        aria-label={canToggle ? (expanded ? translate("nav.collapse") : translate("nav.expand")) : undefined}
+        aria-label={canToggle ? (isExpanded ? translate("nav.collapse") : translate("nav.expand")) : undefined}
         className={styles.disclosure}
         disabled={!canToggle}
         onClick={(event) => {
@@ -218,15 +218,15 @@ export function NavigatorNodeRow({
         tabIndex={-1}
         type="button"
       >
-        {canToggle ? (expanded ? <ChevronDown aria-hidden="true" size={13} /> : <ChevronRight aria-hidden="true" size={13} />) : <span className={styles.disclosureSpacer} />}
+        {canToggle ? (isExpanded ? <ChevronDown aria-hidden="true" size={13} /> : <ChevronRight aria-hidden="true" size={13} />) : <span className={styles.disclosureSpacer} />}
       </button>
       <span className={`${styles.statusDot} ${styles[`status${node.status}`]}`} title={translate(`status.${node.status}` as const)} aria-label={translate(`status.${node.status}` as const)} role="img" />
-      <span className={styles.nodeIcon}><IconForNode expanded={expanded} node={node} /></span>
+      <span className={styles.nodeIcon}><IconForNode isExpanded={isExpanded} node={node} /></span>
       <span className={styles.nodeMain}>
         <span className={styles.nodeName}>{node.name}</span>
         {node.kind === "agent" ? <AgentSubline node={node} translate={translate} /> : null}
       </span>
-      {!visible && node.kind === "project" ? <EyeOff aria-label={translate("nav.hidden")} className={styles.visibilityIcon} size={12} /> : null}
+      {!isVisible && node.kind === "project" ? <EyeOff aria-label={translate("nav.hidden")} className={styles.visibilityIcon} size={12} /> : null}
       {node.kind === "agent" ? <AgentBadges node={node} translate={translate} /> : null}
       <span className={styles.nodeCount}>{countLabel(node, translate)}</span>
       <span className={styles.actions} onClick={(event) => event.stopPropagation()}>{rowActions(node, actions, translate)}</span>

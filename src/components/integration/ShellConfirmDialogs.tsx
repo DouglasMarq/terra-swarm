@@ -25,9 +25,9 @@ export function ShellConfirmDialogs(props: ShellConfirmDialogsProps) {
   const pendingInspectorAction = props.inspectorRequest;
   return <>
     <ConfirmActionDialog
-      open={pendingCommandConfirmation !== null}
-      onOpenChange={(open) => {
-        if (!open) props.onCommandRequestChange(null);
+      isOpen={pendingCommandConfirmation !== null}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) props.onCommandRequestChange(null);
       }}
       title={pendingCommandConfirmation?.title}
       description={pendingCommandConfirmation ? translate("dialogs.resourceDescription", { resource: pendingCommandConfirmation.resourceLabel, description: pendingCommandConfirmation.description }) : ""}
@@ -51,9 +51,9 @@ export function ShellConfirmDialogs(props: ShellConfirmDialogsProps) {
       }}
     />
     <ConfirmActionDialog
-      open={pendingInspectorAction !== null}
-      onOpenChange={(open) => {
-        if (!open) props.onInspectorRequestChange(null);
+      isOpen={pendingInspectorAction !== null}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) props.onInspectorRequestChange(null);
       }}
       title={pendingInspectorAction?.action === "kill" ? translate("pane.confirmKill.confirm") : translate("system.restartSession")}
       description={pendingInspectorAction

@@ -150,7 +150,7 @@ describe("NavigatorPanel", () => {
     const user = userEvent.setup();
     const restart = vi.fn();
     const agentMenu = vi.fn(() => [[{ id: "restart", label: "Reiniciar", onSelect: restart }]]);
-    render(<NavigatorPanel agentMenu={agentMenu} flatten workspaces={workspaces} groups={groups} />);
+    render(<NavigatorPanel agentMenu={agentMenu} shouldFlatten workspaces={workspaces} groups={groups} />);
 
     const row = screen.getByRole("treeitem", { name: "Agente luna-max" });
     await user.click(within(row).getByRole("button", { name: "Abrir menu de contexto" }));

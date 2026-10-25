@@ -60,8 +60,8 @@ function info(extra: Partial<McpServerInfo> = {}): McpServerInfo {
 }
 
 const agents = [
-  { id: "t-1", label: "Vega", running: true },
-  { id: "t-2", label: "Lyra", running: false },
+  { id: "t-1", label: "Vega", isRunning: true },
+  { id: "t-2", label: "Lyra", isRunning: false },
 ];
 
 describe("TaskBoard", () => {

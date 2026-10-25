@@ -64,7 +64,7 @@ export interface ShellState extends ShellStateData {
   navigate: (surface: ShellSurface, workspaceId?: string | null) => void;
   goBack: () => void;
   goForward: () => void;
-  setDockOpen: (open: boolean) => void;
+  setDockOpen: (isOpen: boolean) => void;
   toggleDock: () => void;
   setDockTab: (tab: DockTab) => void;
   openWorkspaceTab: (tab: ShellWorkspaceTab) => void;
@@ -75,7 +75,7 @@ export interface ShellState extends ShellStateData {
   reorderWorkspaceTabs: (workspaceIds: readonly string[]) => void;
   setPanelLayout: (layout: ShellPanelLayout) => void;
   setNavigatorCollapsedIds: (ids: readonly string[]) => void;
-  setSidebarCollapsed: (collapsed: boolean) => void;
+  setSidebarCollapsed: (isCollapsed: boolean) => void;
   toggleSidebar: () => void;
   reset: () => void;
 }
@@ -330,7 +330,7 @@ export const useShellStore = create<ShellState>()(
         });
       },
 
-      setDockOpen: (open) => set((state) => ({ dock: { ...state.dock, open } })),
+      setDockOpen: (isOpen) => set((state) => ({ dock: { ...state.dock, open: isOpen } })),
 
       toggleDock: () =>
         set((state) => ({ dock: { ...state.dock, open: !state.dock.open } })),
@@ -445,7 +445,7 @@ export const useShellStore = create<ShellState>()(
         });
       },
 
-      setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      setSidebarCollapsed: (isSidebarCollapsed) => set({ sidebarCollapsed: isSidebarCollapsed }),
 
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 

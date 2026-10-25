@@ -23,7 +23,7 @@ describe("preferences store", () => {
   afterEach(() => {
     usePreferencesStore.setState({
       fontSize: 13,
-      voiceEnabled: false,
+      isVoiceEnabled: false,
       voiceLang: "auto",
       voiceModel: null,
       voiceInputDevice: null,

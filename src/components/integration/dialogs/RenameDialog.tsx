@@ -9,12 +9,12 @@ import styles from "./ModalForms.module.css";
 export type RenameTargetKind = "workspace" | "group" | "terminal";
 
 export interface RenameDialogProps {
-  open: boolean;
+  isOpen: boolean;
   kind: RenameTargetKind;
   mode?: "rename" | "create";
   value: string;
   onChange: (value: string) => void;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (isOpen: boolean) => void;
   onSubmit: () => void | Promise<void>;
 }
 
@@ -24,24 +24,24 @@ export function RenameDialog({
   onChange,
   onOpenChange,
   onSubmit,
-  open,
+  isOpen,
   value,
 }: RenameDialogProps) {
   const translate = useT();
-  const [submitted, setSubmitted] = useState(false);
+  const [isSubmitted, setSubmitted] = useState(false);
   // Agents may clear their name; projects and groups need one.
-  const valid = kind === "terminal" || value.trim().length > 0;
+  const isValid = kind === "terminal" || value.trim().length > 0;
   const noun = translate(`rename.noun.${kind}`);
   const isCreate = mode === "create";
 
   useEffect(() => {
-    if (!open) setSubmitted(false);
-  }, [open]);
+    if (!isOpen) setSubmitted(false);
+  }, [isOpen]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitted(true);
-    if (!valid) return;
+    if (!isValid) return;
     void onSubmit();
   }
 
@@ -50,7 +50,7 @@ export function RenameDialog({
       className={styles.dialog}
       description={isCreate ? translate("rename.createDescription", { noun }) : translate("rename.description", { noun })}
       onOpenChange={onOpenChange}
-      open={open}
+      open={isOpen}
       title={isCreate ? translate("rename.createTitle", { noun }) : translate("rename.title", { noun })}
     >
       <form className={styles.form} onSubmit={handleSubmit}>
@@ -59,17 +59,17 @@ export function RenameDialog({
             {translate("rename.name")}
           </label>
           <input
-            aria-describedby={submitted && !valid ? "terra-rename-error" : undefined}
-            aria-invalid={submitted && !valid}
+            aria-describedby={isSubmitted && !isValid ? "terra-rename-error" : undefined}
+            aria-invalid={isSubmitted && !isValid}
             autoFocus
             className={styles.input}
-            data-invalid={submitted && !valid ? "true" : undefined}
+            data-invalid={isSubmitted && !isValid ? "true" : undefined}
             id="terra-rename-value"
             onChange={(event) => onChange(event.target.value)}
             type="text"
             value={value}
           />
-          {submitted && !valid ? (
+          {isSubmitted && !isValid ? (
             <span className={styles.error} id="terra-rename-error" role="alert">
               {translate("rename.required")}
             </span>

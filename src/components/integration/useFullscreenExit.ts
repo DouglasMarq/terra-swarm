@@ -1,21 +1,21 @@
 import { useEffect, useEffectEvent, useMemo } from "react";
 import type { WorkspaceSnapshotV2 } from "../../domain/workspace.model";
 
-type SetContainerFullscreen = (containerId: string, fullscreen: boolean) => void;
+type SetContainerFullscreen = (containerId: string, isFullscreen: boolean) => void;
 
 interface FullscreenExitOptions {
   snapshot: WorkspaceSnapshotV2 | null;
-  dockOpen: boolean;
+  isDockOpen: boolean;
   setContainerFullscreen: SetContainerFullscreen;
 }
 
 const ESCAPE_IGNORED_TARGETS = ".xterm, [role='dialog'], [role='menu']";
 
-function useLeaveFullscreenWhenDockOpens(dockOpen: boolean, fullscreenIds: readonly string[], setContainerFullscreen: SetContainerFullscreen) {
+function useLeaveFullscreenWhenDockOpens(isDockOpen: boolean, fullscreenIds: readonly string[], setContainerFullscreen: SetContainerFullscreen) {
   const leaveFullscreen = useEffectEvent(() => fullscreenIds.forEach((id) => setContainerFullscreen(id, false)));
   useEffect(() => {
-    if (dockOpen) leaveFullscreen();
-  }, [dockOpen]);
+    if (isDockOpen) leaveFullscreen();
+  }, [isDockOpen]);
 }
 
 function useLeaveFullscreenOnEscape(fullscreenIds: readonly string[], setContainerFullscreen: SetContainerFullscreen) {
@@ -33,11 +33,11 @@ function useLeaveFullscreenOnEscape(fullscreenIds: readonly string[], setContain
   }, [fullscreenIds, setContainerFullscreen]);
 }
 
-export function useFullscreenExit({ snapshot, dockOpen, setContainerFullscreen }: FullscreenExitOptions) {
+export function useFullscreenExit({ snapshot, isDockOpen, setContainerFullscreen }: FullscreenExitOptions) {
   const fullscreenIds = useMemo(
     () => (snapshot?.containers ?? []).filter((container) => container.fullscreen).map((container) => container.id),
     [snapshot],
   );
-  useLeaveFullscreenWhenDockOpens(dockOpen, fullscreenIds, setContainerFullscreen);
+  useLeaveFullscreenWhenDockOpens(isDockOpen, fullscreenIds, setContainerFullscreen);
   useLeaveFullscreenOnEscape(fullscreenIds, setContainerFullscreen);
 }

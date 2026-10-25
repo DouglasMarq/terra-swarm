@@ -47,7 +47,7 @@ describe("useWorktreeClose", () => {
     expect(api.worktreeRemove).not.toHaveBeenCalled();
     const [notification] = useTerminalRuntimeStore.getState().notifItems;
     expect(notification?.message).toContain("status unavailable");
-    expect(notification?.system).toBe(true);
+    expect(notification?.isSystem).toBe(true);
     consoleError.mockRestore();
   });
 

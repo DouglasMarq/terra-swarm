@@ -58,12 +58,12 @@ describe("useWorktreeReview", () => {
     const { result } = renderHook(() => useWorktreeReview(target));
     await waitFor(() => expect(result.current.diff).not.toBeNull());
 
-    let merged = false;
+    let isMerged = false;
     await act(async () => {
-      merged = await result.current.merge();
+      isMerged = await result.current.merge();
     });
 
-    expect(merged).toBe(true);
+    expect(isMerged).toBe(true);
     expect(api.worktreeMerge).toHaveBeenCalledWith("ws-1", "t-1");
     expect(result.current.notice).toContain("terra/t-1");
     expect(result.current.diff?.status.ahead).toBe(0);
@@ -75,12 +75,12 @@ describe("useWorktreeReview", () => {
     const { result } = renderHook(() => useWorktreeReview(target));
     await waitFor(() => expect(result.current.diff).not.toBeNull());
 
-    let committed = true;
+    let isCommitted = true;
     await act(async () => {
-      committed = await result.current.commit("Changes from Vega");
+      isCommitted = await result.current.commit("Changes from Vega");
     });
 
-    expect(committed).toBe(false);
+    expect(isCommitted).toBe(false);
     expect(api.worktreeCommit).toHaveBeenCalledWith("ws-1", "t-1", "Changes from Vega");
     expect(result.current.error).toBe("nothing to commit");
     expect(result.current.notice).toBeNull();

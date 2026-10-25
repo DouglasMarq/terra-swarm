@@ -16,16 +16,16 @@ export interface TeamDialogProps {
   /** The project is a git repository, so members can get worktrees. */
   canIsolate: boolean;
   /** Start one agent; resolves when it is spawned. */
-  onSpawn: (agent: string, options: { role: AgentRole; worktree: boolean }) => Promise<void>;
+  onSpawn: (agent: string, options: { role: AgentRole; shouldUseWorktree: boolean }) => Promise<void>;
 }
 
 /** Start a ready-made team of agents with roles in the active project. */
 export function TeamDialog({ projectName, agents, defaultAgent, canIsolate, onSpawn }: TeamDialogProps) {
   const translate = useT();
-  const open = useLibraryStore((state) => state.dialog === "team");
+  const isOpen = useLibraryStore((state) => state.dialog === "team");
   const closeDialog = useLibraryStore((state) => state.closeDialog);
   const [chosen, setChosen] = useState<TeamTemplate["id"]>("feature");
-  const [starting, setStarting] = useState(false);
+  const [isStarting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const template = TEAM_TEMPLATES.find((candidate) => candidate.id === chosen) ?? TEAM_TEMPLATES[0];
   const plan = useMemo(() => planTeam(template, { agents, defaultAgent, canIsolate }), [template, agents, defaultAgent, canIsolate]);
@@ -35,7 +35,7 @@ export function TeamDialog({ projectName, agents, defaultAgent, canIsolate, onSp
     setError(null);
     try {
       // One at a time: each spawn sizes itself from the panes already open.
-      for (const member of plan.members) await onSpawn(member.agent, { role: member.role, worktree: member.worktree });
+      for (const member of plan.members) await onSpawn(member.agent, { role: member.role, shouldUseWorktree: member.shouldUseWorktree });
       closeDialog();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -47,9 +47,9 @@ export function TeamDialog({ projectName, agents, defaultAgent, canIsolate, onSp
   return (
     <TerraDialog
       className="terra-team"
-      open={open}
-      onOpenChange={(next) => {
-        if (!next && !starting) closeDialog();
+      open={isOpen}
+      onOpenChange={(isNextOpen) => {
+        if (!isNextOpen && !isStarting) closeDialog();
       }}
       title={translate("teams.title", { project: projectName ?? "" })}
       description={translate("teams.description")}
@@ -63,7 +63,7 @@ export function TeamDialog({ projectName, agents, defaultAgent, canIsolate, onSp
           </label>
         ))}
       </div>
-      {plan.blocked ? (
+      {plan.isBlocked ? (
         <p className="terra-library-notice" role="alert">{translate("teams.noAgents")}</p>
       ) : (
         <ul className="terra-team-members" aria-label={translate("teams.members")}>
@@ -71,19 +71,19 @@ export function TeamDialog({ projectName, agents, defaultAgent, canIsolate, onSp
             <li key={`${member.role}-${index}`}>
               <strong>{translate(`roles.${member.role}`)}</strong>
               <span>{member.agent}</span>
-              {member.worktree ? <span className="terra-team-chip">{translate("teams.worktree")}</span> : null}
-              {member.substituted ? <span className="terra-team-chip" data-tone="warn">{translate("teams.substituted")}</span> : null}
+              {member.shouldUseWorktree ? <span className="terra-team-chip">{translate("teams.worktree")}</span> : null}
+              {member.isSubstituted ? <span className="terra-team-chip" data-tone="warn">{translate("teams.substituted")}</span> : null}
             </li>
           ))}
         </ul>
       )}
       {error ? <p className="terra-library-notice" data-tone="error" role="alert">{error}</p> : null}
       <DialogFooter>
-        <Button type="button" variant="ghost" onClick={closeDialog} disabled={starting}>
+        <Button type="button" variant="ghost" onClick={closeDialog} disabled={isStarting}>
           {translate("common.cancel")}
         </Button>
-        <Button type="button" variant="primary" onClick={() => void start()} disabled={starting || plan.blocked || !projectName}>
-          {starting ? translate("teams.starting") : translate("teams.start", { count: plan.members.length })}
+        <Button type="button" variant="primary" onClick={() => void start()} disabled={isStarting || plan.isBlocked || !projectName}>
+          {isStarting ? translate("teams.starting") : translate("teams.start", { count: plan.members.length })}
         </Button>
       </DialogFooter>
     </TerraDialog>

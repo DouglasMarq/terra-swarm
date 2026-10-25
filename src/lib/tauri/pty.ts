@@ -53,8 +53,8 @@ export function terminalBacklog(id: string): Promise<BacklogSnapshot> {
   return invokeCommand("terminalBacklog", { id });
 }
 
-export function setDurableScrollbackEnabled(enabled: boolean): Promise<void> {
-  return invokeCommand("setDurableScrollbackEnabled", { enabled });
+export function setDurableScrollbackEnabled(isEnabled: boolean): Promise<void> {
+  return invokeCommand("setDurableScrollbackEnabled", { enabled: isEnabled });
 }
 
 export function runningTerminals(): Promise<RunningTerminal[]> {

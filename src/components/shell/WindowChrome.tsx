@@ -13,21 +13,21 @@ export interface WindowChromeProps {
   /** Where the user is; falls back to `title` when no project is active. */
   breadcrumb?: ChromeBreadcrumb;
   title?: string;
-  sidebarCollapsed?: boolean;
+  isSidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
   sidebarShortcut?: string;
   onOpenLauncher?: () => void;
   launcherShortcut?: string;
   /** Agents that need the user; drives the amber notification button. */
   attentionCount?: number;
-  notificationsOpen?: boolean;
-  onNotificationsOpenChange?: (open: boolean) => void;
+  isNotificationsOpen?: boolean;
+  onNotificationsOpenChange?: (isOpen: boolean) => void;
   notificationsPanel?: ReactNode;
   onToggleVoice?: () => void;
-  voiceActive?: boolean;
+  isVoiceActive?: boolean;
   voiceLabel?: string;
   voiceShortcut?: string;
-  inspectorOpen?: boolean;
+  isInspectorOpen?: boolean;
   onToggleInspector?: () => void;
   inspectorShortcut?: string;
 }
@@ -43,20 +43,20 @@ function withShortcut(translate: Translate, label: string, shortcut?: string): s
 export function WindowChrome({
   breadcrumb,
   title,
-  sidebarCollapsed = false,
+  isSidebarCollapsed = false,
   onToggleSidebar,
   sidebarShortcut,
   onOpenLauncher,
   launcherShortcut = formatShortcut(COMMAND_PALETTE_SHORTCUT),
   attentionCount = 0,
-  notificationsOpen = false,
+  isNotificationsOpen = false,
   onNotificationsOpenChange,
   notificationsPanel,
   onToggleVoice,
-  voiceActive = false,
+  isVoiceActive = false,
   voiceLabel,
   voiceShortcut,
-  inspectorOpen = false,
+  isInspectorOpen = false,
   onToggleInspector,
   inspectorShortcut,
 }: WindowChromeProps) {
@@ -64,7 +64,7 @@ export function WindowChrome({
   const notificationsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!notificationsOpen) return;
+    if (!isNotificationsOpen) return;
     const close = (event: PointerEvent) => {
       if (notificationsRef.current?.contains(event.target as Node)) return;
       onNotificationsOpenChange?.(false);
@@ -78,10 +78,10 @@ export function WindowChrome({
       document.removeEventListener("pointerdown", close);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [notificationsOpen, onNotificationsOpenChange]);
+  }, [isNotificationsOpen, onNotificationsOpenChange]);
 
-  const sidebarLabel = withShortcut(translate, translate(sidebarCollapsed ? "shell.sidebar.expand" : "shell.sidebar.collapse"), sidebarShortcut);
-  const inspectorLabel = withShortcut(translate, translate(inspectorOpen ? "shell.inspector.hide" : "shell.inspector.show"), inspectorShortcut);
+  const sidebarLabel = withShortcut(translate, translate(isSidebarCollapsed ? "shell.sidebar.expand" : "shell.sidebar.collapse"), sidebarShortcut);
+  const inspectorLabel = withShortcut(translate, translate(isInspectorOpen ? "shell.inspector.hide" : "shell.inspector.show"), inspectorShortcut);
   const voiceTitle = withShortcut(translate, voiceLabel ?? translate("shell.voice"), voiceShortcut);
   const notificationLabel = attentionCount > 0
     ? translate("shell.attention.button", { count: attentionCount })
@@ -95,7 +95,7 @@ export function WindowChrome({
           type="button"
           onClick={onToggleSidebar}
           aria-label={sidebarLabel}
-          aria-expanded={!sidebarCollapsed}
+          aria-expanded={!isSidebarCollapsed}
           title={sidebarLabel}
         >
           <PanelLeft size={15} aria-hidden="true" />
@@ -142,15 +142,15 @@ export function WindowChrome({
             type="button"
             data-attention={attentionCount > 0}
             aria-haspopup="dialog"
-            aria-expanded={notificationsOpen}
+            aria-expanded={isNotificationsOpen}
             aria-label={notificationLabel}
             title={notificationLabel}
-            onClick={() => onNotificationsOpenChange?.(!notificationsOpen)}
+            onClick={() => onNotificationsOpenChange?.(!isNotificationsOpen)}
           >
             {attentionCount > 0 ? <span className="terra-window-attention-dot" aria-hidden="true" /> : <Bell size={14} aria-hidden="true" />}
             {attentionCount > 0 ? <span>{notificationLabel}</span> : null}
           </button>
-          {notificationsOpen && notificationsPanel ? (
+          {isNotificationsOpen && notificationsPanel ? (
             <div className="terra-window-popover terra-anim-pop">{notificationsPanel}</div>
           ) : null}
         </div>
@@ -158,8 +158,8 @@ export function WindowChrome({
           className="terra-window-icon-button terra-window-voice"
           type="button"
           onClick={onToggleVoice}
-          data-recording={voiceActive}
-          aria-pressed={voiceActive}
+          data-recording={isVoiceActive}
+          aria-pressed={isVoiceActive}
           aria-label={voiceTitle}
           title={voiceTitle}
         >
@@ -170,7 +170,7 @@ export function WindowChrome({
             className="terra-window-icon-button"
             type="button"
             onClick={onToggleInspector}
-            aria-pressed={inspectorOpen}
+            aria-pressed={isInspectorOpen}
             aria-label={inspectorLabel}
             title={inspectorLabel}
           >

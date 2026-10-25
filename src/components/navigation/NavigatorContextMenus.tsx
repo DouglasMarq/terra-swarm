@@ -33,8 +33,8 @@ export function AgentContextMenu({ agent, groups, position, onClose }: AgentCont
           {group.map((item) => (
             <button
               className={styles.agentMenuItem}
-              data-danger={item.danger}
-              disabled={item.disabled}
+              data-danger={item.isDanger}
+              disabled={item.isDisabled}
               key={item.id}
               onClick={() => {
                 onClose();

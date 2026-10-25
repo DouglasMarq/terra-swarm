@@ -17,8 +17,8 @@ export type ResumeSessions = Pick<TerminalSessions, "resumeItem" | "forget" | "r
 
 export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<void>) {
   const items = useTerminalRuntimeStore((state) => state.resumeItems);
-  const [visible, setVisible] = useState(false);
-  const [autoPending, setAutoPending] = useState(false);
+  const [isVisible, setVisible] = useState(false);
+  const [isAutoPending, setAutoPending] = useState(false);
   // One queue mutation at a time; a single item is never resumed twice.
   const mutating = useRef(false);
   const resuming = useRef<Set<string>>(new Set());
@@ -27,7 +27,7 @@ export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<
   /** Offer sessions found at startup. */
   const offer = (found: ResumeItem[]) => {
     runtime().setResumeItems(found);
-    if (usePreferencesStore.getState().autoResume) setAutoPending(true);
+    if (usePreferencesStore.getState().shouldAutoResume) setAutoPending(true);
     else setVisible(true);
     api.storeSavedAt()
       .then(runtime().setResumeSavedAt)
@@ -123,16 +123,16 @@ export function useResumeQueue(sessions: ResumeSessions, refresh: () => Promise<
   });
 
   useEffect(() => {
-    if (!autoPending || !items || items.length === 0) return;
+    if (!isAutoPending || !items || items.length === 0) return;
     setAutoPending(false);
     autoResume();
     // Keyed on the queue loading only: resumeAll changes every render and reads the latest state itself.
-  }, [autoPending, items]);
+  }, [isAutoPending, items]);
 
   return {
     items,
     /** The opening screen is showing. */
-    open: visible && items !== null && items.length > 0,
+    isOpen: isVisible && items !== null && items.length > 0,
     show: () => setVisible(true),
     defer: () => setVisible(false),
     offer,

@@ -6,7 +6,7 @@ export interface WorkspaceContainerSelectionOptions {
   /** Use the focused terminal's persisted pane placement as a location hint. */
   focusedTerminalId?: string | null;
   /** Exclude hidden containers when choosing a fallback. */
-  visibleOnly?: boolean;
+  isVisibleOnly?: boolean;
 }
 
 export interface WorkspaceContainerQuery extends WorkspaceContainerSelectionOptions {
@@ -60,12 +60,12 @@ export function selectWorkspaceContainerId(
   add(workspace?.activeContainerId);
   add(project?.activeContainerId);
 
-  const available = options.visibleOnly
+  const available = options.isVisibleOnly
     ? containers.filter((container) => container.visible)
     : containers;
   for (const container of available) add(container.id);
 
-  if (options.visibleOnly) {
+  if (options.isVisibleOnly) {
     return candidates.find((id) => byId.get(id)?.visible) ?? null;
   }
   return candidates.find((id) => byId.get(id)?.visible) ?? candidates[0] ?? null;

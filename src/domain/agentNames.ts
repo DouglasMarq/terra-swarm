@@ -22,7 +22,7 @@ export const DEFAULT_NAME_LIST: readonly string[] = NAME_SETS.stars;
 
 export interface PickAgentNameOptions {
   /** Skip names that start with the same letter as, or sound like, an open agent's name. */
-  avoidSimilar?: boolean;
+  shouldAvoidSimilar?: boolean;
   exhausted?: NamesExhaustedStrategy;
 }
 
@@ -71,10 +71,10 @@ export function pickAgentName(
   list: readonly string[],
   options: PickAgentNameOptions = {},
 ): string | null {
-  const { avoidSimilar = true, exhausted = "type-number" } = options;
+  const { shouldAvoidSimilar = true, exhausted = "type-number" } = options;
   const taken = new Set(inUse.map(normalizeSearchText));
   const free = list.filter((name) => name.trim() && !taken.has(normalizeSearchText(name)));
-  const distinct = avoidSimilar
+  const distinct = shouldAvoidSimilar
     ? free.filter((name) => !inUse.some((used) => normalizeSearchText(used)[0] === normalizeSearchText(name)[0] || namesSimilar(used, name)))
     : free;
   if (distinct.length > 0) return distinct[0];

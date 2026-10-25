@@ -19,7 +19,7 @@ export interface McpState {
   statuses: Record<string, McpAgentStatus>;
   error: string | null;
   loadServer: () => Promise<void>;
-  setEnabled: (enabled: boolean) => Promise<void>;
+  setEnabled: (isEnabled: boolean) => Promise<void>;
   loadTasks: (workspaceId: string) => Promise<void>;
   loadStatuses: (workspaceId: string) => Promise<void>;
   createTask: (
@@ -54,9 +54,9 @@ export const useMcpStore = create<McpState>((set, get) => ({
     }
   },
 
-  setEnabled: async (enabled) => {
+  setEnabled: async (isEnabled) => {
     try {
-      set({ server: await mcpApi.mcpSetEnabled(enabled) });
+      set({ server: await mcpApi.mcpSetEnabled(isEnabled) });
     } catch (error) {
       set({ error: errorMessage(error) });
     }

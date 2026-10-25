@@ -11,8 +11,8 @@ import { Button } from "../../ui/Button";
 import styles from "./ModalForms.module.css";
 
 export interface WorkspaceDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
   name: string;
   cwd: string;
   groupName?: string | null;
@@ -32,20 +32,20 @@ export function WorkspaceDialog({
   onNameChange,
   onOpenChange,
   onSubmit,
-  open,
+  isOpen,
 }: WorkspaceDialogProps) {
   const translate = useT();
-  const [submitted, setSubmitted] = useState(false);
-  const nameIsValid = name.trim().length > 0;
+  const [isSubmitted, setSubmitted] = useState(false);
+  const isNameValid = name.trim().length > 0;
 
   useEffect(() => {
-    if (!open) setSubmitted(false);
-  }, [open]);
+    if (!isOpen) setSubmitted(false);
+  }, [isOpen]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitted(true);
-    if (!nameIsValid) return;
+    if (!isNameValid) return;
     void onSubmit();
   }
 
@@ -54,7 +54,7 @@ export function WorkspaceDialog({
       className={styles.dialog}
       description={translate("dialogs.workspace.description")}
       onOpenChange={onOpenChange}
-      open={open}
+      open={isOpen}
       title={translate("shell.newWorkspace")}
     >
       <form className={styles.form} onSubmit={handleSubmit}>
@@ -63,18 +63,18 @@ export function WorkspaceDialog({
             {translate("rename.name")}
           </label>
           <input
-            aria-describedby={submitted && !nameIsValid ? "terra-workspace-name-error" : undefined}
-            aria-invalid={submitted && !nameIsValid}
+            aria-describedby={isSubmitted && !isNameValid ? "terra-workspace-name-error" : undefined}
+            aria-invalid={isSubmitted && !isNameValid}
             autoFocus
             className={styles.input}
-            data-invalid={submitted && !nameIsValid ? "true" : undefined}
+            data-invalid={isSubmitted && !isNameValid ? "true" : undefined}
             id="terra-new-workspace-name"
             onChange={(event) => onNameChange(event.target.value)}
             placeholder={translate("dialogs.workspace.namePlaceholder")}
             type="text"
             value={name}
           />
-          {submitted && !nameIsValid ? (
+          {isSubmitted && !isNameValid ? (
             <span className={styles.error} id="terra-workspace-name-error" role="alert">
               {translate("dialogs.workspace.nameRequired")}
             </span>

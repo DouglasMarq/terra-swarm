@@ -45,9 +45,9 @@ describe("useInspectorRuntime", () => {
   });
 
   it("given the inspector closes, stops polling and resets", async () => {
-    const { result, rerender } = renderHook(({ active }) => useInspectorRuntime("t-1", active), { initialProps: { active: true } });
+    const { result, rerender } = renderHook(({ isActive }) => useInspectorRuntime("t-1", isActive), { initialProps: { isActive: true } });
     await act(() => vi.advanceTimersByTimeAsync(0));
-    rerender({ active: false });
+    rerender({ isActive: false });
     await act(() => vi.advanceTimersByTimeAsync(INSPECTOR_RUNTIME_POLL_MS * 2));
     expect(pty.terminalRuntimeInfo).toHaveBeenCalledTimes(1);
     expect(result.current.status).toBe("idle");

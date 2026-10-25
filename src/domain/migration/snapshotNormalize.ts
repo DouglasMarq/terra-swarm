@@ -141,7 +141,7 @@ function readSnapshotContainer(
   ids: SnapshotIdMaps,
   fallbackLayout: WorkspaceLayout,
 ): WorkspaceContainer {
-  const closed = raw.closed === true || raw.visible === false;
+  const isClosed = raw.closed === true || raw.visible === false;
   return {
     id,
     projectId: resolveId(raw.projectId, ids.projectIds),
@@ -150,9 +150,9 @@ function readSnapshotContainer(
     activePaneId: resolveId(raw.activePaneId, ids.paneIds),
     internalLayout: readString(raw.internalLayout) || undefined,
     size: readFiniteNumber(raw.size) ?? undefined,
-    visible: !closed,
+    visible: !isClosed,
     collapsed: Boolean(raw.collapsed),
-    closed,
+    closed: isClosed,
     fullscreen: Boolean(raw.fullscreen),
   };
 }
@@ -181,7 +181,7 @@ function claimPtyId(raw: RecordLike, usedPtyIds: Set<string>): string | null {
 function readSnapshotTab({ id, sourceId, raw }: IdRow, ptyId: string | null, context: TabReadContext): RuntimeTab {
   const nestedMeta = asRecord(raw.meta);
   const paneId = resolveId(raw.paneId, context.ids.paneIds);
-  const orphaned =
+  const isOrphaned =
     paneId === null ||
     ptyId === null ||
     raw.orphaned === true ||
@@ -203,7 +203,7 @@ function readSnapshotTab({ id, sourceId, raw }: IdRow, ptyId: string | null, con
       : {}),
     ...(readString(raw.groupId) ? { groupId: readString(raw.groupId) } : {}),
     ...(raw.suspended === true ? { suspended: true } : {}),
-    orphaned,
+    orphaned: isOrphaned,
   };
 }
 

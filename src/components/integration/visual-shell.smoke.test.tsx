@@ -50,7 +50,7 @@ function shellProps(overrides: Partial<VisualShellSurfaceProps> = {}): VisualShe
     detachedTerminalIds: [],
     appVersion: "2.0.0",
     fontSize: 13,
-    voiceEnabled: false,
+    isVoiceEnabled: false,
     voiceStatus: "idle",
     onFocus: vi.fn(),
     onSelectWorkspace: vi.fn(),
@@ -118,7 +118,7 @@ describe("VisualShellSurface smoke flow", () => {
     const user = userEvent.setup();
     const props = shellProps({
       notifications: { "term-codex": 1 },
-      notificationItems: [{ key: 1, terminalId: "term-codex", workspaceId: workspace.id, message: "Posso rodar npm test?", ts: Date.now(), read: false }],
+      notificationItems: [{ key: 1, terminalId: "term-codex", workspaceId: workspace.id, message: "Posso rodar npm test?", ts: Date.now(), isRead: false }],
     });
     render(<VisualShellSurface {...props} />);
 

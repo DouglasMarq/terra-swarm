@@ -9,7 +9,7 @@ export interface RightDockTab {
 }
 
 export interface RightDockProps {
-  open?: boolean;
+  isOpen?: boolean;
   onOpen?: () => void;
   onClose?: () => void;
   title?: string;
@@ -22,7 +22,7 @@ export interface RightDockProps {
 
 /** The right dock: the agent inspector (⌘I) and the shared task board. */
 export function RightDock({
-  open = true,
+  isOpen = true,
   onClose,
   title,
   content,
@@ -31,12 +31,12 @@ export function RightDock({
   onTabChange,
 }: RightDockProps) {
   const translate = useT();
-  if (!open) return null;
-  const tabbed = tabs !== undefined && tabs.length > 1;
+  if (!isOpen) return null;
+  const isTabbed = tabs !== undefined && tabs.length > 1;
   return (
     <aside className="terra-right-dock terra-anim-slide-in" aria-label={translate("shell.inspector.label")}>
       <div className="terra-right-dock-header">
-        {tabbed ? (
+        {isTabbed ? (
           <div className="terra-right-dock-tabs" role="tablist" aria-label={translate("shell.dock.tabs")}>
             {tabs.map((tab) => (
               <button
@@ -64,7 +64,7 @@ export function RightDock({
           <PanelRightClose size={15} aria-hidden="true" />
         </button>
       </div>
-      <div className="terra-right-dock-content" role={tabbed ? "tabpanel" : undefined}>{content}</div>
+      <div className="terra-right-dock-content" role={isTabbed ? "tabpanel" : undefined}>{content}</div>
     </aside>
   );
 }

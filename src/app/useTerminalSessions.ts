@@ -36,7 +36,7 @@ interface TerminalSessionsInput {
 
 export interface SpawnIntoOptions {
   placement?: { paneId: string; tabId?: string };
-  worktree?: boolean;
+  shouldUseWorktree?: boolean;
   role?: AgentRole | null;
 }
 
@@ -150,9 +150,9 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
   /** Optional automatic names: a fresh agent gets the next free name. */
   const nameNewAgent = (terminalId: string) => {
     const prefs = usePreferencesStore.getState();
-    if (!prefs.agentAutoNames || prefs.agentNames[terminalId]) return;
+    if (!prefs.shouldAutoNameAgents || prefs.agentNames[terminalId]) return;
     const inUse = agentNamesInUse(workspaces, prefs.agentNames);
-    const name = pickAgentName(inUse, prefs.agentNameList, { avoidSimilar: prefs.avoidSimilarNames, exhausted: prefs.namesExhausted });
+    const name = pickAgentName(inUse, prefs.agentNameList, { shouldAvoidSimilar: prefs.shouldAvoidSimilarNames, exhausted: prefs.namesExhausted });
     if (name) prefs.setAgentName(terminalId, name);
   };
 
@@ -168,7 +168,7 @@ export function useTerminalSessions({ workspaces, snapshot, refresh }: TerminalS
       .find((terminal) => terminal && terminal.cols > 0 && terminal.rows > 0);
     const extras = {
       ...launchExtras(command),
-      ...(options.worktree ? { worktree: true } : {}),
+      ...(options.shouldUseWorktree ? { worktree: true } : {}),
       ...(options.role ? { role: options.role } : {}),
     };
     const result = await api.spawnTerminal(workspaceId, command, undefined, sibling?.cols, sibling?.rows, defaultShell(), extras);

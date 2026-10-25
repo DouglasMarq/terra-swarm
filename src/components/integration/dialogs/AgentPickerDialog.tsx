@@ -8,18 +8,18 @@ import { Button } from "../../ui/Button";
 import styles from "./ModalForms.module.css";
 
 export interface AgentPickerDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
   agents: readonly AgentInfo[];
   /** Existing quick-add default, when the picker was opened from the panel. */
   defaultAgent?: string | null;
-  saveDefault: boolean;
-  onSaveDefaultChange: (save: boolean) => void;
+  shouldSaveDefault: boolean;
+  onSaveDefaultChange: (shouldSave: boolean) => void;
   onChoose: (agentId: string) => void | Promise<void>;
   /** The project is a git repository, so the agent can get its own worktree. */
   canIsolate?: boolean;
-  isolate?: boolean;
-  onIsolateChange?: (isolate: boolean) => void;
+  shouldIsolate?: boolean;
+  onIsolateChange?: (shouldIsolate: boolean) => void;
   /** Team role for the new agent; the select shows when this is handled. */
   role?: AgentRole | null;
   onRoleChange?: (role: AgentRole | null) => void;
@@ -31,11 +31,11 @@ export function AgentPickerDialog({
   onChoose,
   onOpenChange,
   onSaveDefaultChange,
-  open,
-  saveDefault,
+  isOpen,
+  shouldSaveDefault,
   defaultAgent = null,
   canIsolate = false,
-  isolate = false,
+  shouldIsolate = false,
   onIsolateChange,
   role = null,
   onRoleChange,
@@ -46,7 +46,7 @@ export function AgentPickerDialog({
       className={styles.dialog}
       description={translate("dialogs.picker.description")}
       onOpenChange={onOpenChange}
-      open={open}
+      open={isOpen}
       title={translate("palette.newAgent")}
     >
       <div aria-label={translate("dialogs.picker.profiles")} className={styles.agentList} role="list">
@@ -84,7 +84,7 @@ export function AgentPickerDialog({
       ) : null}
       <label className={styles.pickerDefault}>
         <input
-          checked={saveDefault}
+          checked={shouldSaveDefault}
           onChange={(event) => onSaveDefaultChange(event.target.checked)}
           type="checkbox"
         />
@@ -92,7 +92,7 @@ export function AgentPickerDialog({
       </label>
       {canIsolate && onIsolateChange ? (
         <label className={styles.pickerDefault}>
-          <input checked={isolate} onChange={(event) => onIsolateChange(event.target.checked)} type="checkbox" />
+          <input checked={shouldIsolate} onChange={(event) => onIsolateChange(event.target.checked)} type="checkbox" />
           <span>
             {translate("dialogs.picker.isolate")}
             <small className={styles.pickerHint}>{translate("dialogs.picker.isolateHint")}</small>

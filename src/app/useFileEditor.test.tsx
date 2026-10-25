@@ -44,12 +44,12 @@ describe("useFileEditor", () => {
     act(() => result.current.setText("two"));
     expect(result.current.isDirty).toBe(true);
 
-    let saved = false;
+    let isSaved = false;
     await act(async () => {
-      saved = await result.current.save();
+      isSaved = await result.current.save();
     });
 
-    expect(saved).toBe(true);
+    expect(isSaved).toBe(true);
     expect(api.writeWorkspaceFile).toHaveBeenCalledWith("ws-1", "src/a.ts", "two", 10);
     expect(result.current.isDirty).toBe(false);
     expect(result.current.file?.modified).toBe(20);
@@ -80,12 +80,12 @@ describe("useFileEditor", () => {
     const { result } = await loaded();
     act(() => result.current.setText("two"));
 
-    let saved = true;
+    let isSaved = true;
     await act(async () => {
-      saved = await result.current.save();
+      isSaved = await result.current.save();
     });
 
-    expect(saved).toBe(false);
+    expect(isSaved).toBe(false);
     expect(result.current.hasConflict).toBe(false);
     expect(result.current.saveError).toBe("the text is too large to save here");
   });

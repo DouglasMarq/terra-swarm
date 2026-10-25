@@ -14,7 +14,7 @@ interface FocusTrackingInput {
   focusedId: string | null;
   snapshot: WorkspaceSnapshotV2 | null;
   /** A dialog is open: keyboard focus stays with it. */
-  modalOpen: boolean;
+  isModalOpen: boolean;
 }
 
 /**
@@ -22,7 +22,7 @@ interface FocusTrackingInput {
  * agent per project, persists the selected pane/tab, and hands keyboard
  * focus back to the terminal when nothing else wants it.
  */
-export function useFocusTracking({ workspaces, activeId, focusedId, snapshot, modalOpen }: FocusTrackingInput) {
+export function useFocusTracking({ workspaces, activeId, focusedId, snapshot, isModalOpen }: FocusTrackingInput) {
   const lastFocusByWorkspace = useRef<Record<string, string>>({});
   const previousActiveId = useRef<string | null>(null);
   const persistedSelection = useRef<string | null>(null);
@@ -86,12 +86,12 @@ export function useFocusTracking({ workspaces, activeId, focusedId, snapshot, mo
   }, [activeId, focusedId, workspaces, snapshot]);
 
   useEffect(() => {
-    if (!focusedId || !activeId || modalOpen) return;
+    if (!focusedId || !activeId || isModalOpen) return;
     const element = document.activeElement as HTMLElement | null;
     if (element && (element.tagName === "INPUT" || element.tagName === "SELECT")) return;
     const frame = requestAnimationFrame(() => getTerminal(focusedId)?.focus());
     return () => cancelAnimationFrame(frame);
-  }, [activeId, focusedId, modalOpen]);
+  }, [activeId, focusedId, isModalOpen]);
 
   return {
     /** Forget a closed project's remembered focus. */

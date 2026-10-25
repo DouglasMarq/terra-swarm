@@ -67,9 +67,9 @@ export function ShellWorkbenchContent({ source, snapshot, activeId, renderTab, a
     const ptyId = tabPtyId(tabId);
     if (ptyId) actions.onKill(ptyId);
   };
-  const onCollapseContainer = (containerId: string, collapsed: boolean) => {
-    if (collapsed) orchestration.setContainerFullscreen(containerId, false);
-    orchestration.setContainerCollapsed(containerId, collapsed);
+  const onCollapseContainer = (containerId: string, isCollapsed: boolean) => {
+    if (isCollapsed) orchestration.setContainerFullscreen(containerId, false);
+    orchestration.setContainerCollapsed(containerId, isCollapsed);
   };
   const hideContainerProject = (containerId: string) => {
     const container = snapshot?.containers.find((candidate) => candidate.id === containerId);

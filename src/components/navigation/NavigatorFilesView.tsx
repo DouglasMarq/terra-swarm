@@ -12,7 +12,7 @@ import styles from "./Navigator.module.css";
 
 interface DirectoryState {
   listing: WorkspaceFileListing | null;
-  loading: boolean;
+  isLoading: boolean;
   error: string | null;
 }
 
@@ -33,33 +33,33 @@ function FileIcon({ entry }: { entry: WorkspaceFileEntry }) {
 
 function FileRow({
   entry,
-  expanded,
-  loading,
+  isExpanded,
+  isLoading,
   depth,
   onToggle,
   onOpen,
 }: {
   entry: WorkspaceFileEntry;
-  expanded: boolean;
-  loading: boolean;
+  isExpanded: boolean;
+  isLoading: boolean;
   depth: number;
   onToggle: () => void;
   onOpen?: () => void;
 }) {
   const translate = useT();
-  const directory = entry.kind === "directory";
+  const isDirectory = entry.kind === "directory";
   const rowContent = (
     <>
       <span className={styles.integrationDisclosure}>
-        {directory ? (expanded ? <ChevronDown aria-hidden="true" size={12} /> : <ChevronRight aria-hidden="true" size={12} />) : null}
+        {isDirectory ? (isExpanded ? <ChevronDown aria-hidden="true" size={12} /> : <ChevronRight aria-hidden="true" size={12} />) : null}
       </span>
       <span className={styles.integrationIcon}><FileIcon entry={entry} /></span>
       <span className={styles.integrationName}>{entry.name}</span>
-      {loading ? <LoaderCircle aria-label={translate("nav.filesView.loadingEntry")} className={styles.spin} size={12} /> : null}
+      {isLoading ? <LoaderCircle aria-label={translate("nav.filesView.loadingEntry")} className={styles.spin} size={12} /> : null}
       {entry.kind === "file" && entry.size !== null ? <span className={styles.integrationMeta}>{translate("nav.filesView.sizeBytes", { size: entry.size })}</span> : null}
     </>
   );
-  if (!directory && entry.kind === "file" && onOpen) {
+  if (!isDirectory && entry.kind === "file" && onOpen) {
     return (
       <button
         aria-label={translate("editor.open", { name: entry.name })}
@@ -72,7 +72,7 @@ function FileRow({
       </button>
     );
   }
-  if (!directory) {
+  if (!isDirectory) {
     return (
       <div
         aria-label={translate("nav.filesView.fileRow", { name: entry.name })}
@@ -87,7 +87,7 @@ function FileRow({
   }
   return (
     <button
-      aria-expanded={expanded}
+      aria-expanded={isExpanded}
       className={styles.integrationRow}
       onClick={onToggle}
       style={{ paddingInlineStart: indentFor(depth) }}
@@ -113,15 +113,15 @@ export function NavigatorFilesView({
   const generation = useRef(0);
   const workspaceId = workspace?.id ?? null;
 
-  const loadDirectory = useCallback(async (relativePath: string, force = false) => {
+  const loadDirectory = useCallback(async (relativePath: string, shouldForce = false) => {
     if (!workspaceId) return;
     const existing = directoriesRef.current[relativePath];
-    if (!force && (existing?.loading || existing?.listing)) return;
+    if (!shouldForce && (existing?.isLoading || existing?.listing)) return;
     const currentGeneration = generation.current;
     setDirectories((current) => {
       const next = {
         ...current,
-        [relativePath]: { listing: current[relativePath]?.listing ?? null, loading: true, error: null },
+        [relativePath]: { listing: current[relativePath]?.listing ?? null, isLoading: true, error: null },
       };
       directoriesRef.current = next;
       return next;
@@ -130,7 +130,7 @@ export function NavigatorFilesView({
       const listing = await loadFiles(workspaceId, relativePath, DEFAULT_FILE_LIST_LIMIT);
       if (currentGeneration !== generation.current) return;
       setDirectories((current) => {
-        const next = { ...current, [relativePath]: { listing, loading: false, error: null } };
+        const next = { ...current, [relativePath]: { listing, isLoading: false, error: null } };
         directoriesRef.current = next;
         return next;
       });
@@ -139,7 +139,7 @@ export function NavigatorFilesView({
       setDirectories((current) => {
         const next = {
           ...current,
-          [relativePath]: { listing: current[relativePath]?.listing ?? null, loading: false, error: errorMessage(error, "") },
+          [relativePath]: { listing: current[relativePath]?.listing ?? null, isLoading: false, error: errorMessage(error, "") },
         };
         directoriesRef.current = next;
         return next;
@@ -179,7 +179,7 @@ export function NavigatorFilesView({
         </div>
       );
     }
-    if (state.loading && !state.listing) {
+    if (state.isLoading && !state.listing) {
       return <div className={styles.integrationLoading}><LoaderCircle className={styles.spin} size={14} /> {translate("nav.filesView.loading")}</div>;
     }
     if (!state.listing || state.listing.entries.length === 0) {
@@ -188,11 +188,11 @@ export function NavigatorFilesView({
     return (
       <>
         {state.listing.entries.map((entry) => {
-          const expanded = expandedPaths.has(entry.path);
+          const isExpanded = expandedPaths.has(entry.path);
           return (
             <div key={entry.path}>
-              <FileRow depth={depth} entry={entry} expanded={expanded} loading={Boolean(directories[entry.path]?.loading)} onToggle={() => toggleDirectory(entry)} onOpen={onOpenFile && workspaceId ? () => onOpenFile(workspaceId, entry.path) : undefined} />
-              {entry.kind === "directory" && expanded ? renderDirectory(entry.path, depth + 1) : null}
+              <FileRow depth={depth} entry={entry} isExpanded={isExpanded} isLoading={Boolean(directories[entry.path]?.isLoading)} onToggle={() => toggleDirectory(entry)} onOpen={onOpenFile && workspaceId ? () => onOpenFile(workspaceId, entry.path) : undefined} />
+              {entry.kind === "directory" && isExpanded ? renderDirectory(entry.path, depth + 1) : null}
             </div>
           );
         })}

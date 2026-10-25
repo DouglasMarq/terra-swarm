@@ -28,11 +28,11 @@ export function WorktreeReviewDialog() {
   const { diff, busy, error, notice, prUrl } = review;
   const [chosen, setChosen] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const [confirmMerge, setConfirmMerge] = useState(false);
-  const [prOpen, setPrOpen] = useState(false);
+  const [isConfirmingMerge, setConfirmMerge] = useState(false);
+  const [isPrOpen, setPrOpen] = useState(false);
   const [prTitle, setPrTitle] = useState("");
   const [prBody, setPrBody] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [isCopied, setCopied] = useState(false);
 
   const suggestDraftTitle = useEffectEvent((label: string) => suggestTitle(label, summary));
 
@@ -52,13 +52,13 @@ export function WorktreeReviewDialog() {
   const sections = useMemo(() => parsePatch(diff?.patch ?? ""), [diff?.patch]);
   const section: DiffFileSection | undefined = sections.find((candidate) => candidate.path === selected);
   const status = diff?.status;
-  const dirty = status ? status.dirty.length > 0 : false;
+  const isDirty = status ? status.dirty.length > 0 : false;
   const ahead = status?.ahead ?? 0;
 
   const commit = () => review.commit(message);
 
   const merge = () => {
-    if (!confirmMerge) {
+    if (!isConfirmingMerge) {
       setConfirmMerge(true);
       return;
     }
@@ -87,8 +87,8 @@ export function WorktreeReviewDialog() {
     <TerraDialog
       className="terra-review"
       open={target !== null}
-      onOpenChange={(open) => {
-        if (!open) close();
+      onOpenChange={(isOpen) => {
+        if (!isOpen) close();
       }}
       title={translate("review.title", { name: target?.label ?? "" })}
       description={
@@ -98,7 +98,7 @@ export function WorktreeReviewDialog() {
             {translate("review.branchLine", { branch: status.branch, base: status.base })}
             <span className="terra-review-stat">{translate("review.ahead", { count: status.ahead })}</span>
             {status.behind > 0 ? <span className="terra-review-stat">{translate("review.behind", { count: status.behind })}</span> : null}
-            {dirty ? <span className="terra-review-stat" data-tone="warn">{translate("review.dirty", { count: status.dirty.length })}</span> : null}
+            {isDirty ? <span className="terra-review-stat" data-tone="warn">{translate("review.dirty", { count: status.dirty.length })}</span> : null}
           </span>
         ) : (
           translate("review.loading")
@@ -135,7 +135,7 @@ export function WorktreeReviewDialog() {
         <div className="terra-review-diff" role="region" aria-label={translate("review.diff")}>
           {diff?.truncated ? <p className="terra-review-empty">{translate("review.truncated")}</p> : null}
           {section ? (
-            section.binary ? (
+            section.isBinary ? (
               <p className="terra-review-empty">{translate("review.binaryFile")}</p>
             ) : (
               <table>
@@ -165,12 +165,12 @@ export function WorktreeReviewDialog() {
         <p className="terra-review-notice">
           <a href={prUrl} target="_blank" rel="noreferrer">{prUrl}</a>
           <button type="button" className="terra-review-icon" onClick={() => void copyUrl()} aria-label={translate("review.copyUrl")} title={translate("review.copyUrl")}>
-            {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
+            {isCopied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
           </button>
         </p>
       ) : null}
 
-      {dirty ? (
+      {isDirty ? (
         <form
           className="terra-review-commit"
           onSubmit={(event) => {
@@ -191,7 +191,7 @@ export function WorktreeReviewDialog() {
         </form>
       ) : null}
 
-      {prOpen ? (
+      {isPrOpen ? (
         <div className="terra-review-pr">
           <input value={prTitle} onChange={(event) => setPrTitle(event.target.value)} aria-label={translate("review.prTitle")} placeholder={translate("review.prTitle")} maxLength={MAX_PR_TITLE_CHARS} />
           <textarea value={prBody} onChange={(event) => setPrBody(event.target.value)} aria-label={translate("review.prBody")} placeholder={translate("review.prBody")} rows={4} />
@@ -203,22 +203,22 @@ export function WorktreeReviewDialog() {
         <Button type="button" variant="ghost" onClick={close}>
           {translate("common.close")}
         </Button>
-        {prOpen ? (
+        {isPrOpen ? (
           <Button type="button" onClick={() => void openPr()} disabled={busy !== null || !prTitle.trim()}>
             <GitPullRequest size={14} aria-hidden="true" />
             {busy === "pr" ? translate("review.working") : translate("review.pushAndOpen")}
           </Button>
         ) : (
-          <Button type="button" onClick={() => setPrOpen(true)} disabled={busy !== null || dirty || ahead === 0}>
+          <Button type="button" onClick={() => setPrOpen(true)} disabled={busy !== null || isDirty || ahead === 0}>
             <GitPullRequest size={14} aria-hidden="true" />
             {translate("review.openPr")}
           </Button>
         )}
-        <Button type="button" variant="primary" onClick={merge} disabled={busy !== null || dirty || ahead === 0}>
+        <Button type="button" variant="primary" onClick={merge} disabled={busy !== null || isDirty || ahead === 0}>
           <GitMerge size={14} aria-hidden="true" />
           {busy === "merge"
             ? translate("review.working")
-            : confirmMerge
+            : isConfirmingMerge
               ? translate("review.confirmMerge", { base: status?.base ?? "" })
               : translate("review.merge", { base: status?.base ?? "" })}
         </Button>

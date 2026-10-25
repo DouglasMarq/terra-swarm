@@ -11,9 +11,9 @@ const SHELL_SHORTCUTS = {
 
 interface ShellShortcutHandlers {
   toggleSidebar: () => void;
-  dockOpen: boolean;
-  setDockOpen: (open: boolean) => void;
-  setCommandPaletteOpen: (open: boolean) => void;
+  isDockOpen: boolean;
+  setDockOpen: (isOpen: boolean) => void;
+  setCommandPaletteOpen: (isOpen: boolean) => void;
 }
 
 function shellShortcut(event: KeyboardEvent): "sidebar" | "inspector" | null {
@@ -44,7 +44,7 @@ export function shouldOpenCommandPaletteShortcut(event: KeyboardEvent): boolean 
   return (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
 }
 
-export function useShellShortcuts({ toggleSidebar, dockOpen, setDockOpen, setCommandPaletteOpen }: ShellShortcutHandlers) {
+export function useShellShortcuts({ toggleSidebar, isDockOpen, setDockOpen, setCommandPaletteOpen }: ShellShortcutHandlers) {
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       const shellKey = shellShortcut(event);
@@ -55,7 +55,7 @@ export function useShellShortcuts({ toggleSidebar, dockOpen, setDockOpen, setCom
       }
       if (shellKey === "inspector") {
         event.preventDefault();
-        setDockOpen(!dockOpen);
+        setDockOpen(!isDockOpen);
         return;
       }
       if (!shouldOpenCommandPaletteShortcut(event)) return;
@@ -64,5 +64,5 @@ export function useShellShortcuts({ toggleSidebar, dockOpen, setDockOpen, setCom
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [dockOpen, setDockOpen, toggleSidebar, setCommandPaletteOpen]);
+  }, [isDockOpen, setDockOpen, toggleSidebar, setCommandPaletteOpen]);
 }

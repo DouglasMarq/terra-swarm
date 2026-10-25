@@ -14,8 +14,8 @@ describe("isTerminalRunning", () => {
 
 describe("deriveAgentStatus", () => {
   it("lets the process state win", () => {
-    expect(deriveAgentStatus({ suspended: true, reported: "needs_input" })).toBe("suspended");
-    expect(deriveAgentStatus({ exited: true, notifications: 3 })).toBe("exited");
+    expect(deriveAgentStatus({ isSuspended: true, reported: "needs_input" })).toBe("suspended");
+    expect(deriveAgentStatus({ hasExited: true, notifications: 3 })).toBe("exited");
   });
 
   it("puts anything that needs a human first", () => {

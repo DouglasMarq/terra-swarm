@@ -29,7 +29,7 @@ export interface BuildNavigatorTreeOptions {
   /** Display labels per terminal id (task title, numbered kind, optional name). */
   agentLabels?: Readonly<Record<string, { primary: string; tag: string } | undefined>>;
   /** Put agents directly under their project, skipping container and pane levels. */
-  flatten?: boolean;
+  shouldFlatten?: boolean;
   /** State the agents reported through their hooks, by terminal id. */
   reported?: Readonly<Record<string, McpAgentState>>;
 }
@@ -62,8 +62,8 @@ function agentNodeStatus(
   const explicit = options.statuses?.agents?.[terminalId];
   if (explicit) return explicit;
   return deriveAgentStatus({
-    suspended: source.suspended,
-    exited: terminalId in (options.exited ?? {}),
+    isSuspended: source.suspended,
+    hasExited: terminalId in (options.exited ?? {}),
     notifications: notificationCount(options.notifications ?? {}, terminalId),
     contextUsed: options.contextUsage?.[terminalId],
     reported: options.reported?.[terminalId],
@@ -294,7 +294,7 @@ function makeGroupNode(group: WorkspaceGroup): NavigatorGroupNode {
     count: 0,
     source: group,
     projectIds: [],
-    suspended: group.suspended,
+    isSuspended: group.suspended,
   };
 }
 
@@ -424,9 +424,9 @@ function makeContainer(build: ProjectBuild, container: WorkspaceContainer): Navi
     projectId: workspace.id,
     containerId: container.id,
     paneIds: effectivePanes.map((pane) => pane.id),
-    visible: container.visible && !container.closed,
-    collapsed: container.collapsed,
-    fullscreen: container.fullscreen,
+    isVisible: container.visible && !container.closed,
+    isCollapsed: container.collapsed,
+    isFullscreen: container.fullscreen,
   };
 }
 
@@ -456,7 +456,7 @@ function makeProject(workspace: Workspace, groupId: string | null, options: Buil
   };
   const structuralChildren = build.hierarchy.containers.map((container) => makeContainer(build, container));
   const agents = projectAgents(build, structuralChildren);
-  const projectChildren: NavigatorNode[] = options.flatten
+  const projectChildren: NavigatorNode[] = options.shouldFlatten
     ? agents.map((agent) => ({ ...agent, parentId: projectId, depth: (groupId ? 1 : 0) + 1 }))
     : structuralChildren.length > 0 ? structuralChildren : agents;
   return {
@@ -471,7 +471,7 @@ function makeProject(workspace: Workspace, groupId: string | null, options: Buil
     source: workspace,
     workspaceId: workspace.id,
     terminalIds: agents.map((agent) => agent.terminalId),
-    visible: options.containerVisibility?.[workspace.id] !== false,
+    isVisible: options.containerVisibility?.[workspace.id] !== false,
   };
 }
 
@@ -563,9 +563,9 @@ export function filterNavigatorTree(tree: NavigatorTree, query: string): Navigat
   if (!needle) return tree;
   const filter = (node: NavigatorNode): NavigatorNode | null => {
     const children = node.children.map(filter).filter((child): child is NavigatorNode => Boolean(child));
-    const matches = normalizeSearchText(searchableText(node)).includes(needle);
-    if (!matches && children.length === 0) return null;
-    return cloneVisibleNode(node, matches ? node.children : children);
+    const isMatch = normalizeSearchText(searchableText(node)).includes(needle);
+    if (!isMatch && children.length === 0) return null;
+    return cloneVisibleNode(node, isMatch ? node.children : children);
   };
   return indexTree(tree.roots.map(filter).filter((node): node is NavigatorNode => Boolean(node)));
 }

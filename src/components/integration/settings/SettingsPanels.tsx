@@ -59,19 +59,19 @@ export interface SettingsPanelsProps {
   onFontSizeReset: () => void;
   gridCols: number;
   onGridLayoutChange: (columns: number) => void | Promise<void>;
-  reduceMotion: boolean;
-  onReduceMotionChange: (enabled: boolean) => void;
+  shouldReduceMotion: boolean;
+  onReduceMotionChange: (isEnabled: boolean) => void;
   flags: FeatureFlags;
-  onFeatureFlagChange: (id: FeatureFlagId, enabled: boolean) => void;
-  voiceEnabled: boolean;
-  onVoiceEnabledChange: (enabled: boolean) => void;
+  onFeatureFlagChange: (id: FeatureFlagId, isEnabled: boolean) => void;
+  isVoiceEnabled: boolean;
+  onVoiceEnabledChange: (isEnabled: boolean) => void;
   voiceLang: VoiceLanguage;
   onVoiceLangChange: (lang: VoiceLanguage) => void;
   voiceInputDevice: string | null;
   voiceInputDevices: readonly string[];
   onVoiceInputDeviceChange: (device: string) => void;
-  micAvailable: boolean | null;
-  micTesting: boolean;
+  isMicAvailable: boolean | null;
+  isMicTesting: boolean;
   onMicTestToggle: () => void;
   voiceModels: readonly VoiceModelInfo[];
   /** "error" when the model list could not be read; "loading" until it is. */
@@ -90,7 +90,7 @@ export interface SettingsPanelsProps {
   onImportSnapshot: () => void;
   appVersion: string;
   updateVersion: string | null;
-  updateInstalling: boolean;
+  isUpdateInstalling: boolean;
   updateCheckState: UpdateCheckState;
   onManualUpdateCheck: () => void;
   onInstallUpdate: () => void;
@@ -116,37 +116,37 @@ function PanelLead({ section }: { section: SettingsSectionDefinition }) {
 }
 
 function Toggle({
-  checked,
+  isChecked,
   label,
   onChange,
-  disabled = false,
+  isDisabled = false,
 }: {
-  checked: boolean;
+  isChecked: boolean;
   label: string;
-  onChange: (checked: boolean) => void;
-  disabled?: boolean;
+  onChange: (isChecked: boolean) => void;
+  isDisabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="switch"
-      aria-checked={checked}
+      aria-checked={isChecked}
       aria-label={label}
-      className={`${styles.toggle} ${checked ? styles.toggleOn : ""}`}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
+      className={`${styles.toggle} ${isChecked ? styles.toggleOn : ""}`}
+      disabled={isDisabled}
+      onClick={() => onChange(!isChecked)}
     >
       <span className={styles.toggleKnob} />
     </button>
   );
 }
 
-function MicLevelMeter({ active }: { active: boolean }) {
+function MicLevelMeter({ isActive }: { isActive: boolean }) {
   const translate = useT();
   const fillRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!active) return undefined;
+    if (!isActive) return undefined;
     const unlisten = onVoiceAudioLevel((level) => {
       const element = fillRef.current;
       if (!element) return;
@@ -155,7 +155,7 @@ function MicLevelMeter({ active }: { active: boolean }) {
     return () => {
       void unlisten.then((cleanup) => cleanup());
     };
-  }, [active]);
+  }, [isActive]);
 
   return (
     <div className={styles.micMeter} aria-label={translate("settingsPanels.micLevel")}>
@@ -197,16 +197,16 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
   const setFamily = usePreferencesStore((state) => state.setTerminalFontFamily);
   const [fonts, setFonts] = useState<SystemFont[] | null>(null);
   const [query, setQuery] = useState("");
-  const [monospaceOnly, setMonospaceOnly] = useState(false);
+  const [isMonospaceOnly, setMonospaceOnly] = useState(false);
   const selectedRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    let alive = true;
+    let isAlive = true;
     void loadSystemFonts().then((list) => {
-      if (alive) setFonts(list);
+      if (isAlive) setFonts(list);
     });
     return () => {
-      alive = false;
+      isAlive = false;
     };
   }, []);
 
@@ -214,21 +214,21 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
     if (fonts) selectedRef.current?.scrollIntoView?.({ block: "nearest" });
   }, [fonts]);
 
-  const shown = useMemo(() => filterFonts(fonts ?? [], query, monospaceOnly), [fonts, query, monospaceOnly]);
-  const missing = fonts !== null && family !== "" && !fonts.some((font) => font.name === family);
+  const shown = useMemo(() => filterFonts(fonts ?? [], query, isMonospaceOnly), [fonts, query, isMonospaceOnly]);
+  const isMissing = fonts !== null && family !== "" && !fonts.some((font) => font.name === family);
   const monoCount = fonts?.filter((font) => font.monospace).length ?? 0;
 
   const row = ({ name, label, isMonospace, note }: FontOptionRow) => {
-    const selected = family === name;
+    const isSelected = family === name;
     return (
       <button
         key={name || "__default"}
-        ref={selected ? selectedRef : undefined}
+        ref={isSelected ? selectedRef : undefined}
         type="button"
         role="option"
-        aria-selected={selected}
+        aria-selected={isSelected}
         className={styles.fontOption}
-        data-selected={selected}
+        data-selected={isSelected}
         onClick={() => setFamily(name)}
       >
         <span className={styles.fontOptionName} style={{ fontFamily: name ? terminalFontStack(name) : DEFAULT_TERMINAL_FONT_STACK }}>{label}</span>
@@ -259,16 +259,16 @@ function TerminalFontPicker({ fontSize }: { fontSize: number }) {
         <button
           type="button"
           className={styles.chip}
-          aria-pressed={monospaceOnly}
-          data-active={monospaceOnly}
-          onClick={() => setMonospaceOnly((value) => !value)}
+          aria-pressed={isMonospaceOnly}
+          data-active={isMonospaceOnly}
+          onClick={() => setMonospaceOnly((isCurrentlyMonospaceOnly) => !isCurrentlyMonospaceOnly)}
         >
           {translate("settingsPanels.fontMonoOnly")}
         </button>
       </div>
       <div className={styles.fontList} role="listbox" aria-label={translate("settingsPanels.fontFamily")}>
         {!query ? row({ name: "", label: translate("settingsPanels.fontDefault"), isMonospace: true }) : null}
-        {missing ? row({ name: family, label: family, isMonospace: false, note: translate("settingsPanels.fontMissing") }) : null}
+        {isMissing ? row({ name: family, label: family, isMonospace: false, note: translate("settingsPanels.fontMissing") }) : null}
         {shown.map((font) => row({ name: font.name, label: font.name, isMonospace: font.monospace }))}
         {fonts !== null && shown.length === 0 ? <div className={styles.fontEmpty}>{translate("settingsPanels.fontNoMatch")}</div> : null}
       </div>
@@ -293,7 +293,7 @@ function useNamesInUse(): string[] {
 /** Dictation goes to the project's orchestrator agent when one is running. */
 function VoiceToOrchestratorRow() {
   const translate = useT();
-  const enabled = usePreferencesStore((state) => state.voiceToOrchestrator);
+  const isEnabled = usePreferencesStore((state) => state.shouldSendVoiceToOrchestrator);
   const setEnabled = usePreferencesStore((state) => state.setVoiceToOrchestrator);
   return (
     <div className={styles.row}>
@@ -301,7 +301,7 @@ function VoiceToOrchestratorRow() {
         <span className={styles.label}>{translate("settingsPanels.voiceToOrchestrator")}</span>
         <span className={styles.rowHint}>{translate("settingsPanels.voiceToOrchestratorHint")}</span>
       </div>
-      <Toggle checked={enabled} label={translate("settingsPanels.voiceToOrchestrator")} onChange={setEnabled} />
+      <Toggle isChecked={isEnabled} label={translate("settingsPanels.voiceToOrchestrator")} onChange={setEnabled} />
     </div>
   );
 }
@@ -309,7 +309,7 @@ function VoiceToOrchestratorRow() {
 /** Native notifications and the app icon badge. */
 function SystemNotificationsCard() {
   const translate = useT();
-  const enabled = usePreferencesStore((state) => state.systemNotifications);
+  const isEnabled = usePreferencesStore((state) => state.isSystemNotificationsEnabled);
   const setEnabled = usePreferencesStore((state) => state.setSystemNotifications);
   return (
     <div className={styles.card}>
@@ -319,7 +319,7 @@ function SystemNotificationsCard() {
           <span className={styles.label}>{translate("settingsPanels.systemNotifications")}</span>
           <span className={styles.rowHint}>{translate("settingsPanels.systemNotificationsHint")}</span>
         </div>
-        <Toggle checked={enabled} label={translate("settingsPanels.systemNotifications")} onChange={setEnabled} />
+        <Toggle isChecked={isEnabled} label={translate("settingsPanels.systemNotifications")} onChange={setEnabled} />
       </div>
     </div>
   );
@@ -330,24 +330,24 @@ function AgentLaunchEditor({ agentId, label }: { agentId: string; label: string 
   const translate = useT();
   const saved = usePreferencesStore((state) => state.agentLaunch[agentId]);
   const setAgentLaunch = usePreferencesStore((state) => state.setAgentLaunch);
-  const [open, setOpen] = useState(false);
+  const [isOpen, setOpen] = useState(false);
   const [args, setArgs] = useState(saved?.args ?? "");
   const [env, setEnv] = useState(saved?.env ?? "");
   const invalid = parseEnvLines(env).invalid;
-  const configured = Boolean(saved?.args.trim() || saved?.env.trim());
+  const isConfigured = Boolean(saved?.args.trim() || saved?.env.trim());
   const save = () => setAgentLaunch(agentId, { args, env });
   return (
     <div className={styles.agentLaunch}>
       <button
         type="button"
         className={styles.agentLaunchToggle}
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        aria-expanded={isOpen}
+        onClick={() => setOpen(!isOpen)}
       >
         {translate("settingsPanels.launchOptions")}
-        {configured ? <span className={styles.agentLaunchBadge}>{translate("settingsPanels.launchConfigured")}</span> : null}
+        {isConfigured ? <span className={styles.agentLaunchBadge}>{translate("settingsPanels.launchConfigured")}</span> : null}
       </button>
-      {open ? (
+      {isOpen ? (
         <div className={styles.stack}>
           <label className={styles.fieldLabel}>
             {translate("settingsPanels.launchArgs")}
@@ -403,10 +403,10 @@ function McpCard() {
           <span className={styles.rowHint}>{translate("settingsPanels.mcpExposeHint")}</span>
         </div>
         <Toggle
-          checked={server ? server.available && server.enabled : true}
-          disabled={!server || !server.available}
+          isChecked={server ? server.available && server.enabled : true}
+          isDisabled={!server || !server.available}
           label={translate("settingsPanels.mcpExpose")}
-          onChange={(enabled) => void setEnabled(enabled)}
+          onChange={(isEnabled) => void setEnabled(isEnabled)}
         />
       </div>
       {server && !server.available ? (
@@ -436,7 +436,7 @@ function AgentNamesCard() {
   const prefs = usePreferencesStore();
   const inUse = useNamesInUse();
   const [draft, setDraft] = useState("");
-  const next = pickAgentName(inUse, prefs.agentNameList, { avoidSimilar: prefs.avoidSimilarNames, exhausted: prefs.namesExhausted });
+  const next = pickAgentName(inUse, prefs.agentNameList, { shouldAvoidSimilar: prefs.shouldAvoidSimilarNames, exhausted: prefs.namesExhausted });
   const usedCount = prefs.agentNameList.filter((name) => inUse.includes(name)).length;
 
   const addName = () => {
@@ -454,9 +454,9 @@ function AgentNamesCard() {
           <span className={styles.label}>{translate("settingsPanels.autoNames")}</span>
           <span className={styles.rowHint}>{translate("settingsPanels.autoNamesHint")}</span>
         </div>
-        <Toggle checked={prefs.agentAutoNames} label={translate("settingsPanels.autoNames")} onChange={prefs.setAgentAutoNames} />
+        <Toggle isChecked={prefs.shouldAutoNameAgents} label={translate("settingsPanels.autoNames")} onChange={prefs.setAgentAutoNames} />
       </div>
-      {prefs.agentAutoNames ? (
+      {prefs.shouldAutoNameAgents ? (
         <div className={styles.stack}>
           <label className={styles.fieldLabel}>
             {translate("settingsPanels.nameSet")}
@@ -468,9 +468,9 @@ function AgentNamesCard() {
           </label>
           <div className={styles.nameChips}>
             {prefs.agentNameList.map((name) => {
-              const used = inUse.includes(name);
+              const isUsed = inUse.includes(name);
               return (
-                <span className={styles.nameChip} data-used={used} key={name} title={name}>
+                <span className={styles.nameChip} data-used={isUsed} key={name} title={name}>
                   <span className={styles.nameChipDot} aria-hidden="true" />
                   {name}
                   <button
@@ -506,7 +506,7 @@ function AgentNamesCard() {
               <span className={styles.label}>{translate("settingsPanels.avoidSimilar")}</span>
               <span className={styles.rowHint}>{translate("settingsPanels.avoidSimilarHint")}</span>
             </div>
-            <Toggle checked={prefs.avoidSimilarNames} label={translate("settingsPanels.avoidSimilar")} onChange={prefs.setAvoidSimilarNames} />
+            <Toggle isChecked={prefs.shouldAvoidSimilarNames} label={translate("settingsPanels.avoidSimilar")} onChange={prefs.setAvoidSimilarNames} />
           </div>
           <label className={styles.fieldLabel}>
             {translate("settingsPanels.exhausted")}
@@ -562,7 +562,7 @@ function AgentPanel({
           <div className={styles.agentList}>
             {profiles.map((profile) => {
               const detected = agents.find((agent) => agent.id === profile.id);
-              const available = detected?.available ?? true;
+              const isAvailable = detected?.available ?? true;
               return (
                 <div className={styles.agentEntry} key={profile.id}>
                   <div className={styles.agentRow}>
@@ -570,11 +570,11 @@ function AgentPanel({
                       <span className={styles.agentName}>{profile.label}</span>
                       <span className={styles.agentCommand}>{profile.command || "shell"}</span>
                     </div>
-                    <span className={`${styles.status} ${available ? styles.available : styles.unavailable}`}>
-                      {available ? translate("settingsPanels.available") : translate("settingsPanels.notFound")}
+                    <span className={`${styles.status} ${isAvailable ? styles.available : styles.unavailable}`}>
+                      {isAvailable ? translate("settingsPanels.available") : translate("settingsPanels.notFound")}
                     </span>
                   </div>
-                  {profile.id !== "shell" && available ? <AgentLaunchEditor agentId={profile.id} label={profile.label} /> : null}
+                  {profile.id !== "shell" && isAvailable ? <AgentLaunchEditor agentId={profile.id} label={profile.label} /> : null}
                 </div>
               );
             })}
@@ -600,19 +600,19 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
     onFontSizeReset,
     gridCols,
     onGridLayoutChange,
-    reduceMotion,
+    shouldReduceMotion,
     onReduceMotionChange,
     flags,
     onFeatureFlagChange,
-    voiceEnabled,
+    isVoiceEnabled,
     onVoiceEnabledChange,
     voiceLang,
     onVoiceLangChange,
     voiceInputDevice,
     voiceInputDevices,
     onVoiceInputDeviceChange,
-    micAvailable,
-    micTesting,
+    isMicAvailable,
+    isMicTesting,
     onMicTestToggle,
     voiceModels,
     voiceModelsStatus = "ready",
@@ -630,7 +630,7 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
     onImportSnapshot,
     appVersion,
     updateVersion,
-    updateInstalling,
+    isUpdateInstalling,
     updateCheckState,
     onManualUpdateCheck,
     onInstallUpdate,
@@ -652,7 +652,7 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
                 <span className={styles.label}>{translate("settingsPanels.reduceMotion")}</span>
                 <span className={styles.rowHint}>{translate("settingsPanels.reduceMotionHint")}</span>
               </div>
-              <Toggle checked={reduceMotion} label={translate("settingsPanels.reduceMotion")} onChange={onReduceMotionChange} />
+              <Toggle isChecked={shouldReduceMotion} label={translate("settingsPanels.reduceMotion")} onChange={onReduceMotionChange} />
             </div>
           </div>
           <div className={styles.card}>
@@ -665,7 +665,7 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
                     <span className={styles.label}>{translate(`settingsPanels.flags.${id}.label`)}</span>
                     <span className={styles.rowHint}>{translate(`settingsPanels.flags.${id}.description`)}</span>
                   </div>
-                  <Toggle checked={flags[id]} label={translate(`settingsPanels.flags.${id}.label`)} onChange={(enabled) => onFeatureFlagChange(id, enabled)} />
+                  <Toggle isChecked={flags[id]} label={translate(`settingsPanels.flags.${id}.label`)} onChange={(isEnabled) => onFeatureFlagChange(id, isEnabled)} />
                 </div>
               ))}
             </div>
@@ -736,10 +736,10 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
                 <span className={styles.label}>{translate("settingsPanels.voiceEnable")}</span>
                 <span className={styles.rowHint}>{translate("settingsPanels.voiceEnableHint")}</span>
               </div>
-              <Toggle checked={voiceEnabled} label={translate("settingsPanels.voiceEnableLabel")} disabled={micAvailable === false && !voiceEnabled} onChange={onVoiceEnabledChange} />
+              <Toggle isChecked={isVoiceEnabled} label={translate("settingsPanels.voiceEnableLabel")} isDisabled={isMicAvailable === false && !isVoiceEnabled} onChange={onVoiceEnabledChange} />
             </div>
-            {micAvailable === false && !voiceEnabled ? <p className={styles.hint}>{translate("settingsPanels.noMic")}</p> : null}
-            {voiceEnabled ? (
+            {isMicAvailable === false && !isVoiceEnabled ? <p className={styles.hint}>{translate("settingsPanels.noMic")}</p> : null}
+            {isVoiceEnabled ? (
               <>
                 <label className={styles.fieldLabel}>
                   {translate("settingsPanels.voiceLanguage")}
@@ -761,11 +761,11 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
                     <span className={styles.rowHint}>{translate("settingsPanels.micTestHint")}</span>
                   </div>
                   <div className={styles.micTest}>
-                    <MicLevelMeter active={micTesting} />
-                    <button className={styles.chip} onClick={onMicTestToggle}>{micTesting ? translate("settingsPanels.stop") : translate("settingsPanels.test")}</button>
+                    <MicLevelMeter isActive={isMicTesting} />
+                    <button className={styles.chip} onClick={onMicTestToggle}>{isMicTesting ? translate("settingsPanels.stop") : translate("settingsPanels.test")}</button>
                   </div>
                 </div>
-                {micTesting ? <p className={styles.hint}>{translate("settingsPanels.micTestBody")}</p> : null}
+                {isMicTesting ? <p className={styles.hint}>{translate("settingsPanels.micTestBody")}</p> : null}
                 <VoiceToOrchestratorRow />
               </>
             ) : null}
@@ -836,7 +836,7 @@ export function SettingsSectionPanel({ section, ...props }: SettingsPanelsProps)
           </div>
           <div className={styles.card}>
             <span className={styles.cardTitle}>{translate("settingsPanels.updatesTitle")}</span>
-            {updateVersion ? <div className={styles.row}><span className={styles.label}>{translate("settingsPanels.updateAvailable", { version: updateVersion })}</span><button className={styles.primary} disabled={updateInstalling} onClick={onInstallUpdate}>{updateInstalling ? translate("settingsPanels.installing") : translate("settingsPanels.updateNow")}</button></div> : <div className={styles.row}><span className={styles.status}>{updateCheckState === "checking" ? translate("settingsPanels.checking") : updateCheckState === "uptodate" ? translate("settingsPanels.upToDate") : updateCheckState === "error" ? translate("settingsPanels.checkFailed") : translate("settingsPanels.checkHourly")}</span><button className={styles.chip} disabled={updateCheckState === "checking"} onClick={onManualUpdateCheck}>{translate("settingsPanels.checkNow")}</button></div>}
+            {updateVersion ? <div className={styles.row}><span className={styles.label}>{translate("settingsPanels.updateAvailable", { version: updateVersion })}</span><button className={styles.primary} disabled={isUpdateInstalling} onClick={onInstallUpdate}>{isUpdateInstalling ? translate("settingsPanels.installing") : translate("settingsPanels.updateNow")}</button></div> : <div className={styles.row}><span className={styles.status}>{updateCheckState === "checking" ? translate("settingsPanels.checking") : updateCheckState === "uptodate" ? translate("settingsPanels.upToDate") : updateCheckState === "error" ? translate("settingsPanels.checkFailed") : translate("settingsPanels.checkHourly")}</span><button className={styles.chip} disabled={updateCheckState === "checking"} onClick={onManualUpdateCheck}>{translate("settingsPanels.checkNow")}</button></div>}
           </div>
         </div>
       )}

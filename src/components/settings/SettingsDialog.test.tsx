@@ -14,7 +14,7 @@ describe("SettingsDialog", () => {
       <SettingsDialog
         onActiveSectionChange={onActiveSectionChange}
         onOpenChange={vi.fn()}
-        open
+        isOpen
         slots={{
           voice: ({ section }) => <p>Voice settings for {section.label}</p>,
         }}
@@ -29,7 +29,7 @@ describe("SettingsDialog", () => {
 
   it("filters categories through the accessible settings search", async () => {
     const user = userEvent.setup();
-    render(<SettingsDialog onOpenChange={vi.fn()} open />);
+    render(<SettingsDialog onOpenChange={vi.fn()} isOpen />);
 
     const search = screen.getByRole("searchbox", { name: "Buscar configurações" });
     await user.type(search, "voz");
@@ -39,7 +39,7 @@ describe("SettingsDialog", () => {
   });
 
   it("keeps Ctrl+K inside settings and focuses the search", () => {
-    render(<SettingsDialog onOpenChange={vi.fn()} open />);
+    render(<SettingsDialog onOpenChange={vi.fn()} isOpen />);
 
     const search = screen.getByRole("searchbox", { name: "Buscar configurações" });
     screen.getByRole("tab", { name: "Voz" }).focus();

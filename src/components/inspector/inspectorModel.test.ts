@@ -111,7 +111,7 @@ describe("resolveInspectorTarget", () => {
       cwd: "/work/terra",
       state: "ativo",
       contextUsage: 42,
-      detached: false,
+      isDetached: false,
     }));
   });
 

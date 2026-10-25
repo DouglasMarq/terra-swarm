@@ -153,7 +153,7 @@ function legacyWorkspaceLayout(rawWorkspace: RecordLike, layout: WorkspaceLayout
 }
 
 function legacyContainer(rawContainer: RecordLike, containerId: string, owner: ContainerOwner): WorkspaceContainer {
-  const visible = rawContainer.visible !== false && rawContainer.closed !== true;
+  const isVisible = rawContainer.visible !== false && rawContainer.closed !== true;
   return {
     id: containerId,
     projectId: owner.projectId,
@@ -162,9 +162,9 @@ function legacyContainer(rawContainer: RecordLike, containerId: string, owner: C
     activePaneId: null,
     internalLayout: readString(rawContainer.internalLayout) || undefined,
     size: readFiniteNumber(rawContainer.size) ?? undefined,
-    visible,
+    visible: isVisible,
     collapsed: Boolean(rawContainer.collapsed),
-    closed: !visible,
+    closed: !isVisible,
     fullscreen: Boolean(rawContainer.fullscreen),
   };
 }

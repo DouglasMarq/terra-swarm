@@ -14,8 +14,8 @@ describe("planTeam", () => {
       defaultAgent: null,
       canIsolate: true,
     });
-    expect(plan.blocked).toBe(false);
-    expect(plan.members.map((member) => `${member.role}:${member.agent}:${member.worktree}`)).toEqual([
+    expect(plan.isBlocked).toBe(false);
+    expect(plan.members.map((member) => `${member.role}:${member.agent}:${member.shouldUseWorktree}`)).toEqual([
       "orchestrator:claude:false",
       "executor:claude:true",
       "executor:codex:true",
@@ -34,11 +34,11 @@ describe("planTeam", () => {
       defaultAgent: "kimi",
       canIsolate: false,
     });
-    expect(plan.members[2]).toEqual({ role: "executor", agent: "kimi", worktree: false, substituted: true });
-    expect(plan.members.every((member) => !member.worktree)).toBe(true);
+    expect(plan.members[2]).toEqual({ role: "executor", agent: "kimi", shouldUseWorktree: false, isSubstituted: true });
+    expect(plan.members.every((member) => !member.shouldUseWorktree)).toBe(true);
   });
 
   it("is blocked when no agent is installed", () => {
-    expect(planTeam(feature, { agents: [{ id: "shell", label: "Shell", available: true }], defaultAgent: null, canIsolate: true }).blocked).toBe(true);
+    expect(planTeam(feature, { agents: [{ id: "shell", label: "Shell", available: true }], defaultAgent: null, canIsolate: true }).isBlocked).toBe(true);
   });
 });

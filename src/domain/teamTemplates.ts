@@ -5,7 +5,7 @@ export interface TeamMember {
   /** Preferred agent profile; another available one stands in when it is missing. */
   agent: string;
   /** Work in an isolated git worktree (only in git projects). */
-  worktree?: boolean;
+  shouldUseWorktree?: boolean;
 }
 
 export interface TeamTemplate {
@@ -19,17 +19,17 @@ export const TEAM_TEMPLATES: readonly TeamTemplate[] = [
     id: "feature",
     members: [
       { role: "orchestrator", agent: "claude" },
-      { role: "executor", agent: "claude", worktree: true },
-      { role: "executor", agent: "codex", worktree: true },
+      { role: "executor", agent: "claude", shouldUseWorktree: true },
+      { role: "executor", agent: "codex", shouldUseWorktree: true },
       { role: "reviewer", agent: "claude" },
-      { role: "tester", agent: "claude", worktree: true },
+      { role: "tester", agent: "claude", shouldUseWorktree: true },
     ],
   },
   {
     id: "pair",
     members: [
       { role: "orchestrator", agent: "claude" },
-      { role: "executor", agent: "claude", worktree: true },
+      { role: "executor", agent: "claude", shouldUseWorktree: true },
     ],
   },
   {
@@ -44,15 +44,15 @@ export const TEAM_TEMPLATES: readonly TeamTemplate[] = [
 export interface PlannedMember {
   role: AgentRole;
   agent: string;
-  worktree: boolean;
+  shouldUseWorktree: boolean;
   /** The preferred agent was not installed, so `agent` stands in. */
-  substituted: boolean;
+  isSubstituted: boolean;
 }
 
 export interface TeamPlan {
   members: PlannedMember[];
   /** Nothing usable is installed: the team cannot start. */
-  blocked: boolean;
+  isBlocked: boolean;
 }
 
 /**
@@ -70,15 +70,15 @@ export function planTeam(template: TeamTemplate, roster: TeamRoster): TeamPlan {
   const available = agents.filter((agent) => agent.available && agent.id !== "shell");
   const has = (id: string | null): id is string => Boolean(id && available.some((agent) => agent.id === id));
   const fallback = has(defaultAgent) ? defaultAgent : available[0]?.id ?? null;
-  if (!fallback) return { members: [], blocked: true };
+  if (!fallback) return { members: [], isBlocked: true };
   const members = template.members.map((member) => {
-    const installed = has(member.agent);
+    const isInstalled = has(member.agent);
     return {
       role: member.role,
-      agent: installed ? member.agent : fallback,
-      worktree: Boolean(member.worktree && canIsolate),
-      substituted: !installed,
+      agent: isInstalled ? member.agent : fallback,
+      shouldUseWorktree: Boolean(member.shouldUseWorktree && canIsolate),
+      isSubstituted: !isInstalled,
     };
   });
-  return { members, blocked: false };
+  return { members, isBlocked: false };
 }

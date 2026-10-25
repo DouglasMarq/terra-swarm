@@ -18,8 +18,8 @@ interface Props {
   /** Hides this queue without mutating it. It can be reopened from ⌘K. */
   onDefer: () => void;
   /** Resume every saved session on startup without asking. */
-  autoResume?: boolean;
-  onAutoResumeChange?: (enabled: boolean) => void;
+  shouldAutoResume?: boolean;
+  onAutoResumeChange?: (isEnabled: boolean) => void;
 }
 
 interface ResumeGroup {
@@ -51,19 +51,19 @@ export function ResumeDialog({
   onResume,
   onResumeAll,
   savedAt,
-  autoResume = false,
+  shouldAutoResume = false,
   onAutoResumeChange,
 }: Props) {
   const translate = useT();
   const groups = useMemo(() => groupByProject(items), [items]);
   const [unchecked, setUnchecked] = useState<ReadonlySet<string>>(new Set());
-  const [confirmDismissAll, setConfirmDismissAll] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [isConfirmingDismissAll, setConfirmDismissAll] = useState(false);
+  const [isBusy, setBusy] = useState(false);
   const selected = items.filter((item) => !unchecked.has(item.terminalId));
 
-  const toggle = (ids: readonly string[], checked: boolean) => setUnchecked((current) => {
+  const toggle = (ids: readonly string[], isChecked: boolean) => setUnchecked((current) => {
     const next = new Set(current);
-    ids.forEach((id) => (checked ? next.delete(id) : next.add(id)));
+    ids.forEach((id) => (isChecked ? next.delete(id) : next.add(id)));
     return next;
   });
 
@@ -93,8 +93,8 @@ export function ResumeDialog({
         description={savedLabel
           ? translate("resume.descriptionAt", { count: items.length, when: savedLabel })
           : translate("resume.description", { count: items.length })}
-        onOpenChange={(open) => {
-          if (!open) onDefer();
+        onOpenChange={(isOpen) => {
+          if (!isOpen) onDefer();
         }}
         open={items.length > 0}
         title={
@@ -142,7 +142,7 @@ export function ResumeDialog({
           </div>
 
           <div className={styles.resumeFooter}>
-            <button type="button" className="terra-button terra-button-primary" disabled={busy || selected.length === 0} onClick={() => void resumeSelected()}>
+            <button type="button" className="terra-button terra-button-primary" disabled={isBusy || selected.length === 0} onClick={() => void resumeSelected()}>
               {translate("resume.resumeSelected", { count: selected.length })}
             </button>
             <button type="button" className="terra-button" onClick={onDefer}>
@@ -155,7 +155,7 @@ export function ResumeDialog({
           </div>
           {onAutoResumeChange ? (
             <label className={styles.resumeAuto}>
-              <input type="checkbox" checked={autoResume} onChange={(event) => onAutoResumeChange(event.target.checked)} />
+              <input type="checkbox" checked={shouldAutoResume} onChange={(event) => onAutoResumeChange(event.target.checked)} />
               {translate("resume.always")}
             </label>
           ) : null}
@@ -171,10 +171,10 @@ export function ResumeDialog({
           await onDismissAll();
           setConfirmDismissAll(false);
         }}
-        onOpenChange={(open) => {
-          if (!open) setConfirmDismissAll(false);
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setConfirmDismissAll(false);
         }}
-        open={confirmDismissAll}
+        isOpen={isConfirmingDismissAll}
         title={translate("resume.discardTitle")}
       />
     </>

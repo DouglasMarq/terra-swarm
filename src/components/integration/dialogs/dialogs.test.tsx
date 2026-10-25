@@ -37,7 +37,7 @@ describe("integration dialogs", () => {
         onNameChange={vi.fn()}
         onOpenChange={vi.fn()}
         onSubmit={onSubmit}
-        open
+        isOpen
       />,
     );
 
@@ -58,8 +58,8 @@ describe("integration dialogs", () => {
         onChoose={onChoose}
         onOpenChange={vi.fn()}
         onSaveDefaultChange={onSaveDefaultChange}
-        open
-        saveDefault={false}
+        isOpen
+        shouldSaveDefault={false}
       />,
     );
 
@@ -78,8 +78,8 @@ describe("integration dialogs", () => {
         onChoose={vi.fn()}
         onOpenChange={vi.fn()}
         onSaveDefaultChange={vi.fn()}
-        open
-        saveDefault
+        isOpen
+        shouldSaveDefault
       />,
     );
 
@@ -97,7 +97,7 @@ describe("integration dialogs", () => {
         onChange={vi.fn()}
         onOpenChange={vi.fn()}
         onSubmit={onSubmit}
-        open
+        isOpen
         value="Agents"
       />,
     );

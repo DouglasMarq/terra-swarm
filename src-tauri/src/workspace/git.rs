@@ -19,12 +19,6 @@ pub struct WorkspaceGitStatus {
     pub conflicted: Vec<String>,
 }
 
-pub(crate) fn add_unique(values: &mut Vec<String>, value: String) {
-    if !values.iter().any(|existing| existing == &value) {
-        values.push(value);
-    }
-}
-
 pub(crate) fn parse_git_status(output: &[u8]) -> Result<WorkspaceGitStatus, String> {
     let mut records = output.split(|byte| *byte == 0);
     let header = records

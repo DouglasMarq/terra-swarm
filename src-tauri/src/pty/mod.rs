@@ -24,14 +24,14 @@ use shell::{shell_flavor, ShellFlavor};
 
 use crate::agent_catalog;
 use crate::ipc_error::{IpcError, IpcErrorCode};
-use crate::mcp::connect::McpLaunch;
+use crate::mcp::connect::{LaunchRequest, McpLaunch};
 use crate::mcp::launch::Quoting;
 use crate::mcp::{McpHub, McpLease};
 use crate::roles::Role;
 use crate::scrollback::ScrollbackStore;
 use crate::sync::LockExt;
-use crate::workspace::{TerminalMeta, WorkspaceStore};
-use crate::worktree::WorktreeInfo;
+use crate::workspace::{change_and_save, TerminalMeta, WorkspaceStore};
+use crate::worktree::{NewWorktree, WorktreeInfo};
 
 static NEXT_TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
 static SPAWN_SEQ: AtomicU64 = AtomicU64::new(1);
@@ -431,20 +431,22 @@ fn record_terminal(
     workspace_id: &str,
     meta: &TerminalMeta,
 ) -> Result<(), String> {
-    let added = registries
-        .store
-        .lock_or_recover()
-        .add_terminal(workspace_id, meta.clone());
-    if added {
-        return Ok(());
+    let recorded = change_and_save(registries.store, |store| {
+        if !store.can_add_terminal(workspace_id, &meta.id) {
+            return Err(format!(
+                "workspace {} unavailable or terminal {} belongs to another workspace",
+                workspace_id, meta.id
+            ));
+        }
+        store.record_terminal(workspace_id, meta.clone());
+        Ok(())
+    });
+    if recorded.is_err() {
+        // The workspace was closed while we were spawning; don't leak the
+        // process or leave it running untracked.
+        kill_terminal_inner(registries.manager, &meta.id);
     }
-    // The workspace was closed while we were spawning; don't leak the
-    // process or leave it running untracked.
-    kill_terminal_inner(registries.manager, &meta.id);
-    Err(format!(
-        "workspace {} unavailable or terminal {} belongs to another workspace",
-        workspace_id, meta.id
-    ))
+    recorded
 }
 
 fn workspace_cwd(store: &Mutex<WorkspaceStore>, workspace_id: &str) -> Result<String, String> {
@@ -534,12 +536,12 @@ fn new_worktree<R: Runtime>(
             .map_err(|e| e.to_string())?
             .join("worktrees"),
     };
-    crate::worktree::create(
-        std::path::Path::new(target.repo_cwd),
-        &root,
-        target.workspace_id,
-        target.terminal_id,
-    )
+    crate::worktree::create(NewWorktree {
+        project_cwd: std::path::Path::new(target.repo_cwd),
+        root: &root,
+        workspace_id: target.workspace_id,
+        terminal_id: target.terminal_id,
+    })
 }
 
 fn spawn_process<'a, R: Runtime>(
@@ -557,13 +559,13 @@ fn spawn_process<'a, R: Runtime>(
     // Issued only after the duplicate checks above: a fresh token for an id
     // that is already running would log the live terminal out.
     let mut mcp_launch = app.try_state::<Arc<McpHub>>().and_then(|hub| {
-        hub.launch(
-            launch.id,
-            launch.workspace_id,
-            &launch_command,
-            launch.role,
-            quoting_for(&shell),
-        )
+        hub.launch(LaunchRequest {
+            terminal_id: launch.id,
+            workspace_id: launch.workspace_id,
+            command: &launch_command,
+            role: launch.role,
+            quoting: quoting_for(&shell),
+        })
     });
     // Only the spawned process sees the MCP flags; `command` (persisted in
     // the workspace store) stays as the user typed it.
@@ -1066,7 +1068,9 @@ pub fn kill_terminal(app: AppHandle, id: String) -> Result<(), String> {
         eprintln!("failed to remove durable scrollback for {}: {}", id, error);
     }
     let store = app.state::<Mutex<WorkspaceStore>>();
-    store.lock_or_recover().remove_terminal(&id);
+    let mut workspaces = store.lock_or_recover();
+    workspaces.forget_terminal(&id);
+    workspaces.save();
     Ok(())
 }
 

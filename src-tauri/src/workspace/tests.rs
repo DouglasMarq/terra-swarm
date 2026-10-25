@@ -443,7 +443,7 @@ fn deduplicates_terminal_ids_across_workspaces_without_touching_scrollback() {
 
     // A destructive terminal removal now has exactly one owner to act
     // on; the quarantined duplicate cannot make a second workspace match.
-    store.remove_terminal("shared-terminal");
+    store.forget_terminal("shared-terminal");
     assert!(store
         .workspaces
         .iter()

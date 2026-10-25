@@ -7,6 +7,9 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{AppHandle, Emitter, Runtime};
 
+use crate::collections::{add_unique, reorder_by_ids};
+use crate::text::trim_in_place;
+
 mod commands;
 mod editor;
 mod files;
@@ -56,18 +59,6 @@ const MAX_LAYOUT_TRACKS: u32 = 128;
 /// mutation.
 pub(crate) fn emit_workspaces_changed<R: Runtime>(app: &AppHandle<R>) {
     let _ = app.emit("workspaces-changed", ());
-}
-
-fn reorder_by_ids<T>(items: Vec<T>, order: &[String], id_of: impl Fn(&T) -> &str) -> Vec<T> {
-    let mut remaining = items;
-    let mut sorted = Vec::with_capacity(remaining.len());
-    for id in order {
-        if let Some(position) = remaining.iter().position(|item| id_of(item) == id) {
-            sorted.push(remaining.remove(position));
-        }
-    }
-    sorted.extend(remaining);
-    sorted
 }
 
 pub fn bump_next_id(id: &str) {

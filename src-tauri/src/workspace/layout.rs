@@ -76,7 +76,7 @@ impl WorkspaceStore {
         remove_displaced(workspace, &placement);
         let pane_index = ensure_terminal_pane(workspace, &placement.pane_id, &command);
         attach_to_container(workspace, pane_index)?;
-        place_tab(&mut workspace.panes[pane_index], tab, &command);
+        place_tab(&mut workspace.panes[pane_index], tab);
         Ok(())
     }
 
@@ -400,21 +400,9 @@ fn pane_container_id(workspace: &Workspace, pane_index: usize) -> String {
         .unwrap_or_else(|| WorkspaceStore::default_container_id(&workspace.id))
 }
 
-fn place_tab(pane: &mut Pane, tab: TerminalTab, command: &str) {
+fn place_tab(pane: &mut Pane, tab: TerminalTab) {
     pane.active_tab_id = Some(tab.id.clone());
-    let Some(existing) = pane.tabs.iter_mut().find(|existing| existing.id == tab.id) else {
-        pane.tabs.push(tab);
-        return;
-    };
-    if existing.kind.trim().is_empty() {
-        existing.kind = default_tab_kind();
-    }
-    if existing.name.trim().is_empty() {
-        existing.name = command.to_string();
-    }
-    existing.cwd = tab.cwd;
-    existing.pty_id = tab.pty_id;
-    existing.suspended = tab.suspended;
+    pane.tabs.push(tab);
 }
 
 fn resolve_container(workspace: &mut Workspace, container_id: &str) -> Result<usize, String> {

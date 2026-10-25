@@ -8,7 +8,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
@@ -322,16 +322,26 @@ pub(crate) fn next_save_seq() -> u64 {
 pub(crate) fn save_channel() -> &'static Sender<SaveRequest> {
     SAVE_TX.get_or_init(|| {
         let (tx, rx) = channel::<SaveRequest>();
-        std::thread::spawn(move || {
-            while let Ok(mut req) = rx.recv() {
-                while let Ok(newer) = rx.recv_timeout(SAVE_DEBOUNCE) {
-                    req = newer;
-                }
-                write_guarded(&req.path, &req.json, req.seq);
-            }
-        });
+        std::thread::spawn(move || write_coalesced_saves(rx));
         tx
     })
+}
+
+fn write_coalesced_saves(rx: Receiver<SaveRequest>) {
+    while let Some(burst) = next_save_burst(&rx) {
+        for request in burst.into_values() {
+            write_guarded(&request.path, &request.json, request.seq);
+        }
+    }
+}
+
+fn next_save_burst(rx: &Receiver<SaveRequest>) -> Option<HashMap<PathBuf, SaveRequest>> {
+    let first = rx.recv().ok()?;
+    let mut burst = HashMap::from([(first.path.clone(), first)]);
+    while let Ok(newer) = rx.recv_timeout(SAVE_DEBOUNCE) {
+        burst.insert(newer.path.clone(), newer);
+    }
+    Some(burst)
 }
 
 /// Never silently wipe the user's data: keep an unusable store around for
@@ -504,5 +514,38 @@ impl WorkspaceStore {
             }
             Err(e) => eprintln!("failed to serialize workspaces on exit: {}", e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn save_request(path: &Path, json: &str) -> SaveRequest {
+        SaveRequest {
+            path: path.to_path_buf(),
+            json: json.to_string(),
+            seq: next_save_seq(),
+        }
+    }
+
+    #[test]
+    fn given_saves_for_two_paths_in_one_burst_when_the_writer_flushes_then_each_path_gets_its_latest_save(
+    ) {
+        let directory =
+            std::env::temp_dir().join(format!("terra-swarm-save-burst-{}", std::process::id()));
+        let first = directory.join("first.json");
+        let second = directory.join("second.json");
+        let (sender, receiver) = channel();
+        sender.send(save_request(&first, "first-old")).unwrap();
+        sender.send(save_request(&second, "second")).unwrap();
+        sender.send(save_request(&first, "first-new")).unwrap();
+        drop(sender);
+
+        write_coalesced_saves(receiver);
+
+        assert_eq!(std::fs::read_to_string(&first).unwrap(), "first-new");
+        assert_eq!(std::fs::read_to_string(&second).unwrap(), "second");
+        let _ = std::fs::remove_dir_all(directory);
     }
 }

@@ -528,7 +528,7 @@ fn f32_to_i8(sample: f32) -> i8 {
 }
 
 fn f32_to_u8(sample: f32) -> u8 {
-    // .round() so digital silence lands exactly on the format'sample equilibrium
+    // .round() so digital silence lands exactly on the format's equilibrium
     // instead of 1 LSB below it (a tiny DC offset).
     // A float-to-int `as` saturates, clipping out-of-range samples.
     (sample * (f32::from(u8::MAX) / 2.0) + f32::from(u8::MAX) / 2.0).round() as u8

@@ -31,7 +31,7 @@ use crate::roles::Role;
 use crate::scrollback::ScrollbackStore;
 use crate::sync::LockExt;
 use crate::workspace::{TerminalMeta, WorkspaceStore};
-use crate::worktree::WorktreeInfo;
+use crate::worktree::{NewWorktree, WorktreeInfo};
 
 static NEXT_TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
 static SPAWN_SEQ: AtomicU64 = AtomicU64::new(1);
@@ -534,12 +534,12 @@ fn new_worktree<R: Runtime>(
             .map_err(|e| e.to_string())?
             .join("worktrees"),
     };
-    crate::worktree::create(
-        std::path::Path::new(target.repo_cwd),
-        &root,
-        target.workspace_id,
-        target.terminal_id,
-    )
+    crate::worktree::create(NewWorktree {
+        project_cwd: std::path::Path::new(target.repo_cwd),
+        root: &root,
+        workspace_id: target.workspace_id,
+        terminal_id: target.terminal_id,
+    })
 }
 
 fn spawn_process<'a, R: Runtime>(

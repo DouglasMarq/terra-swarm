@@ -288,14 +288,20 @@ pub fn open_pull_request(info: &WorktreeInfo, title: &str, body: &str) -> Result
 #[cfg(test)]
 mod tests {
     use super::super::test_repo::{cleanup, init};
-    use super::super::{create, git};
+    use super::super::{create, git, NewWorktree};
     use super::*;
 
     #[test]
     fn diff_covers_commits_edits_and_new_files() {
         let repo = init("diff");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         let dir = Path::new(&info.path);
         std::fs::write(dir.join("app/readme.txt"), "hello\nworld\n").unwrap();
         git(dir, &["commit", "-qam", "edit"]).unwrap();
@@ -335,7 +341,13 @@ mod tests {
     ) {
         let repo = init("untracked-cap");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         let dir = Path::new(&info.path);
         for file_number in 0..=MAX_UNTRACKED_FILES {
             std::fs::write(dir.join(format!("new-{file_number:04}.txt")), "x\n").unwrap();
@@ -352,7 +364,13 @@ mod tests {
     fn commit_then_merge_into_the_base() {
         let repo = init("merge");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-2").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-2",
+        })
+        .unwrap();
         assert!(commit(&info, "nothing")
             .unwrap_err()
             .contains("nothing to commit"));
@@ -378,7 +396,13 @@ mod tests {
     fn a_conflicting_merge_leaves_the_base_untouched() {
         let repo = init("conflict");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-3").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-3",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("app/readme.txt"), "agent\n").unwrap();
         commit(&info, "agent edit").unwrap();
         std::fs::write(repo.join("app/readme.txt"), "human\n").unwrap();
@@ -395,7 +419,13 @@ mod tests {
     fn given_a_worktree_whose_status_fails_refuses_to_merge_or_open_a_pull_request() {
         let repo = init("guard");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("feature.txt"), "done\n").unwrap();
         commit(&info, "Add the feature").unwrap();
         std::fs::write(Path::new(&info.path).join("draft.txt"), "unsaved\n").unwrap();
@@ -414,7 +444,13 @@ mod tests {
     fn given_a_main_checkout_on_a_detached_head_refuses_to_merge() {
         let repo = init("detached");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("feature.txt"), "done\n").unwrap();
         commit(&info, "Add the feature").unwrap();
         git(&repo, &["checkout", "-q", "--detach"]).unwrap();
@@ -428,7 +464,13 @@ mod tests {
     fn given_a_merge_that_cannot_start_reports_that_nothing_changed() {
         let repo = init("blocked");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("feature.txt"), "agent\n").unwrap();
         commit(&info, "Add the feature").unwrap();
         std::fs::write(repo.join("feature.txt"), "human, untracked\n").unwrap();
@@ -445,7 +487,13 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let repo = init("abort");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("feature.txt"), "done\n").unwrap();
         commit(&info, "Add the feature").unwrap();
         let hook = repo.join(".git/hooks/commit-msg");
@@ -462,7 +510,13 @@ mod tests {
     fn given_an_option_like_branch_or_base_refuses_to_review_it() {
         let repo = init("option");
         let root = repo.with_extension("worktrees");
-        let info = create(&repo, &root, "ws", "t-1").unwrap();
+        let info = create(NewWorktree {
+            project_cwd: &repo,
+            root: &root,
+            workspace_id: "ws",
+            terminal_id: "t-1",
+        })
+        .unwrap();
         std::fs::write(Path::new(&info.path).join("feature.txt"), "done\n").unwrap();
         commit(&info, "Add the feature").unwrap();
         let before = git(&repo, &["rev-parse", "HEAD"]).unwrap();

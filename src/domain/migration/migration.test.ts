@@ -319,6 +319,20 @@ describe("mergeWorkspaceSnapshot", () => {
     expect(refreshed.containers[0]).toMatchObject({ id: containerId, visible: false, closed: true });
   });
 
+  it("Given a previous snapshot that placed the project in another group, when refreshing, then the project follows the backend group", () => {
+    const first = mergeWorkspaceSnapshot(sharedPaneWorkspaces, null);
+    const group = { name: "Group", projectIds: [], parentGroupId: null, collapsed: false, suspended: false, layout: first.layout };
+    const previous = {
+      ...first,
+      groups: [{ ...group, id: "group-agents" }, { ...group, id: "group-other" }],
+      projects: first.projects.map((project) => ({ ...project, groupId: "group-other" })),
+    };
+
+    const refreshed = mergeWorkspaceSnapshot(sharedPaneWorkspaces, previous);
+
+    expect(refreshed.projects.map((project) => project.groupId)).toEqual(["group-agents"]);
+  });
+
   it("preserves visual active state and layout while removing a stale PTY", () => {
     const first = mergeWorkspaceSnapshot(sharedPaneWorkspaces, null);
     const visualState = {

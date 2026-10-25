@@ -17,6 +17,7 @@ use tauri::{Listener, Manager};
 
 /// How long `SWARM_DEMO=1` waits for the window before seeding terminals.
 const DEMO_SEED_DELAY: Duration = Duration::from_millis(800);
+const BUILD_FAILURE_EXIT_CODE: i32 = 1;
 
 /// Remove the old scrollback of terminals the store no longer knows. A
 /// store that could not be read knows no terminals, so it keeps them all.
@@ -44,7 +45,7 @@ fn clean_orphaned_scrollback(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -195,24 +196,30 @@ pub fn run() {
             voice::voice_set_model,
             voice::voice_download_model,
         ])
-        .build(tauri::generate_context!())
-        .expect("error while building tauri application")
-        .run(|app, event| {
-            match event {
-                tauri::RunEvent::ExitRequested { .. } => {
-                    // Flush the workspace store synchronously; the debounced
-                    // background writer may not fire before the process exits.
-                    app.state::<Mutex<workspace::WorkspaceStore>>()
-                        .lock_or_recover()
-                        .save_now();
-                    pty::kill_all(&app.state::<Mutex<pty::PtyManager>>());
-                }
-                tauri::RunEvent::Exit => {
-                    pty::kill_all(&app.state::<Mutex<pty::PtyManager>>());
-                }
-                _ => {}
+        .build(tauri::generate_context!());
+    let app = match app {
+        Ok(app) => app,
+        Err(error) => {
+            eprintln!("failed to build the Tauri application: {error}");
+            std::process::exit(BUILD_FAILURE_EXIT_CODE);
+        }
+    };
+    app.run(|app, event| {
+        match event {
+            tauri::RunEvent::ExitRequested { .. } => {
+                // Flush the workspace store synchronously; the debounced
+                // background writer may not fire before the process exits.
+                app.state::<Mutex<workspace::WorkspaceStore>>()
+                    .lock_or_recover()
+                    .save_now();
+                pty::kill_all(&app.state::<Mutex<pty::PtyManager>>());
             }
-        });
+            tauri::RunEvent::Exit => {
+                pty::kill_all(&app.state::<Mutex<pty::PtyManager>>());
+            }
+            _ => {}
+        }
+    });
 }
 
 #[cfg(test)]

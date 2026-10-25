@@ -3,6 +3,7 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { AgentInfo } from "../domain/agent.model";
 import type { McpAgentStatus, McpTask, McpTaskPatch } from "../domain/mcp.model";
 import type { Workspace, WorkspaceGitStatus, WorkspaceGroup, WorkspaceSnapshotTransfer } from "../domain/workspace.model";
+import { asRecord, isRecord, type UnknownRecord } from "../lib/records/records";
 
 const workspaces: Workspace[] = [
   {
@@ -148,11 +149,16 @@ const backlog: Record<string, string> = {
   "pty-claude-docs": "● Gerando exemplos de atalhos\r\n",
 };
 
+function commandArgs(payload: unknown): UnknownRecord {
+  const args = asRecord(payload);
+  return isRecord(args.request) ? args.request : args;
+}
+
 export function installMockBackend(): void {
   const scenario = new URLSearchParams(window.location.search).get("mock");
   mockWindows("main");
   mockIPC((cmd, payload) => {
-    const args = (payload ?? {}) as Record<string, unknown>;
+    const args = commandArgs(payload);
     switch (cmd) {
       case "list_workspaces": return workspaces;
       case "list_groups": return groups;

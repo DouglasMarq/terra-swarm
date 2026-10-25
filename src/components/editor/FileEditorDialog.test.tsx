@@ -33,9 +33,9 @@ describe("FileEditorDialog", () => {
 
     fireEvent.change(await screen.findByLabelText("code"), { target: { value: "two" } });
     await userEvent.click(screen.getByRole("button", { name: /salvar/i }));
-    expect(api.writeWorkspaceFile).toHaveBeenLastCalledWith("ws", "src/a.ts", "two", 10);
+    expect(api.writeWorkspaceFile).toHaveBeenLastCalledWith({ workspaceId: "ws", relativePath: "src/a.ts", content: "two", expectedModified: 10 });
     await userEvent.click(await screen.findByRole("button", { name: /sobrescrever/i }));
-    expect(api.writeWorkspaceFile).toHaveBeenLastCalledWith("ws", "src/a.ts", "two", null);
+    expect(api.writeWorkspaceFile).toHaveBeenLastCalledWith({ workspaceId: "ws", relativePath: "src/a.ts", content: "two", expectedModified: null });
     expect(await screen.findByRole("button", { name: /salvar/i })).toBeTruthy();
   });
 

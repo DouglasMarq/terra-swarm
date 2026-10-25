@@ -96,7 +96,7 @@ describe("useWorktreeReview", () => {
       await result.current.openPullRequest("Changes from Vega", "");
     });
 
-    expect(api.worktreeOpenPr).toHaveBeenCalledWith("ws-1", "t-1", "Changes from Vega", "");
+    expect(api.worktreeOpenPr).toHaveBeenCalledWith({ workspaceId: "ws-1", terminalId: "t-1", title: "Changes from Vega", body: "" });
     expect(result.current.prUrl).toBe("https://example.test/pr/1");
   });
 });

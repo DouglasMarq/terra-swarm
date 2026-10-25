@@ -1,7 +1,7 @@
 use super::{safe_relative_path, write_atomic, WorkspaceStore};
 use crate::ipc_error::{IpcError, IpcErrorCode};
 use crate::sync::LockExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::State;
@@ -150,19 +150,25 @@ pub fn read_workspace_file(
 #[tauri::command(async)]
 pub fn write_workspace_file(
     store: State<'_, Mutex<WorkspaceStore>>,
-    workspace_id: String,
-    relative_path: String,
-    content: String,
-    expected_modified: Option<u64>,
+    request: WorkspaceFileWriteRequest,
 ) -> Result<WorkspaceFileSaved, IpcError> {
     write_file(
-        Path::new(&workspace_cwd(&store, &workspace_id)?),
+        Path::new(&workspace_cwd(&store, &request.workspace_id)?),
         FileSave {
-            relative: &relative_path,
-            content: &content,
-            expected_modified,
+            relative: &request.relative_path,
+            content: &request.content,
+            expected_modified: request.expected_modified,
         },
     )
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFileWriteRequest {
+    pub workspace_id: String,
+    pub relative_path: String,
+    pub content: String,
+    pub expected_modified: Option<u64>,
 }
 
 #[cfg(test)]

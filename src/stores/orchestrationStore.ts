@@ -539,7 +539,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
       ),
     };
     persistCommand(
-      workspaceApi.moveWorkspacePane(target.projectId, paneId, toContainerId, index),
+      workspaceApi.moveWorkspacePane({ workspaceId: target.projectId, paneId, toContainerId, index }),
       "pane move",
       [
         `pane:${paneId}`,

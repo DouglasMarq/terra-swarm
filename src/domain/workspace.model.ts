@@ -136,6 +136,13 @@ export interface ActivePaneSelection {
   paneId: string | null;
 }
 
+export interface WorkspacePaneMove {
+  workspaceId: string;
+  paneId: string;
+  toContainerId: string;
+  index?: number | null;
+}
+
 export interface WorkspaceContainer {
   id: string;
   projectId: string | null;

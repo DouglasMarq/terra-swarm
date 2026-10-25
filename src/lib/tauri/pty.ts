@@ -1,29 +1,22 @@
-import type { AgentLaunchExtras } from "../../domain/agent.model";
 import type { NotificationPayload } from "../../domain/notification.model";
-import type { BacklogSnapshot, ContextPayload, ExitPayload, OutputChunk, RunningTerminal, SpawnedTerminal, TerminalRuntimeInfo, TitlePayload } from "../../domain/terminal.model";
+import type { BacklogSnapshot, ContextPayload, ExitPayload, OutputChunk, RunningTerminal, SpawnedTerminal, TerminalRuntimeInfo, TerminalSpawn, TitlePayload } from "../../domain/terminal.model";
 import { invokeCommand } from "./commands";
 import { listenPayload, type UnlistenFn } from "./events";
 
 const DEFAULT_TERMINAL_COLUMNS = 80;
 const DEFAULT_TERMINAL_ROWS = 24;
 
-export function spawnTerminal(
-  workspaceId: string,
-  command: string,
-  terminalId?: string,
-  cols = DEFAULT_TERMINAL_COLUMNS,
-  rows = DEFAULT_TERMINAL_ROWS,
-  shell?: string,
-  launch?: AgentLaunchExtras,
-): Promise<SpawnedTerminal> {
+export function spawnTerminal(spawn: TerminalSpawn): Promise<SpawnedTerminal> {
   return invokeCommand("spawnTerminal", {
-    workspaceId,
-    command,
-    cols,
-    rows,
-    terminalId: terminalId ?? null,
-    shell: shell ?? null,
-    launch: launch ?? null,
+    request: {
+      workspaceId: spawn.workspaceId,
+      command: spawn.command,
+      cols: spawn.cols ?? DEFAULT_TERMINAL_COLUMNS,
+      rows: spawn.rows ?? DEFAULT_TERMINAL_ROWS,
+      terminalId: spawn.terminalId ?? null,
+      shell: spawn.shell ?? null,
+      launch: spawn.launch ?? null,
+    },
   });
 }
 
@@ -36,7 +29,7 @@ export function resizeTerminal(
   cols: number,
   rows: number,
 ): Promise<void> {
-  return invokeCommand("resizeTerminal", { id, cols, rows });
+  return invokeCommand("resizeTerminal", { request: { id, cols, rows } });
 }
 
 export function killTerminal(id: string): Promise<void> {

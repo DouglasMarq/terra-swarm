@@ -13,6 +13,13 @@ export interface WorktreeChangedFile {
   deletions: number | null;
 }
 
+export interface WorktreePullRequest {
+  workspaceId: string;
+  terminalId: string;
+  title: string;
+  body: string;
+}
+
 export interface WorktreeDiff {
   status: WorktreeStatus;
   files: WorktreeChangedFile[];

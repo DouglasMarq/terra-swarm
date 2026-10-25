@@ -859,24 +859,35 @@ impl Drop for CreatedWorktree {
     }
 }
 
-// Each argument is a field of the `spawn_terminal` IPC contract (`src/lib/tauri/commands.ts`).
-#[allow(clippy::too_many_arguments)]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpawnTerminalRequest {
+    pub workspace_id: String,
+    pub command: String,
+    pub cols: u16,
+    pub rows: u16,
+    pub terminal_id: Option<String>,
+    pub shell: Option<String>,
+    pub launch: Option<LaunchExtras>,
+}
+
+#[derive(Deserialize)]
+pub struct TerminalSizeRequest {
+    pub id: String,
+    pub cols: u16,
+    pub rows: u16,
+}
+
 #[tauri::command(async)]
 pub fn spawn_terminal(
     app: AppHandle,
-    manager: State<'_, Mutex<PtyManager>>,
-    store: State<'_, Mutex<WorkspaceStore>>,
-    workspace_id: String,
-    command: String,
-    cols: u16,
-    rows: u16,
-    terminal_id: Option<String>,
-    shell: Option<String>,
-    launch: Option<LaunchExtras>,
+    request: SpawnTerminalRequest,
 ) -> Result<SpawnedTerminal, String> {
-    let launch = launch.unwrap_or_default();
+    let manager = app.state::<Mutex<PtyManager>>();
+    let store = app.state::<Mutex<WorkspaceStore>>();
+    let launch = request.launch.unwrap_or_default();
     let options = SpawnOptions {
-        shell,
+        shell: request.shell,
         args: launch.args,
         env: launch.env,
         should_use_worktree: launch.should_use_worktree,
@@ -890,11 +901,11 @@ pub fn spawn_terminal(
             store: &store,
         },
         SpawnRequest {
-            workspace_id: &workspace_id,
-            command: &command,
-            cols,
-            rows,
-            terminal_id: terminal_id.as_deref(),
+            workspace_id: &request.workspace_id,
+            command: &request.command,
+            cols: request.cols,
+            rows: request.rows,
+            terminal_id: request.terminal_id.as_deref(),
             options: &options,
         },
     )
@@ -979,10 +990,9 @@ fn send_input(
 #[tauri::command(async)]
 pub fn resize_terminal(
     manager: State<'_, Mutex<PtyManager>>,
-    id: String,
-    cols: u16,
-    rows: u16,
+    request: TerminalSizeRequest,
 ) -> Result<(), String> {
+    let TerminalSizeRequest { id, cols, rows } = request;
     let (master, last_size) = {
         let manager = manager.lock_or_recover();
         let entry = manager
@@ -1177,6 +1187,47 @@ mod scrollback_flag_tests {
             b"existing"
         );
         let _ = fs::remove_dir_all(root);
+    }
+}
+
+#[cfg(test)]
+mod request_tests {
+    use super::SpawnTerminalRequest;
+
+    #[test]
+    fn given_a_camel_case_spawn_request_when_parsing_then_every_field_and_the_worktree_flag_are_read(
+    ) {
+        let request: SpawnTerminalRequest = serde_json::from_value(serde_json::json!({
+            "workspaceId": "ws-1",
+            "command": "codex",
+            "cols": 120,
+            "rows": 40,
+            "terminalId": "pty-1",
+            "shell": null,
+            "launch": { "shouldUseWorktree": true },
+        }))
+        .unwrap();
+
+        assert_eq!(request.workspace_id, "ws-1");
+        assert_eq!((request.cols, request.rows), (120, 40));
+        assert_eq!(request.terminal_id.as_deref(), Some("pty-1"));
+        assert!(request.shell.is_none());
+        assert!(request.launch.unwrap().should_use_worktree);
+    }
+
+    #[test]
+    fn given_launch_extras_with_the_old_worktree_name_when_parsing_then_the_flag_is_kept() {
+        let request: SpawnTerminalRequest = serde_json::from_value(serde_json::json!({
+            "workspaceId": "ws-1",
+            "command": "codex",
+            "cols": 80,
+            "rows": 24,
+            "launch": { "worktree": true },
+        }))
+        .unwrap();
+
+        assert!(request.terminal_id.is_none());
+        assert!(request.launch.unwrap().should_use_worktree);
     }
 }
 

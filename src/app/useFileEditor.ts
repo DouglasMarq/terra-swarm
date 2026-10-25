@@ -53,7 +53,12 @@ export function useFileEditor(target: EditorTarget | null): FileEditor {
     setIsSaving(true);
     setSaveError(null);
     try {
-      const saved = await api.writeWorkspaceFile(target.workspaceId, target.path, text, shouldOverwrite ? null : file.modified);
+      const saved = await api.writeWorkspaceFile({
+        workspaceId: target.workspaceId,
+        relativePath: target.path,
+        content: text,
+        expectedModified: shouldOverwrite ? null : file.modified,
+      });
       setFile({ ...file, content: text, size: saved.size, modified: saved.modified });
       setHasConflict(false);
       return true;

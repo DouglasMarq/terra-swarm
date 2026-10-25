@@ -1,4 +1,4 @@
-import type { WorktreeDiff, WorktreeStatus } from "../../domain/worktree.model";
+import type { WorktreeDiff, WorktreePullRequest, WorktreeStatus } from "../../domain/worktree.model";
 import { invokeCommand } from "./commands";
 
 function worktreeStatus(workspaceId: string, terminalId: string): Promise<WorktreeStatus | null> {
@@ -6,7 +6,7 @@ function worktreeStatus(workspaceId: string, terminalId: string): Promise<Worktr
 }
 
 function worktreeRemove(workspaceId: string, terminalId: string, shouldDeleteBranch: boolean): Promise<void> {
-  return invokeCommand("worktreeRemove", { workspaceId, terminalId, shouldDeleteBranch });
+  return invokeCommand("worktreeRemove", { request: { workspaceId, terminalId, shouldDeleteBranch } });
 }
 
 function worktreeDiff(workspaceId: string, terminalId: string): Promise<WorktreeDiff> {
@@ -14,15 +14,15 @@ function worktreeDiff(workspaceId: string, terminalId: string): Promise<Worktree
 }
 
 function worktreeCommit(workspaceId: string, terminalId: string, message: string): Promise<WorktreeStatus> {
-  return invokeCommand("worktreeCommit", { workspaceId, terminalId, message });
+  return invokeCommand("worktreeCommit", { request: { workspaceId, terminalId, message } });
 }
 
 function worktreeMerge(workspaceId: string, terminalId: string): Promise<WorktreeStatus> {
   return invokeCommand("worktreeMerge", { workspaceId, terminalId });
 }
 
-function worktreeOpenPr(workspaceId: string, terminalId: string, title: string, body: string): Promise<string> {
-  return invokeCommand("worktreeOpenPr", { workspaceId, terminalId, title, body });
+function worktreeOpenPr(pullRequest: WorktreePullRequest): Promise<string> {
+  return invokeCommand("worktreeOpenPr", { request: pullRequest });
 }
 
 export const worktreeApi = {

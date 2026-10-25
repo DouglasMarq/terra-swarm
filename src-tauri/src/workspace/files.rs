@@ -1,6 +1,6 @@
 use super::*;
 use crate::sync::LockExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use tauri::State;
@@ -167,13 +167,23 @@ fn compare_entries(left: &WorkspaceFileEntry, right: &WorkspaceFileEntry) -> std
 #[tauri::command(async)]
 pub fn list_workspace_files(
     store: State<'_, Mutex<WorkspaceStore>>,
-    workspace_id: String,
-    relative_path: Option<String>,
-    limit: Option<usize>,
+    request: WorkspaceFileListRequest,
 ) -> Result<WorkspaceFileListing, String> {
     let cwd = {
         let store = store.lock_or_recover();
-        store.workspace(&workspace_id)?.cwd.clone()
+        store.workspace(&request.workspace_id)?.cwd.clone()
     };
-    list_directory_entries(Path::new(&cwd), relative_path.as_deref(), limit)
+    list_directory_entries(
+        Path::new(&cwd),
+        request.relative_path.as_deref(),
+        request.limit,
+    )
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFileListRequest {
+    pub workspace_id: String,
+    pub relative_path: Option<String>,
+    pub limit: Option<usize>,
 }

@@ -3,9 +3,9 @@ import type { AgentInfo, AgentTokenUsage, AgentLaunchExtras } from "../../domain
 import type { McpAgentStatus, McpServerInfo, McpTask, McpTaskPatch, McpTaskPriority } from "../../domain/mcp.model";
 import type { BacklogSnapshot, RunningTerminal, SpawnedTerminal, TerminalRuntimeInfo, TerminalPlacement } from "../../domain/terminal.model";
 import type { VoiceModelInfo } from "../../domain/voice.model";
-import type { ActivePaneSelection, Workspace, WorkspaceGroup, WorkspaceSnapshotTransfer, WorkspaceContainerPatch, WorkspaceLayout, WorkspaceGitStatus } from "../../domain/workspace.model";
-import type { WorkspaceFileContent, WorkspaceFileListing, WorkspaceFileSaved } from "../../domain/workspaceFiles.model";
-import type { WorktreeDiff, WorktreeStatus } from "../../domain/worktree.model";
+import type { ActivePaneSelection, Workspace, WorkspaceGroup, WorkspaceSnapshotTransfer, WorkspaceContainerPatch, WorkspaceLayout, WorkspaceGitStatus, WorkspacePaneMove } from "../../domain/workspace.model";
+import type { WorkspaceFileContent, WorkspaceFileListing, WorkspaceFileSaved, WorkspaceFileWrite } from "../../domain/workspaceFiles.model";
+import type { WorktreeDiff, WorktreePullRequest, WorktreeStatus } from "../../domain/worktree.model";
 import type { SystemFont } from "../terminalFonts";
 import { toIpcError } from "./errors";
 
@@ -27,7 +27,7 @@ export interface IpcCommandContract {
     result: WorkspaceSnapshotTransfer;
   };
   createWorkspace: {
-    args: { name: string; cwd: string };
+    args: { request: { name: string; cwd: string } };
     result: Workspace;
   };
   closeWorkspace: {
@@ -35,7 +35,7 @@ export interface IpcCommandContract {
     result: void;
   };
   renameWorkspace: {
-    args: { id: string; name: string };
+    args: { request: { id: string; name: string } };
     result: void;
   };
   listGroups: {
@@ -47,7 +47,7 @@ export interface IpcCommandContract {
     result: WorkspaceGroup;
   };
   renameGroup: {
-    args: { id: string; name: string };
+    args: { request: { id: string; name: string } };
     result: void;
   };
   removeGroup: {
@@ -63,59 +63,58 @@ export interface IpcCommandContract {
     result: void;
   };
   setWorkspaceGroup: {
-    args: { workspaceId: string; groupId: string | null };
+    args: { request: { workspaceId: string; groupId: string | null } };
     result: void;
   };
   setTerminalPlacement: {
-    args: TerminalPlacement;
+    args: { request: TerminalPlacement };
     result: void;
   };
   setActivePane: {
-    args: ActivePaneSelection;
+    args: { request: ActivePaneSelection };
     result: void;
   };
   reorderWorkspaceContainers: {
-    args: { workspaceId: string; order: string[] };
+    args: { request: { workspaceId: string; order: string[] } };
     result: void;
   };
   reorderWorkspacePanes: {
-    args: { workspaceId: string; containerId: string; order: string[] };
+    args: { request: { workspaceId: string; containerId: string; order: string[] } };
     result: void;
   };
   moveWorkspacePane: {
-    args: {
-      workspaceId: string;
-      paneId: string;
-      toContainerId: string;
-      index?: number | null;
-    };
+    args: { request: WorkspacePaneMove };
     result: void;
   };
   setWorkspaceContainerState: {
     args: {
-      workspaceId: string;
-      containerId: string;
-      patch: WorkspaceContainerPatch;
+      request: {
+        workspaceId: string;
+        containerId: string;
+        patch: WorkspaceContainerPatch;
+      };
     };
     result: void;
   };
   setWorkspaceLayout: {
-    args: { workspaceId: string; layout: WorkspaceLayout };
+    args: { request: { workspaceId: string; layout: WorkspaceLayout } };
     result: void;
   };
   setWorkspaceCollapsed: {
-    args: { workspaceId: string; isCollapsed: boolean };
+    args: { request: { workspaceId: string; isCollapsed: boolean } };
     result: void;
   };
   spawnTerminal: {
     args: {
-      workspaceId: string;
-      command: string;
-      cols: number;
-      rows: number;
-      terminalId: string | null;
-      shell: string | null;
-      launch: AgentLaunchExtras | null;
+      request: {
+        workspaceId: string;
+        command: string;
+        cols: number;
+        rows: number;
+        terminalId: string | null;
+        shell: string | null;
+        launch: AgentLaunchExtras | null;
+      };
     };
     result: SpawnedTerminal;
   };
@@ -132,7 +131,7 @@ export interface IpcCommandContract {
     result: void;
   };
   resizeTerminal: {
-    args: { id: string; cols: number; rows: number };
+    args: { request: { id: string; cols: number; rows: number } };
     result: void;
   };
   killTerminal: {
@@ -164,7 +163,7 @@ export interface IpcCommandContract {
     result: void;
   };
   setTerminalWidth: {
-    args: { wsId: string; terminalId: string; width: number };
+    args: { request: { wsId: string; terminalId: string; width: number } };
     result: void;
   };
   detectAgents: {
@@ -180,7 +179,7 @@ export interface IpcCommandContract {
     result: string | null;
   };
   listWorkspaceFiles: {
-    args: { workspaceId: string; relativePath?: string; limit?: number };
+    args: { request: { workspaceId: string; relativePath?: string; limit?: number } };
     result: WorkspaceFileListing;
   };
   readWorkspaceFile: {
@@ -188,7 +187,7 @@ export interface IpcCommandContract {
     result: WorkspaceFileContent;
   };
   writeWorkspaceFile: {
-    args: { workspaceId: string; relativePath: string; content: string; expectedModified: number | null };
+    args: { request: WorkspaceFileWrite };
     result: WorkspaceFileSaved;
   };
   gitStatus: {
@@ -209,16 +208,18 @@ export interface IpcCommandContract {
   };
   mcpCreateTask: {
     args: {
-      workspaceId: string;
-      title: string;
-      description: string | null;
-      priority: McpTaskPriority | null;
-      assignee: string | null;
+      request: {
+        workspaceId: string;
+        title: string;
+        description: string | null;
+        priority: McpTaskPriority | null;
+        assignee: string | null;
+      };
     };
     result: McpTask;
   };
   mcpUpdateTask: {
-    args: { workspaceId: string; id: string; patch: McpTaskPatch };
+    args: { request: { workspaceId: string; id: string; patch: McpTaskPatch } };
     result: McpTask;
   };
   mcpDeleteTask: {
@@ -238,7 +239,7 @@ export interface IpcCommandContract {
     result: WorktreeStatus | null;
   };
   worktreeRemove: {
-    args: { workspaceId: string; terminalId: string; shouldDeleteBranch: boolean };
+    args: { request: { workspaceId: string; terminalId: string; shouldDeleteBranch: boolean } };
     result: void;
   };
   worktreeDiff: {
@@ -246,7 +247,7 @@ export interface IpcCommandContract {
     result: WorktreeDiff;
   };
   worktreeCommit: {
-    args: { workspaceId: string; terminalId: string; message: string };
+    args: { request: { workspaceId: string; terminalId: string; message: string } };
     result: WorktreeStatus;
   };
   worktreeMerge: {
@@ -254,7 +255,7 @@ export interface IpcCommandContract {
     result: WorktreeStatus;
   };
   worktreeOpenPr: {
-    args: { workspaceId: string; terminalId: string; title: string; body: string };
+    args: { request: WorktreePullRequest };
     result: string;
   };
   voiceToggleRecording: {

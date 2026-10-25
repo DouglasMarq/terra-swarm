@@ -15,6 +15,13 @@ export interface WorkspaceFileContent {
   modified: number;
 }
 
+export interface WorkspaceFileWrite {
+  workspaceId: string;
+  relativePath: string;
+  content: string;
+  expectedModified: number | null;
+}
+
 export interface WorkspaceFileSaved {
   size: number;
   modified: number;

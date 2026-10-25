@@ -53,7 +53,7 @@ describe("shell store", () => {
     expect(useShellStore.getState().activeSurface).toBe("workbench");
 
     const historyBeforeReopen = useShellStore.getState().history.length;
-    expect(store.reopenWorkspaceTab("workspace-a")).toBe(true);
+    store.reopenWorkspaceTab("workspace-a");
     expect(useShellStore.getState().history.length).toBe(historyBeforeReopen + 1);
     expect(useShellStore.getState().workspaceTabs.map((tab) => tab.workspaceId)).toContain(
       "workspace-a",

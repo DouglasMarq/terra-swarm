@@ -65,7 +65,7 @@ export interface ShellState extends ShellStateData {
   setDockTab: (tab: DockTab) => void;
   openWorkspaceTab: (tab: ShellWorkspaceTab) => void;
   closeWorkspaceTab: (workspaceId: string) => void;
-  reopenWorkspaceTab: (workspaceId?: string) => boolean;
+  reopenWorkspaceTab: (workspaceId?: string) => void;
   selectWorkspaceTab: (workspaceId: string) => void;
   /** Reorders the visual workspace strip without affecting workspace lifecycle. */
   reorderWorkspaceTabs: (workspaceIds: readonly string[]) => void;
@@ -390,7 +390,7 @@ export const useShellStore = create<ShellState>()(
         const tab = get().recentlyClosedTabs.find((item) =>
           id ? item.workspaceId === id : true,
         );
-        if (!tab) return false;
+        if (!tab) return;
         set((state) => ({
           workspaceTabs: [...state.workspaceTabs, tab],
           recentlyClosedTabs: state.recentlyClosedTabs.filter(
@@ -398,7 +398,6 @@ export const useShellStore = create<ShellState>()(
           ),
         }));
         get().navigate("workbench", tab.workspaceId);
-        return true;
       },
 
       selectWorkspaceTab: (workspaceId) => {

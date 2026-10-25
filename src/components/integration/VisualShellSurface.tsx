@@ -786,7 +786,9 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
         onOpenLibrary: (dialog) => useLibraryStore.getState().openDialog(dialog),
         onReopenTab: () => {
           const candidate = shell.recentlyClosedTabs[0];
-          if (shell.reopenWorkspaceTab() && candidate) props.onSelectWorkspace(candidate.workspaceId);
+          if (!candidate) return;
+          shell.reopenWorkspaceTab(candidate.workspaceId);
+          props.onSelectWorkspace(candidate.workspaceId);
         },
       }}
       onRequestConfirm={(request) => {

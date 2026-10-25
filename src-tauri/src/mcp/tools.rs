@@ -6,9 +6,8 @@ use serde_json::{json, Value};
 use tauri::Runtime;
 
 use super::model::{AgentState, NewTask, StoreError, Task, TaskPatch, TaskPriority, TaskStatus};
-use super::repo::{
-    DEFAULT_INBOX_LIMIT, DEFAULT_SEARCH_LIMIT, MAX_LIMIT, MAX_STATUS_SUMMARY_CHARS, MAX_TITLE_CHARS,
-};
+use super::repo::{DEFAULT_INBOX_LIMIT, DEFAULT_SEARCH_LIMIT, MAX_LIMIT, MAX_TITLE_CHARS};
+use super::statuses::MAX_STATUS_SUMMARY_CHARS;
 use super::{AgentIdentity, McpHub};
 
 pub struct ToolDef {
@@ -392,13 +391,13 @@ pub fn call<R: Runtime>(
     match name {
         "whoami" => {
             let workspace = hub.workspace(ws);
-            let repo = hub.repo()?;
+            let statuses = hub.statuses()?;
             let peers: Vec<Value> = hub
                 .peers(ws)
                 .into_iter()
                 .filter(|peer| peer.terminal_id != me)
                 .map(|peer| {
-                    let status = repo.status_of(&peer.terminal_id);
+                    let status = statuses.status_of(&peer.terminal_id);
                     json!({
                         "terminal_id": peer.terminal_id,
                         "agent": peer.agent,
@@ -409,6 +408,8 @@ pub fn call<R: Runtime>(
                     })
                 })
                 .collect();
+            drop(statuses);
+            let repo = hub.repo()?;
             let mine = repo.list_tasks(ws, None, Some(me), None)?;
             Ok(json!({
                 "terminal_id": me,
@@ -555,14 +556,15 @@ pub fn call<R: Runtime>(
                     to
                 )));
             }
-            let mut repo = hub.repo()?;
-            let (task, message) = repo.assign_task(ws, &args.id, me, to, args.note.as_deref())?;
+            let (task, message) =
+                hub.repo()?
+                    .assign_task(ws, &args.id, me, to, args.note.as_deref())?;
             // Typing into a terminal that is busy or waiting on a human could
             // answer a prompt by accident, so only idle agents are woken.
-            let idle = repo
+            let idle = hub
+                .statuses()?
                 .status_of(to)
                 .is_some_and(|status| status.state == AgentState::Idle);
-            drop(repo);
             hub.emit_tasks_changed(ws);
             hub.emit_message(&message);
             if idle {
@@ -600,7 +602,9 @@ pub fn call<R: Runtime>(
                     STATE_VALUES.join(", ")
                 ))
             })?;
-            let status = hub.repo()?.report_status(ws, me, state, &args.summary)?;
+            let status = hub
+                .statuses()?
+                .report_status(ws, me, state, &args.summary)?;
             hub.emit_agent_status(&status);
             Ok(json!(status))
         }

@@ -164,7 +164,7 @@ mod tests {
         let url = format!("http://127.0.0.1:{}/mcp", port);
         let body = serde_json::json!({ "agent": "claude", "event": "Notification", "payload": { "message": "Allow Bash?" } }).to_string();
         post_hook(&url, &token, &body).expect("hook accepted");
-        let status = hub.repo().unwrap().status_of("t-1").cloned().unwrap();
+        let status = hub.statuses().unwrap().status_of("t-1").cloned().unwrap();
         assert_eq!(status.state, AgentState::NeedsInput);
         assert_eq!(status.summary, "Allow Bash?");
         // A wrong token is refused.

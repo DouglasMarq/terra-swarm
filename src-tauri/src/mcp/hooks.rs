@@ -55,8 +55,8 @@ pub fn apply<R: Runtime>(
         hub.set_session_log(&who.terminal_id, log);
     }
     let (state, summary) = interpret(call)?;
-    let reported = hub.repo().and_then(|mut repo| {
-        repo.report_status(&who.workspace_id, &who.terminal_id, state, &summary)
+    let reported = hub.statuses().and_then(|mut statuses| {
+        statuses.report_status(&who.workspace_id, &who.terminal_id, state, &summary)
     });
     let status = match reported {
         Ok(status) => status,
@@ -273,7 +273,7 @@ mod tests {
             &call("claude", "Notification", json!({ "message": "Approve?" })),
         );
         assert_eq!(state, Some(AgentState::NeedsInput));
-        let status = hub.repo().unwrap().status_of("t-1").cloned().unwrap();
+        let status = hub.statuses().unwrap().status_of("t-1").cloned().unwrap();
         assert_eq!(status.summary, "Approve?");
         let events = events.lock().unwrap();
         assert!(events.iter().any(|(event, _)| event == EVENT_AGENT_STATUS));

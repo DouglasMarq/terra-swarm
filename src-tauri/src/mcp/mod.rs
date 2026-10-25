@@ -19,6 +19,7 @@ pub mod launch;
 pub mod model;
 pub mod repo;
 pub mod server;
+pub mod statuses;
 pub mod tools;
 
 use serde::Serialize;
@@ -32,6 +33,7 @@ use auth::TokenRegistry;
 pub use auth::{AgentIdentity, McpLease};
 use model::{AgentStatus, Message, StoreError, StoreResult};
 use repo::Repo;
+use statuses::StatusRegistry;
 
 pub const EVENT_TASKS_CHANGED: &str = "mcp-tasks-changed";
 pub const EVENT_MESSAGE: &str = "mcp-message";
@@ -60,6 +62,7 @@ pub struct ServerInfo {
 
 pub struct McpHub<R: Runtime = Wry> {
     repo: Option<Mutex<Repo>>,
+    statuses: Mutex<StatusRegistry>,
     error: Option<String>,
     db_path: Option<PathBuf>,
     tokens: Mutex<TokenRegistry>,
@@ -86,6 +89,7 @@ impl<R: Runtime> McpHub<R> {
         };
         Self {
             repo,
+            statuses: Mutex::new(StatusRegistry::default()),
             error,
             db_path: Some(db_path),
             tokens: Mutex::new(TokenRegistry::default()),
@@ -101,6 +105,7 @@ impl<R: Runtime> McpHub<R> {
     pub fn with_repo(repo: Repo, config_dir: Option<PathBuf>, app: AppHandle<R>) -> Self {
         Self {
             repo: Some(Mutex::new(repo)),
+            statuses: Mutex::new(StatusRegistry::default()),
             error: None,
             db_path: None,
             tokens: Mutex::new(TokenRegistry::default()),
@@ -119,12 +124,23 @@ impl<R: Runtime> McpHub<R> {
     pub fn repo(&self) -> StoreResult<MutexGuard<'_, Repo>> {
         match &self.repo {
             Some(repo) => Ok(repo.lock_or_recover()),
-            None => Err(StoreError::Unavailable(
-                self.error
-                    .clone()
-                    .unwrap_or_else(|| "not initialized".into()),
-            )),
+            None => Err(self.unavailable()),
         }
+    }
+
+    pub fn statuses(&self) -> StoreResult<MutexGuard<'_, StatusRegistry>> {
+        if self.repo.is_none() {
+            return Err(self.unavailable());
+        }
+        Ok(self.statuses.lock_or_recover())
+    }
+
+    fn unavailable(&self) -> StoreError {
+        StoreError::Unavailable(
+            self.error
+                .clone()
+                .unwrap_or_else(|| "not initialized".into()),
+        )
     }
 
     pub fn set_port(&self, port: u16) {
@@ -232,8 +248,8 @@ impl<R: Runtime> McpHub<R> {
     }
 
     fn forget_agent(&self, identity: &AgentIdentity) {
-        if let Ok(mut repo) = self.repo() {
-            repo.forget_status(&identity.terminal_id);
+        if let Ok(mut statuses) = self.statuses() {
+            statuses.forget_status(&identity.terminal_id);
         }
         self.emit(
             EVENT_AGENT_STATUS,
@@ -258,6 +274,9 @@ impl<R: Runtime> McpHub<R> {
             }
             Err(_) => return,
         }
+        self.statuses
+            .lock_or_recover()
+            .forget_workspace(workspace_id);
         self.emit_tasks_changed(workspace_id);
     }
 
@@ -434,8 +453,13 @@ mod tests {
                 },
             )
             .unwrap();
+        hub.statuses()
+            .unwrap()
+            .report_status("ws-1", "t-1", model::AgentState::Working, "")
+            .unwrap();
         hub.purge_workspace("ws-1");
         assert!(hub.identify(&token).is_none());
+        assert!(hub.statuses().unwrap().statuses("ws-1").is_empty());
         assert!(hub
             .repo()
             .unwrap()

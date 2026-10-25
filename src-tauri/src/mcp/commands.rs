@@ -128,8 +128,8 @@ pub fn mcp_delete_task(hub: Hub<'_>, workspace_id: String, id: String) -> Result
 
 #[tauri::command(async)]
 pub fn mcp_agent_statuses(hub: Hub<'_>, workspace_id: String) -> Vec<AgentStatus> {
-    hub.repo()
-        .map(|repo| repo.statuses(&workspace_id))
+    hub.statuses()
+        .map(|statuses| statuses.statuses(&workspace_id))
         .unwrap_or_else(|error| {
             eprintln!("cannot list agent statuses: {}", error);
             Vec::new()

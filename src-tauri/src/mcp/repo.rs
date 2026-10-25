@@ -1,16 +1,15 @@
-//! Queries behind the MCP tools and the Tasks panel: tasks, messages, notes
-//! and agent statuses. Every call is scoped by `workspace_id`, which callers
-//! take from the caller's token, never from the agent's arguments.
+//! Queries behind the MCP tools and the Tasks panel: tasks, messages and
+//! notes. Every call is scoped by `workspace_id`, which callers take from the
+//! caller's token, never from the agent's arguments.
 //!
-//! Statuses are runtime facts and live only in memory; everything else is in
-//! `mcp.db` and is kept in full (no size-based eviction).
+//! Everything is in `mcp.db` and is kept in full (no size-based eviction).
 
 use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 use std::collections::{HashMap, HashSet};
 
 use super::model::{
-    normalize_task_id, AgentState, AgentStatus, Message, NewTask, Note, StoreError, StoreResult,
-    Task, TaskEvent, TaskPatch, TaskPriority, TaskStatus,
+    normalize_task_id, Message, NewTask, Note, StoreError, StoreResult, Task, TaskEvent, TaskPatch,
+    TaskPriority, TaskStatus,
 };
 
 use crate::clock::now_millis;
@@ -21,7 +20,6 @@ pub const MAX_BODY_BYTES: usize = 64 * 1024;
 pub const MAX_LABELS: usize = 16;
 pub const MAX_LABEL_CHARS: usize = 40;
 pub const MAX_NOTE_KEY_CHARS: usize = 80;
-pub const MAX_STATUS_SUMMARY_CHARS: usize = 500;
 pub const DEFAULT_INBOX_LIMIT: usize = 50;
 pub const DEFAULT_SEARCH_LIMIT: usize = 20;
 pub const MAX_LIMIT: usize = 200;
@@ -526,15 +524,11 @@ fn load_note(conn: &Connection, workspace_id: &str, id: i64) -> StoreResult<Note
 
 pub struct Repo {
     conn: Connection,
-    statuses: HashMap<String, AgentStatus>,
 }
 
 impl Repo {
     pub fn new(conn: Connection) -> Self {
-        Self {
-            conn,
-            statuses: HashMap::new(),
-        }
+        Self { conn }
     }
 
     #[cfg(test)]
@@ -582,8 +576,6 @@ impl Repo {
         let tx = self.conn.transaction()?;
         delete_workspace_rows(&tx, workspace_id)?;
         tx.commit()?;
-        self.statuses
-            .retain(|_, status| status.workspace_id != workspace_id);
         Ok(())
     }
 
@@ -608,8 +600,6 @@ impl Repo {
             delete_workspace_rows(&tx, id)?;
         }
         tx.commit()?;
-        self.statuses
-            .retain(|_, status| !gone.contains(&status.workspace_id));
         Ok(())
     }
 
@@ -987,53 +977,6 @@ impl Repo {
             }
         };
         Ok(notes)
-    }
-
-    // ----- agent status (memory only) -------------------------------------
-
-    pub fn report_status(
-        &mut self,
-        workspace_id: &str,
-        terminal_id: &str,
-        state: AgentState,
-        summary: &str,
-    ) -> StoreResult<AgentStatus> {
-        let summary = summary.trim();
-        if summary.chars().count() > MAX_STATUS_SUMMARY_CHARS {
-            return Err(StoreError::Invalid(format!(
-                "summary is longer than {} characters",
-                MAX_STATUS_SUMMARY_CHARS
-            )));
-        }
-        let status = AgentStatus {
-            terminal_id: terminal_id.to_string(),
-            workspace_id: workspace_id.to_string(),
-            state,
-            summary: summary.to_string(),
-            updated_at: now_millis(),
-        };
-        self.statuses
-            .insert(terminal_id.to_string(), status.clone());
-        Ok(status)
-    }
-
-    pub fn status_of(&self, terminal_id: &str) -> Option<&AgentStatus> {
-        self.statuses.get(terminal_id)
-    }
-
-    pub fn statuses(&self, workspace_id: &str) -> Vec<AgentStatus> {
-        let mut list: Vec<AgentStatus> = self
-            .statuses
-            .values()
-            .filter(|status| status.workspace_id == workspace_id)
-            .cloned()
-            .collect();
-        list.sort_by(|a, b| a.terminal_id.cmp(&b.terminal_id));
-        list
-    }
-
-    pub fn forget_status(&mut self, terminal_id: &str) {
-        self.statuses.remove(terminal_id);
     }
 
     #[cfg(test)]
@@ -1709,8 +1652,6 @@ mod tests {
             repo.read_inbox(ws, "t-2", true, None).unwrap();
             assert!(message.id > 0);
             repo.add_note(ws, "t-1", "note", Some("k")).unwrap();
-            repo.report_status(ws, &format!("{}-agent", ws), AgentState::Working, "")
-                .unwrap();
         }
         repo.purge_workspace("ws-1").unwrap();
         assert!(repo
@@ -1718,7 +1659,6 @@ mod tests {
             .unwrap()
             .is_empty());
         assert!(repo.search_notes("ws-1", "", None).unwrap().is_empty());
-        assert!(repo.statuses("ws-1").is_empty());
         assert_eq!(repo.list_tasks("ws-2", None, None, None).unwrap().len(), 2);
         assert_eq!(repo.count("task_deps"), 1);
         assert_eq!(repo.count("task_events"), 2);
@@ -1728,21 +1668,6 @@ mod tests {
         repo.retain_workspaces(&HashSet::new()).unwrap();
         assert_eq!(repo.count("tasks"), 0);
         assert_eq!(repo.count("messages"), 0);
-    }
-
-    #[test]
-    fn statuses_are_scoped_and_validated() {
-        let mut repo = Repo::in_memory();
-        repo.report_status("ws-1", "t-1", AgentState::Working, "parsing")
-            .unwrap();
-        repo.report_status("ws-2", "t-5", AgentState::Idle, "")
-            .unwrap();
-        assert_eq!(repo.statuses("ws-1").len(), 1);
-        assert!(repo
-            .report_status("ws-1", "t-1", AgentState::Idle, &"x".repeat(501))
-            .is_err());
-        repo.forget_status("t-1");
-        assert!(repo.statuses("ws-1").is_empty());
     }
 
     #[test]

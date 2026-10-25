@@ -1,0 +1,52 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react"],
+  "categories": {
+    "correctness": "off"
+  },
+  "ignorePatterns": ["dist/**", "coverage/**", "src-tauri/**"],
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/ban-ts-comment": [
+      "error",
+      {
+        "ts-ignore": "allow-with-description",
+        "ts-expect-error": "allow-with-description",
+        "ts-nocheck": "allow-with-description"
+      }
+    ],
+    "max-params": ["error", { "max": 3 }],
+    "max-depth": ["error", 3],
+    "id-length": ["error", { "min": 2, "properties": "never", "checkGeneric": false }],
+    "no-magic-numbers": [
+      "error",
+      {
+        "ignore": [-1, 0, 1, 2],
+        "ignoreArrayIndexes": true,
+        "ignoreEnums": true,
+        "ignoreNumericLiteralTypes": true,
+        "ignoreReadonlyClassProperties": true,
+        "ignoreTypeIndexes": true
+      }
+    ],
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
+    "no-console": ["error", { "allow": ["warn", "error"] }],
+    "no-debugger": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test/**", "src/dev/**"],
+      "rules": {
+        "no-magic-numbers": "off"
+      }
+    },
+    {
+      "files": ["src/components/voice/VoiceCapsule.tsx", "src/stores/previewStore.ts"],
+      "rules": {
+        "no-magic-numbers": "off"
+      }
+    }
+  ]
+}

@@ -21,6 +21,7 @@ import { useLibraryStore } from "../../stores/libraryStore";
 import type { McpAgentStatus, McpTask, McpTaskPatch, McpTaskStatus } from "../../types";
 import { BOARD_COLUMNS, boardColumns, planDrop } from "./boardModel";
 import { TaskCard, type TaskAgentOption } from "./TasksPanel";
+import { useWorkspaceTasks } from "./useWorkspaceTasks";
 import { MAX_TASK_TITLE_CHARS } from "../../domain/tasks";
 import "./tasks.css";
 
@@ -56,11 +57,8 @@ export interface TaskBoardProps {
  */
 export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: TaskBoardProps) {
   const t = useT();
-  const tasks = useMcpStore((state) => (workspaceId ? state.tasks[workspaceId] : undefined));
-  const statuses = useMcpStore((state) => state.statuses);
-  const server = useMcpStore((state) => state.server);
-  const error = useMcpStore((state) => state.error);
-  const { loadTasks, loadStatuses, loadServer, createTask, updateTask, deleteTask, clearError } = useMcpStore.getState();
+  const { tasks, statuses, server, error } = useWorkspaceTasks(workspaceId);
+  const { createTask, updateTask, deleteTask, clearError } = useMcpStore.getState();
   const [draft, setDraft] = useState("");
   const [dragging, setDragging] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -69,16 +67,6 @@ export function TaskBoard({ workspaceId, workspaceName, agents, onSendPrompt }: 
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor),
   );
-
-  useEffect(() => {
-    void loadServer();
-  }, [loadServer]);
-
-  useEffect(() => {
-    if (!workspaceId) return;
-    void loadTasks(workspaceId);
-    void loadStatuses(workspaceId);
-  }, [workspaceId, loadTasks, loadStatuses]);
 
   useEffect(() => {
     if (!notice) return;

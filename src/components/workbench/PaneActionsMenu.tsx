@@ -103,7 +103,7 @@ export function PaneActionsMenu({ label, groups }: PaneActionsMenuProps) {
           onMouseDown={(event) => event.stopPropagation()}
           onBlur={(event) => {
             const next = event.relatedTarget as Node | null;
-            if (next && !menuRef.current?.contains(next)) setOpen(false);
+            if (next && !menuRef.current?.contains(next) && !rootRef.current?.contains(next)) setOpen(false);
           }}
         >
           {groups.filter((group) => group.length > 0).map((group, groupIndex) => (

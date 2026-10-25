@@ -89,7 +89,7 @@ describe("PaneActionsMenu", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
-  it.fails("Given an open pane menu, when clicking its trigger again in an engine that focuses buttons on click, then it closes", async () => {
+  it("Given an open pane menu, when clicking its trigger again in an engine that focuses buttons on click, then it closes", async () => {
     const user = userEvent.setup();
     render(<PaneActionsMenu label="Mais ações" groups={[[{ id: "first", label: "Primeira", onSelect: vi.fn() }]]} />);
     const trigger = screen.getByRole("button", { name: "Mais ações" });

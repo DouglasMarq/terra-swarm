@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::Runtime;
 
+use super::integration;
 use super::repo::AgentState;
 use super::{AgentIdentity, McpHub};
 use crate::usage::SessionLog;
@@ -21,7 +22,6 @@ pub const HOOKS_PATH: &str = "/hooks";
 pub const CLAUDE_HOOKS_PATH: &str = "/hooks/claude";
 pub const EVENT_AGENT_ATTENTION: &str = "agent-attention";
 const MAX_HOOK_BODY: usize = 256 * 1024;
-const MAX_SUMMARY_CHARS: usize = 200;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct HookCall {
@@ -34,88 +34,15 @@ pub struct HookCall {
     pub payload: Value,
 }
 
-fn text_field(payload: &Value, keys: &[&str]) -> Option<String> {
-    keys.iter()
-        .find_map(|key| payload.get(*key).and_then(Value::as_str))
-        .map(|text| text.split_whitespace().collect::<Vec<_>>().join(" "))
-        .filter(|text| !text.is_empty())
-        .map(|text| {
-            if text.chars().count() > MAX_SUMMARY_CHARS {
-                let mut cut: String = text.chars().take(MAX_SUMMARY_CHARS - 1).collect();
-                cut.push('…');
-                cut
-            } else {
-                text
-            }
-        })
-}
-
 /// What a hook event says about the agent: its new state and a one-line
 /// summary. `None` for events that carry no state change.
 pub fn interpret(call: &HookCall) -> Option<(AgentState, String)> {
-    let payload = &call.payload;
-    match (call.agent.as_str(), call.event.as_str()) {
-        ("claude", "UserPromptSubmit") => Some((
-            AgentState::Working,
-            text_field(payload, &["prompt"]).unwrap_or_default(),
-        )),
-        ("claude", "PreToolUse") => Some((
-            AgentState::Working,
-            text_field(payload, &["tool_name"]).unwrap_or_default(),
-        )),
-        ("claude", "Notification") => {
-            let message = text_field(payload, &["message"]).unwrap_or_default();
-            // `idle_prompt` only means the turn ended a minute ago; it is not
-            // a question, and treating it as one would keep the orchestrator
-            // from waking an agent that finished. Older versions send no type.
-            match payload.get("notification_type").and_then(Value::as_str) {
-                None
-                | Some("permission_prompt")
-                | Some("elicitation_dialog")
-                | Some("elicitation_url_dialog")
-                | Some("agent_needs_input") => Some((AgentState::NeedsInput, message)),
-                Some("idle_prompt") => Some((AgentState::Idle, String::new())),
-                Some(_) => None,
-            }
-        }
-        ("claude", "Stop") | ("claude", "SessionStart") => Some((AgentState::Idle, String::new())),
-        ("codex", _) => match payload
-            .get("type")
-            .and_then(Value::as_str)
-            .unwrap_or(call.event.as_str())
-        {
-            "agent-turn-complete" => Some((
-                AgentState::Idle,
-                text_field(
-                    payload,
-                    &["last-assistant-message", "last_assistant_message"],
-                )
-                .unwrap_or_default(),
-            )),
-            _ => None,
-        },
-        _ => None,
-    }
+    integration::by_id(&call.agent)?.interpret(&call.event, &call.payload)
 }
 
 /// The session log a hook event points at, for token usage.
 pub fn session_log(call: &HookCall) -> Option<SessionLog> {
-    match call.agent.as_str() {
-        "claude" => call
-            .payload
-            .get("transcript_path")
-            .and_then(Value::as_str)
-            .and_then(crate::usage::claude_transcript_from_hook)
-            .map(SessionLog::Claude),
-        "codex" => call
-            .payload
-            .get("thread-id")
-            .or_else(|| call.payload.get("thread_id"))
-            .and_then(Value::as_str)
-            .filter(|thread| !thread.is_empty())
-            .map(|thread| SessionLog::Codex(thread.to_string())),
-        _ => None,
-    }
+    integration::by_id(&call.agent)?.session_log(&call.payload)
 }
 
 /// Apply a hook call for `who`. Returns the state it set, if any.
@@ -207,6 +134,7 @@ async fn receive<R: Runtime>(
 
 #[cfg(test)]
 mod tests {
+    use super::super::integration::MAX_SUMMARY_CHARS;
     use super::super::test_support::{app, hub, identity};
     use super::super::EVENT_AGENT_STATUS;
     use super::*;
@@ -305,7 +233,13 @@ mod tests {
             "notify",
             json!({ "type": "agent-turn-complete", "thread-id": "0199-abc" }),
         ));
-        assert_eq!(log, Some(SessionLog::Codex("0199-abc".into())));
+        assert_eq!(
+            log,
+            Some(SessionLog {
+                integration: "codex",
+                locator: "0199-abc".into()
+            })
+        );
         // A Claude transcript outside Claude's own folder is ignored.
         assert_eq!(
             session_log(&call(

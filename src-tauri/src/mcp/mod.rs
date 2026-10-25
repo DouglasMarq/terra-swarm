@@ -11,8 +11,10 @@
 
 pub mod auth;
 pub mod commands;
+pub mod connect;
 pub mod db;
 pub mod hooks;
+pub mod integration;
 pub mod launch;
 pub mod repo;
 pub mod server;

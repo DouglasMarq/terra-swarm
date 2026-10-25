@@ -144,14 +144,10 @@ pub fn agent_usage(hub: Hub<'_>, workspace_id: String) -> Vec<crate::usage::Agen
         .into_iter()
         .filter_map(|terminal_id| {
             let log = hub.session_log(&terminal_id)?;
-            let agent = match log {
-                crate::usage::SessionLog::Claude(_) => "claude",
-                crate::usage::SessionLog::Codex(_) => "codex",
-            };
-            let usage = crate::usage::usage_of(&log)?;
+            let usage = super::integration::usage_of(&log)?;
             Some(crate::usage::AgentUsage {
                 terminal_id,
-                agent: agent.into(),
+                agent: log.integration.into(),
                 usage,
             })
         })

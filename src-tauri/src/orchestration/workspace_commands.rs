@@ -6,8 +6,9 @@ use crate::pty::{bump_next_terminal_id, kill_all, kill_terminal_inner, PtyManage
 use crate::sync::LockExt;
 use crate::workspace::{
     bump_next_group_id, bump_next_id, change_and_save, emit_workspaces_changed,
-    mark_imported_sessions_suspended, parse_import_snapshot, replace_store_file, transfer_counts,
-    validate_explicit_path, WorkspaceSnapshotTransfer, WorkspaceStore, WORKSPACE_FILE_VERSION,
+    mark_imported_sessions_suspended, parse_import_snapshot, read_snapshot_file,
+    replace_store_file, transfer_counts, validate_explicit_path, WorkspaceSnapshotTransfer,
+    WorkspaceStore, WORKSPACE_FILE_VERSION,
 };
 
 /// Called by `close_workspace`: workspaces live in `workspaces.json`, so
@@ -68,13 +69,7 @@ pub fn import_workspace_snapshot(
     path: String,
 ) -> Result<WorkspaceSnapshotTransfer, String> {
     let source = validate_explicit_path(&path)?;
-    let raw = std::fs::read_to_string(&source).map_err(|error| {
-        format!(
-            "failed to read workspace snapshot {}: {}",
-            source.display(),
-            error
-        )
-    })?;
+    let raw = read_snapshot_file(&source)?;
     let mut imported = parse_import_snapshot(&raw)?;
     mark_imported_sessions_suspended(&mut imported);
     let counts = transfer_counts(&imported);

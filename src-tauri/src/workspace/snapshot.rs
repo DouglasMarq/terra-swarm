@@ -159,11 +159,7 @@ pub fn store_saved_at(store: State<'_, Mutex<WorkspaceStore>>) -> Result<Option<
     let Some(path) = &store.save_path else {
         return Ok(None);
     };
-    let millis = std::fs::metadata(path)
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(crate::clock::epoch_millis);
-    Ok(millis)
+    Ok(modified_millis(path))
 }
 
 /// Export the current metadata snapshot to an explicit, absolute local path.

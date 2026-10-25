@@ -214,6 +214,23 @@ pub(crate) fn write_atomic(path: &std::path::Path, json: &str) -> std::io::Resul
     result
 }
 
+pub(crate) fn modified_millis(path: &Path) -> Option<u64> {
+    std::fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(crate::clock::epoch_millis)
+}
+
+pub(crate) fn read_snapshot_file(path: &Path) -> Result<String, String> {
+    std::fs::read_to_string(path).map_err(|error| {
+        format!(
+            "failed to read workspace snapshot {}: {}",
+            path.display(),
+            error
+        )
+    })
+}
+
 /// Move an existing store out of the way before normalizing it.  The first
 /// backup keeps the historical `workspaces.json.bak` name; subsequent
 /// recoveries get a numbered suffix instead of replacing an earlier backup.

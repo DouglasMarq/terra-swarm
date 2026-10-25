@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,6 +15,12 @@ vi.mock("./CodeEditor", () => ({
 import { IpcError } from "../../lib/tauri/errors";
 import { useEditorStore } from "../../stores/editorStore";
 import { FileEditorDialog } from "./FileEditorDialog";
+
+function footerClose(): HTMLElement {
+  const button = screen.getAllByRole("button", { name: "Fechar" }).find((candidate) => candidate.textContent?.trim() === "Fechar");
+  if (!button) throw new Error("the footer close button is missing");
+  return button;
+}
 
 describe("FileEditorDialog", () => {
   beforeEach(() => {
@@ -56,5 +62,71 @@ describe("FileEditorDialog", () => {
     act(() => useEditorStore.getState().open({ workspaceId: "ws", path: "logo.png" }));
     expect(await screen.findByText(/binário/i)).toBeTruthy();
     expect(screen.queryByLabelText("code")).toBeNull();
+  });
+
+  it("Given a file that cannot be read, when opening it, then the reason is shown and saving is off", async () => {
+    api.readWorkspaceFile.mockRejectedValue(new Error("permission denied"));
+    render(<FileEditorDialog />);
+    act(() => useEditorStore.getState().open({ workspaceId: "ws", path: "src/a.ts" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("permission denied");
+    expect(screen.getByRole("button", { name: /salvar/i })).toBeDisabled();
+  });
+
+  it("Given unsaved changes, when closing, then it asks first and the second close discards them", async () => {
+    const user = userEvent.setup();
+    render(<FileEditorDialog />);
+    act(() => useEditorStore.getState().open({ workspaceId: "ws", path: "src/a.ts" }));
+
+    fireEvent.change(await screen.findByLabelText("code"), { target: { value: "two" } });
+    expect(screen.getByLabelText("Alterações não salvas")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.getByText("Há alterações não salvas. Fechar mesmo assim e perdê-las?")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Descartar e fechar" }));
+
+    expect(useEditorStore.getState().target).toBeNull();
+  });
+
+  it("Given a clean file, when closing, then it closes at once", async () => {
+    const user = userEvent.setup();
+    render(<FileEditorDialog />);
+    act(() => useEditorStore.getState().open({ workspaceId: "ws", path: "src/a.ts" }));
+
+    await screen.findByLabelText("code");
+    await user.click(footerClose());
+
+    expect(useEditorStore.getState().target).toBeNull();
+  });
+
+  it("Given a conflict while a discard is pending, when reloading from disk, then the file is read again and the prompt clears", async () => {
+    const user = userEvent.setup();
+    api.writeWorkspaceFile.mockRejectedValueOnce(new IpcError({ code: "changedOnDisk", message: "the file changed on disk since it was opened" }));
+    api.readWorkspaceFile.mockResolvedValueOnce({ path: "src/a.ts", content: "one", isBinary: false, size: 3, modified: 10 });
+    api.readWorkspaceFile.mockResolvedValueOnce({ path: "src/a.ts", content: "agent edit", isBinary: false, size: 10, modified: 30 });
+    render(<FileEditorDialog />);
+    act(() => useEditorStore.getState().open({ workspaceId: "ws", path: "src/a.ts" }));
+
+    fireEvent.change(await screen.findByLabelText("code"), { target: { value: "two" } });
+    await user.click(screen.getByRole("button", { name: /salvar/i }));
+    await user.click(footerClose());
+    await user.click(await screen.findByRole("button", { name: "Recarregar do disco" }));
+
+    expect(await screen.findByDisplayValue("agent edit")).toBeInTheDocument();
+    expect(screen.queryByText("Há alterações não salvas. Fechar mesmo assim e perdê-las?")).not.toBeInTheDocument();
+    expect(api.readWorkspaceFile).toHaveBeenCalledTimes(2);
+  });
+
+  it("Given a pending discard, when the save succeeds, then the prompt clears", async () => {
+    const user = userEvent.setup();
+    api.writeWorkspaceFile.mockResolvedValueOnce({ size: 3, modified: 20 });
+    render(<FileEditorDialog />);
+    act(() => useEditorStore.getState().open({ workspaceId: "ws", path: "src/a.ts" }));
+
+    fireEvent.change(await screen.findByLabelText("code"), { target: { value: "two" } });
+    await user.click(footerClose());
+    await user.click(screen.getByRole("button", { name: /salvar/i }));
+
+    await waitFor(() => expect(footerClose()).toBeInTheDocument());
+    expect(useEditorStore.getState().target).not.toBeNull();
   });
 });

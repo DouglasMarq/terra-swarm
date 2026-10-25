@@ -161,6 +161,386 @@ function placementFromNestedPane(
   return null;
 }
 
+interface LegacyMigrationState {
+  layout: WorkspaceLayout;
+  projects: Project[];
+  groups: Group[];
+  containers: WorkspaceContainer[];
+  panes: Pane[];
+  tabs: TerminalTab[];
+  orphanedTabIds: string[];
+  usedProjectIds: Set<string>;
+  usedContainerIds: Set<string>;
+  usedPaneIds: Set<string>;
+  usedTabIds: Set<string>;
+  usedPtyIds: Set<string>;
+}
+
+interface WorkspaceMigration {
+  raw: RecordLike;
+  index: number;
+  rawId: string;
+  project: Project;
+  layout: WorkspaceLayout;
+  paneRows: RecordLike[];
+  containerRows: RecordLike[];
+  containers: WorkspaceContainer[];
+  containerIdsBySource: Map<string, string>;
+  paneIdsBySource: Map<string, string>;
+  tabIdsBySource: Map<string, string>;
+  paneActiveTabBySource: Map<string, string>;
+  paneContainerBySource: Map<string, string>;
+  paneLayoutBySource: Map<string, WorkspaceLayout>;
+}
+
+interface LegacyTerminal {
+  index: number;
+  meta: TerminalMeta;
+  rawId: string;
+  ptyId: string | null;
+  sourcePaneId: string;
+  sourceTabId: string;
+}
+
+interface IndexedValue {
+  value: unknown;
+  index: number;
+}
+
+interface ContainerOwner {
+  projectId: string;
+  layout: WorkspaceLayout;
+  idsBySource: Map<string, string>;
+}
+
+function createLegacyMigrationState(layout: WorkspaceLayout): LegacyMigrationState {
+  return {
+    layout,
+    projects: [],
+    groups: [],
+    containers: [],
+    panes: [],
+    tabs: [],
+    orphanedTabIds: [],
+    usedProjectIds: new Set<string>(),
+    usedContainerIds: new Set<string>(),
+    usedPaneIds: new Set<string>(),
+    usedTabIds: new Set<string>(),
+    usedPtyIds: new Set<string>(),
+  };
+}
+
+function legacyWorkspaceLayout(rawWorkspace: RecordLike, layout: WorkspaceLayout): WorkspaceLayout {
+  return normalizeLayout(
+    rawWorkspace.layout ?? {
+      mode: readString(rawWorkspace.layoutMode) || layout.mode,
+    },
+    layout,
+  );
+}
+
+function legacyContainer(rawContainer: RecordLike, containerId: string, owner: ContainerOwner): WorkspaceContainer {
+  const visible = rawContainer.visible !== false && rawContainer.closed !== true;
+  return {
+    id: containerId,
+    projectId: owner.projectId,
+    paneIds: [],
+    layout: normalizeLayout(rawContainer.layout, owner.layout),
+    activePaneId: null,
+    internalLayout: readString(rawContainer.internalLayout) || undefined,
+    size: readFiniteNumber(rawContainer.size) ?? undefined,
+    visible,
+    collapsed: Boolean(rawContainer.collapsed),
+    closed: !visible,
+    fullscreen: Boolean(rawContainer.fullscreen),
+  };
+}
+
+function legacyContainers(
+  state: LegacyMigrationState,
+  containerRows: readonly RecordLike[],
+  owner: ContainerOwner,
+): WorkspaceContainer[] {
+  return containerRows.map((rawContainer, containerIndex) => {
+    const sourceId = readString(rawContainer.id);
+    const containerId = uniqueId(
+      sourceId || `container-${owner.projectId}`,
+      `container-${owner.projectId}-${containerIndex + 1}`,
+      state.usedContainerIds,
+    );
+    if (sourceId) owner.idsBySource.set(sourceId, containerId);
+    return legacyContainer(rawContainer, containerId, owner);
+  });
+}
+
+function startWorkspaceMigration(
+  state: LegacyMigrationState,
+  rawWorkspace: RecordLike,
+  workspaceIndex: number,
+): WorkspaceMigration {
+  const rawId = readString(rawWorkspace.id);
+  const projectId = uniqueId(rawId, `project-${workspaceIndex + 1}`, state.usedProjectIds);
+  const layout = legacyWorkspaceLayout(rawWorkspace, state.layout);
+  const rawContainerRows = readArray(rawWorkspace.containers).map(asRecord);
+  const containerRows = rawContainerRows.length > 0 ? rawContainerRows : [{}];
+  const containerIdsBySource = new Map<string, string>();
+  const containers = legacyContainers(state, containerRows, { projectId, layout, idsBySource: containerIdsBySource });
+  const workspaceGroupId = readString(rawWorkspace.groupId) || readString(rawWorkspace.group_id);
+  const project: Project = {
+    id: projectId,
+    name: readString(rawWorkspace.name) || `Project ${workspaceIndex + 1}`,
+    cwd: readString(rawWorkspace.cwd),
+    groupId: workspaceGroupId || null,
+    paneIds: [],
+    containerIds: containers.map((container) => container.id),
+    activePaneId: null,
+    activeContainerId:
+      containerIdsBySource.get(readString(rawWorkspace.activeContainerId)) || containers[0]?.id || null,
+    layout: cloneLayout(layout),
+    collapsed: Boolean(rawWorkspace.collapsed),
+  };
+  return {
+    raw: rawWorkspace,
+    index: workspaceIndex,
+    rawId,
+    project,
+    layout,
+    paneRows: workspacePaneRows(rawWorkspace),
+    containerRows,
+    containers,
+    containerIdsBySource,
+    paneIdsBySource: new Map<string, string>(),
+    tabIdsBySource: new Map<string, string>(),
+    paneActiveTabBySource: new Map<string, string>(),
+    paneContainerBySource: new Map<string, string>(),
+    paneLayoutBySource: new Map<string, WorkspaceLayout>(),
+  };
+}
+
+function sourcePaneContainerId(workspace: WorkspaceMigration, rawPane: RecordLike, sourcePaneId: string): string {
+  const sourceContainerId = readString(rawPane.containerId) || readString(rawPane.container_id);
+  const mappedContainerId = workspace.containerIdsBySource.get(sourceContainerId);
+  const containingContainer = workspace.containerRows.find((rawContainer) =>
+    readArray(rawContainer.paneIds).some((paneId) => readString(paneId) === sourcePaneId),
+  );
+  const containingId = containingContainer
+    ? workspace.containerIdsBySource.get(readString(containingContainer.id))
+    : undefined;
+  return mappedContainerId || containingId || workspace.containers[0]?.id || "";
+}
+
+function indexSourcePanes(workspace: WorkspaceMigration): void {
+  for (const rawPane of workspace.paneRows) {
+    const sourcePaneId = readString(rawPane.id);
+    const sourceActiveTabId = readString(rawPane.activeTabId) || readString(rawPane.active_tab_id);
+    if (sourcePaneId && sourceActiveTabId) {
+      workspace.paneActiveTabBySource.set(sourcePaneId, sourceActiveTabId);
+    }
+    if (!sourcePaneId) continue;
+    workspace.paneContainerBySource.set(sourcePaneId, sourcePaneContainerId(workspace, rawPane, sourcePaneId));
+    workspace.paneLayoutBySource.set(sourcePaneId, normalizeLayout(rawPane.layout, workspace.layout));
+  }
+}
+
+function claimLegacyTerminal(
+  state: LegacyMigrationState,
+  workspace: WorkspaceMigration,
+  row: IndexedValue,
+): LegacyTerminal {
+  const terminal = asRecord(row.value);
+  const meta = terminalMeta(terminal, `legacy-terminal-${workspace.index + 1}-${row.index + 1}`);
+  const rawId = readString(terminal.id) || readString(asRecord(terminal.meta).id);
+  const ptyId = rawId.length > 0 && !state.usedPtyIds.has(rawId) ? rawId : null;
+  if (ptyId) state.usedPtyIds.add(ptyId);
+  const nestedPlacement = placementFromNestedPane(workspace.raw, rawId, meta.tabId ?? "");
+  return {
+    index: row.index,
+    meta,
+    rawId,
+    ptyId,
+    sourcePaneId: meta.paneId || nestedPlacement?.paneId || "",
+    sourceTabId: meta.tabId || nestedPlacement?.tabId || "",
+  };
+}
+
+function claimLegacyPaneId(
+  state: LegacyMigrationState,
+  workspace: WorkspaceMigration,
+  terminal: LegacyTerminal,
+): string {
+  const { sourcePaneId } = terminal;
+  const paneId =
+    (sourcePaneId && workspace.paneIdsBySource.get(sourcePaneId)) ||
+    uniqueId(sourcePaneId, `pane-${workspace.project.id}-${terminal.index + 1}`, state.usedPaneIds);
+  if (sourcePaneId) workspace.paneIdsBySource.set(sourcePaneId, paneId);
+  return paneId;
+}
+
+function claimLegacyTabId(
+  state: LegacyMigrationState,
+  workspace: WorkspaceMigration,
+  terminal: LegacyTerminal,
+): string {
+  const { sourceTabId } = terminal;
+  const tabId =
+    (sourceTabId && workspace.tabIdsBySource.get(sourceTabId)) ||
+    uniqueId(sourceTabId, `tab-${workspace.project.id}-${terminal.index + 1}`, state.usedTabIds);
+  if (sourceTabId) workspace.tabIdsBySource.set(sourceTabId, tabId);
+  return tabId;
+}
+
+function legacyTab(
+  workspace: WorkspaceMigration,
+  terminal: LegacyTerminal,
+  placement: { paneId: string; tabId: string },
+): RuntimeTab {
+  const { meta } = terminal;
+  return {
+    id: placement.tabId,
+    paneId: placement.paneId,
+    ptyId: terminal.ptyId,
+    command: meta.command,
+    cwd: workspace.project.cwd,
+    width: meta.width,
+    title: meta.command || "Terminal",
+    ...(meta.suspended !== undefined ? { suspended: meta.suspended } : {}),
+    ...(meta.groupId ? { groupId: meta.groupId } : {}),
+    ...(terminal.sourcePaneId ? { placementExplicit: true } : {}),
+    ...(terminal.rawId && terminal.ptyId === null ? { legacyTerminalId: terminal.rawId } : {}),
+    ...(workspace.rawId ? { legacyWorkspaceId: workspace.rawId } : {}),
+    orphaned: terminal.ptyId === null,
+  };
+}
+
+function legacyPaneFor(
+  state: LegacyMigrationState,
+  workspace: WorkspaceMigration,
+  placement: { paneId: string; sourcePaneId: string; containerId: string },
+): Pane {
+  const existing = state.panes.find((candidate) => candidate.id === placement.paneId);
+  if (existing) return existing;
+  const pane: Pane = {
+    id: placement.paneId,
+    projectId: workspace.project.id,
+    containerId: placement.containerId,
+    tabIds: [],
+    activeTabId: null,
+    layout: cloneLayout(
+      (placement.sourcePaneId && workspace.paneLayoutBySource.get(placement.sourcePaneId)) || workspace.layout,
+    ),
+  };
+  state.panes.push(pane);
+  workspace.project.paneIds.push(pane.id);
+  workspace.containers.find((candidate) => candidate.id === placement.containerId)?.paneIds.push(pane.id);
+  return pane;
+}
+
+function migrateLegacyTerminal(
+  state: LegacyMigrationState,
+  workspace: WorkspaceMigration,
+  row: IndexedValue,
+): void {
+  const terminal = claimLegacyTerminal(state, workspace, row);
+  const paneId = claimLegacyPaneId(state, workspace, terminal);
+  const tabId = claimLegacyTabId(state, workspace, terminal);
+  const containerId =
+    (terminal.sourcePaneId && workspace.paneContainerBySource.get(terminal.sourcePaneId)) ||
+    workspace.containers[0]?.id ||
+    "";
+  const tab = legacyTab(workspace, terminal, { paneId, tabId });
+  if (!workspace.project.groupId && terminal.meta.groupId) workspace.project.groupId = terminal.meta.groupId;
+  const pane = legacyPaneFor(state, workspace, { paneId, sourcePaneId: terminal.sourcePaneId, containerId });
+  pane.tabIds.push(tabId);
+  pane.activeTabId ??= tabId;
+  state.tabs.push(tab);
+  workspace.project.activePaneId ??= paneId;
+  if (tab.orphaned) state.orphanedTabIds.push(tabId);
+}
+
+function applyRequestedActivePane(workspace: WorkspaceMigration): void {
+  const requestedActivePaneId = readString(workspace.raw.activePaneId) || readString(workspace.raw.active_pane_id);
+  if (!requestedActivePaneId || !workspace.paneIdsBySource.has(requestedActivePaneId)) return;
+  workspace.project.activePaneId = workspace.paneIdsBySource.get(requestedActivePaneId) ?? workspace.project.activePaneId;
+}
+
+function applySourceActiveTabs(state: LegacyMigrationState, workspace: WorkspaceMigration): void {
+  for (const [sourcePaneId, sourceActiveTabId] of workspace.paneActiveTabBySource) {
+    const paneId = workspace.paneIdsBySource.get(sourcePaneId);
+    const tabId = workspace.tabIdsBySource.get(sourceActiveTabId);
+    const pane = state.panes.find((candidate) => candidate.id === paneId);
+    if (pane && tabId && pane.tabIds.includes(tabId)) pane.activeTabId = tabId;
+  }
+}
+
+function applySourceTabOrder(state: LegacyMigrationState, workspace: WorkspaceMigration): void {
+  for (const rawPane of workspace.paneRows) {
+    const paneId = workspace.paneIdsBySource.get(readString(rawPane.id));
+    const pane = state.panes.find((candidate) => candidate.id === paneId);
+    if (!pane) continue;
+    const tabOrder = readArray(rawPane.tabs)
+      .map((rawTab) => workspace.tabIdsBySource.get(readString(asRecord(rawTab).id)))
+      .filter((tabId): tabId is string => Boolean(tabId));
+    if (tabOrder.length > 0) {
+      pane.tabIds = uniqueStrings([...tabOrder, ...pane.tabIds]);
+    }
+  }
+}
+
+function applySourceContainerOrder(workspace: WorkspaceMigration): void {
+  for (const [index, rawContainer] of workspace.containerRows.entries()) {
+    const target = workspace.containers[index];
+    if (!target) continue;
+    const paneOrder = readArray(rawContainer.paneIds)
+      .map((rawPaneId) => workspace.paneIdsBySource.get(readString(rawPaneId)))
+      .filter((paneId): paneId is string => Boolean(paneId));
+    if (paneOrder.length > 0) {
+      target.paneIds = uniqueStrings([...paneOrder, ...target.paneIds]);
+      target.layout = mergeWorkspaceLayout(
+        target.layout,
+        { ...target.layout, itemIds: target.paneIds },
+        new Set(target.paneIds),
+        workspace.layout,
+      );
+    }
+    const sourceActivePaneId =
+      readString(rawContainer.activePaneId) || readString(rawContainer.active_pane_id);
+    target.activePaneId =
+      (sourceActivePaneId && workspace.paneIdsBySource.get(sourceActivePaneId)) ||
+      target.paneIds[0] ||
+      null;
+  }
+}
+
+function migrateLegacyWorkspace(state: LegacyMigrationState, rawWorkspace: RecordLike, workspaceIndex: number): void {
+  const workspace = startWorkspaceMigration(state, rawWorkspace, workspaceIndex);
+  state.projects.push(workspace.project);
+  state.containers.push(...workspace.containers);
+  indexSourcePanes(workspace);
+  readArray(rawWorkspace.terminals).forEach((value, index) => migrateLegacyTerminal(state, workspace, { value, index }));
+  applyRequestedActivePane(workspace);
+  applySourceActiveTabs(state, workspace);
+  applySourceTabOrder(state, workspace);
+  applySourceContainerOrder(workspace);
+}
+
+function legacySnapshot(state: LegacyMigrationState): WorkspaceSnapshotV2 {
+  return {
+    version: DOMAIN_SNAPSHOT_VERSION,
+    projects: state.projects,
+    groups: state.groups,
+    containers: state.containers,
+    panes: state.panes,
+    tabs: state.tabs,
+    orphanedTabIds: uniqueStrings(state.orphanedTabIds),
+    activeProjectId: state.projects[0]?.id ?? null,
+    activeGroupId: null,
+    activeContainerId: state.containers[0]?.id ?? null,
+    activePaneId: state.panes[0]?.id ?? null,
+    activeTabId: state.tabs[0]?.id ?? null,
+    layout: cloneLayout(state.layout),
+  };
+}
+
 /**
  * Converts the pre-Onda-2 `Workspace[]` contract into normalized entities.
  *
@@ -172,255 +552,11 @@ export function migrateLegacyWorkspaces(
   input: readonly Workspace[] | unknown,
   options: LegacyMigrationOptions = {},
 ): WorkspaceSnapshotV2 {
-  const workspaces = migrationWorkspaceRows(input);
-  const layout = layoutFor(options);
-  const projects: Project[] = [];
-  const groups: Group[] = [];
-  const containers: WorkspaceContainer[] = [];
-  const panes: Pane[] = [];
-  const tabs: TerminalTab[] = [];
-  const orphanedTabIds: string[] = [];
-  const usedProjectIds = new Set<string>();
-  const usedContainerIds = new Set<string>();
-  const usedPaneIds = new Set<string>();
-  const usedTabIds = new Set<string>();
-  const usedPtyIds = new Set<string>();
-
-  workspaces.forEach((rawWorkspace, workspaceIndex) => {
-    const rawWorkspaceId = readString(rawWorkspace.id);
-    const projectId = uniqueId(
-      rawWorkspaceId,
-      `project-${workspaceIndex + 1}`,
-      usedProjectIds,
-    );
-    const projectName = readString(rawWorkspace.name) || `Project ${workspaceIndex + 1}`;
-    const projectCwd = readString(rawWorkspace.cwd);
-    const workspaceGroupId = readString(rawWorkspace.groupId) || readString(rawWorkspace.group_id);
-    const workspaceLayout = normalizeLayout(
-      rawWorkspace.layout ?? {
-        mode: readString(rawWorkspace.layoutMode) || layout.mode,
-      },
-      layout,
-    );
-    const rawPaneRows = workspacePaneRows(rawWorkspace);
-    const rawContainerRows = readArray(rawWorkspace.containers).map(asRecord);
-    const project: Project = {
-      id: projectId,
-      name: projectName,
-      cwd: projectCwd,
-      groupId: workspaceGroupId || null,
-      paneIds: [],
-      containerIds: [],
-      activePaneId: null,
-      activeContainerId: null,
-      layout: cloneLayout(workspaceLayout),
-      collapsed: Boolean(rawWorkspace.collapsed),
-    };
-    projects.push(project);
-
-    const sourceContainerRows = rawContainerRows.length > 0 ? rawContainerRows : [{}];
-    const sourceContainerIds = new Map<string, string>();
-    const containersForProject: WorkspaceContainer[] = sourceContainerRows.map(
-      (rawContainer, containerIndex): WorkspaceContainer => {
-        const sourceId = readString(rawContainer.id);
-        const containerId = uniqueId(
-          sourceId || `container-${projectId}`,
-          `container-${projectId}-${containerIndex + 1}`,
-          usedContainerIds,
-        );
-        if (sourceId) sourceContainerIds.set(sourceId, containerId);
-        const containerLayout = normalizeLayout(rawContainer.layout, workspaceLayout);
-        const visible = rawContainer.visible !== false && rawContainer.closed !== true;
-        return {
-          id: containerId,
-          projectId,
-          paneIds: [],
-          layout: containerLayout,
-          activePaneId: null,
-          internalLayout: readString(rawContainer.internalLayout) || undefined,
-          size: readFiniteNumber(rawContainer.size) ?? undefined,
-          visible,
-          collapsed: Boolean(rawContainer.collapsed),
-          closed: !visible,
-          fullscreen: Boolean(rawContainer.fullscreen),
-        };
-      },
-    );
-    containers.push(...containersForProject);
-    project.containerIds.push(...containersForProject.map((container) => container.id));
-    project.activeContainerId =
-      sourceContainerIds.get(readString(rawWorkspace.activeContainerId)) ||
-      containersForProject[0]?.id ||
-      null;
-
-    const rawTerminals = readArray(rawWorkspace.terminals);
-    const paneIdsBySource = new Map<string, string>();
-    const tabIdsBySource = new Map<string, string>();
-    const paneActiveTabBySource = new Map<string, string>();
-    const paneContainerBySource = new Map<string, string>();
-    const paneLayoutBySource = new Map<string, WorkspaceLayout>();
-    for (const rawPane of rawPaneRows) {
-      const sourcePaneId = readString(rawPane.id);
-      const sourceActiveTabId = readString(rawPane.activeTabId) || readString(rawPane.active_tab_id);
-      if (sourcePaneId && sourceActiveTabId) {
-        paneActiveTabBySource.set(sourcePaneId, sourceActiveTabId);
-      }
-      if (sourcePaneId) {
-        const sourceContainerId =
-          readString(rawPane.containerId) || readString(rawPane.container_id);
-        const mappedContainerId = sourceContainerIds.get(sourceContainerId);
-        const containingContainer = sourceContainerRows.find((rawContainer) =>
-          readArray(rawContainer.paneIds).some((paneId) => readString(paneId) === sourcePaneId),
-        );
-        const containingId = containingContainer
-          ? sourceContainerIds.get(readString(containingContainer.id))
-          : undefined;
-        paneContainerBySource.set(
-          sourcePaneId,
-          mappedContainerId || containingId || containersForProject[0]?.id || "",
-        );
-        paneLayoutBySource.set(sourcePaneId, normalizeLayout(rawPane.layout, workspaceLayout));
-      }
-    }
-    rawTerminals.forEach((rawTerminal, terminalIndex) => {
-      const terminal = asRecord(rawTerminal);
-      const rawMeta = terminalMeta(terminal, `legacy-terminal-${workspaceIndex + 1}-${terminalIndex + 1}`);
-      const rawTerminalId = readString(terminal.id) || readString(asRecord(terminal.meta).id);
-      const hasUniquePtyId = rawTerminalId.length > 0 && !usedPtyIds.has(rawTerminalId);
-      const ptyId = hasUniquePtyId ? rawTerminalId : null;
-      if (ptyId) usedPtyIds.add(ptyId);
-
-      const nestedPlacement = placementFromNestedPane(rawWorkspace, rawTerminalId, rawMeta.tabId ?? "");
-      const sourcePaneId = rawMeta.paneId || nestedPlacement?.paneId || "";
-      const sourceTabId = rawMeta.tabId || nestedPlacement?.tabId || "";
-      const paneId =
-        (sourcePaneId && paneIdsBySource.get(sourcePaneId)) ||
-        uniqueId(
-          sourcePaneId,
-          `pane-${projectId}-${terminalIndex + 1}`,
-          usedPaneIds,
-        );
-      if (sourcePaneId) paneIdsBySource.set(sourcePaneId, paneId);
-      const tabId =
-        (sourceTabId && tabIdsBySource.get(sourceTabId)) ||
-        uniqueId(
-          sourceTabId,
-          `tab-${projectId}-${terminalIndex + 1}`,
-          usedTabIds,
-        );
-      if (sourceTabId) tabIdsBySource.set(sourceTabId, tabId);
-      const paneContainerId =
-        (sourcePaneId && paneContainerBySource.get(sourcePaneId)) ||
-        containersForProject[0]?.id ||
-        "";
-      const orphaned = !hasUniquePtyId;
-      const tab = {
-        id: tabId,
-        paneId,
-        ptyId,
-        command: rawMeta.command,
-        cwd: projectCwd,
-        width: rawMeta.width,
-        title: rawMeta.command || "Terminal",
-        ...(rawMeta.suspended !== undefined ? { suspended: rawMeta.suspended } : {}),
-        ...(rawMeta.groupId ? { groupId: rawMeta.groupId } : {}),
-        ...(sourcePaneId ? { placementExplicit: true } : {}),
-        ...(rawTerminalId && !hasUniquePtyId ? { legacyTerminalId: rawTerminalId } : {}),
-        ...(rawWorkspaceId ? { legacyWorkspaceId: rawWorkspaceId } : {}),
-        orphaned,
-      } as TerminalTab;
-      if (!project.groupId && rawMeta.groupId) project.groupId = rawMeta.groupId;
-      let pane = panes.find((candidate) => candidate.id === paneId);
-      if (!pane) {
-        pane = {
-          id: paneId,
-          projectId,
-          containerId: paneContainerId,
-          tabIds: [],
-          activeTabId: null,
-          layout: cloneLayout(
-            (sourcePaneId && paneLayoutBySource.get(sourcePaneId)) || workspaceLayout,
-          ),
-        };
-        panes.push(pane);
-        project.paneIds.push(paneId);
-        const container = containersForProject.find(
-          (candidate) => candidate.id === paneContainerId,
-        );
-        container?.paneIds.push(paneId);
-      }
-      pane.tabIds.push(tabId);
-      pane.activeTabId ??= tabId;
-      tabs.push(tab);
-      project.activePaneId ??= paneId;
-      if (orphaned) orphanedTabIds.push(tabId);
-    });
-
-    const requestedActivePaneId = readString(rawWorkspace.activePaneId) || readString(rawWorkspace.active_pane_id);
-    if (requestedActivePaneId && paneIdsBySource.has(requestedActivePaneId)) {
-      project.activePaneId = paneIdsBySource.get(requestedActivePaneId) ?? project.activePaneId;
-    }
-    for (const [sourcePaneId, sourceActiveTabId] of paneActiveTabBySource) {
-      const paneId = paneIdsBySource.get(sourcePaneId);
-      const tabId = tabIdsBySource.get(sourceActiveTabId);
-      const pane = panes.find((candidate) => candidate.id === paneId);
-      if (pane && tabId && pane.tabIds.includes(tabId)) pane.activeTabId = tabId;
-    }
-    for (const rawPane of rawPaneRows) {
-      const sourcePaneId = readString(rawPane.id);
-      const paneId = paneIdsBySource.get(sourcePaneId);
-      const pane = panes.find((candidate) => candidate.id === paneId);
-      if (!pane) continue;
-      const tabOrder = readArray(rawPane.tabs)
-        .map((rawTab) => tabIdsBySource.get(readString(asRecord(rawTab).id)))
-        .filter((tabId): tabId is string => Boolean(tabId));
-      if (tabOrder.length > 0) {
-        pane.tabIds = uniqueStrings([...tabOrder, ...pane.tabIds]);
-      }
-    }
-    for (const [index, rawContainer] of sourceContainerRows.entries()) {
-      const target = containersForProject[index];
-      if (!target) continue;
-      const paneOrder = readArray(rawContainer.paneIds)
-        .map((rawPaneId) => paneIdsBySource.get(readString(rawPaneId)))
-        .filter((paneId): paneId is string => Boolean(paneId));
-      if (paneOrder.length > 0) {
-        target.paneIds = uniqueStrings([...paneOrder, ...target.paneIds]);
-        target.layout = mergeWorkspaceLayout(
-          target.layout,
-          { ...target.layout, itemIds: target.paneIds },
-          new Set(target.paneIds),
-          workspaceLayout,
-        );
-      }
-      const sourceActivePaneId =
-        readString(rawContainer.activePaneId) || readString(rawContainer.active_pane_id);
-      target.activePaneId =
-        (sourceActivePaneId && paneIdsBySource.get(sourceActivePaneId)) ||
-        target.paneIds[0] ||
-        null;
-    }
-  });
-
-  const firstProject = projects[0] ?? null;
-  const firstContainer = containers[0] ?? null;
-  const firstPane = panes[0] ?? null;
-  const firstTab = tabs[0] ?? null;
-  return {
-    version: DOMAIN_SNAPSHOT_VERSION,
-    projects,
-    groups,
-    containers,
-    panes,
-    tabs,
-    orphanedTabIds: uniqueStrings(orphanedTabIds),
-    activeProjectId: firstProject?.id ?? null,
-    activeGroupId: null,
-    activeContainerId: firstContainer?.id ?? null,
-    activePaneId: firstPane?.id ?? null,
-    activeTabId: firstTab?.id ?? null,
-    layout: cloneLayout(layout),
-  };
+  const state = createLegacyMigrationState(layoutFor(options));
+  migrationWorkspaceRows(input).forEach((rawWorkspace, workspaceIndex) =>
+    migrateLegacyWorkspace(state, rawWorkspace, workspaceIndex),
+  );
+  return legacySnapshot(state);
 }
 
 /** Portuguese-friendly alias used by callers that describe this as a migration. */

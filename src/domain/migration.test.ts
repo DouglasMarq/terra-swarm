@@ -59,6 +59,54 @@ describe("migrateLegacyWorkspaces", () => {
     expect(snapshot.activeTabId).toBe("tab-ws-alpha-1");
   });
 
+  it("Given legacy containers and panes with their own order, when migrating, then the source order, visibility and active ids are kept", () => {
+    const snapshot = migrateLegacyWorkspaces([
+      {
+        id: "ws-split",
+        name: "Split",
+        cwd: "/work/split",
+        activeContainerId: "c-right",
+        activePaneId: "p-c",
+        containers: [
+          { id: "c-left", paneIds: ["p-b", "p-a"], activePaneId: "p-a" },
+          { id: "c-right", visible: false, size: 30 },
+        ],
+        panes: [
+          { id: "p-a", activeTabId: "t-a2", tabs: [{ id: "t-a2" }, { id: "t-a1" }] },
+          { id: "p-b" },
+          { id: "p-c", containerId: "c-right" },
+        ],
+        terminals: [
+          { id: "pty-a1", command: "codex", paneId: "p-a", tabId: "t-a1" },
+          { id: "pty-a2", command: "claude", paneId: "p-a", tabId: "t-a2" },
+          { id: "pty-b", command: "bash", paneId: "p-b", tabId: "t-b", groupId: "group-1" },
+          { id: "pty-c", command: "zsh", paneId: "p-c", tabId: "t-c" },
+        ],
+      },
+    ]);
+
+    expect(snapshot.projects[0]).toMatchObject({
+      containerIds: ["c-left", "c-right"],
+      activeContainerId: "c-right",
+      activePaneId: "p-c",
+      groupId: "group-1",
+    });
+    expect(snapshot.containers).toMatchObject([
+      { id: "c-left", paneIds: ["p-b", "p-a"], activePaneId: "p-a", visible: true },
+      { id: "c-right", paneIds: ["p-c"], activePaneId: "p-c", visible: false, closed: true, size: 30 },
+    ]);
+    expect(snapshot.panes.find((pane) => pane.id === "p-a")).toMatchObject({
+      tabIds: ["t-a2", "t-a1"],
+      activeTabId: "t-a2",
+      containerId: "c-left",
+    });
+    expect(snapshot.tabs.find((tab) => tab.id === "t-b")).toMatchObject({
+      paneId: "p-b",
+      legacyWorkspaceId: "ws-split",
+      orphaned: false,
+    });
+  });
+
   it("is deterministic and keeps the old workspace ids", () => {
     const legacy = [
       {

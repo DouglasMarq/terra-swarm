@@ -269,21 +269,8 @@ function withRecentCommands(
     );
 }
 
-/** Build the complete, callback-free command model for the current Terra state. */
-export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[] {
-  const groups = data.groups ?? [];
-  const agents = data.agents ?? [];
-  // Starting an agent needs a real workspace target. Keep the command visible
-  // so the palette explains what is missing, but never dispatch an empty id
-  // to the host (which would turn into a failed spawn request).
-  const focusedWorkspaceId = data.focusedWorkspaceId && data.workspaces.some(
-    (workspace) => workspace.id === data.focusedWorkspaceId,
-  )
-    ? data.focusedWorkspaceId
-    : null;
-  const hasAgentWorkspace = focusedWorkspaceId !== null;
-  const context = focusedContext(data);
-  const commands: CommandDescriptor[] = [
+function routeCommands(): CommandDescriptor[] {
+  return [
     command({
       id: "navigate:workbench",
       label: t("palette.goWorkbench"),
@@ -321,55 +308,65 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       intent: { kind: "navigate", route: "settings" },
     }),
   ];
+}
 
-  for (const group of groups) {
-    const groupName = group.name.trim() || group.id;
-    commands.push(
-      command({
-        id: `open-group:${safeIdPart(group.id)}`,
-        label: t("palette.openGroup", { name: groupName }),
-        description: t("palette.openGroupDesc"),
-        group: "navigation",
-        keywords: [groupName, "grupo", "projeto", "abrir"],
-        icon: "group",
-        intent: { kind: "open-group", groupId: group.id },
-      }),
-    );
-  }
+function groupName(group: WorkspaceGroup): string {
+  return group.name.trim() || group.id;
+}
 
-  for (const workspace of data.workspaces) {
-    const name = workspaceLabel(workspace);
-    commands.push(
-      command({
-        id: `open-workspace:${safeIdPart(workspace.id)}`,
-        label: t("palette.openProject", { name }),
-        description: workspace.cwd || t("palette.openProjectDesc"),
-        group: "navigation",
-        keywords: [name, workspace.cwd, "projeto", "workspace", "abrir"],
-        icon: "folder",
-        intent: { kind: "open-workspace", workspaceId: workspace.id },
-      }),
-    );
-    for (const terminal of workspace.terminals) {
-      const terminalName = terminalLabel(terminal);
-      const agentLabel = data.agentLabels?.[terminal.id];
-      const primary = agentLabel?.primary ?? terminalName;
-      const tag = agentLabel?.tag ?? terminalName;
-      commands.push(
-        command({
-          id: `open-terminal:${safeIdPart(workspace.id)}:${safeIdPart(terminal.id)}`,
-          label: agentLabel ? `${primary} · ${name}` : t("palette.openAgent", { name: terminalName, project: name }),
-          description: agentLabel ? t("palette.openAgentDescTagged", { tag }) : t("palette.openAgentDesc"),
-          group: "navigation",
-          keywords: [terminalName, primary, tag, name, workspace.cwd, "agente", "terminal", "focar"],
-          icon: "terminal",
-          intent: { kind: "open-terminal", workspaceId: workspace.id, terminalId: terminal.id },
-        }),
-      );
-    }
-  }
+function openGroupCommand(group: WorkspaceGroup): CommandDescriptor {
+  const name = groupName(group);
+  return command({
+    id: `open-group:${safeIdPart(group.id)}`,
+    label: t("palette.openGroup", { name }),
+    description: t("palette.openGroupDesc"),
+    group: "navigation",
+    keywords: [name, "grupo", "projeto", "abrir"],
+    icon: "group",
+    intent: { kind: "open-group", groupId: group.id },
+  });
+}
 
-  commands.push(
+function openWorkspaceCommand(workspace: Workspace): CommandDescriptor {
+  const name = workspaceLabel(workspace);
+  return command({
+    id: `open-workspace:${safeIdPart(workspace.id)}`,
+    label: t("palette.openProject", { name }),
+    description: workspace.cwd || t("palette.openProjectDesc"),
+    group: "navigation",
+    keywords: [name, workspace.cwd, "projeto", "workspace", "abrir"],
+    icon: "folder",
+    intent: { kind: "open-workspace", workspaceId: workspace.id },
+  });
+}
+
+function openTerminalCommand(data: CommandPaletteData, workspace: Workspace, terminal: TerminalMeta): CommandDescriptor {
+  const name = workspaceLabel(workspace);
+  const terminalName = terminalLabel(terminal);
+  const agentLabel = data.agentLabels?.[terminal.id];
+  const primary = agentLabel?.primary ?? terminalName;
+  const tag = agentLabel?.tag ?? terminalName;
+  return command({
+    id: `open-terminal:${safeIdPart(workspace.id)}:${safeIdPart(terminal.id)}`,
+    label: agentLabel ? `${primary} · ${name}` : t("palette.openAgent", { name: terminalName, project: name }),
+    description: agentLabel ? t("palette.openAgentDescTagged", { tag }) : t("palette.openAgentDesc"),
+    group: "navigation",
+    keywords: [terminalName, primary, tag, name, workspace.cwd, "agente", "terminal", "focar"],
+    icon: "terminal",
+    intent: { kind: "open-terminal", workspaceId: workspace.id, terminalId: terminal.id },
+  });
+}
+
+function workspaceCommands(data: CommandPaletteData): CommandDescriptor[] {
+  return data.workspaces.flatMap((workspace) => [
+    openWorkspaceCommand(workspace),
+    ...workspace.terminals.map((terminal) => openTerminalCommand(data, workspace, terminal)),
+  ]);
+}
+
+function createCommands(data: CommandPaletteData, focusedWorkspaceId: string | null): CommandDescriptor[] {
+  const hasAgentWorkspace = focusedWorkspaceId !== null;
+  return [
     command({
       id: "create:project",
       label: t("palette.newProject"),
@@ -419,178 +416,187 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       icon: "agent",
       intent: { kind: "open-library", dialog: "prompts" },
     }),
-  );
+  ];
+}
 
-  for (const group of groups) {
-    const groupName = group.name.trim() || group.id;
-    commands.push(
-      command({
-        id: `create:project:${safeIdPart(group.id)}`,
-        label: t("palette.newProjectIn", { name: groupName }),
-        description: t("palette.newProjectInDesc"),
-        group: "create",
-        keywords: ["criar", "projeto", groupName, "grupo"],
-        icon: "folder",
-        intent: { kind: "create-project", groupId: group.id },
-      }),
-    );
-  }
+function createInGroupCommand(group: WorkspaceGroup): CommandDescriptor {
+  const name = groupName(group);
+  return command({
+    id: `create:project:${safeIdPart(group.id)}`,
+    label: t("palette.newProjectIn", { name }),
+    description: t("palette.newProjectInDesc"),
+    group: "create",
+    keywords: ["criar", "projeto", name, "grupo"],
+    icon: "folder",
+    intent: { kind: "create-project", groupId: group.id },
+  });
+}
 
-  for (const agent of agents) {
-    const agentName = agent.label.trim() || agent.id;
-    const available = agent.available && hasAgentWorkspace;
-    commands.push(
-      command({
-        id: `create-agent:${safeIdPart(agent.id)}`,
-        label: !agent.available
-          ? t("palette.agentUnavailable", { name: agentName })
-          : hasAgentWorkspace
-            ? t("palette.startAgent", { name: agentName })
-            : t("palette.startAgentNoProject", { name: agentName }),
-        description: !agent.available
-          ? t("palette.agentUnavailableDesc")
-          : hasAgentWorkspace
-            ? t("palette.startAgentDesc")
-            : t("palette.pickProjectFirst"),
-        group: "create",
-        keywords: [agentName, agent.id, "agente", "iniciar", "disponível", "disponivel"],
-        icon: "agent",
-        disabled: !available,
-        intent: {
-          kind: "create-agent",
-          workspaceId: focusedWorkspaceId,
-          agentId: agent.id,
-        },
-      }),
-    );
-  }
+function startAgentLabel(agent: AgentInfo, hasAgentWorkspace: boolean): string {
+  const name = agent.label.trim() || agent.id;
+  if (!agent.available) return t("palette.agentUnavailable", { name });
+  return hasAgentWorkspace ? t("palette.startAgent", { name }) : t("palette.startAgentNoProject", { name });
+}
 
-  if (context) {
-    const contextLabel = `${context.label ?? context.command} · ${context.workspaceName}`;
-    commands.push(
-      command({
-        id: "agent:open-focused",
-        label: t("palette.focus", { name: contextLabel }),
-        description: t("palette.focusDesc"),
-        group: "agent",
-        keywords: ["agente", "focar", "selecionado", context.command, context.workspaceName],
-        icon: "terminal",
-        intent: { kind: "open-terminal", workspaceId: context.workspaceId, terminalId: context.terminalId },
-      }),
-    );
-    // Resuming spawns into the same id, which the backend refuses while the
-    // process is alive, so it is offered only once the agent has exited.
-    if (data.exitedTerminalIds?.includes(context.terminalId)) commands.push(
-      command({
-        id: "agent:resume-focused",
-        label: t("palette.resume", { name: contextLabel }),
-        description: t("palette.resumeDesc"),
-        group: "agent",
-        keywords: ["retomar", "resume", "continuar", "agente", context.command],
-        icon: "play",
-        intent: { kind: "focused-agent-action", action: "resume", context },
-      }),
-    );
+function startAgentDescription(agent: AgentInfo, hasAgentWorkspace: boolean): string {
+  if (!agent.available) return t("palette.agentUnavailableDesc");
+  return hasAgentWorkspace ? t("palette.startAgentDesc") : t("palette.pickProjectFirst");
+}
 
-    const destructiveFocusedCommands: readonly DestructiveFocusedCommand[] = [
-      {
-        id: "agent:interrupt-focused",
-        label: t("palette.interrupt", { name: contextLabel }),
-        description: t("palette.interruptDesc"),
-        keywords: ["interromper", "parar", "cancelar", "agente"],
-        icon: "stop",
-        kind: "interrupt-agent",
-        action: "interrupt",
-        title: t("palette.interruptTitle"),
-      },
-      {
-        id: "agent:restart-focused",
-        label: t("palette.restart", { name: contextLabel }),
-        description: t("palette.restartDesc"),
-        keywords: ["reiniciar", "restart", "agente"],
-        icon: "restart",
-        kind: "restart-agent",
-        action: "restart",
-        title: t("palette.restartTitle"),
-      },
-      {
-        id: "agent:stop-focused",
-        label: t("palette.stop", { name: contextLabel }),
-        description: t("palette.stopDesc"),
-        keywords: ["encerrar", "parar", "stop", "matar", "kill", "agente"],
-        icon: "stop",
-        kind: "stop-agent",
-        action: "stop",
-        title: t("palette.stopTitle"),
-      },
-      {
-        id: "agent:clear-focused",
-        label: t("palette.clear", { name: contextLabel }),
-        description: t("palette.clearDesc"),
-        keywords: ["limpar", "histórico", "historico", "scrollback", "agente"],
-        icon: "clear",
-        kind: "clear-scrollback",
-        action: "clear-scrollback",
-        title: t("palette.clearTitle"),
-      },
-    ];
-    for (const candidate of destructiveFocusedCommands) {
-      commands.push(
-        command({
-          id: candidate.id,
-          label: candidate.label,
-          description: candidate.description,
-          group: "agent",
-          keywords: candidate.keywords,
-          icon: candidate.icon,
-          intent: { kind: "focused-agent-action", action: candidate.action, context },
-          confirmation: destructiveRequest(candidate, context),
-        }),
-      );
-    }
-  }
+function startAgentCommand(agent: AgentInfo, focusedWorkspaceId: string | null): CommandDescriptor {
+  const agentName = agent.label.trim() || agent.id;
+  const hasAgentWorkspace = focusedWorkspaceId !== null;
+  return command({
+    id: `create-agent:${safeIdPart(agent.id)}`,
+    label: startAgentLabel(agent, hasAgentWorkspace),
+    description: startAgentDescription(agent, hasAgentWorkspace),
+    group: "create",
+    keywords: [agentName, agent.id, "agente", "iniciar", "disponível", "disponivel"],
+    icon: "agent",
+    disabled: !(agent.available && hasAgentWorkspace),
+    intent: {
+      kind: "create-agent",
+      workspaceId: focusedWorkspaceId,
+      agentId: agent.id,
+    },
+  });
+}
 
-  commands.push(
-    command({
-      id: "settings:toggle-dock",
-      label: data.dockOpen === false ? t("palette.openInspector") : t("palette.closeInspector"),
-      description: t("palette.toggleInspectorDesc"),
-      group: "settings",
-      keywords: ["dock", "painel", "lateral", "direita", "alternar"],
-      icon: "dock",
-      intent: { kind: "toggle-dock" },
-    }),
-    command(
-      data.voiceEnabled === false
+function contextLabelOf(context: FocusedAgentContext): string {
+  return `${context.label ?? context.command} · ${context.workspaceName}`;
+}
+
+function destructiveFocusedCommands(context: FocusedAgentContext): readonly DestructiveFocusedCommand[] {
+  const contextLabel = contextLabelOf(context);
+  return [
+    {
+      id: "agent:interrupt-focused",
+      label: t("palette.interrupt", { name: contextLabel }),
+      description: t("palette.interruptDesc"),
+      keywords: ["interromper", "parar", "cancelar", "agente"],
+      icon: "stop",
+      kind: "interrupt-agent",
+      action: "interrupt",
+      title: t("palette.interruptTitle"),
+    },
+    {
+      id: "agent:restart-focused",
+      label: t("palette.restart", { name: contextLabel }),
+      description: t("palette.restartDesc"),
+      keywords: ["reiniciar", "restart", "agente"],
+      icon: "restart",
+      kind: "restart-agent",
+      action: "restart",
+      title: t("palette.restartTitle"),
+    },
+    {
+      id: "agent:stop-focused",
+      label: t("palette.stop", { name: contextLabel }),
+      description: t("palette.stopDesc"),
+      keywords: ["encerrar", "parar", "stop", "matar", "kill", "agente"],
+      icon: "stop",
+      kind: "stop-agent",
+      action: "stop",
+      title: t("palette.stopTitle"),
+    },
+    {
+      id: "agent:clear-focused",
+      label: t("palette.clear", { name: contextLabel }),
+      description: t("palette.clearDesc"),
+      keywords: ["limpar", "histórico", "historico", "scrollback", "agente"],
+      icon: "clear",
+      kind: "clear-scrollback",
+      action: "clear-scrollback",
+      title: t("palette.clearTitle"),
+    },
+  ];
+}
+
+function destructiveCommand(candidate: DestructiveFocusedCommand, context: FocusedAgentContext): CommandDescriptor {
+  return command({
+    id: candidate.id,
+    label: candidate.label,
+    description: candidate.description,
+    group: "agent",
+    keywords: candidate.keywords,
+    icon: candidate.icon,
+    intent: { kind: "focused-agent-action", action: candidate.action, context },
+    confirmation: destructiveRequest(candidate, context),
+  });
+}
+
+function focusAgentCommand(context: FocusedAgentContext): CommandDescriptor {
+  return command({
+    id: "agent:open-focused",
+    label: t("palette.focus", { name: contextLabelOf(context) }),
+    description: t("palette.focusDesc"),
+    group: "agent",
+    keywords: ["agente", "focar", "selecionado", context.command, context.workspaceName],
+    icon: "terminal",
+    intent: { kind: "open-terminal", workspaceId: context.workspaceId, terminalId: context.terminalId },
+  });
+}
+
+function resumeAgentCommand(context: FocusedAgentContext): CommandDescriptor {
+  return command({
+    id: "agent:resume-focused",
+    label: t("palette.resume", { name: contextLabelOf(context) }),
+    description: t("palette.resumeDesc"),
+    group: "agent",
+    keywords: ["retomar", "resume", "continuar", "agente", context.command],
+    icon: "play",
+    intent: { kind: "focused-agent-action", action: "resume", context },
+  });
+}
+
+function focusedAgentCommands(data: CommandPaletteData, context: FocusedAgentContext | null): CommandDescriptor[] {
+  if (!context) return [];
+  // Resuming spawns into the same id, which the backend refuses while the
+  // process is alive, so it is offered only once the agent has exited.
+  const isExited = data.exitedTerminalIds?.includes(context.terminalId) ?? false;
+  return [
+    focusAgentCommand(context),
+    ...(isExited ? [resumeAgentCommand(context)] : []),
+    ...destructiveFocusedCommands(context).map((candidate) => destructiveCommand(candidate, context)),
+  ];
+}
+
+function voiceCommand(data: CommandPaletteData): CommandDescriptor {
+  return command(
+    data.voiceEnabled === false
+      ? {
+          id: "settings:voice",
+          label: t("palette.voiceSetup"),
+          description: t("palette.voiceSetupDesc"),
+          group: "settings",
+          keywords: ["voz", "voice", "microfone", "configurar", "ativar"],
+          icon: "voice",
+          intent: { kind: "voice-settings" },
+        }
+      : data.voiceRecording
         ? {
-            id: "settings:voice",
-            label: t("palette.voiceSetup"),
-            description: t("palette.voiceSetupDesc"),
+            id: "voice:stop",
+            label: t("palette.voiceStop"),
+            description: t("palette.voiceStopDesc"),
             group: "settings",
-            keywords: ["voz", "voice", "microfone", "configurar", "ativar"],
+            keywords: ["voz", "voice", "microfone", "parar", "gravar", "captura"],
             icon: "voice",
-            intent: { kind: "voice-settings" },
+            intent: { kind: "stop-voice" },
           }
-        : data.voiceRecording
-          ? {
-              id: "voice:stop",
-              label: t("palette.voiceStop"),
-              description: t("palette.voiceStopDesc"),
-              group: "settings",
-              keywords: ["voz", "voice", "microfone", "parar", "gravar", "captura"],
-              icon: "voice",
-              intent: { kind: "stop-voice" },
-            }
-          : {
-              id: "voice:start",
-              label: t("palette.voiceStart"),
-              description: t("palette.voiceStartDesc"),
-              group: "settings",
-              keywords: ["voz", "voice", "microfone", "iniciar", "gravar", "captura"],
-              icon: "voice",
-              intent: { kind: "start-voice" },
-            },
-    ),
+        : {
+            id: "voice:start",
+            label: t("palette.voiceStart"),
+            description: t("palette.voiceStartDesc"),
+            group: "settings",
+            keywords: ["voz", "voice", "microfone", "iniciar", "gravar", "captura"],
+            icon: "voice",
+            intent: { kind: "start-voice" },
+          },
+  );
+}
+
+function snapshotCommands(): CommandDescriptor[] {
+  return [
     command({
       id: "settings:export",
       label: t("palette.export"),
@@ -617,6 +623,11 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
         resourceLabel: t("palette.currentWorkspace"),
       },
     }),
+  ];
+}
+
+function restoreCommands(data: CommandPaletteData): CommandDescriptor[] {
+  return [
     command({
       id: "settings:reattach-terminal",
       label: t("palette.reattach"),
@@ -647,8 +658,50 @@ export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[]
       disabled: !data.hasRecentlyClosedTabs,
       intent: { kind: "reopen-tab" },
     }),
-  );
+  ];
+}
 
+function settingsCommands(data: CommandPaletteData): CommandDescriptor[] {
+  return [
+    command({
+      id: "settings:toggle-dock",
+      label: data.dockOpen === false ? t("palette.openInspector") : t("palette.closeInspector"),
+      description: t("palette.toggleInspectorDesc"),
+      group: "settings",
+      keywords: ["dock", "painel", "lateral", "direita", "alternar"],
+      icon: "dock",
+      intent: { kind: "toggle-dock" },
+    }),
+    voiceCommand(data),
+    ...snapshotCommands(),
+    ...restoreCommands(data),
+  ];
+}
+
+function agentWorkspaceId(data: CommandPaletteData): string | null {
+  // Starting an agent needs a real workspace target. Keep the command visible
+  // so the palette explains what is missing, but never dispatch an empty id
+  // to the host (which would turn into a failed spawn request).
+  const focusedWorkspaceId = data.focusedWorkspaceId;
+  if (!focusedWorkspaceId) return null;
+  return data.workspaces.some((workspace) => workspace.id === focusedWorkspaceId) ? focusedWorkspaceId : null;
+}
+
+/** Build the complete, callback-free command model for the current Terra state. */
+export function buildCommandModel(data: CommandPaletteData): CommandDescriptor[] {
+  const groups = data.groups ?? [];
+  const agents = data.agents ?? [];
+  const focusedWorkspaceId = agentWorkspaceId(data);
+  const commands: CommandDescriptor[] = [
+    ...routeCommands(),
+    ...groups.map(openGroupCommand),
+    ...workspaceCommands(data),
+    ...createCommands(data, focusedWorkspaceId),
+    ...groups.map(createInGroupCommand),
+    ...agents.map((agent) => startAgentCommand(agent, focusedWorkspaceId)),
+    ...focusedAgentCommands(data, focusedContext(data)),
+    ...settingsCommands(data),
+  ];
   const recent = withRecentCommands(commands, data.recentCommandIds);
   return recent.length > 0 ? [...recent, ...commands] : commands;
 }

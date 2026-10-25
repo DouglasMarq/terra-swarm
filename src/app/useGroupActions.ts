@@ -6,7 +6,8 @@ import { agentKind } from "../domain/agentLabels";
 import { planResume } from "../domain/session/resumePlanner";
 import { useOrchestrationStore } from "../stores/orchestrationStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
-import { resumeCommandFor, type TerminalSessions } from "./useTerminalSessions";
+import { resumeCommandFor } from "../domain/session/resumeItems";
+import type { TerminalSessions } from "./useTerminalSessions";
 
 interface GroupActionsInput {
   workspaces: Workspace[];

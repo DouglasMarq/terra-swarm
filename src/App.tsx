@@ -24,7 +24,8 @@ import { TeamDialog } from "./components/library/TeamDialog";
 import { orchestratorOf } from "./domain/agentRoles";
 import { isTerminalRunning } from "./domain/agentStatus";
 import { agentLabelText, buildAgentLabels } from "./domain/agentLabels";
-import { resumeCommandFor, useTerminalSessions } from "./app/useTerminalSessions";
+import { resumeCommandFor } from "./domain/session/resumeItems";
+import { useTerminalSessions } from "./app/useTerminalSessions";
 import { useUpdater } from "./app/useUpdater";
 import type { AgentRole, NotificationItem } from "./types";
 import {

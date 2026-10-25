@@ -13,13 +13,14 @@ import type {
 } from "../types";
 import { getTerminal } from "../terminalRegistry";
 import { t } from "../i18n";
-import { agentKind, agentLabelText, buildAgentLabels } from "../domain/agentLabels";
+import { agentLabelText, buildAgentLabels } from "../domain/agentLabels";
 import { pickAgentName } from "../domain/agentNames";
 import { createDebouncedTask } from "../lib/async/debounce";
 import { createSpawnQueue } from "../domain/session/spawnQueue";
 import { isCurrentSpawnedTerminalRunning } from "../domain/session/terminalLifecycle";
 import { workspaceIdForTerminal } from "../domain/session/terminalOwnership";
-import { freshCommand, profileForCommand, resolveResumeCommand } from "../domain/agentProfiles";
+import { freshCommand, profileForCommand } from "../domain/agentProfiles";
+import { resumeItemFor } from "../domain/session/resumeItems";
 import { parseEnvLines, usePreferencesStore } from "../stores/preferencesStore";
 import { useTerminalRuntimeStore } from "../stores/terminalRuntimeStore";
 import { useUiStore } from "../stores/uiStore";
@@ -30,22 +31,6 @@ const RESUME_CONCURRENCY = 2;
 
 /** Debounce for `workspaces-changed` bursts (layout drags, group updates). */
 const WORKSPACES_REFRESH_DEBOUNCE_MS = 75;
-
-export function resumeCommandFor(command: string): string {
-  return resolveResumeCommand(profileForCommand(command), command);
-}
-
-export function resumeItemFor(workspace: Workspace, terminal: Workspace["terminals"][number]): ResumeItem {
-  return {
-    terminalId: terminal.id,
-    wsId: workspace.id,
-    wsName: workspace.name,
-    cwd: workspace.cwd,
-    command: terminal.command,
-    agentId: agentKind(terminal.command),
-    resumeCommand: resumeCommandFor(terminal.command),
-  };
-}
 
 interface TerminalSessionsInput {
   workspaces: readonly Workspace[];

@@ -10,7 +10,8 @@ import type { useAgentCatalog } from "./useAgentCatalog";
 import type { useResumeQueue } from "./useResumeQueue";
 import type { useVoiceSettings } from "./useVoiceSettings";
 import type { useWorkspaces } from "./useWorkspaces";
-import { resumeItemFor, type TerminalSessions } from "./useTerminalSessions";
+import { resumeItemFor } from "../domain/session/resumeItems";
+import type { TerminalSessions } from "./useTerminalSessions";
 
 interface InitializationInput {
   workspaces: ReturnType<typeof useWorkspaces>;

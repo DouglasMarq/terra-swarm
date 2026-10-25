@@ -1,7 +1,7 @@
 import { agentKind } from "../domain/agentLabels";
 import { CONTEXT_ATTENTION_PERCENT, CONTEXT_WARNING_PERCENT, deriveAgentStatus } from "../domain/agentStatus";
 import { useMcpStore } from "../stores/mcpStore";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { api } from "../api";
@@ -118,9 +118,12 @@ export function TerminalPane(props: Props) {
   onFocusRef.current = props.onFocus;
   const [isDropTarget, setIsDropTarget] = useState(false);
 
+  const currentFont = useEffectEvent(() => ({ fontFamily, fontSize }));
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    const { fontFamily, fontSize } = currentFont();
 
     const term = new Terminal({
       fontFamily,

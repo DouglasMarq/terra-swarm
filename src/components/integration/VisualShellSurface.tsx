@@ -210,11 +210,12 @@ export function VisualShellSurface(props: VisualShellSurfaceProps) {
     onActivityChange: setNavigatorActivity,
   };
 
+  const { activeSurface, activeWorkspaceId, navigate: navigateShell } = shell;
   useEffect(() => {
-    if (shell.activeSurface === "workbench" && !shell.activeWorkspaceId && props.activeId) {
-      shell.navigate("workbench", props.activeId);
+    if (activeSurface === "workbench" && !activeWorkspaceId && props.activeId) {
+      navigateShell("workbench", props.activeId);
     }
-  }, [props.activeId, shell.activeSurface, shell.activeWorkspaceId, shell.navigate]);
+  }, [props.activeId, activeSurface, activeWorkspaceId, navigateShell]);
 
   const navigate = (
     surface: ShellSurface,

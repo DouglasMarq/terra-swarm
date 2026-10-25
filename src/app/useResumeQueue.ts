@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { api } from "../api";
 import type { ResumeItem } from "../domain/terminal.model";
 import { t } from "../i18n";
@@ -116,10 +116,14 @@ export function useResumeQueue(sessions: TerminalSessions, refresh: () => Promis
   };
 
   // "Always resume without asking": run the queue once it is loaded.
+  const autoResume = useEffectEvent(() => {
+    void resumeAll();
+  });
+
   useEffect(() => {
     if (!autoPending || !items || items.length === 0) return;
     setAutoPending(false);
-    void resumeAll();
+    autoResume();
     // Keyed on the queue loading only: resumeAll changes every render and reads the latest state itself.
   }, [autoPending, items]);
 

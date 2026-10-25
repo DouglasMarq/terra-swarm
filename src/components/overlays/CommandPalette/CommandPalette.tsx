@@ -1,4 +1,4 @@
-import { useLocale, useT } from "../../../i18n";
+import { useT } from "../../../i18n";
 import {
   ArchiveRestore,
   Bot,
@@ -22,7 +22,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Command } from "cmdk";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { AgentInfo } from "../../../domain/agent.model";
 import type { Workspace, WorkspaceGroup } from "../../../domain/workspace.model";
 import {
@@ -102,36 +102,26 @@ export function CommandPalette({
   onOpenChange,
 }: CommandPaletteProps) {
   const t = useT();
-  const locale = useLocale();
   const [query, setQuery] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
-  const commands = useMemo(
-    () =>
-      buildCommandModel({
-        workspaces,
-        groups,
-        agents,
-        focusedWorkspaceId,
-        focusedTerminalId,
-        focusedGroupId,
-        recentCommandIds,
-        hasDetachedTabs,
-        hasRecentlyClosedTabs,
-        dockOpen,
-        voiceEnabled,
-        voiceRecording,
-        agentLabels,
-        resumeCount,
-        exitedTerminalIds,
-      }),
-    // `locale` re-runs the model so labels follow a language switch.
-    [locale, agentLabels, resumeCount, exitedTerminalIds, agents, dockOpen, focusedGroupId, focusedTerminalId, focusedWorkspaceId, groups, hasDetachedTabs, hasRecentlyClosedTabs, recentCommandIds, voiceEnabled, voiceRecording, workspaces],
-  );
-  const visibleCommands = useMemo(() => filterCommands(commands, query), [commands, query]);
-  const visibleGroups = useMemo(
-    () => groupCommands(visibleCommands).filter((group) => group.commands.length > 0),
-    [visibleCommands],
-  );
+  const commands = buildCommandModel({
+    workspaces,
+    groups,
+    agents,
+    focusedWorkspaceId,
+    focusedTerminalId,
+    focusedGroupId,
+    recentCommandIds,
+    hasDetachedTabs,
+    hasRecentlyClosedTabs,
+    dockOpen,
+    voiceEnabled,
+    voiceRecording,
+    agentLabels,
+    resumeCount,
+    exitedTerminalIds,
+  });
+  const visibleGroups = groupCommands(filterCommands(commands, query)).filter((group) => group.commands.length > 0);
 
   useEffect(() => {
     if (!open) {

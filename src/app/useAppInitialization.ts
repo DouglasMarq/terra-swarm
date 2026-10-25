@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { api } from "../api";
 import type { ResumeItem } from "../domain/terminal.model";
 import { t } from "../i18n";
@@ -86,9 +86,13 @@ export function useAppInitialization({ workspaces, sessions, resumeQueue, agentC
     );
   };
 
-  useEffect(() => {
+  const startOnMount = useEffectEvent(() => {
     if (started.current) return;
     start();
+  });
+
+  useEffect(() => {
+    startOnMount();
     // Mount only: later attempts go through `retry`.
   }, []);
 

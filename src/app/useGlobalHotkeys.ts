@@ -186,5 +186,5 @@ export function useGlobalHotkeys({
     window.addEventListener("keydown", handler, { capture: true });
     return () =>
       window.removeEventListener("keydown", handler, { capture: true });
-  }, [capturing, hotkeys]);
+  }, [capturing, hotkeys, setCapturing]);
 }
